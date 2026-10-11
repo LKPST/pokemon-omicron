@@ -237,8 +237,10 @@ const PokemonDatabase = {
     iconSprite:
       'graphics/pokemon_battle_sprites/icons/gIconEELEKTROSS_1.png',
     cry: 'audio/cries/EELEKTROSS_1.ogg',
-    xPos: 503,
-    yPos: 107,
+    xPosFront: 503,
+    yPosFront: 107,
+    xPosBack: 129,
+    yPosBack: 359,
   },
 
   SPECIES_LUCARIO_Z: {
@@ -288,7 +290,9 @@ const PokemonDatabase = {
     iconSprite:
       'graphics/pokemon_battle_sprites/icons/gIconLUCARIO_2.png',
     cry: 'audio/cries/LUCARIO_2.ogg',
-    xPos: 129,
-    yPos: 359,
+    xPosFront: 503,
+    yPosFront: 107,
+    xPosBack: 129,
+    yPosBack: 359,
   },
 };

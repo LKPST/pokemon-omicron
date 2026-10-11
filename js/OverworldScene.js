@@ -22,6 +22,11 @@ class OverworldScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 48,
     });
+    // Inside OverworldScene preload()
+    this.load.spritesheet('lily_ow', 'graphics/overworld/lily.png', {
+      frameWidth: 32,
+      frameHeight: 48,
+    });
   }
 
   create() {
@@ -120,44 +125,125 @@ class OverworldScene extends Phaser.Scene {
   }
 
   spawnEvents() {
-    const events = this.currentMap.events;
-    const blockSize = this.currentMap.dimensions.blockSize;
+    console.group("[Diagnostics] 🗺️ === OVERWORLD MAP EVENTS AUDIT ===");
+    
+    // 1. Inspect map data source
+    const mapKey = this.currentMapKey || "Criscanto Town";
+    const mapData = window.OverworldMaps ? window.OverworldMaps[mapKey] : null;
+    
+    console.log(`[Diagnostics] Target Map Key: "${mapKey}"`, mapData);
 
-    for (const key in events) {
-      const eventData = events[key];
+    if (!mapData) {
+      console.error(`[Diagnostics] ❌ CRITICAL: Map data for "${mapKey}" is undefined or not found in window.OverworldMaps!`);
+      console.groupEnd();
+      return;
+    }
+
+    const events = mapData.events;
+    if (!events) {
+      console.error("[Diagnostics] ❌ CRITICAL: 'events' property is missing entirely from mapData!", mapData);
+      console.groupEnd();
+      return;
+    }
+
+    // 2. Log all found event keys raw from the map object
+    const rawEventKeys = Object.keys(events);
+    console.log(`[Diagnostics] 📋 Total raw event keys found in map object: ${rawEventKeys.length}`, rawEventKeys);
+
+    this.npcs = [];
+    const blockSize = mapData.dimensions.blockSize || 8;
+    const successfullySpawned = [];
+    const failedEvents = [];
+
+    // 3. Evaluate each event individually
+    for (const [key, eventData] of Object.entries(events)) {
+      console.group(`[Diagnostics] Evaluating Event: "${key}"`);
+      console.log("Event Data Object:", eventData);
+
+      if (!eventData.eventType) {
+        console.warn(`[Diagnostics] ⚠️ FAILED: Missing 'eventType' property.`);
+        failedEvents.push({ key, reason: "Missing eventType" });
+        console.groupEnd();
+        continue;
+      }
+
       if (eventData.eventType === 'NPC') {
+        const owID = eventData.owID;
+        console.log(`[Diagnostics] Detected NPC Event with owID: "${owID}"`);
+
+        if (!owID) {
+          console.warn(`[Diagnostics] ❌ FAILED: NPC event is missing 'owID'.`);
+          failedEvents.push({ key, reason: "Missing owID" });
+          console.groupEnd();
+          continue;
+        }
+
+        const tableEntry = window.OverworldTable ? window.OverworldTable[owID] : null;
+        console.log(`[Diagnostics] Table Entry lookup in window.OverworldTable["${owID}"]:`, tableEntry);
+
+        if (!tableEntry) {
+          console.error(`[Diagnostics] ❌ FAILED: owID "${owID}" does not exist in window.OverworldTable!`);
+          failedEvents.push({ key, reason: `owID "${owID}" missing from OverworldTable` });
+          console.groupEnd();
+          continue;
+        }
+
+        const textureKey = tableEntry.spriteID || `${owID.toLowerCase()}_ow`;
+        const textureExists = this.textures.exists(textureKey);
+        console.log(`[Diagnostics] Texture Key check "${textureKey}": Exists = ${textureExists}`);
+
+        if (!textureExists) {
+          console.error(`[Diagnostics] ❌ FAILED: Texture "${textureKey}" is not loaded in Phaser TextureManager.`);
+          failedEvents.push({ key, reason: `Texture "${textureKey}" not loaded` });
+          console.groupEnd();
+          continue;
+        }
+
+        // Spawn calculation
         const x = eventData.xPos * blockSize + blockSize / 2;
         const y = eventData.yPos * blockSize + blockSize / 2;
 
         const npcSprite = this.add
-          .sprite(x, y, 'portia_ow', 0)
+          .sprite(x, y, textureKey, 0)
           .setOrigin(0.5, 0.85)
           .setScale(0.5);
 
         npcSprite.direction = 'down';
         npcSprite.eventConfig = eventData;
-        this.activeNPC = npcSprite;
+        this.npcs.push(npcSprite);
 
-        console.log(
-          `[Logger] NPC ${eventData.owID} spawned at grid (${eventData.xPos}, ${eventData.yPos}) -> world (${x}, ${y})`
-        );
+        console.log(`[Diagnostics] ✅ SUCCESS: Spawned NPC "${owID}" at grid (${eventData.xPos}, ${eventData.yPos}) -> world coords (${x}, ${y})`);
+        successfullySpawned.push({ key, owID });
+      } else {
+        console.log(`[Diagnostics] ℹ️ Skipped non-NPC eventType: "${eventData.eventType}"`);
       }
+
+      console.groupEnd();
     }
+
+    // 4. Final summary block
+    console.log("--------------------------------------------------AVE SUMMARY--------------------------------------------------");
+    console.log(`[Diagnostics] 🟢 Successfully Spawned (${successfullySpawned.length}):`, successfullySpawned);
+    console.log(`[Diagnostics] 🔴 Failed / Skipped (${failedEvents.length}):`, failedEvents);
+    console.groupEnd();
   }
 
   updateNPCMovement() {
-    if (this.isLocked || !this.activeNPC) return;
+    if (this.isLocked || !this.npcs || this.npcs.length === 0) return;
 
-    const config = this.activeNPC.eventConfig;
-    if (!config || config.movementType !== 'wander_left_right') return;
+    // Loop through all NPCs and apply movement if their config allows it
+    this.npcs.forEach(npc => {
+      const config = npc.eventConfig;
+      if (!config || config.movementType !== 'wander_left_right') return;
 
-    const moveTypes = ['walk_left', 'walk_right'];
-    const chosenMove = Phaser.Math.RND.pick(moveTypes);
+      const moveTypes = ['walk_left', 'walk_right'];
+      const chosenMove = Phaser.Math.RND.pick(moveTypes);
 
-    console.log(`[Logger] NPC Movement triggered for Portia: ${chosenMove}`);
-    if (window.OverworldMovement) {
-      window.OverworldMovement.execute(this.activeNPC, chosenMove);
-    }
+      console.log(`[Logger] NPC Movement triggered for ${config.owID}: ${chosenMove}`);
+      if (window.OverworldMovement) {
+        window.OverworldMovement.execute(npc, chosenMove);
+      }
+    });
   }
 
   update(time, delta) {
@@ -169,9 +255,9 @@ class OverworldScene extends Phaser.Scene {
     }
 
     // --- CRITICAL FIX: Depth Sorting by Y ---
-    if (this.player && this.activeNPC) {
+    if (this.player && this.npcs) {
       this.player.setDepth(this.player.y);
-      this.activeNPC.setDepth(this.activeNPC.y);
+      this.npcs.forEach(npc => npc.setDepth(npc.y));
     }
 
     if (!this.isMoving) {
@@ -202,12 +288,12 @@ class OverworldScene extends Phaser.Scene {
         if (this.isPassable(targetGridX, targetGridY)) {
           this.movePlayerTo(targetGridX, targetGridY, newDir);
         } else {
-          // --- CRITICAL FIX: Force continuous stepping frame when key is held down against collision ---
+          // --- FIX: Guard or remove this.activeNPC references in collision bump ---
           const stepCycle = Math.floor(time / 150) % 2 === 0 ? 1 : 2;
           const frameIndex = window.getOverworldFrame(newDir, stepCycle);
           this.player.setFrame(frameIndex);
           console.log(
-            `[Logger] Collision Bump! Dir: ${newDir}, Frame: ${frameIndex}, Player Y: ${this.player.y}, NPC Y: ${this.activeNPC.y}`
+            `[Logger] Collision Bump! Dir: ${newDir}, Frame: ${frameIndex}, Player Y: ${this.player.y}`
           );
         }
       } else {
@@ -229,23 +315,25 @@ class OverworldScene extends Phaser.Scene {
     // Solid building walls
     if (blockData[gridY][gridX] === 2) return false;
 
-    // Check if player occupies the target tile
+    const blockSize = this.currentMap.dimensions.blockSize;
+
+    // Check if player occupies the target tile (using Math.round to prevent float drift)
     if (this.player) {
-      const blockSize = this.currentMap.dimensions.blockSize;
-      const playerGridX = Math.floor(this.player.x / blockSize);
-      const playerGridY = Math.floor(this.player.y / blockSize);
+      const playerGridX = Math.round((this.player.x - blockSize / 2) / blockSize);
+      const playerGridY = Math.round((this.player.y - blockSize / 2) / blockSize);
       if (playerGridX === gridX && playerGridY === gridY) {
-        return false; // Blocked by player!
+        return false;
       }
     }
 
-    // Check if another NPC occupies the target tile
-    if (this.activeNPC) {
-      const blockSize = this.currentMap.dimensions.blockSize;
-      const npcGridX = Math.floor(this.activeNPC.x / blockSize);
-      const npcGridY = Math.floor(this.activeNPC.y / blockSize);
-      if (npcGridX === gridX && npcGridY === gridY) {
-        return false;
+    // Check if any NPC occupies the target tile (using Math.round)
+    if (this.npcs) {
+      for (const npc of this.npcs) {
+        const npcGridX = Math.round((npc.x - blockSize / 2) / blockSize);
+        const npcGridY = Math.round((npc.y - blockSize / 2) / blockSize);
+        if (npcGridX === gridX && npcGridY === gridY) {
+          return false;
+        }
       }
     }
 
@@ -262,8 +350,9 @@ class OverworldScene extends Phaser.Scene {
     this.walkStep = this.walkStep === 1 ? 2 : 1;
     this.player.setFrame(window.getOverworldFrame(direction, this.walkStep));
 
+    // --- FIX: Removed reference to this.activeNPC.y ---
     console.log(
-      `[Logger] Moving player to grid (${targetX}, ${targetY}) | Player Y: ${this.player.y} vs NPC Y: ${this.activeNPC.y}`
+      `[Logger] Moving player to grid (${targetX}, ${targetY}) | Player Y: ${this.player.y}`
     );
 
     this.tweens.add({
@@ -281,17 +370,12 @@ class OverworldScene extends Phaser.Scene {
   }
 
   tryInteract() {
-    if (!this.activeNPC) return;
+    if (!this.npcs || this.npcs.length === 0) return;
 
-    // Check grid position to ensure player is directly facing the NPC
     const blockSize = this.currentMap.dimensions.blockSize;
-    const playerGridX = Math.floor(this.player.x / blockSize);
-    const playerGridY = Math.floor(this.player.y / blockSize);
+    const playerGridX = Math.round((this.player.x - blockSize / 2) / blockSize);
+    const playerGridY = Math.round((this.player.y - blockSize / 2) / blockSize);
 
-    const npcGridX = Math.floor(this.activeNPC.x / blockSize);
-    const npcGridY = Math.floor(this.activeNPC.y / blockSize);
-
-    // Calculate expected target grid coordinate based on player's facing direction
     let targetX = playerGridX;
     let targetY = playerGridY;
     if (this.player.direction === 'up') targetY -= 1;
@@ -299,23 +383,21 @@ class OverworldScene extends Phaser.Scene {
     else if (this.player.direction === 'left') targetX -= 1;
     else if (this.player.direction === 'right') targetX += 1;
 
-    // Check if the tile the player is facing matches the NPC's position
-    const isFacingNPC = targetX === npcGridX && targetY === npcGridY;
+    const targetNPC = this.npcs.find(npc => {
+      const npcGridX = Math.round((npc.x - blockSize / 2) / blockSize);
+      const npcGridY = Math.round((npc.y - blockSize / 2) / blockSize);
+      return npcGridX === targetX && npcGridY === targetY;
+    });
 
-    console.log(
-      `[Logger] Try Interact: Facing NPC? ${isFacingNPC} (Player Dir: ${this.player.direction})`
-    );
-
-    if (isFacingNPC) {
-      const scriptName = this.activeNPC.eventConfig.script;
-      console.log(`[Logger] Triggering script: ${scriptName}`);
+    if (targetNPC) {
+      this.activeNPC = targetNPC;
+      const scriptName = targetNPC.eventConfig.script;
+      console.log(`[Logger] Triggering script for ${targetNPC.eventConfig.owID}: ${scriptName}`);
 
       if (window.OverworldScriptEngine) {
         window.OverworldScriptEngine.runScript(this, scriptName);
       } else {
-        console.error(
-          '[Logger] FATAL: OverworldScriptEngine not found globally!'
-        );
+        console.error('[Logger] FATAL: OverworldScriptEngine not found globally!');
       }
     }
   }

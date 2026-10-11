@@ -68,6 +68,9 @@ class BattleScene extends Phaser.Scene {
       frameWidth: 64,
       frameHeight: 64,
     });
+
+    this.load.audio('battle_music', 'audio/music/victory_march.mp3');
+
     this.load.image('latin_short', 'graphics/fonts/latin_short.png');
 
     if (this.sound.context && this.sound.context.state === 'suspended') {
@@ -133,16 +136,6 @@ class BattleScene extends Phaser.Scene {
     removeSpriteBackground(this, 'pokeball_raw', 16, 16);
     removeSpriteBackground(this, 'sparkle_raw', 32, 32);
 
-    if (this.sound.context && this.sound.context.state === 'suspended') {
-      const unlockAudio = () => {
-        this.sound.context.resume().then(() => {
-          this.input.off('pointerdown', unlockAudio);
-          this.input.off('keydown', unlockAudio);
-        });
-      };
-      this.input.on('pointerdown', unlockAudio);
-      this.input.on('keydown', unlockAudio);
-    }
 
     if (this.textures.exists('latin_short') && !this.textures.exists('emerald_font')) {
       const sourceImage = this.textures.get('latin_short').getSourceImage();
@@ -180,6 +173,15 @@ class BattleScene extends Phaser.Scene {
 
     if (typeof EmeraldFont !== 'undefined') {
       this.fontRenderer = new EmeraldFont(this);
+    }
+
+    // Play battle music on loop
+    if (this.cache.audio.exists('battle_music')) {
+      this.battleMusic = this.sound.add('battle_music', {
+        loop: true,
+        volume: 0.5 // Adjust volume if needed (0.0 to 1.0)
+      });
+      this.battleMusic.play();
     }
 
     // 640x480 Widescreen/Boxed Battle Background
@@ -303,6 +305,26 @@ class BattleScene extends Phaser.Scene {
     }
   }
 
+  // Add this inside GameStateManagerClass.js
+  get activePartyMon1() {
+    const mon = this.saveData.party ? this.saveData.party[0] : null;
+    console.log("[GameStateManager] 🔍 Reading slot 0 from save data. Current Nickname:", mon ? mon.nickname : "None");
+    return mon;
+  }
+
+  parseText(text) {
+    if (!text) return '';
+    const firstMon = this.playerPartyMon1;
+    const monName = firstMon ? (firstMon.nickname || firstMon.species.replace('SPECIES_', '')) : 'Pokémon';
+
+    console.log(`[GameStateManager] 📝 Parsing text dialogue. Injected Pokemon Name: "${monName}"`);
+
+    return text
+      .replace(/\$activePlayerName/g, this.saveData.player.name)
+      .replace(/\$activeMonName/g, monName)
+      .replace(/\$activeOpponentNameBankA/g, this.activeOpponentNameBankA);
+  }
+
   startTrainerSlide() {
     this.setupBattleUIElements();
 
@@ -373,7 +395,11 @@ class BattleScene extends Phaser.Scene {
 
   spawnEnemyPokemon(callback) {
     const activeEnemyMon = window.GameStateManager && window.GameStateManager.opponentPartyMon1;
+    console.log("[DeepLogger] 👾 === START ENEMY SPAWN LOOKUP ===");
+    console.log("[DeepLogger] Active Enemy Mon from StateManager:", activeEnemyMon);
+
     if (!activeEnemyMon || !activeEnemyMon.species) {
+      console.log("[DeepLogger] ❌ Enemy species missing or null.");
       if (typeof callback === 'function') callback();
       return;
     }
@@ -382,44 +408,79 @@ class BattleScene extends Phaser.Scene {
     const db = typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : window.PokemonDatabase;
 
     if (!db) {
+      console.log("[DeepLogger] ❌ CRITICAL: PokemonDatabase is completely undefined!");
       if (typeof callback === 'function') callback();
       return;
     }
 
-    const cleanSpecies = speciesKey.replace('SPECIES_', '').replace(/_[MF]$/, '').toLowerCase();
-    const foundDbKey = Object.keys(db).find(k => {
-      const kClean = k.replace('SPECIES_', '').replace(/_[mf]$/, '').toLowerCase();
-      return kClean === cleanSpecies || k.toLowerCase() === speciesKey.toLowerCase();
+    // Step 1: Direct Exact Match
+    let staticData = db[speciesKey];
+    console.log(`[DeepLogger] Direct lookup for key "${speciesKey}":`, staticData ? "FOUND" : "NOT FOUND");
+
+    // Step 2: Fallback Search if needed
+    if (!staticData) {
+      const cleanSpecies = speciesKey.replace('SPECIES_', '').replace(/_[MF]$/, '').toLowerCase();
+      const foundDbKey = Object.keys(db).find(k => {
+        const kClean = k.replace('SPECIES_', '').replace(/_[mf]$/, '').toLowerCase();
+        return kClean === cleanSpecies || k.toLowerCase() === speciesKey.toLowerCase();
+      });
+      staticData = foundDbKey ? db[foundDbKey] : Object.values(db).find(entry => entry && entry.name && entry.name.toLowerCase() === cleanSpecies);
+      console.log(`[DeepLogger] Fallback search result:`, staticData ? "FOUND" : "NOT FOUND");
+    }
+
+    if (!staticData) {
+      console.log(`[DeepLogger] ❌ Failed to find static data for enemy species "${speciesKey}".`);
+      if (typeof callback === 'function') callback();
+      return;
+    }
+
+    console.log("[DeepLogger] 📄 Raw Enemy Static Entry object retrieved from Database:", staticData);
+    console.log("[DeepLogger] 🔍 Raw Property Values Found:", {
+      'staticData.xPosFront': staticData.xPosFront,
+      'staticData.yPosFront': staticData.yPosFront,
+      'staticData.xPos': staticData.xPos,
+      'staticData.yPos': staticData.yPos
     });
-
-    let staticData = foundDbKey ? db[foundDbKey] : null;
-    if (!staticData) {
-      staticData = Object.values(db).find(entry => entry && entry.name && entry.name.toLowerCase() === cleanSpecies);
-    }
-
-    if (!staticData) {
-      if (typeof callback === 'function') callback();
-      return;
-    }
 
     const frontSpritePath = staticData.frontSprite;
     const frontTextureKey = `pkmn_${speciesKey}_front`;
     const cryKey = `cry_${speciesKey}`;
     
-    const xPos = staticData.xPos !== undefined ? staticData.xPos : 480;
-    const yPos = staticData.yPos !== undefined ? staticData.yPos : 150;
-    const cryPath = staticData.cry;
+    // Explicit Fallback Evaluation with logging
+    let xPos, yPos;
+    if (staticData.xPosFront !== undefined) {
+      xPos = staticData.xPosFront;
+      console.log("[DeepLogger] ✅ Using xPosFront:", xPos);
+    } else if (staticData.xPos !== undefined) {
+      xPos = staticData.xPos;
+      console.log("[DeepLogger] ⚠️ Fallback to legacy xPos:", xPos);
+    } else {
+      xPos = 480;
+      console.log("[DeepLogger] ⚠️ Fallback to default xPos:", xPos);
+    }
 
-    const needsFront = !this.textures.exists(frontTextureKey);
+    if (staticData.yPosFront !== undefined) {
+      yPos = staticData.yPosFront;
+      console.log("[DeepLogger] ✅ Using yPosFront:", yPos);
+    } else if (staticData.yPos !== undefined) {
+      yPos = staticData.yPos;
+      console.log("[DeepLogger] ⚠️ Fallback to legacy yPos:", yPos);
+    } else {
+      yPos = 150;
+      console.log("[DeepLogger] ⚠️ Fallback to default yPos:", yPos);
+    }
+
+    console.log(`[DeepLogger] 🎯 FINAL ENEMY COORDS SENT TO THROW -> x: ${xPos}, y: ${yPos}`);
 
     const finishSpawn = () => {
       const transKey = removeSpriteBackground(this, frontTextureKey, 0, 0);
       this.executeEnemyThrow(transKey, { xPos, yPos }, cryKey, callback);
     };
 
+    const needsFront = !this.textures.exists(frontTextureKey);
     if (needsFront) {
       if (frontSpritePath) this.load.image(frontTextureKey, frontSpritePath);
-      if (cryPath && !this.cache.audio.exists(cryKey)) this.load.audio(cryKey, cryPath);
+      if (staticData.cry && !this.cache.audio.exists(cryKey)) this.load.audio(cryKey, staticData.cry);
 
       this.load.once('complete', finishSpawn);
       this.load.start();
@@ -428,7 +489,9 @@ class BattleScene extends Phaser.Scene {
     }
   }
  
-  executeEnemyThrow(textureKey, staticData, cryKey, callback) {
+  executeEnemyThrow(textureKey, coordsObj, cryKey, callback) {
+    console.log(`[CoordDebug] 🚀 executeEnemyThrow received coords -> x: ${coordsObj.xPos}, y: ${coordsObj.yPos}`);
+
     const ballKey = this.textures.exists('pokeball_raw_trans') ? 'pokeball_raw_trans' : 'pokeball_raw';
     const sparkleKey = this.textures.exists('sparkle_raw_trans') ? 'sparkle_raw_trans' : 'sparkle_raw';
 
@@ -436,17 +499,16 @@ class BattleScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: ball,
-      x: staticData.xPos,
-      y: staticData.yPos - 20,
+      x: coordsObj.xPos,
+      y: coordsObj.yPos - 20,
       duration: 400,
       ease: 'Quad.easeOut',
       onComplete: () => {
         ball.destroy();
         
-        // --- ADDED: Save reference to enemy sprite for coordinate editing ---
-        this.enemySpriteRef = this.add.image(staticData.xPos, staticData.yPos, textureKey).setDepth(4);
+        this.enemySpriteRef = this.add.image(coordsObj.xPos, coordsObj.yPos, textureKey).setDepth(4);
 
-        const sparkle = this.add.sprite(staticData.xPos, staticData.yPos, sparkleKey, 0).setDepth(25).setScale(5);
+        const sparkle = this.add.sprite(coordsObj.xPos, coordsObj.yPos, sparkleKey, 0).setDepth(25).setScale(5);
         const sparkleAnimKey = 'sparkle_anim_enemy';
         if (!this.anims.exists(sparkleAnimKey)) {
           this.anims.create({
@@ -476,22 +538,49 @@ class BattleScene extends Phaser.Scene {
 
     this.tweens.add({ targets: ball, angle: -360 * 2, duration: 400, ease: 'Linear' });
   }
-
+ 
   spawnPlayerPokemon() {
     const activeMon = window.GameStateManager && window.GameStateManager.playerPartyMon1;
-    if (!activeMon || !activeMon.species) return;
+    console.log("[DeepLogger] 🟢 === START PLAYER SPAWN LOOKUP ===");
+    console.log("[DeepLogger] Active Player Mon from StateManager:", activeMon);
+
+    if (!activeMon || !activeMon.species) {
+      console.log("[DeepLogger] ❌ Player species missing or null.");
+      return;
+    }
 
     const speciesKey = activeMon.species;
     const db = typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : window.PokemonDatabase;
-    let staticData = db[speciesKey];
 
+    if (!db) {
+      console.log("[DeepLogger] ❌ CRITICAL: PokemonDatabase is undefined for player lookup!");
+      return;
+    }
+
+    // Step 1: Direct Exact Match
+    let staticData = db[speciesKey];
+    console.log(`[DeepLogger] Direct lookup for player key "${speciesKey}":`, staticData ? "FOUND" : "NOT FOUND");
+
+    // Step 2: Fallback Search if needed
     if (!staticData) {
       const cleanSpecies = speciesKey.replace('SPECIES_', '').toLowerCase();
       const foundKey = Object.keys(db).find(k => k.toLowerCase() === speciesKey.toLowerCase() || k.toLowerCase().replace('species_', '') === cleanSpecies);
       staticData = foundKey ? db[foundKey] : Object.values(db).find(entry => entry && entry.name && entry.name.toLowerCase() === cleanSpecies);
+      console.log(`[DeepLogger] Player fallback search result:`, staticData ? "FOUND" : "NOT FOUND");
     }
 
-    if (!staticData) return;
+    if (!staticData) {
+      console.log(`[DeepLogger] ❌ Failed to find static data for player species "${speciesKey}".`);
+      return;
+    }
+
+    console.log("[DeepLogger] 📄 Raw Player Static Entry object retrieved from Database:", staticData);
+    console.log("[DeepLogger] 🔍 Raw Property Values Found:", {
+      'staticData.xPosBack': staticData.xPosBack,
+      'staticData.yPosBack': staticData.yPosBack,
+      'staticData.xPos': staticData.xPos,
+      'staticData.yPos': staticData.yPos
+    });
 
     const isShiny = activeMon.isShiny === 1;
     const spritePath = isShiny 
@@ -499,8 +588,32 @@ class BattleScene extends Phaser.Scene {
       : (staticData.backSprite || staticData.backShinySprite || staticData.frontSprite);
 
     const cryPath = staticData.cry;
-    const xPos = staticData.xPos !== undefined ? staticData.xPos : 180;
-    const yPos = staticData.yPos !== undefined ? staticData.yPos : 300;
+    
+    // Explicit Fallback Evaluation with logging
+    let xPos, yPos;
+    if (staticData.xPosBack !== undefined) {
+      xPos = staticData.xPosBack;
+      console.log("[DeepLogger] ✅ Using xPosBack:", xPos);
+    } else if (staticData.xPos !== undefined) {
+      xPos = staticData.xPos;
+      console.log("[DeepLogger] ⚠️ Fallback to legacy xPos:", xPos);
+    } else {
+      xPos = 180;
+      console.log("[DeepLogger] ⚠️ Fallback to default xPos:", xPos);
+    }
+
+    if (staticData.yPosBack !== undefined) {
+      yPos = staticData.yPosBack;
+      console.log("[DeepLogger] ✅ Using yPosBack:", yPos);
+    } else if (staticData.yPos !== undefined) {
+      yPos = staticData.yPos;
+      console.log("[DeepLogger] ⚠️ Fallback to legacy yPos:", yPos);
+    } else {
+      yPos = 300;
+      console.log("[DeepLogger] ⚠️ Fallback to default yPos:", yPos);
+    }
+
+    console.log(`[DeepLogger] 🎯 FINAL PLAYER COORDS SENT TO THROW -> x: ${xPos}, y: ${yPos}`);
 
     const textureKey = `pkmn_${speciesKey}_${activeMon.isShiny || 0}_back`;
     const cryKey = `cry_${speciesKey}`;
@@ -520,10 +633,12 @@ class BattleScene extends Phaser.Scene {
     }
   }
 
-  executePlayerThrow(textureKey, staticData, cryKey) {
-    const pokeSprite = this.add.image(staticData.xPos, staticData.yPos, textureKey).setDepth(4).setVisible(false).setScale(0.1, 1.5);
+  executePlayerThrow(textureKey, coordsObj, cryKey) {
+    console.log(`[CoordDebug] 🚀 executePlayerThrow received coords -> x: ${coordsObj.xPos}, y: ${coordsObj.yPos}`);
 
-    // --- ADDED: Save reference to player sprite for coordinate editing ---
+    const pokeSprite = this.add.image(coordsObj.xPos, coordsObj.yPos, textureKey).setDepth(4).setVisible(false).setScale(0.1, 1.5);
+
+    // Save reference for live coordinate editing (T, F, G, H keys)
     this.playerSpriteRef = pokeSprite;
 
     if (typeof ThrowPokeBallAnim !== 'undefined') {
@@ -553,6 +668,7 @@ class BattleScene extends Phaser.Scene {
     }
   }
 
+
   setupBattleUIElements() {
     this.add.rectangle(320, 477, 636, 6, 0x3b3a32).setDepth(10);
     this.add.rectangle(320, 420, 632, 112, 0x5a554a).setDepth(10);
@@ -563,8 +679,15 @@ class BattleScene extends Phaser.Scene {
     this.menuGfx = this.add.graphics().setDepth(11);
 
     if (this.fontRenderer) {
-      const rawDialogue = 'What will\n$activePlayerName do?';
-      const formattedDialogue = window.GameStateManager.parseText(rawDialogue);
+      const activeMon = window.GameStateManager ? window.GameStateManager.playerPartyMon1 : null;
+      const monName = activeMon ? (activeMon.nickname || activeMon.species.replace('SPECIES_', '')) : 'Pokémon';
+      
+      console.log("[BattleScene] 🎨 Setting up UI dialogue box. Target Mon Name:", monName);
+
+      const rawDialogue = `What will\n${monName} do?`;
+      const formattedDialogue = window.GameStateManager.parseText 
+        ? window.GameStateManager.parseText(rawDialogue) 
+        : rawDialogue;
 
       this.fontRenderer.print(40, 385, formattedDialogue, 24); 
 

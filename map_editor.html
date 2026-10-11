@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pokémon Micron - Overworld Map Editor</title>
+  <style>
+    body { font-family: monospace; background: #222; color: #eee; display: flex; height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; gap: 15px; }
+    .panel { background: #333; padding: 15px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+    #controls { width: 360px; }
+    #canvas-container { flex: 1; display: flex; justify-content: center; align-items: center; background: #111; overflow: auto; position: relative; }
+    #output-panel { width: 440px; display: flex; flex-direction: column; gap: 10px; }
+    .sub-box { flex: 1; display: flex; flex-direction: column; gap: 5px; min-height: 0; }
+    textarea { width: 100%; height: 100%; background: #1a1a1a; color: #76ff03; border: 1px solid #555; font-family: monospace; padding: 8px; box-sizing: border-box; resize: none; font-size: 11px; }
+    .script-text { color: #00bcd4; }
+    .btn-group { display: flex; gap: 5px; flex-wrap: wrap; }
+    button { padding: 6px 10px; background: #444; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 11px; }
+    button.active { background: #00acc1; }
+    button:hover { background: #555; }
+    .btn-primary { background: #00acc1; font-weight: bold; }
+    .btn-success { background: #4caf50; font-weight: bold; }
+    .grid { display: grid; gap: 1px; background: #444; user-select: none; }
+    .tile { width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; cursor: pointer; user-select: none; position: relative; overflow: hidden; }
+    .t0 { background: #78c850; } /* Floor */
+    .t1 { background: #55aa77; } /* Grass */
+    .t2 { background: #88d8b0; } /* Wall */
+    
+    .npc-sprite {
+      width: 26px; height: 26px; border-radius: 4px;
+      display: flex; justify-content: center; align-items: center;
+      font-size: 12px; font-weight: bold; color: #fff;
+      cursor: grab; z-index: 10; border: 1px solid rgba(255,255,255,0.6);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    }
+    .npc-sprite:active { cursor: grabbing; }
+
+    input[type="text"], input[type="number"], select { background: #222; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; width: 100%; box-sizing: border-box; font-family: monospace; font-size: 11px; }
+    .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; }
+    .checkbox-label input { width: auto; cursor: pointer; }
+    label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+    .help-text { font-size: 11px; color: #aaa; background: #222; padding: 6px; border-radius: 4px; border-left: 3px solid #00acc1; }
+  </style>
+</head>
+<body>
+
+  <!-- LEFT PANEL: Controls & Event Creator -->
+  <div class="panel" id="controls">
+    <h3>🗺️ Map Properties</h3>
+    <div style="display: flex; gap: 5px; margin-bottom: 3px;">
+      <button class="btn-success" style="flex:1;" onclick="createNewMap()">+ New Map</button>
+    </div>
+    <label>Map Name: <input type="text" id="mapName" value="Criscanto Town" oninput="generateOutput()"></label>
+    
+    <div style="display: flex; gap: 10px;">
+      <label>Width: <input type="number" id="mapCols" value="10" min="5" max="30" onchange="initGrid()"></label>
+      <label>Height: <input type="number" id="mapRows" value="10" min="5" max="30" onchange="initGrid()"></label>
+    </div>
+
+    <label>Map Type: <input type="text" id="mapType" value="MAP_TYPE_TOWN" oninput="generateOutput()"></label>
+    
+    <label>Weather: 
+      <select id="mapWeather" onchange="generateOutput()">
+        <option value="WEATHER_NONE">WEATHER_NONE</option>
+        <option value="WEATHER_RAIN">WEATHER_RAIN</option>
+        <option value="WEATHER_SNOW">WEATHER_SNOW</option>
+        <option value="WEATHER_FOG">WEATHER_FOG</option>
+      </select>
+    </label>
+
+    <label>Music (`audio/music/`): 
+      <select id="mapMusic" onchange="generateOutput()">
+        <option value="mus_criscanto_town.mp3">mus_criscanto_town.mp3</option>
+        <option value="mus_route1.mp3">mus_route1.mp3</option>
+        <option value="mus_pokemon_center.mp3">mus_pokemon_center.mp3</option>
+        <option value="mus_trainer_battle.mp3">mus_trainer_battle.mp3</option>
+      </select>
+    </label>
+
+    <div style="display: flex; gap: 15px; margin-top: 5px;">
+      <label class="checkbox-label"><input type="checkbox" id="isFlyable" onchange="generateOutput()"> Is Flyable</label>
+      <label class="checkbox-label"><input type="checkbox" id="isRunning" checked onchange="generateOutput()"> Is Running Allowed</label>
+    </div>
+    
+    <h3>🎨 Tile Brush</h3>
+    <div class="btn-group">
+      <button id="brush0" class="active" onclick="setBrush(0)">Floor (0)</button>
+      <button id="brush1" onclick="setBrush(1)">Grass (1)</button>
+      <button id="brush2" onclick="setBrush(2)">Wall (2)</button>
+    </div>
+
+    <h3>👥 Event Manager</h3>
+    <div style="display: flex; gap: 5px; margin-bottom: 3px;">
+      <button class="btn-primary" style="flex:1;" onclick="addNewEventPrompt()">+ Add New Event</button>
+    </div>
+    <div class="help-text">💡 Click & drag sprites on grid to move them instantly.</div>
+    
+    <label>Active Event Key: 
+      <select id="evtKeySelect" onchange="loadSelectedEvent()">
+        <option value="NPC_Portia">NPC_Portia</option>
+        <option value="NPC_Lily">NPC_Lily</option>
+      </select>
+    </label>
+    
+    <label>Overworld Character (owID): 
+      <select id="evtOwID" onchange="updateEventSprite(); generateOutput();">
+        <option value="Portia">Portia</option>
+        <option value="Lily">Lily</option>
+        <option value="Brendan">Brendan</option>
+      </select>
+    </label>
+
+    <label>Script Name: 
+      <select id="evtScript" onchange="updateActiveEventData(); generateOutput()">
+        <option value="portia_battle_trigger">portia_battle_trigger</option>
+        <option value="lily_gift_trigger">lily_gift_trigger</option>
+        <option value="nurse_heal_trigger">nurse_heal_trigger</option>
+      </select>
+    </label>
+    
+    <div style="display: flex; gap: 10px;">
+      <label>Grid X: <input type="number" id="evtX" value="5" min="0" oninput="syncInputsToEvent(); generateOutput()"></label>
+      <label>Grid Y: <input type="number" id="evtY" value="3" min="0" oninput="syncInputsToEvent(); generateOutput()"></label>
+    </div>
+  </div>
+
+  <!-- CENTER PANEL: Visual Grid Canvas -->
+  <div class="panel" id="canvas-container">
+    <div id="gridElement" class="grid" ondragover="event.preventDefault()"></div>
+  </div>
+
+  <!-- RIGHT PANEL: Split in Half (Map Output Top / Script Viewer Bottom) -->
+  <div class="panel" id="output-panel">
+    <!-- Top Box: Map Output -->
+    <div class="sub-box">
+      <h3>📋 Map Code Output</h3>
+      <textarea id="outputCode" readonly></textarea>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('outputCode').value); alert('Map Code Copied!');">Copy Map Output</button>
+    </div>
+
+    <!-- Bottom Box: Script Engine Viewer -->
+    <div class="sub-box">
+      <h3>📜 Script Engine (`js/script_engine`)</h3>
+      <textarea id="scriptOutput" class="script-text" readonly></textarea>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('scriptOutput').value); alert('Script Code Copied!');">Copy Script Code</button>
+    </div>
+  </div>
+
+  <script>
+    let cols = 10, rows = 10;
+    let gridData = [];
+    let currentBrush = 0;
+    
+    const spriteColors = {
+      "Portia": "#e91e63",
+      "Lily": "#9c27b0",
+      "Brendan": "#ff9800"
+    };
+
+    const scriptLibrary = {
+      "portia_battle_trigger": `// js/script_engine/portia_battle_trigger.js\nwindow.ScriptEngine = window.ScriptEngine || {};\nwindow.ScriptEngine["portia_battle_trigger"] = function() {\n  console.log("[Script] Portia challenge initiated!");\n  DialogueManager.show("Portia: Let's see your Pokémon strength!");\n  BattleManager.startTrainerBattle("Portia");\n};`,
+      "lily_gift_trigger": `// js/script_engine/lily_gift_trigger.js\nwindow.ScriptEngine = window.ScriptEngine || {};\nwindow.ScriptEngine["lily_gift_trigger"] = function() {\n  DialogueManager.show("Lily: I want you to have this Pokémon!");\n  GivePokemonSystem.give({ species: "SPECIES_EELEKTROSS_M", level: 15 });\n  DialogueManager.show("Lily: Take good care of it!");\n};`,
+      "nurse_heal_trigger": `// js/script_engine/nurse_heal_trigger.js\nwindow.ScriptEngine = window.ScriptEngine || {};\nwindow.ScriptEngine["nurse_heal_trigger"] = function() {\n  DialogueManager.show("Nurse: Welcome to our Pokémon Center!");\n  PartyHealer.healAll();\n  DialogueManager.show("Your Pokémon are fully healed!");\n};`
+    };
+
+    let eventsList = {
+      NPC_Portia: { owID: "Portia", eventType: "NPC", script: "portia_battle_trigger", movementType: "wander_left_right", isTrainer: true, viewRadius: 3, xPos: 5, yPos: 3, flagID: "FLAG_DEFEATED_PORTIA" },
+      NPC_Lily: { owID: "Lily", eventType: "NPC", script: "lily_gift_trigger", movementType: "face_down", isTrainer: false, xPos: 3, yPos: 6, flagID: "FLAG_RECEIVED_LILY_POKEMON" }
+    };
+
+    let draggedEventKey = null;
+
+    function initGrid() {
+      cols = parseInt(document.getElementById('mapCols').value);
+      rows = parseInt(document.getElementById('mapRows').value);
+      
+      gridData = [];
+      for (let r = 0; r < rows; r++) {
+        let rowArr = [];
+        for (let c = 0; c < cols; c++) rowArr.push(0);
+        gridData.push(rowArr);
+      }
+      renderGrid();
+      generateOutput();
+    }
+
+    function createNewMap() {
+      const name = prompt("Enter new map name:", "Route 1");
+      if (!name) return;
+      document.getElementById('mapName').value = name;
+      document.getElementById('mapCols').value = 10;
+      document.getElementById('mapRows').value = 10;
+      document.getElementById('mapType').value = "MAP_TYPE_ROUTE";
+      document.getElementById('mapWeather').value = "WEATHER_NONE";
+      document.getElementById('mapMusic').value = "mus_route1.mp3";
+      document.getElementById('isFlyable').checked = false;
+      document.getElementById('isRunning').checked = true;
+      eventsList = {};
+      updateEventDropdown();
+      initGrid();
+    }
+
+    function addNewEventPrompt() {
+      const keyName = prompt("Enter Event Key (e.g. NPC_Elder, Signpost_1):", "NPC_NewNPC");
+      if (!keyName) return;
+      if (eventsList[keyName]) {
+        alert("An event with that key already exists!");
+        return;
+      }
+
+      eventsList[keyName] = {
+        owID: "Portia",
+        eventType: "NPC",
+        script: "portia_battle_trigger",
+        movementType: "face_down",
+        isTrainer: false,
+        xPos: 0,
+        yPos: 0,
+        flagID: `FLAG_${keyName.toUpperCase()}_INTERACTED`
+      };
+
+      updateEventDropdown();
+      document.getElementById('evtKeySelect').value = keyName;
+      loadSelectedEvent();
+      renderGrid();
+      generateOutput();
+    }
+
+    function updateEventDropdown() {
+      const select = document.getElementById('evtKeySelect');
+      select.innerHTML = '';
+      for (const k of Object.keys(eventsList)) {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = k;
+        select.appendChild(opt);
+      }
+    }
+
+    function renderGrid() {
+      const container = document.getElementById('gridElement');
+      container.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
+      container.innerHTML = '';
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const div = document.createElement('div');
+          div.className = `tile t${gridData[r][c]}`;
+          div.dataset.r = r;
+          div.dataset.c = c;
+          
+          let occupantKey = Object.keys(eventsList).find(k => eventsList[k].xPos === c && eventsList[k].yPos === r);
+          if (occupantKey) {
+            const occupant = eventsList[occupantKey];
+            const spriteBox = document.createElement('div');
+            spriteBox.className = 'npc-sprite';
+            spriteBox.style.backgroundColor = spriteColors[occupant.owID] || '#00acc1';
+            spriteBox.textContent = occupant.owID[0];
+            spriteBox.draggable = true;
+            
+            spriteBox.ondragstart = (e) => {
+              draggedEventKey = occupantKey;
+              document.getElementById('evtKeySelect').value = occupantKey;
+              loadSelectedEvent();
+            };
+
+            div.appendChild(spriteBox);
+          }
+
+          div.ondragover = (e) => e.preventDefault();
+          div.ondrop = (e) => {
+            e.preventDefault();
+            if (draggedEventKey && eventsList[draggedEventKey]) {
+              eventsList[draggedEventKey].xPos = c;
+              eventsList[draggedEventKey].yPos = r;
+              document.getElementById('evtX').value = c;
+              document.getElementById('evtY').value = r;
+              draggedEventKey = null;
+              renderGrid();
+              generateOutput();
+            }
+          };
+
+          div.onclick = () => {
+            if (!occupantKey) {
+              gridData[r][c] = currentBrush;
+              renderGrid();
+              generateOutput();
+            }
+          };
+
+          container.appendChild(div);
+        }
+      }
+    }
+
+    function setBrush(val) {
+      currentBrush = val;
+      document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+      document.getElementById(`brush${val}`).classList.add('active');
+    }
+
+    function loadSelectedEvent() {
+      const sel = document.getElementById('evtKeySelect').value;
+      const ev = eventsList[sel];
+      if (ev) {
+        document.getElementById('evtOwID').value = ev.owID || 'Portia';
+        document.getElementById('evtScript').value = ev.script || 'portia_battle_trigger';
+        document.getElementById('evtX').value = ev.xPos || 0;
+        document.getElementById('evtY').value = ev.yPos || 0;
+        updateScriptDisplay();
+      }
+    }
+
+    function updateEventSprite() {
+      const sel = document.getElementById('evtKeySelect').value;
+      const owID = document.getElementById('evtOwID').value;
+      if (eventsList[sel]) {
+        eventsList[sel].owID = owID;
+        if (owID === 'Portia') document.getElementById('evtScript').value = 'portia_battle_trigger';
+        if (owID === 'Lily') document.getElementById('evtScript').value = 'lily_gift_trigger';
+        eventsList[sel].script = document.getElementById('evtScript').value;
+        updateScriptDisplay();
+      }
+      renderGrid();
+    }
+
+    function updateActiveEventData() {
+      const sel = document.getElementById('evtKeySelect').value;
+      const scriptVal = document.getElementById('evtScript').value;
+      if (eventsList[sel]) {
+        eventsList[sel].script = scriptVal;
+      }
+      updateScriptDisplay();
+    }
+
+    function updateScriptDisplay() {
+      const scriptName = document.getElementById('evtScript').value;
+      document.getElementById('scriptOutput').value = scriptLibrary[scriptName] || `// Custom script: ${scriptName}\nwindow.ScriptEngine = window.ScriptEngine || {};\nwindow.ScriptEngine["${scriptName}"] = function() {\n  // TODO: Add script logic here\n};`;
+    }
+
+    function syncInputsToEvent() {
+      const sel = document.getElementById('evtKeySelect').value;
+      const x = parseInt(document.getElementById('evtX').value);
+      const y = parseInt(document.getElementById('evtY').value);
+      if (eventsList[sel]) {
+        eventsList[sel].xPos = isNaN(x) ? 0 : x;
+        eventsList[sel].yPos = isNaN(y) ? 0 : y;
+        renderGrid();
+      }
+    }
+
+    function generateOutput() {
+      const mapName = document.getElementById('mapName').value;
+      const mapType = document.getElementById('mapType').value;
+      const weather = document.getElementById('mapWeather').value;
+      const music = document.getElementById('mapMusic').value;
+      const isFlyable = document.getElementById('isFlyable').checked;
+      const isRunning = document.getElementById('isRunning').checked;
+
+      let blockDataStr = "[\n" + gridData.map(row => "      [" + row.join(", ") + "]").join(",\n") + "\n    ]";
+      
+      let eventsStr = "{\n";
+      for (const [k, v] of Object.entries(eventsList)) {
+        eventsStr += `      ${k}: {\n`;
+        for (const [ek, ev] of Object.entries(v)) {
+          let formattedVal = typeof ev === 'string' ? `"${ev}"` : ev;
+          eventsStr += `        ${ek}: ${formattedVal},\n`;
+        }
+        eventsStr += `      },\n`;
+      }
+      eventsStr += "    }";
+
+      const fullOutput = `window.OverworldMaps = window.OverworldMaps || {};\nwindow.OverworldMaps["${mapName}"] = {\n  mapType: "${mapType}",\n  weather: "${weather}",\n  isFlyable: ${isFlyable},\n  isRunning: ${isRunning},\n  music: "audio/music/${music}",\n  dimensions: {\n    width: ${cols},\n    height: ${rows},\n    blockSize: 8\n  },\n  blockData: ${blockDataStr},\n  events: ${eventsStr}\n};`;
+
+      document.getElementById('outputCode').value = fullOutput;
+    }
+
+    updateEventDropdown();
+    initGrid();
+    updateScriptDisplay();
+  </script>
+</body>
+</html>

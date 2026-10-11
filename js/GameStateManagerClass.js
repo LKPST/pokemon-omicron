@@ -1,44 +1,71 @@
-// js/GameStateManagerClass.js
-
-class GameStateManagerClass {
+  class GameStateManagerClass {
   constructor() {
-    // --- PLAYER STATE ---
-    this.activePlayerName = 'Clay';
-    this.activePlayerGender = 'MALE'; // 'MALE' or 'FEMALE'
-    this.activePlayerBackSprite = 'gTrainerBackPic_Brendan';
-    this.activePlayerMapID = 1;
-    this.activePlayerBankID = 0;
-    this.activePlayerXpos = 0;
-    this.activePlayerYpos = 0;
-
-    // --- PLAYER PARTY POKEMON (Slots 1 to 6) ---
-    this.playerPartyMon1 = {
-      species: 'SPECIES_LUCARIO_Z',
-      nickname: 'Flora',
-      OTID: 54321,
-      HP: 150,
-      maxHP: 150,
-      level: 50,
-      isShiny: 1,           // 1 = Shiny (uses backShinySprite), 0 = Normal
-      teraType: 'TYPE_GRASS',
-      isGigantaMax: false,
-      heldItem: 'ITEM_LEFTOVERS',
-      ability: 'ABILITY_PROTEAN',
-      paradoxPoint: 10,
-      manaPoint: 100,
-      ballId: 1             // Pokeball ID used for throwing animation
+    // --- PLAYER & METADATA ---
+    this.saveData = {
+      player: {
+        name: 'Clay',
+        gender: 'MALE',
+        playerOTID: 54321,
+        playerSecretID: 12345,
+        money: 500,
+        mapID: 1,
+        x: 320,
+        y: 240
+      },
+      party: [
+        {
+          species: 'SPECIES_LUCARIO_Z',
+          nickname: 'Flora',
+          natdexID: 448,
+          level: 50,
+          exp: 125000,
+          expmax: 156250,
+          isShiny: 1,
+          gender: 'FEMALE',
+          HP: 150,
+          maxHP: 150,
+          Attack: 120,
+          Def: 95,
+          spattack: 115,
+          sdpef: 90,
+          speed: 110,
+          ivhp: 31, ivatk: 31, ivdef: 30, ivspd: 31, ivspa: 31, ivspe: 31,
+          nature: 'NATURE_ADAMANT',
+          ability: 'ABILITY_PROTEAN',
+          teraType: 'TYPE_GRASS',
+          isGigantaMax: false,
+          heldItem: 'ITEM_LEFTOVERS',
+          pokerus: 0,
+          friendship: 70,
+          isHatched: true,
+          paradoxPoint: 10,
+          manaPoint: 100,
+          ballId: 1,
+          cool: 0, cute: 0, smart: 0, tough: 0, beauty: 0, sheen: 0,
+          OTID: 54321,
+          OTsecretID: 12345,
+          OTName: 'Clay',
+          latestOTID: 54321,
+          latestOTName: 'Clay',
+          caughtloc: 'ROUTE_101',
+          moves: [
+            { moveId: 'MOVE_CLOSE_COMBAT', currentPP: 8, maxPP: 8 },
+            { moveId: 'MOVE_BULLET_PUNCH', currentPP: 30, maxPP: 30 },
+            { moveId: 'MOVE_SWORDS_DANCE', currentPP: 20, maxPP: 20 },
+            { moveId: 'MOVE_IRON_HEAD', currentPP: 15, maxPP: 15 }
+          ],
+          markings: { circle: true, triangle: false, square: true, heart: false, star: false, diamond: false },
+          ribbons: ['RIBBON_CHAMPION'],
+          superTrainingFlags: { hpMedal: true, atkMedal: true, defMedal: false, spatkMedal: false, spdefMedal: false, speedMedal: true }
+        },
+        null, null, null, null, null
+      ],
+      pcStorage: Array.from({ length: 8 }, () => []),
+      flags: {},
+      vars: {}
     };
-    this.playerPartyMon2 = null;
-    this.playerPartyMon3 = null;
-    this.playerPartyMon4 = null;
-    this.playerPartyMon5 = null;
-    this.playerPartyMon6 = null;
 
-    // --- BATTLE CONTEXT & TARGETING BANKS ---
-    this.attackerBank = null; // Who is currently executing an action
-    this.targetBankA = null; // Primary target
-    this.targetBankB = null; // Secondary target (multi-battles)
-    this.targetBankC = null; // Tertiary target
+    // --- OPPONENT & BATTLE STATE ---
     this.opponentPartyMon1 = {
       species: 'SPECIES_EELEKTROSS_M',
       nickname: 'Hexerene',
@@ -54,48 +81,44 @@ class GameStateManagerClass {
       paradoxPoint: 10,
       manaPoint: 100,
       ballId: 1
-    }; // Current active opponent Pokémon
+    };
 
-    this.partnerPartyMon = null; // Current active ally Pokémon (multi-battles)
-
-    // --- OPPONENT BANK A (Primary Enemy / Trainer) ---
     this.activeOpponentNameBankA = 'PORTIA';
     this.activeOpponentTrainerIDBankA = 101;
     this.activeOpponentTrainerSpriteBankA = 'portia';
     this.activeOpponentClassBankA = 'PKMN TRAINER';
     this.activeOpponentMoneyBankA = 500;
-    this.activeOpponentMovePoolBankA = [];
-    this.activeOpponentItemPoolBankA = [];
-    this.activeOpponentNatureBankA = 'Hardy';
-    this.activeOpponentCustomBallBankA = 'poke_ball';
-    this.activeOpponentBankA = null;
-
-    // --- OPPONENT BANK B (Multi-battle slot 2) ---
-    this.activeOpponentNameBankB = '';
-    this.activeOpponentTrainerIDBankB = null;
-    this.activeOpponentTrainerSpriteBankB = null;
-    this.activeOpponentClassBankB = '';
-    this.activeOpponentMoneyBankB = 0;
-    this.activeOpponentMovePoolBankB = [];
-    this.activeOpponentItemPoolBankB = [];
-    this.activeOpponentNatureBankB = '';
-    this.activeOpponentCustomBallBankB = '';
-    this.activeOpponentBankB = null;
-
-    // --- OPPONENT BANK C (Multi-battle slot 3) ---
-    this.activeOpponentNameBankC = '';
-    this.activeOpponentTrainerIDBankC = null;
-    this.activeOpponentTrainerSpriteBankC = null;
-    this.activeOpponentClassBankC = '';
-    this.activeOpponentMoneyBankC = 0;
-    this.activeOpponentMovePoolBankC = [];
-    this.activeOpponentItemPoolBankC = [];
-    this.activeOpponentNatureBankC = '';
-    this.activeOpponentCustomBallBankC = '';
-    this.activeOpponentBankC = null;
   }
 
-  // --- STATIC DATABASE LOOKUP HELPER ---
+  // --- SEAMLESS GETTERS/SETTERS FOR BATTLE & SAVE COMPATIBILITY ---
+  get playerPartyMon1() { return this.saveData.party[0]; }
+  set playerPartyMon1(mon) { this.saveData.party[0] = mon; }
+
+  get playerPartyMon2() { return this.saveData.party[1]; }
+  set playerPartyMon2(mon) { this.saveData.party[1] = mon; }
+
+  get activePlayerName() { return this.saveData.player.name; }
+  set activePlayerName(name) { this.saveData.player.name = name; }
+
+  // --- LOAD METHOD FROM save.json ---
+  loadSaveData(externalSaveData) {
+    if (externalSaveData) {
+      this.saveData = externalSaveData;
+    }
+  }
+
+  // --- TEXT INTERPOLATION ---
+  parseText(text) {
+    if (!text) return '';
+    const firstMon = this.playerPartyMon1;
+    const monName = firstMon ? (firstMon.nickname || firstMon.species.replace('SPECIES_', '')) : 'Pokémon';
+
+    return text
+      .replace(/\$activePlayerName/g, this.saveData.player.name)
+      .replace(/\$activeMonName/g, monName)
+      .replace(/\$activeOpponentNameBankA/g, this.activeOpponentNameBankA);
+  }
+
   getStaticData(partyMon) {
     if (!partyMon || typeof PokemonDatabase === 'undefined' || !PokemonDatabase[partyMon.species]) {
       return {
@@ -112,24 +135,12 @@ class GameStateManagerClass {
     return PokemonDatabase[partyMon.species];
   }
 
-  // --- TEXT INTERPOLATION HELPER ---
-  // Automatically replaces $activePlayerName or opponent name tags inside any dialogue string
-  parseText(text) {
-    if (!text) return '';
-    return text
-      .replace(/\$activePlayerName/g, this.activePlayerName)
-      .replace(/\$activeOpponentNameBankA/g, this.activeOpponentNameBankA)
-      .replace(/\$activeOpponentNameBankB/g, this.activeOpponentNameBankB)
-      .replace(/\$activeOpponentNameBankC/g, this.activeOpponentNameBankC);
-  }
-
-  // --- GETTERS & SETTERS ---
   setPlayerName(name) {
-    this.activePlayerName = name;
+    this.saveData.player.name = name;
   }
 
   getPlayerName() {
-    return this.activePlayerName;
+    return this.saveData.player.name;
   }
 
   setOpponentBankA(trainerData) {
@@ -138,10 +149,23 @@ class GameStateManagerClass {
     this.activeOpponentTrainerSpriteBankA = trainerData.sprite || '';
     this.activeOpponentClassBankA = trainerData.trainerClass || 'TRAINER';
     this.activeOpponentMoneyBankA = trainerData.money || 0;
-    this.activeOpponentMovePoolBankA = trainerData.moves || [];
-    this.activeOpponentItemPoolBankA = trainerData.items || [];
   }
+
+  // --- ASYNC LOADER FOR save.json ---
+  async initSaveFile() {
+    try {
+      const response = await fetch('save.json');
+      if (!response.ok) throw new Error('Failed to fetch save.json');
+      
+      const externalSaveData = await response.json();
+      this.loadSaveData(externalSaveData);
+      console.log('[GameStateManager] Successfully loaded and synchronized with save.json!');
+    } catch (error) {
+      console.warn('[GameStateManager] Could not load save.json. Using constructor default data.', error);
+    }
+  }
+  
 }
 
 // Global Singleton Instance
-window.GameStateManager = new GameStateManagerClass();
+window.GameStateManager = new GameStateManagerClass(); 

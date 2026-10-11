@@ -23,6 +23,18 @@ window.OverworldTable = {
     isCycling: false,
     owSprite: 'graphics/overworld/brendan.png',
   },
+  Lily: {
+    spriteID: 'lily_ow',
+    frames: 12, // 3 frames per direction across 4 directions (Down, Left, Right, Up)
+    genderBased: false,
+    owType: 'NPC',
+    owDimension: '16x32', // Standard GBA human NPC dimension
+    isRunning: false,
+    isFishing: false,
+    isSurfing: false,
+    isCycling: false,
+    owSprite: 'graphics/overworld/lily.png',
+  },
   Hatterene: {
     spriteID: 'hatterene_ow',
     frames: 12,
