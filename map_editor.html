@@ -2,267 +2,733 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Pokémon Micron - Overworld Map Editor</title>
-  <style>
-    body { font-family: monospace; background: #222; color: #eee; display: flex; height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; gap: 15px; }
-    .panel { background: #333; padding: 15px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-    #controls { width: 360px; }
-    #canvas-container { flex: 1; display: flex; justify-content: center; align-items: center; background: #111; overflow: auto; position: relative; }
-    #output-panel { width: 440px; display: flex; flex-direction: column; gap: 10px; }
-    .sub-box { flex: 1; display: flex; flex-direction: column; gap: 5px; min-height: 0; }
-    textarea { width: 100%; height: 100%; background: #1a1a1a; color: #76ff03; border: 1px solid #555; font-family: monospace; padding: 8px; box-sizing: border-box; resize: none; font-size: 11px; }
-    .script-text { color: #00bcd4; }
-    .btn-group { display: flex; gap: 5px; flex-wrap: wrap; }
-    button { padding: 6px 10px; background: #444; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 11px; }
-    button.active { background: #00acc1; }
-    button:hover { background: #555; }
-    .btn-primary { background: #00acc1; font-weight: bold; }
-    .btn-success { background: #4caf50; font-weight: bold; }
-    .grid { display: grid; gap: 1px; background: #444; user-select: none; }
-    .tile { width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; cursor: pointer; user-select: none; position: relative; overflow: hidden; }
-    .t0 { background: #78c850; } /* Floor */
-    .t1 { background: #55aa77; } /* Grass */
-    .t2 { background: #88d8b0; } /* Wall */
-    
-    .npc-sprite {
-      width: 26px; height: 26px; border-radius: 4px;
-      display: flex; justify-content: center; align-items: center;
-      font-size: 12px; font-weight: bold; color: #fff;
-      cursor: grab; z-index: 10; border: 1px solid rgba(255,255,255,0.6);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-    }
-    .npc-sprite:active { cursor: grabbing; }
+  <title>Pokémon Micron - Advanced Map & World Editor</title>
+  
+  <script src="js/ow_table.js"></script>
 
-    input[type="text"], input[type="number"], select { background: #222; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; width: 100%; box-sizing: border-box; font-family: monospace; font-size: 11px; }
-    .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; }
-    .checkbox-label input { width: auto; cursor: pointer; }
-    label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
-    .help-text { font-size: 11px; color: #aaa; background: #222; padding: 6px; border-radius: 4px; border-left: 3px solid #00acc1; }
+  <style>
+    body { font-family: monospace; background: #121212; color: #e0e0e0; display: flex; height: 100vh; margin: 0; padding: 12px; box-sizing: border-box; gap: 15px; }
+    .panel { background: #1e1e1e; padding: 16px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; border: 1px solid #2d2d2d; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    #controls { width: 440px; }
+    #canvas-container { flex: 1; display: flex; justify-content: center; align-items: center; background: #0a0a0a; overflow: auto; position: relative; border: 1px solid #2d2d2d; border-radius: 8px; padding: 60px; }
+    #output-panel { width: 480px; display: flex; flex-direction: column; gap: 10px; transition: width 0.2s; }
+    .sub-box { display: flex; flex-direction: column; gap: 6px; min-height: 0; flex: 1; transition: height 0.2s; background: #1e1e1e; padding: 12px; border-radius: 8px; border: 1px solid #2d2d2d; }
+    .sub-box.collapsed { flex: 0 0 45px !important; overflow: hidden; }
+    .sub-box.collapsed textarea, .sub-box.collapsed button { display: none; }
+    
+    textarea { width: 100%; height: 100%; background: #141414; color: #76ff03; border: 1px solid #333; border-radius: 6px; font-family: monospace; padding: 10px; box-sizing: border-box; resize: none; font-size: 11px; }
+    .script-text { color: #00bcd4; }
+    
+    /* Tabs */
+    .tab-header { display: flex; gap: 4px; background: #141414; padding: 4px; border-radius: 6px; border: 1px solid #2d2d2d; }
+    .tab-btn { padding: 8px 12px; background: transparent; color: #888; border: none; cursor: pointer; border-radius: 4px; font-size: 11px; font-weight: bold; flex: 1; text-align: center; transition: all 0.2s; }
+    .tab-btn.active { background: #00acc1; color: white; box-shadow: 0 2px 6px rgba(0,172,193,0.3); }
+    .tab-content { display: none; flex-direction: column; gap: 10px; }
+    .tab-content.active { display: flex; }
+
+    button { padding: 7px 12px; background: #2d2d2d; color: #fff; border: 1px solid #3d3d3d; cursor: pointer; border-radius: 6px; font-size: 11px; font-weight: bold; transition: background 0.2s; }
+    button:hover { background: #3d3d3d; }
+    .btn-primary { background: #00acc1; border-color: #00838f; color: white; }
+    .btn-primary:hover { background: #0097a7; }
+    .btn-success { background: #43a047; border-color: #2e7d32; color: white; }
+    .btn-success:hover { background: #388e3c; }
+    .btn-danger { background: #e53935; border-color: #c62828; color: white; }
+    .btn-danger:hover { background: #d32f2f; }
+    .tool-icon-btn { padding: 8px 14px; background: #252525; border: 1px solid #383838; border-radius: 6px; cursor: pointer; font-size: 13px; color: #aaa; }
+    .tool-icon-btn.active { background: #00acc1; color: white; border-color: #00838f; }
+
+    .event-inspector-card { background: #141414; border: 1px solid #2d2d2d; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* World Canvas Layout Engine */
+    .world-stage { position: relative; display: flex; justify-content: center; align-items: center; }
+    .active-map-wrapper { position: relative; z-index: 10; border: 2px solid #00acc1; box-shadow: 0 0 25px rgba(0,172,193,0.3); border-radius: 4px; }
+    
+    .connected-map-wrapper {
+      position: absolute; opacity: 0.75; border: 2px dashed #76ff03;
+      cursor: pointer; z-index: 5; user-select: none; transition: opacity 0.2s;
+    }
+    .connected-map-wrapper:hover { opacity: 1; border-color: #fff; }
+    .connected-label { background: rgba(0,0,0,0.9); color: #76ff03; font-size: 9px; padding: 3px 6px; position: absolute; top: -18px; left: 0; white-space: nowrap; border: 1px solid #76ff03; border-radius: 3px; }
+
+    .grid { display: grid; gap: 1px; background: #333; user-select: none; position: relative; }
+    .tile { width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; cursor: pointer; user-select: none; position: relative; overflow: visible; font-size: 9px; font-weight: bold; }
+    
+    .t-0 { background: #78c850; color: #222; }
+    .t-1 { background: #333; color: #888; }
+    .t-2 { background: #3b82f6; color: #fff; }
+    .t-3 { background: #06b6d4; color: #000; }
+    .t-4 { background: #6366f1; color: #fff; }
+    .t-5 { background: #a855f7; color: #fff; }
+
+    .hide-values .tile { color: transparent !important; }
+
+    .sprite-frame-container {
+      position: absolute; bottom: 0px; left: 0px;
+      overflow: visible; z-index: 10; pointer-events: auto; cursor: grab;
+    }
+    .sprite-frame-container:active { cursor: grabbing; }
+
+    .event-badge {
+      width: 26px; height: 26px; border-radius: 6px; color: #fff;
+      display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold;
+      z-index: 10; position: absolute; cursor: grab; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+    .event-badge:active { cursor: grabbing; }
+    .badge-npc { background: #e53935; }       /* Red */
+    .badge-script { background: #43a047; }    /* Green */
+    .badge-sign { background: #fb8c00; }      /* Orange */
+    .badge-tile { background: #1e88e5; }      /* Blue */
+    .badge-warp { background: #8e24aa; }      /* Violet */
+
+    .toggle-container {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #141414; padding: 10px 14px; border-radius: 8px; border: 1px solid #2d2d2d;
+    }
+    .toggle-switch {
+      position: relative; display: inline-block; width: 40px; height: 22px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #333; transition: 0.3s; border-radius: 22px; border: 1px solid #444;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px;
+      background-color: white; transition: 0.3s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: #00acc1; border-color: #00838f; }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    input[type="text"], input[type="number"], select { background: #141414; color: #fff; border: 1px solid #333; padding: 7px 10px; border-radius: 6px; width: 100%; box-sizing: border-box; font-family: monospace; font-size: 11px; }
+    input:focus, select:focus { border-color: #00acc1; outline: none; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #aaa; font-weight: bold; }
+    .help-text { font-size: 11px; color: #888; background: #141414; padding: 8px; border-radius: 6px; border-left: 3px solid #00acc1; line-height: 1.4; }
+    
+    .connection-card, .event-card, .wild-card { background: #141414; padding: 10px; border-radius: 6px; border: 1px solid #2d2d2d; display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+    .wild-group { background: #141414; border: 1px solid #2d2d2d; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; }
+
+    #modalOverlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+    #modalBox { background: #1e1e1e; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; width: 340px; border: 1px solid #3d3d3d; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
   </style>
 </head>
 <body>
 
-  <!-- LEFT PANEL: Controls & Event Creator -->
+  <!-- MODAL -->
+  <div id="modalOverlay">
+    <div id="modalBox">
+      <h4 id="modalTitle" style="margin:0; color:#00acc1; font-size:14px;">Enter Value</h4>
+      <input type="text" id="modalInput" autofocus>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button onclick="closeModal(false)">Cancel</button>
+        <button class="btn-primary" onclick="closeModal(true)">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEFT PANEL -->
   <div class="panel" id="controls">
-    <h3>🗺️ Map Properties</h3>
-    <div style="display: flex; gap: 5px; margin-bottom: 3px;">
-      <button class="btn-success" style="flex:1;" onclick="createNewMap()">+ New Map</button>
-    </div>
-    <label>Map Name: <input type="text" id="mapName" value="Criscanto Town" oninput="generateOutput()"></label>
-    
-    <div style="display: flex; gap: 10px;">
-      <label>Width: <input type="number" id="mapCols" value="10" min="5" max="30" onchange="initGrid()"></label>
-      <label>Height: <input type="number" id="mapRows" value="10" min="5" max="30" onchange="initGrid()"></label>
-    </div>
-
-    <label>Map Type: <input type="text" id="mapType" value="MAP_TYPE_TOWN" oninput="generateOutput()"></label>
-    
-    <label>Weather: 
-      <select id="mapWeather" onchange="generateOutput()">
-        <option value="WEATHER_NONE">WEATHER_NONE</option>
-        <option value="WEATHER_RAIN">WEATHER_RAIN</option>
-        <option value="WEATHER_SNOW">WEATHER_SNOW</option>
-        <option value="WEATHER_FOG">WEATHER_FOG</option>
-      </select>
-    </label>
-
-    <label>Music (`audio/music/`): 
-      <select id="mapMusic" onchange="generateOutput()">
-        <option value="mus_criscanto_town.mp3">mus_criscanto_town.mp3</option>
-        <option value="mus_route1.mp3">mus_route1.mp3</option>
-        <option value="mus_pokemon_center.mp3">mus_pokemon_center.mp3</option>
-        <option value="mus_trainer_battle.mp3">mus_trainer_battle.mp3</option>
-      </select>
-    </label>
-
-    <div style="display: flex; gap: 15px; margin-top: 5px;">
-      <label class="checkbox-label"><input type="checkbox" id="isFlyable" onchange="generateOutput()"> Is Flyable</label>
-      <label class="checkbox-label"><input type="checkbox" id="isRunning" checked onchange="generateOutput()"> Is Running Allowed</label>
+    <h3 style="margin:0; color:#00acc1; font-size:15px;">🗺️ World & Map Editor</h3>
+    <div style="display: flex; gap: 6px;">
+      <select id="mapSelector" onchange="switchActiveMap(this.value)" style="flex:2; font-weight:bold;"></select>
+      <button class="btn-success" style="flex:1;" onclick="promptNewMap()">+ New Map</button>
     </div>
     
-    <h3>🎨 Tile Brush</h3>
-    <div class="btn-group">
-      <button id="brush0" class="active" onclick="setBrush(0)">Floor (0)</button>
-      <button id="brush1" onclick="setBrush(1)">Grass (1)</button>
-      <button id="brush2" onclick="setBrush(2)">Wall (2)</button>
+    <label>Map Identifier Name: <input type="text" id="mapName" value="Criscanto Town" oninput="updateMapNameKey()"></label>
+
+    <!-- Tab Header -->
+    <div class="tab-header">
+      <button class="tab-btn active" onclick="switchTab('env', this)">Environment</button>
+      <button class="tab-btn" onclick="switchTab('conn', this)">Connections</button>
+      <button class="tab-btn" onclick="switchTab('events', this)">Events</button>
+      <button class="tab-btn" onclick="switchTab('wild', this)">Wild</button>
+      <button class="tab-btn" onclick="switchTab('props', this)">Properties</button>
     </div>
 
-    <h3>👥 Event Manager</h3>
-    <div style="display: flex; gap: 5px; margin-bottom: 3px;">
-      <button class="btn-primary" style="flex:1;" onclick="addNewEventPrompt()">+ Add New Event</button>
-    </div>
-    <div class="help-text">💡 Click & drag sprites on grid to move them instantly.</div>
-    
-    <label>Active Event Key: 
-      <select id="evtKeySelect" onchange="loadSelectedEvent()">
-        <option value="NPC_Portia">NPC_Portia</option>
-        <option value="NPC_Lily">NPC_Lily</option>
-      </select>
-    </label>
-    
-    <label>Overworld Character (owID): 
-      <select id="evtOwID" onchange="updateEventSprite(); generateOutput();">
-        <option value="Portia">Portia</option>
-        <option value="Lily">Lily</option>
-        <option value="Brendan">Brendan</option>
-      </select>
-    </label>
+    <!-- TAB 1: Environment -->
+    <div id="tab-env" class="tab-content active">
+      <div class="help-text">💡 Paint tiles onto active grid. Press <b>Ctrl+Z</b> to Undo, <b>Ctrl+Y</b> to Redo.</div>
+      <label>Drawing Tool:</label>
+      <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+        <button id="toolPencil" class="tool-icon-btn active" onclick="setTool('pencil')" title="Pencil">✏️ Pencil</button>
+        <button id="toolFill" class="tool-icon-btn" onclick="setTool('fill')" title="Fill Box">🪣 Fill Box</button>
+      </div>
 
-    <label>Script Name: 
-      <select id="evtScript" onchange="updateActiveEventData(); generateOutput()">
-        <option value="portia_battle_trigger">portia_battle_trigger</option>
-        <option value="lily_gift_trigger">lily_gift_trigger</option>
-        <option value="nurse_heal_trigger">nurse_heal_trigger</option>
-      </select>
-    </label>
-    
-    <div style="display: flex; gap: 10px;">
-      <label>Grid X: <input type="number" id="evtX" value="5" min="0" oninput="syncInputsToEvent(); generateOutput()"></label>
-      <label>Grid Y: <input type="number" id="evtY" value="3" min="0" oninput="syncInputsToEvent(); generateOutput()"></label>
+      <label>Tile Property Brush:
+        <select id="tileBrush" onchange="updateBrushVisual()">
+          <option value="0">0: Normal Floor</option>
+          <option value="1">1: Grass Patch</option>
+          <option value="2">2: Building Wall</option>
+          <option value="3">3: Fishing Spot</option>
+          <option value="4">4: Waterfall</option>
+          <option value="5">5: Covering NPC Roof</option>
+        </select>
+      </label>
+      <div id="brushIndicator" style="height: 10px; background: #78c850; border-radius: 4px; border: 1px solid #333;"></div>
+    </div>
+
+    <!-- TAB 2: Connections -->
+    <div id="tab-conn" class="tab-content">
+      <div class="help-text">Click any connected mini-map on canvas to switch to it instantly. Drag maps to adjust offsets.</div>
+      <div id="connectionsListContainer"></div>
+      <button class="btn-primary" onclick="addConnection()">+ Add Connection</button>
+    </div>
+
+    <!-- TAB 3: Events -->
+    <div id="tab-events" class="tab-content">
+      <div class="help-text">✨ Select an event below or <b>drag event sprites directly on the grid</b> to reposition them.</div>
+      
+      <div class="toggle-container">
+        <span style="font-size: 11px; font-weight: bold; color: #ccc;">Show Overworld Sprites</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="showOverworldToggle" checked onchange="renderWorldCanvas()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <label>Add New Event Type:</label>
+      <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('NPC')">+ NPC</button>
+        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('Script Tile')">+ Script</button>
+        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('Signpost')">+ Sign</button>
+        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('Tile')">+ Tile</button>
+        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('Warp')">+ Warp</button>
+      </div>
+      
+      <label style="margin-top:4px;">Active Event Key: 
+        <select id="evtKeySelect" onchange="loadSelectedEvent()"></select>
+      </label>
+
+      <div id="eventDetailsWrapper" style="display:none; flex-direction:column; gap:8px;" class="event-inspector-card">
+        <label>Event Type (Locked): 
+          <select id="evtType" disabled style="background:#1a1a1a; color:#777;">
+            <option value="NPC">NPC</option>
+            <option value="Script Tile">Script Tile</option>
+            <option value="Signpost">Signpost</option>
+            <option value="Tile">Tile</option>
+            <option value="Warp">Warp</option>
+          </select>
+        </label>
+        <div id="eventPropertiesContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+    </div>
+
+    <!-- TAB 4: Wild Data -->
+    <div id="tab-wild" class="tab-content">
+      <div class="help-text">Configure encounter tables grouped by time of day with live sprite previews.</div>
+      <div id="wildListContainer"></div>
+    </div>
+
+    <!-- TAB 5: Properties -->
+    <div id="tab-props" class="tab-content">
+      <div style="display: flex; gap: 10px;">
+        <label>Width: <input type="number" id="mapCols" value="10" min="5" max="30" onchange="resizeGrid()"></label>
+        <label>Height: <input type="number" id="mapRows" value="10" min="5" max="30" onchange="resizeGrid()"></label>
+      </div>
+
+      <label>Map Bank: <input type="number" id="mapBank" value="0" oninput="generateOutput()"></label>
+      
+      <label>Map Type: 
+        <select id="mapType" onchange="generateOutput()">
+          <option value="City">City</option>
+          <option value="Town">Town</option>
+          <option value="Route">Route</option>
+          <option value="Cave">Cave</option>
+          <option value="Indoor">Indoor</option>
+        </select>
+      </label>
+
+      <label>Weather: 
+        <select id="mapWeather" onchange="generateOutput()">
+          <option value="Normal">Normal</option>
+          <option value="Rain">Rain</option>
+          <option value="Snow">Snow</option>
+          <option value="Fog">Fog</option>
+          <option value="Thunderstorm">Thunderstorm</option>
+          <option value="Volcanic Ash">Volcanic Ash</option>
+        </select>
+      </label>
+
+      <label>Music Path: 
+        <select id="mapMusic" onchange="generateOutput()">
+          <option value="audio/music/criscanto_town.mp3">criscanto_town.mp3</option>
+          <option value="audio/music/mus_route1.mp3">mus_route1.mp3</option>
+          <option value="audio/music/mus_pokemon_center.mp3">mus_pokemon_center.mp3</option>
+          <option value="audio/music/mus_trainer_battle.mp3">mus_trainer_battle.mp3</option>
+        </select>
+      </label>
+
+      <div style="display: flex; gap: 15px; margin-top: 6px;">
+        <label style="flex-direction:row; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="isFlyable" checked onchange="generateOutput()"> Is Flyable</label>
+        <label style="flex-direction:row; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="isRunning" checked onchange="generateOutput()"> Is Running</label>
+      </div>
     </div>
   </div>
 
-  <!-- CENTER PANEL: Visual Grid Canvas -->
+  <!-- CENTER PANEL -->
   <div class="panel" id="canvas-container">
-    <div id="gridElement" class="grid" ondragover="event.preventDefault()"></div>
+    <div id="worldCanvasWrapper" class="world-stage"></div>
   </div>
 
-  <!-- RIGHT PANEL: Split in Half (Map Output Top / Script Viewer Bottom) -->
+  <!-- RIGHT PANEL (Collapsible) -->
   <div class="panel" id="output-panel">
-    <!-- Top Box: Map Output -->
-    <div class="sub-box">
-      <h3>📋 Map Code Output</h3>
+    <div class="sub-box" id="boxOutput">
+      <div class="panel-header">
+        <h3 style="margin:0; font-size:13px; color:#00acc1;">📋 Master `Overworld_map.txt` Output</h3>
+        <button onclick="toggleBox('boxOutput')">[ - ]</button>
+      </div>
       <textarea id="outputCode" readonly></textarea>
-      <button onclick="navigator.clipboard.writeText(document.getElementById('outputCode').value); alert('Map Code Copied!');">Copy Map Output</button>
+      <button class="btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('outputCode').value); alert('Master Map Code Copied!');">Copy Master Map Output</button>
     </div>
 
-    <!-- Bottom Box: Script Engine Viewer -->
-    <div class="sub-box">
-      <h3>📜 Script Engine (`js/script_engine`)</h3>
+    <div class="sub-box" id="boxScript">
+      <div class="panel-header">
+        <h3>📜 Script Engine Viewer</h3>
+        <button onclick="toggleBox('boxScript')">[ - ]</button>
+      </div>
       <textarea id="scriptOutput" class="script-text" readonly></textarea>
       <button onclick="navigator.clipboard.writeText(document.getElementById('scriptOutput').value); alert('Script Code Copied!');">Copy Script Code</button>
     </div>
   </div>
 
   <script>
-    let cols = 10, rows = 10;
-    let gridData = [];
-    let currentBrush = 0;
-    
-    const spriteColors = {
-      "Portia": "#e91e63",
-      "Lily": "#9c27b0",
-      "Brendan": "#ff9800"
+    const PokemonDatabase = {
+      SPECIES_BULBASAUR: { name: 'Bulbasaur', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconSprite1001Bulbasaur.png' },
+      SPECIES_MEOWSCARADA: { name: 'Meowscarada', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconSprite1262Meowscarada.png' },
+      SPECIES_HATTERENE: { name: 'Hatterene', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconSprite1150Hatterene.png' },
+      SPECIES_EELEKTROSS_M: { name: 'Eelektross', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconEELEKTROSS_1.png' },
+      SPECIES_LUCARIO_Z: { name: 'Lucario', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconLUCARIO_2.png' }
     };
 
-    const scriptLibrary = {
-      "portia_battle_trigger": `// js/script_engine/portia_battle_trigger.js\nwindow.ScriptEngine = window.ScriptEngine || {};\nwindow.ScriptEngine["portia_battle_trigger"] = function() {\n  console.log("[Script] Portia challenge initiated!");\n  DialogueManager.show("Portia: Let's see your Pokémon strength!");\n  BattleManager.startTrainerBattle("Portia");\n};`,
-      "lily_gift_trigger": `// js/script_engine/lily_gift_trigger.js\nwindow.ScriptEngine = window.ScriptEngine || {};\nwindow.ScriptEngine["lily_gift_trigger"] = function() {\n  DialogueManager.show("Lily: I want you to have this Pokémon!");\n  GivePokemonSystem.give({ species: "SPECIES_EELEKTROSS_M", level: 15 });\n  DialogueManager.show("Lily: Take good care of it!");\n};`,
-      "nurse_heal_trigger": `// js/script_engine/nurse_heal_trigger.js\nwindow.ScriptEngine = window.ScriptEngine || {};\nwindow.ScriptEngine["nurse_heal_trigger"] = function() {\n  DialogueManager.show("Nurse: Welcome to our Pokémon Center!");\n  PartyHealer.healAll();\n  DialogueManager.show("Your Pokémon are fully healed!");\n};`
+    function owTableLogger() {
+      console.group("🔍 [OW Table Logger] Scanning window.OverworldTable...");
+      const table = window.OverworldTable || {};
+      const keys = Object.keys(table);
+      console.log(`Total Overworld Sprites Found: ${keys.length}`);
+      
+      let summaryTable = {};
+      keys.forEach(spriteID => {
+        const data = table[spriteID];
+        summaryTable[spriteID] = {
+          spriteID: data.spriteID || 'N/A',
+          spritePath: data.owSprite || 'N/A',
+          trueDimension: data.trueDimension || '32x32',
+          owType: data.owType || 'NPC',
+          ...data
+        };
+      });
+      console.table(summaryTable);
+      console.groupEnd();
+      return summaryTable;
+    }
+
+    let cols = 10, rows = 10;
+    let gridData = [];
+    let mapsRepository = {}; 
+    let currentMapKey = "Criscanto Town";
+    let activeTool = 'pencil';
+    let activeTab = 'env';
+    
+    let undoStack = [];
+    let redoStack = [];
+
+    let mapConnections = [];
+    let wildEncounters = {
+      morning: [{ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 }],
+      afternoon: [{ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 }],
+      night: [{ pokemonName: "SPECIES_HATTERENE", minLevel: 5, maxLevel: 8, appearanceRate: 15 }],
+      dawn: [{ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 }]
     };
 
     let eventsList = {
-      NPC_Portia: { owID: "Portia", eventType: "NPC", script: "portia_battle_trigger", movementType: "wander_left_right", isTrainer: true, viewRadius: 3, xPos: 5, yPos: 3, flagID: "FLAG_DEFEATED_PORTIA" },
-      NPC_Lily: { owID: "Lily", eventType: "NPC", script: "lily_gift_trigger", movementType: "face_down", isTrainer: false, xPos: 3, yPos: 6, flagID: "FLAG_RECEIVED_LILY_POKEMON" }
+      NPC_Portia: { eventType: "NPC", owID: "Portia", script: "portia_battle_trigger", movementType: "MOVEMENT_TYPE_WANDER_LEFT_RIGHT", isTrainer: true, viewRadius: 3, xPos: 5, yPos: 3, flagID: "FLAG_DEFEATED_PORTIA" }
     };
 
+    let isMouseDown = false;
+    let fillStart = null;
+    let draggingConnIndex = null;
+    let dragStartPos = { x: 0, y: 0 };
     let draggedEventKey = null;
+    let modalCallback = null;
 
-    function initGrid() {
+    const tileStyles = ['t-0', 't-1', 't-2', 't-3', 't-4', 't-5'];
+
+    const movementTypesList = [
+      "MOVEMENT_TYPE_LOOK_AROUND",
+      "MOVEMENT_TYPE_WANDER_UP_AND_DOWN",
+      "MOVEMENT_TYPE_WANDER_LEFT_AND_RIGHT",
+      "MOVEMENT_TYPE_WANDER_AROUND",
+      "MOVEMENT_TYPE_FACE_UP",
+      "MOVEMENT_TYPE_FACE_DOWN",
+      "MOVEMENT_TYPE_FACE_LEFT",
+      "MOVEMENT_TYPE_FACE_RIGHT",
+      "MOVEMENT_TYPE_PLAYER",
+      "MOVEMENT_TYPE_INVISIBLE"
+    ];
+
+    const scriptLibrary = {
+      "portia_battle_trigger": `window.ScriptEngine["portia_battle_trigger"] = function() { DialogueManager.show("Portia: Let's battle!"); };`,
+      "lily_gift_trigger": `window.ScriptEngine["lily_gift_trigger"] = function() { GivePokemonSystem.give({ species: "SPECIES_EELEKTROSS_M", level: 15 }); };`,
+      "nurse_heal_trigger": `window.ScriptEngine["nurse_heal_trigger"] = function() { PartyHealer.healAll(); };`
+    };
+
+    function showModal(title, defaultVal, cb) {
+      document.getElementById('modalTitle').textContent = title;
+      const input = document.getElementById('modalInput');
+      input.value = defaultVal;
+      document.getElementById('modalOverlay').style.display = 'flex';
+      input.focus();
+      modalCallback = cb;
+    }
+
+    function closeModal(confirm) {
+      document.getElementById('modalOverlay').style.display = 'none';
+      if (confirm && modalCallback) {
+        modalCallback(document.getElementById('modalInput').value);
+      }
+      modalCallback = null;
+    }
+
+    document.getElementById('modalInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') closeModal(true);
+      if (e.key === 'Escape') closeModal(false);
+    });
+
+    function toggleBox(boxId) {
+      const box = document.getElementById(boxId);
+      box.classList.toggle('collapsed');
+      const btn = box.querySelector('.panel-header button');
+      btn.textContent = box.classList.contains('collapsed') ? '[ + ]' : '[ - ]';
+    }
+
+    function switchTab(tabID, btn) {
+      activeTab = tabID;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${tabID}`).classList.add('active');
+      btn.classList.add('active');
+
+      renderWorldCanvas();
+    }
+
+    function setTool(tool) {
+      activeTool = tool;
+      document.getElementById('toolPencil').classList.toggle('active', tool === 'pencil');
+      document.getElementById('toolFill').classList.toggle('active', tool === 'fill');
+    }
+
+    function pushHistory() {
+      undoStack.push(JSON.stringify(gridData));
+      if (undoStack.length > 50) undoStack.shift();
+      redoStack = [];
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (undoStack.length > 0) {
+          redoStack.push(JSON.stringify(gridData));
+          gridData = JSON.parse(undoStack.pop());
+          renderWorldCanvas();
+          generateOutput();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        if (redoStack.length > 0) {
+          undoStack.push(JSON.stringify(gridData));
+          gridData = JSON.parse(redoStack.pop());
+          renderWorldCanvas();
+          generateOutput();
+        }
+      }
+    });
+
+    function initDefaultMap() {
+      cols = 10; rows = 10;
+      gridData = [
+        [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+        [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+        [2, 0, 1, 1, 0, 0, 1, 1, 0, 2],
+        [2, 0, 1, 1, 0, 0, 1, 1, 0, 2],
+        [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+        [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+        [2, 0, 1, 1, 0, 0, 1, 1, 0, 2],
+        [2, 0, 1, 1, 0, 0, 1, 1, 0, 2],
+        [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+        [2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+      ];
+      mapsRepository[currentMapKey] = {
+        map: currentMapKey,
+        bank: 0,
+        mapType: "City",
+        weather: "Normal",
+        isFlyable: true,
+        isRunning: true,
+        music: "audio/music/criscanto_town.mp3",
+        connections: [],
+        wildEncounters: JSON.parse(JSON.stringify(wildEncounters)),
+        dimensions: { width: 10, height: 10, blockSize: 8 },
+        blockData: JSON.parse(JSON.stringify(gridData)),
+        events: JSON.parse(JSON.stringify(eventsList))
+      };
+      updateMapSelectorDropdown();
+      loadMapIntoEditor(currentMapKey);
+    }
+
+    function updateMapSelectorDropdown() {
+      const selector = document.getElementById('mapSelector');
+      if (!selector) return;
+      selector.innerHTML = '';
+      for (const mKey of Object.keys(mapsRepository)) {
+        const opt = document.createElement('option');
+        opt.value = mKey;
+        opt.textContent = mKey;
+        if (mKey === currentMapKey) opt.selected = true;
+        selector.appendChild(opt);
+      }
+    }
+
+    function switchActiveMap(mapKey) {
+      saveCurrentMapState();
+      currentMapKey = mapKey;
+      loadMapIntoEditor(mapKey);
+    }
+
+    function loadMapIntoEditor(mapKey) {
+      const mData = mapsRepository[mapKey];
+      if (!mData) return;
+
+      document.getElementById('mapName').value = mapKey;
+      document.getElementById('mapBank').value = mData.bank ?? 0;
+      document.getElementById('mapCols').value = mData.dimensions.width;
+      document.getElementById('mapRows').value = mData.dimensions.height;
+      document.getElementById('mapType').value = mData.mapType;
+      document.getElementById('mapWeather').value = mData.weather;
+      document.getElementById('mapMusic').value = mData.music;
+      document.getElementById('isFlyable').checked = mData.isFlyable;
+      document.getElementById('isRunning').checked = mData.isRunning;
+      
+      cols = mData.dimensions.width;
+      rows = mData.dimensions.height;
+      gridData = JSON.parse(JSON.stringify(mData.blockData));
+      eventsList = JSON.parse(JSON.stringify(mData.events));
+      mapConnections = JSON.parse(JSON.stringify(mData.connections || []));
+      wildEncounters = JSON.parse(JSON.stringify(mData.wildEncounters || { morning: [], afternoon: [], night: [], dawn: [] }));
+
+      undoStack = [];
+      redoStack = [];
+
+      updateEventDropdown();
+      renderWorldCanvas();
+      renderConnectionsUI();
+      renderWildUI();
+      generateOutput();
+    }
+
+    function saveCurrentMapState() {
+      mapsRepository[currentMapKey] = {
+        map: currentMapKey,
+        bank: parseInt(document.getElementById('mapBank').value) || 0,
+        mapType: document.getElementById('mapType').value,
+        weather: document.getElementById('mapWeather').value,
+        isFlyable: document.getElementById('isFlyable').checked,
+        isRunning: document.getElementById('isRunning').checked,
+        music: document.getElementById('mapMusic').value,
+        connections: JSON.parse(JSON.stringify(mapConnections)),
+        wildEncounters: JSON.parse(JSON.stringify(wildEncounters)),
+        dimensions: { width: cols, height: rows, blockSize: 8 },
+        blockData: JSON.parse(JSON.stringify(gridData)),
+        events: JSON.parse(JSON.stringify(eventsList))
+      };
+    }
+
+    function updateMapNameKey() {
+      const newName = document.getElementById('mapName').value.trim();
+      if (!newName || newName === currentMapKey) return;
+      delete mapsRepository[currentMapKey];
+      currentMapKey = newName;
+      mapsRepository[currentMapKey] = {};
+      saveCurrentMapState();
+      updateMapSelectorDropdown();
+      generateOutput();
+    }
+
+    function promptNewMap() {
+      showModal("Enter new map name:", "Route_1", (newName) => {
+        if (!newName || mapsRepository[newName]) {
+          alert("Invalid or existing map name!");
+          return;
+        }
+        saveCurrentMapState();
+        currentMapKey = newName;
+        cols = 10; rows = 10;
+        gridData = [];
+        for (let r = 0; r < rows; r++) {
+          let rowArr = [];
+          for (let c = 0; c < cols; c++) rowArr.push(0);
+          gridData.push(rowArr);
+        }
+        eventsList = {};
+        mapConnections = [];
+        wildEncounters = { morning: [], afternoon: [], night: [], dawn: [] };
+        
+        saveCurrentMapState();
+        updateMapSelectorDropdown();
+        loadMapIntoEditor(currentMapKey);
+      });
+    }
+
+    function resizeGrid() {
       cols = parseInt(document.getElementById('mapCols').value);
       rows = parseInt(document.getElementById('mapRows').value);
-      
-      gridData = [];
+      let newGrid = [];
       for (let r = 0; r < rows; r++) {
         let rowArr = [];
-        for (let c = 0; c < cols; c++) rowArr.push(0);
-        gridData.push(rowArr);
+        for (let c = 0; c < cols; c++) {
+          rowArr.push(gridData[r] && gridData[r][c] !== undefined ? gridData[r][c] : 0);
+        }
+        newGrid.push(rowArr);
       }
-      renderGrid();
+      pushHistory();
+      gridData = newGrid;
+      renderWorldCanvas();
       generateOutput();
     }
 
-    function createNewMap() {
-      const name = prompt("Enter new map name:", "Route 1");
-      if (!name) return;
-      document.getElementById('mapName').value = name;
-      document.getElementById('mapCols').value = 10;
-      document.getElementById('mapRows').value = 10;
-      document.getElementById('mapType').value = "MAP_TYPE_ROUTE";
-      document.getElementById('mapWeather').value = "WEATHER_NONE";
-      document.getElementById('mapMusic').value = "mus_route1.mp3";
-      document.getElementById('isFlyable').checked = false;
-      document.getElementById('isRunning').checked = true;
-      eventsList = {};
-      updateEventDropdown();
-      initGrid();
-    }
-
-    function addNewEventPrompt() {
-      const keyName = prompt("Enter Event Key (e.g. NPC_Elder, Signpost_1):", "NPC_NewNPC");
-      if (!keyName) return;
-      if (eventsList[keyName]) {
-        alert("An event with that key already exists!");
-        return;
+    function renderFullSizeGrid(targetCols, targetRows, targetData) {
+      let miniGrid = document.createElement('div');
+      miniGrid.className = 'grid';
+      miniGrid.style.gridTemplateColumns = `repeat(${targetCols}, 32px)`;
+      for (let r = 0; r < targetRows; r++) {
+        for (let c = 0; c < targetCols; c++) {
+          const tile = document.createElement('div');
+          let val = (targetData && targetData[r] && targetData[r][c] !== undefined) ? targetData[r][c] : 0;
+          tile.className = `tile ${tileStyles[val] || 't-0'}`;
+          miniGrid.appendChild(tile);
+        }
       }
-
-      eventsList[keyName] = {
-        owID: "Portia",
-        eventType: "NPC",
-        script: "portia_battle_trigger",
-        movementType: "face_down",
-        isTrainer: false,
-        xPos: 0,
-        yPos: 0,
-        flagID: `FLAG_${keyName.toUpperCase()}_INTERACTED`
-      };
-
-      updateEventDropdown();
-      document.getElementById('evtKeySelect').value = keyName;
-      loadSelectedEvent();
-      renderGrid();
-      generateOutput();
+      return miniGrid;
     }
 
-    function updateEventDropdown() {
-      const select = document.getElementById('evtKeySelect');
-      select.innerHTML = '';
-      for (const k of Object.keys(eventsList)) {
-        const opt = document.createElement('option');
-        opt.value = k;
-        opt.textContent = k;
-        select.appendChild(opt);
-      }
-    }
+    function renderWorldCanvas() {
+      const wrapper = document.getElementById('worldCanvasWrapper');
+      wrapper.innerHTML = '';
 
-    function renderGrid() {
-      const container = document.getElementById('gridElement');
+      const activeWrapper = document.createElement('div');
+      activeWrapper.className = 'active-map-wrapper';
+
+      const container = document.createElement('div');
+      container.id = 'gridElement';
+      container.className = `grid ${activeTab !== 'env' ? 'hide-values' : ''}`;
       container.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
-      container.innerHTML = '';
+
+      const showOw = document.getElementById('showOverworldToggle')?.checked ?? true;
 
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const div = document.createElement('div');
-          div.className = `tile t${gridData[r][c]}`;
+          div.className = `tile ${tileStyles[gridData[r][c]] || 't-0'}`;
+          div.textContent = gridData[r][c];
           div.dataset.r = r;
           div.dataset.c = c;
           
-          let occupantKey = Object.keys(eventsList).find(k => eventsList[k].xPos === c && eventsList[k].yPos === r);
-          if (occupantKey) {
-            const occupant = eventsList[occupantKey];
-            const spriteBox = document.createElement('div');
-            spriteBox.className = 'npc-sprite';
-            spriteBox.style.backgroundColor = spriteColors[occupant.owID] || '#00acc1';
-            spriteBox.textContent = occupant.owID[0];
-            spriteBox.draggable = true;
-            
-            spriteBox.ondragstart = (e) => {
-              draggedEventKey = occupantKey;
-              document.getElementById('evtKeySelect').value = occupantKey;
-              loadSelectedEvent();
-            };
+          let occupantKey = Object.keys(eventsList).find(k => {
+            const ev = eventsList[k];
+            return ev.xPos === c && ev.yPos === r;
+          });
 
-            div.appendChild(spriteBox);
+          if (occupantKey && activeTab === 'events') {
+            const occupant = eventsList[occupantKey];
+            const eType = occupant.eventType || 'NPC';
+
+            const tableRef = window.OverworldTable || {};
+            const owData = tableRef[occupant.owID] || {};
+            const spriteUrl = owData.owSprite || `graphics/overworld/${(occupant.owID || '').toLowerCase()}.png`;
+
+            if (showOw && occupant.owID) {
+              const frameBox = document.createElement('div');
+              frameBox.className = 'sprite-frame-container';
+
+              let dimStr = owData.trueDimension || '32x48';
+              let [w, h] = dimStr.split('x').map(Number);
+              
+              const isBuilding = owData.owType === 'Building' || (owData.frames !== undefined && owData.frames <= 1);
+
+              // 🔍 DETAILED RENDER & SCALE LOGGER
+              console.log(`🏠 [OW Render Logger] ID: ${occupant.owID} | Type: ${owData.owType || 'NPC'} | trueDimension: ${dimStr} | Parsed W:${w}, H:${h} | Scale: 100%`);
+
+              if (isBuilding) {
+                // Buildings render at full 100% scale without shrinking or clipping, anchored top-left
+                frameBox.style.width = `${w}px`;
+                frameBox.style.height = `${h}px`;
+                frameBox.style.bottom = `0px`;
+                frameBox.style.left = `0px`;
+                frameBox.style.transform = `none`;
+
+                const img = document.createElement('img');
+                img.src = spriteUrl;
+                img.className = 'npc-sprite';
+                img.style.width = `${w}px`;
+                img.style.height = `${h}px`;
+                img.style.top = `0px`;
+                img.style.left = `0px`;
+                img.style.maxWidth = 'none';
+                img.style.maxHeight = 'none';
+                frameBox.appendChild(img);
+              } else {
+                // Multi-frame animated sprite sheet
+                frameBox.style.width = `${w}px`;
+                frameBox.style.height = `${h}px`;
+                frameBox.style.bottom = `0px`;
+                frameBox.style.left = `50%`;
+                frameBox.style.transform = `translateX(-50%)`;
+
+                const spriteBox = document.createElement('div');
+                spriteBox.className = 'npc-sprite-box';
+                spriteBox.style.width = `${w}px`;
+                spriteBox.style.height = `${h}px`;
+                spriteBox.style.backgroundImage = `url('${spriteUrl}')`;
+                spriteBox.style.backgroundPosition = `0px 0px`;
+                spriteBox.style.backgroundRepeat = `no-repeat`;
+                spriteBox.style.backgroundSize = `${w * 4}px ${h * 4}px`;
+                frameBox.appendChild(spriteBox);
+              }
+
+              frameBox.draggable = true;
+              frameBox.onclick = (e) => {
+                e.stopPropagation();
+                document.getElementById('evtKeySelect').value = occupantKey;
+                loadSelectedEvent();
+              };
+              frameBox.ondragstart = (e) => {
+                draggedEventKey = occupantKey;
+                e.dataTransfer.setData('text/plain', occupantKey);
+              };
+              div.appendChild(frameBox);
+            } else {
+              const badge = document.createElement('div');
+              let badgeClass = 'badge-npc';
+              let badgeText = 'P';
+
+              if (eType === 'Script Tile') { badgeClass = 'badge-script'; badgeText = 'S'; }
+              else if (eType === 'Signpost') { badgeClass = 'badge-sign'; badgeText = 'S'; }
+              else if (eType === 'Tile') { badgeClass = 'badge-tile'; badgeText = 'T'; }
+              else if (eType === 'Warp') { badgeClass = 'badge-warp'; badgeText = 'W'; }
+
+              badge.className = `event-badge ${badgeClass}`;
+              badge.textContent = badgeText;
+              badge.draggable = true;
+              badge.onclick = (e) => {
+                e.stopPropagation();
+                document.getElementById('evtKeySelect').value = occupantKey;
+                loadSelectedEvent();
+              };
+              badge.ondragstart = (e) => {
+                draggedEventKey = occupantKey;
+                e.dataTransfer.setData('text/plain', occupantKey);
+              };
+              div.appendChild(badge);
+            }
           }
 
           div.ondragover = (e) => e.preventDefault();
@@ -271,112 +737,593 @@
             if (draggedEventKey && eventsList[draggedEventKey]) {
               eventsList[draggedEventKey].xPos = c;
               eventsList[draggedEventKey].yPos = r;
-              document.getElementById('evtX').value = c;
-              document.getElementById('evtY').value = r;
+              document.getElementById('evtKeySelect').value = draggedEventKey;
+              loadSelectedEvent();
               draggedEventKey = null;
-              renderGrid();
+              renderWorldCanvas();
               generateOutput();
             }
           };
 
-          div.onclick = () => {
-            if (!occupantKey) {
-              gridData[r][c] = currentBrush;
-              renderGrid();
+          div.onmousedown = (e) => {
+            if (activeTab !== 'env') return;
+            isMouseDown = true;
+            pushHistory();
+            const brush = parseInt(document.getElementById('tileBrush').value);
+            if (activeTool === 'pencil') {
+              gridData[r][c] = brush;
+              renderWorldCanvas();
+              generateOutput();
+            } else if (activeTool === 'fill') {
+              fillStart = {r, c};
+            }
+          };
+
+          div.onmouseenter = () => {
+            if (isMouseDown && activeTool === 'pencil' && activeTab === 'env') {
+              const brush = parseInt(document.getElementById('tileBrush').value);
+              gridData[r][c] = brush;
+              renderWorldCanvas();
               generateOutput();
             }
+          };
+
+          div.onmouseup = () => {
+            if (isMouseDown && activeTool === 'fill' && fillStart && activeTab === 'env') {
+              const brush = parseInt(document.getElementById('tileBrush').value);
+              const rMin = Math.min(fillStart.r, r), rMax = Math.max(fillStart.r, r);
+              const cMin = Math.min(fillStart.c, c), cMax = Math.max(fillStart.c, c);
+              for (let y = rMin; y <= rMax; y++) {
+                for (let x = cMin; x <= cMax; x++) {
+                  gridData[y][x] = brush;
+                }
+              }
+              fillStart = null;
+              renderWorldCanvas();
+              generateOutput();
+            }
+            isMouseDown = false;
           };
 
           container.appendChild(div);
         }
       }
+      activeWrapper.appendChild(container);
+      wrapper.appendChild(activeWrapper);
+
+      if (activeTab === 'conn') {
+        mapConnections.forEach((conn, idx) => {
+          if (!mapsRepository[conn.map]) return;
+          let targetMap = mapsRepository[conn.map];
+
+          let connWrapper = document.createElement('div');
+          connWrapper.className = 'connected-map-wrapper';
+          
+          let label = document.createElement('div');
+          label.className = 'connected-label';
+          label.textContent = `${conn.direction.toUpperCase()}: ${conn.map} (Offset: ${conn.offset}) [Click to Switch]`;
+          connWrapper.appendChild(label);
+
+          connWrapper.appendChild(renderFullSizeGrid(targetMap.dimensions.width, targetMap.dimensions.height, targetMap.blockData));
+
+          let tWidth = targetMap.dimensions.width * 33;
+          let tHeight = targetMap.dimensions.height * 33;
+          let aWidth = cols * 33;
+          let aHeight = rows * 33;
+
+          let posX = 0, posY = 0;
+          if (conn.direction === 'up') {
+            posX = conn.offset * 33;
+            posY = -tHeight;
+          } else if (conn.direction === 'down') {
+            posX = conn.offset * 33;
+            posY = aHeight;
+          } else if (conn.direction === 'left') {
+            posX = -tWidth;
+            posY = conn.offset * 33;
+          } else if (conn.direction === 'right') {
+            posX = aWidth;
+            posY = conn.offset * 33;
+          }
+
+          connWrapper.style.left = `${posX}px`;
+          connWrapper.style.top = `${posY}px`;
+
+          connWrapper.onclick = (e) => {
+            e.stopPropagation();
+            switchActiveMap(conn.map);
+            document.getElementById('mapSelector').value = conn.map;
+          };
+
+          connWrapper.onmousedown = (e) => {
+            draggingConnIndex = idx;
+            dragStartPos = { x: e.clientX, y: e.clientY };
+            e.stopPropagation();
+          };
+
+          wrapper.appendChild(connWrapper);
+        });
+      }
     }
 
-    function setBrush(val) {
-      currentBrush = val;
-      document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
-      document.getElementById(`brush${val}`).classList.add('active');
+    window.onmousemove = (e) => {
+      if (draggingConnIndex === null) return;
+      let dx = e.clientX - dragStartPos.x;
+      let dy = e.clientY - dragStartPos.y;
+
+      let conn = mapConnections[draggingConnIndex];
+      if (conn.direction === 'up' || conn.direction === 'down') {
+        if (Math.abs(dx) > 16) {
+          conn.offset += Math.sign(dx);
+          dragStartPos.x = e.clientX;
+          renderConnectionsUI();
+          generateOutput();
+        }
+      } else {
+        if (Math.abs(dy) > 16) {
+          conn.offset += Math.sign(dy);
+          dragStartPos.y = e.clientY;
+          renderConnectionsUI();
+          generateOutput();
+        }
+      }
+    };
+
+    window.onmouseup = () => { 
+      isMouseDown = false; 
+      draggingConnIndex = null;
+      draggedEventKey = null;
+    };
+
+    function renderConnectionsUI() {
+      const container = document.getElementById('connectionsListContainer');
+      if (!container) return;
+      container.innerHTML = '';
+      mapConnections.forEach((conn, idx) => {
+        const card = document.createElement('div');
+        card.className = 'connection-card';
+        let mapOptionsHtml = '';
+        for (const mKey of Object.keys(mapsRepository)) {
+          if (mKey === currentMapKey) continue;
+          mapOptionsHtml += `<option value="${mKey}" ${conn.map === mKey ? 'selected' : ''}>${mKey}</option>`;
+        }
+
+        card.innerHTML = `
+          <div style="display:flex; gap:5px;">
+            <select onchange="updateConnection(${idx}, 'direction', this.value)">
+              <option value="up" ${conn.direction==='up'?'selected':''}>UP</option>
+              <option value="down" ${conn.direction==='down'?'selected':''}>DOWN</option>
+              <option value="left" ${conn.direction==='left'?'selected':''}>LEFT</option>
+              <option value="right" ${conn.direction==='right'?'selected':''}>RIGHT</option>
+            </select>
+            <select onchange="updateConnection(${idx}, 'map', this.value)">${mapOptionsHtml}</select>
+            <button class="btn-danger" onclick="removeConnection(${idx})">X</button>
+          </div>
+          <div style="display:flex; align-items:center; gap:5px; font-size:10px;">
+            <span>Offset:</span>
+            <input type="number" value="${conn.offset}" oninput="updateConnection(${idx}, 'offset', parseInt(this.value) || 0)">
+          </div>
+        `;
+        container.appendChild(card);
+      });
+      renderWorldCanvas();
+    }
+
+    function addConnection() {
+      const existingKeys = Object.keys(mapsRepository).filter(k => k !== currentMapKey);
+      if (existingKeys.length === 0) {
+        alert("Create another map first before adding a connection!");
+        return;
+      }
+      let targetMapName = existingKeys[0];
+      let dir = "down";
+      let oppositeDir = "up";
+
+      mapConnections.push({ direction: dir, map: targetMapName, offset: 0 });
+
+      if (mapsRepository[targetMapName]) {
+        if (!mapsRepository[targetMapName].connections) mapsRepository[targetMapName].connections = [];
+        mapsRepository[targetMapName].connections = mapsRepository[targetMapName].connections.filter(c => c.map !== currentMapKey);
+        mapsRepository[targetMapName].connections.push({ direction: oppositeDir, map: currentMapKey, offset: 0 });
+      }
+
+      renderConnectionsUI();
+      generateOutput();
+    }
+
+    function updateConnection(idx, field, val) {
+      let newConn = mapConnections[idx];
+      newConn[field] = val;
+
+      let targetMapObj = mapsRepository[newConn.map];
+      if (targetMapObj) {
+        if (!targetMapObj.connections) targetMapObj.connections = [];
+        targetMapObj.connections = targetMapObj.connections.filter(c => c.map !== currentMapKey);
+        
+        let oppDir = { up: 'down', down: 'up', left: 'right', right: 'left' }[newConn.direction];
+        targetMapObj.connections.push({ direction: oppDir, map: currentMapKey, offset: newConn.offset });
+      }
+
+      renderWorldCanvas();
+      generateOutput();
+    }
+
+    function removeConnection(idx) {
+      let conn = mapConnections[idx];
+      if (conn && mapsRepository[conn.map]) {
+        let targetMapObj = mapsRepository[conn.map];
+        if (targetMapObj && targetMapObj.connections) {
+          targetMapObj.connections = targetMapObj.connections.filter(c => c.map !== currentMapKey);
+        }
+      }
+      mapConnections.splice(idx, 1);
+      renderConnectionsUI();
+      generateOutput();
+    }
+
+    function renderWildUI() {
+      const container = document.getElementById('wildListContainer');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const times = ['morning', 'afternoon', 'night', 'dawn'];
+      times.forEach(timeKey => {
+        if (!wildEncounters[timeKey]) wildEncounters[timeKey] = [];
+        
+        let groupDiv = document.createElement('div');
+        groupDiv.className = 'wild-group';
+        
+        let header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.justifyContent = 'space-between';
+        header.style.alignItems = 'center';
+        header.innerHTML = `<b>🌞 ${timeKey.toUpperCase()}</b> <button class="btn-primary" onclick="addWildEntry('${timeKey}')">+ Add Pokemon</button>`;
+        groupDiv.appendChild(header);
+
+        wildEncounters[timeKey].forEach((wild, idx) => {
+          let card = document.createElement('div');
+          card.className = 'wild-card';
+          
+          let speciesOptions = '';
+          let currentIcon = '';
+          for (const [sKey, sObj] of Object.entries(PokemonDatabase)) {
+            if (sKey === wild.pokemonName) currentIcon = sObj.iconSprite;
+            speciesOptions += `<option value="${sKey}" ${wild.pokemonName === sKey ? 'selected' : ''}>${sObj.name} (${sKey})</option>`;
+          }
+
+          card.innerHTML = `
+            <div style="display:flex; gap:8px; align-items:center;">
+              <img src="${currentIcon || ''}" style="width:32px; height:32px; transform: scale(0.25); transform-origin: left center; image-rendering:pixelated;" onerror="this.style.display='none'">
+              <select style="flex:1;" onchange="updateWildEntry('${timeKey}', ${idx}, 'pokemonName', this.value); renderWildUI(); generateOutput();">
+                ${speciesOptions}
+              </select>
+              <button class="btn-danger" onclick="removeWildEntry('${timeKey}', ${idx})">X</button>
+            </div>
+            <div style="display:flex; gap:5px; font-size:10px;">
+              <label>Min Lv: <input type="number" value="${wild.minLevel}" oninput="updateWildEntry('${timeKey}', ${idx}, 'minLevel', parseInt(this.value))"></label>
+              <label>Max Lv: <input type="number" value="${wild.maxLevel}" oninput="updateWildEntry('${timeKey}', ${idx}, 'maxLevel', parseInt(this.value))"></label>
+              <label>Rate %: <input type="number" value="${wild.appearanceRate}" oninput="updateWildEntry('${timeKey}', ${idx}, 'appearanceRate', parseInt(this.value))"></label>
+            </div>
+          `;
+          groupDiv.appendChild(card);
+        });
+
+        container.appendChild(groupDiv);
+      });
+    }
+
+    function addWildEntry(timeKey) {
+      if (!wildEncounters[timeKey]) wildEncounters[timeKey] = [];
+      wildEncounters[timeKey].push({ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 });
+      renderWildUI();
+      generateOutput();
+    }
+
+    function updateWildEntry(timeKey, idx, field, val) {
+      wildEncounters[timeKey][idx][field] = val;
+      generateOutput();
+    }
+
+    function removeWildEntry(timeKey, idx) {
+      wildEncounters[timeKey].splice(idx, 1);
+      renderWildUI();
+      generateOutput();
+    }
+
+    function promptNewEvent(type) {
+      showModal(`Enter Event Key for ${type}:`, `${type.replace(' ', '_')}_1`, (keyName) => {
+        if (!keyName || eventsList[keyName]) {
+          if (keyName) alert("Event key already exists!");
+          return;
+        }
+
+        let newEvt = { eventType: type, xPos: 0, yPos: 0 };
+        if (type === 'NPC') {
+          const owKeys = Object.keys(window.OverworldTable || {});
+          newEvt.owID = owKeys[0] || "Portia";
+          newEvt.script = "portia_battle_trigger";
+          newEvt.movementType = "MOVEMENT_TYPE_WANDER_LEFT_RIGHT";
+          newEvt.isTrainer = true;
+          newEvt.viewRadius = 3;
+          newEvt.flagID = `FLAG_${keyName.toUpperCase()}_DEFEATED`;
+        } else if (type === 'Script Tile') {
+          newEvt.script = "portia_battle_trigger";
+          newEvt.scriptVar = "0001";
+          newEvt.varValue = 1;
+        } else if (type === 'Signpost') {
+          newEvt.script = "portia_battle_trigger";
+        } else if (type === 'Tile') {
+          newEvt.tileID = 0;
+        } else if (type === 'Warp') {
+          newEvt.targetMap = "Route_1";
+          newEvt.bankID = 0;
+          newEvt.warpNumber = 1;
+        }
+
+        eventsList[keyName] = newEvt;
+        updateEventDropdown();
+        document.getElementById('evtKeySelect').value = keyName;
+        loadSelectedEvent();
+        renderWorldCanvas();
+        generateOutput();
+      });
+    }
+
+    function updateEventDropdown() {
+      const select = document.getElementById('evtKeySelect');
+      if (!select) return;
+      let currentVal = select.value;
+      select.innerHTML = '<option value="">-- Select Event --</option>';
+      for (const k of Object.keys(eventsList)) {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = k;
+        select.appendChild(opt);
+      }
+      if (eventsList[currentVal]) select.value = currentVal;
     }
 
     function loadSelectedEvent() {
       const sel = document.getElementById('evtKeySelect').value;
+      const detailsWrapper = document.getElementById('eventDetailsWrapper');
       const ev = eventsList[sel];
-      if (ev) {
-        document.getElementById('evtOwID').value = ev.owID || 'Portia';
-        document.getElementById('evtScript').value = ev.script || 'portia_battle_trigger';
-        document.getElementById('evtX').value = ev.xPos || 0;
-        document.getElementById('evtY').value = ev.yPos || 0;
-        updateScriptDisplay();
+
+      if (!sel || !ev) {
+        detailsWrapper.style.display = 'none';
+        return;
       }
+
+      detailsWrapper.style.display = 'flex';
+      document.getElementById('evtType').value = ev.eventType || "NPC";
+      updateEventTypeSchema();
     }
 
-    function updateEventSprite() {
+    function updateEventTypeSchema() {
       const sel = document.getElementById('evtKeySelect').value;
-      const owID = document.getElementById('evtOwID').value;
-      if (eventsList[sel]) {
-        eventsList[sel].owID = owID;
-        if (owID === 'Portia') document.getElementById('evtScript').value = 'portia_battle_trigger';
-        if (owID === 'Lily') document.getElementById('evtScript').value = 'lily_gift_trigger';
-        eventsList[sel].script = document.getElementById('evtScript').value;
-        updateScriptDisplay();
+      const ev = eventsList[sel];
+      if (!ev) return;
+
+      const type = ev.eventType || "NPC";
+      document.getElementById('evtType').value = type;
+      const container = document.getElementById('eventPropertiesContainer');
+      container.innerHTML = '';
+
+      if (type === 'NPC') {
+        let owOptions = '';
+        for (const owKey of Object.keys(window.OverworldTable || {})) {
+          owOptions += `<option value="${owKey}" ${ev.owID === owKey ? 'selected' : ''}>${owKey}</option>`;
+        }
+
+        let movOptions = '';
+        movementTypesList.forEach(m => {
+          movOptions += `<option value="${m}" ${ev.movementType === m ? 'selected' : ''}>${m}</option>`;
+        });
+
+        container.innerHTML = `
+          <label>Overworld Character (owID): 
+            <select id="schemaOwID" onchange="saveSchemaData(); generateOutput();">
+              ${owOptions}
+            </select>
+          </label>
+          <label>Script Name: <input type="text" id="schemaScript" value="${ev.script || ''}" oninput="saveSchemaData(); generateOutput();"></label>
+          <label>Movement Type: 
+            <select id="schemaMovement" onchange="saveSchemaData(); generateOutput();">
+              ${movOptions}
+            </select>
+          </label>
+          <div style="display:flex; gap:10px;">
+            <label class="checkbox-label" style="flex-direction:row; gap:6px; cursor:pointer;"><input type="checkbox" id="schemaTrainer" ${ev.isTrainer?'checked':''} onchange="saveSchemaData(); generateOutput();"> Is Trainer</label>
+            <label>View Radius: <input type="number" id="schemaView" value="${ev.viewRadius || 3}" oninput="saveSchemaData(); generateOutput();"></label>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+          </div>
+          <label>Flag ID: <input type="text" id="schemaFlag" value="${ev.flagID || ''}" oninput="saveSchemaData(); generateOutput();"></label>
+        `;
+      } else if (type === 'Script Tile') {
+        container.innerHTML = `
+          <div style="display:flex; gap:10px;">
+            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+          </div>
+          <label>Script: <input type="text" id="schemaScript" value="${ev.script || ''}" oninput="saveSchemaData(); generateOutput();"></label>
+          <div style="display:flex; gap:10px;">
+            <label>Var (0001-9999): <input type="text" id="schemaVar" value="${ev.scriptVar || '0001'}" placeholder="0001" oninput="saveSchemaData(); generateOutput();"></label>
+            <label>Value (1-255): <input type="number" id="schemaVal" value="${ev.varValue || 1}" min="1" max="255" oninput="saveSchemaData(); generateOutput();"></label>
+          </div>
+        `;
+      } else if (type === 'Signpost') {
+        container.innerHTML = `
+          <div style="display:flex; gap:10px;">
+            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+          </div>
+          <label>Script: <input type="text" id="schemaScript" value="${ev.script || ''}" oninput="saveSchemaData(); generateOutput();"></label>
+        `;
+      } else if (type === 'Tile') {
+        container.innerHTML = `
+          <label>Tile ID: <input type="number" id="schemaTileID" value="${ev.tileID || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+          <div style="display:flex; gap:10px;">
+            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+          </div>
+        `;
+      } else if (type === 'Warp') {
+        container.innerHTML = `
+          <label>Target Map: <input type="text" id="schemaTargetMap" value="${ev.targetMap || 'Route_1'}" oninput="saveSchemaData(); generateOutput();"></label>
+          <div style="display:flex; gap:10px;">
+            <label>Bank ID: <input type="number" id="schemaBank" value="${ev.bankID || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+            <label>Warp Number: <input type="number" id="schemaWarpNum" value="${ev.warpNumber || 1}" oninput="saveSchemaData(); generateOutput();"></label>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
+          </div>
+        `;
       }
-      renderGrid();
+      renderWorldCanvas();
     }
 
-    function updateActiveEventData() {
+    function saveSchemaData() {
       const sel = document.getElementById('evtKeySelect').value;
-      const scriptVal = document.getElementById('evtScript').value;
-      if (eventsList[sel]) {
-        eventsList[sel].script = scriptVal;
-      }
-      updateScriptDisplay();
+      const ev = eventsList[sel];
+      if (!ev) return;
+      
+      if (document.getElementById('schemaX')) ev.xPos = parseInt(document.getElementById('schemaX').value) || 0;
+      if (document.getElementById('schemaY')) ev.yPos = parseInt(document.getElementById('schemaY').value) || 0;
+      if (document.getElementById('schemaScript')) ev.script = document.getElementById('schemaScript').value;
+      if (document.getElementById('schemaOwID')) ev.owID = document.getElementById('schemaOwID').value;
+      if (document.getElementById('schemaMovement')) ev.movementType = document.getElementById('schemaMovement').value;
+      if (document.getElementById('schemaTrainer')) ev.isTrainer = document.getElementById('schemaTrainer').checked;
+      if (document.getElementById('schemaView')) ev.viewRadius = parseInt(document.getElementById('schemaView').value) || 3;
+      if (document.getElementById('schemaFlag')) ev.flagID = document.getElementById('schemaFlag').value;
+      if (document.getElementById('schemaVar')) ev.scriptVar = document.getElementById('schemaVar').value;
+      if (document.getElementById('schemaVal')) ev.varValue = parseInt(document.getElementById('schemaVal').value) || 1;
+      if (document.getElementById('schemaTileID')) ev.tileID = parseInt(document.getElementById('schemaTileID').value) || 0;
+      if (document.getElementById('schemaTargetMap')) ev.targetMap = document.getElementById('schemaTargetMap').value;
+      if (document.getElementById('schemaBank')) ev.bankID = parseInt(document.getElementById('schemaBank').value) || 0;
+      if (document.getElementById('schemaWarpNum')) ev.warpNumber = parseInt(document.getElementById('schemaWarpNum').value) || 1;
+
+      renderWorldCanvas();
     }
 
-    function updateScriptDisplay() {
-      const scriptName = document.getElementById('evtScript').value;
-      document.getElementById('scriptOutput').value = scriptLibrary[scriptName] || `// Custom script: ${scriptName}\nwindow.ScriptEngine = window.ScriptEngine || {};\nwindow.ScriptEngine["${scriptName}"] = function() {\n  // TODO: Add script logic here\n};`;
-    }
-
-    function syncInputsToEvent() {
-      const sel = document.getElementById('evtKeySelect').value;
-      const x = parseInt(document.getElementById('evtX').value);
-      const y = parseInt(document.getElementById('evtY').value);
-      if (eventsList[sel]) {
-        eventsList[sel].xPos = isNaN(x) ? 0 : x;
-        eventsList[sel].yPos = isNaN(y) ? 0 : y;
-        renderGrid();
-      }
+    function updateBrushVisual() {
+      const brushVal = document.getElementById('tileBrush').value;
+      const colors = ['#78c850', '#333', '#3b82f6', '#06b6d4', '#6366f1', '#a855f7'];
+      document.getElementById('brushIndicator').style.background = colors[brushVal];
     }
 
     function generateOutput() {
-      const mapName = document.getElementById('mapName').value;
-      const mapType = document.getElementById('mapType').value;
-      const weather = document.getElementById('mapWeather').value;
-      const music = document.getElementById('mapMusic').value;
-      const isFlyable = document.getElementById('isFlyable').checked;
-      const isRunning = document.getElementById('isRunning').checked;
-
-      let blockDataStr = "[\n" + gridData.map(row => "      [" + row.join(", ") + "]").join(",\n") + "\n    ]";
+      saveCurrentMapState();
       
-      let eventsStr = "{\n";
-      for (const [k, v] of Object.entries(eventsList)) {
-        eventsStr += `      ${k}: {\n`;
-        for (const [ek, ev] of Object.entries(v)) {
-          let formattedVal = typeof ev === 'string' ? `"${ev}"` : ev;
-          eventsStr += `        ${ek}: ${formattedVal},\n`;
+      let fullMasterOutput = `window.OverworldMaps = {\n`;
+      let mapEntries = [];
+
+      for (const [mName, mData] of Object.entries(mapsRepository)) {
+        let blockDataStr = "[\n" + mData.blockData.map(row => "      [" + row.join(", ") + "]").join(",\n") + "\n    ]";
+        
+        let wildDataStr = "{\n";
+        for (const [timeKey, arr] of Object.entries(mData.wildEncounters)) {
+          wildDataStr += `      ${timeKey}: [\n`;
+          (arr || []).forEach(w => {
+            let specObj = PokemonDatabase[w.pokemonName] || { name: w.pokemonName };
+            wildDataStr += `        { pokemonName: "${specObj.name}", levelRange: [${w.minLevel}, ${w.maxLevel}], appearanceRate: ${w.appearanceRate} },\n`;
+          });
+          wildDataStr += `      ],\n`;
         }
-        eventsStr += `      },\n`;
+        wildDataStr += `    }`;
+
+        let evtStr = "{\n";
+        for (const [k, v] of Object.entries(mData.events)) {
+          evtStr += `      ${k}: {\n`;
+          evtStr += `        eventType: "${v.eventType || 'NPC'}",\n`;
+          
+          if (v.eventType === 'NPC') {
+            evtStr += `        owID: "${v.owID || 'Portia'}",\n`;
+            evtStr += `        script: "${v.script || ''}",\n`;
+            evtStr += `        movementType: "${v.movementType || 'MOVEMENT_TYPE_WANDER_LEFT_RIGHT'}",\n`;
+            evtStr += `        isTrainer: ${!!v.isTrainer},\n`;
+            evtStr += `        viewRadius: ${v.viewRadius || 3},\n`;
+            evtStr += `        xPos: ${v.xPos || 0},\n`;
+            evtStr += `        yPos: ${v.yPos || 0},\n`;
+            evtStr += `        flagID: "${v.flagID || ''}"\n`;
+          } else if (v.eventType === 'Script Tile') {
+            evtStr += `        xPos: ${v.xPos || 0},\n`;
+            evtStr += `        yPos: ${v.yPos || 0},\n`;
+            evtStr += `        script: "${v.script || ''}",\n`;
+            evtStr += `        scriptVar: "${v.scriptVar || '0001'}",\n`;
+            evtStr += `        varValue: ${v.varValue || 1}\n`;
+          } else if (v.eventType === 'Signpost') {
+            evtStr += `        xPos: ${v.xPos || 0},\n`;
+            evtStr += `        yPos: ${v.yPos || 0},\n`;
+            evtStr += `        script: "${v.script || ''}"\n`;
+          } else if (v.eventType === 'Tile') {
+            evtStr += `        tileID: ${v.tileID || 0},\n`;
+            evtStr += `        xPos: ${v.xPos || 0},\n`;
+            evtStr += `        yPos: ${v.yPos || 0}\n`;
+          } else if (v.eventType === 'Warp') {
+            evtStr += `        map: "${v.targetMap || 'Route_1'}",\n`;
+            evtStr += `        bankID: ${v.bankID || 0},\n`;
+            evtStr += `        warpNumber: ${v.warpNumber || 1},\n`;
+            evtStr += `        xPos: ${v.xPos || 0},\n`;
+            evtStr += `        yPos: ${v.yPos || 0}\n`;
+          }
+          evtStr += `      },\n`;
+        }
+        evtStr += "    }";
+
+        let connObj = { up: null, down: null, left: null, right: null };
+        (mData.connections || []).forEach(c => {
+          let targetMapObj = mapsRepository[c.map];
+          let bankVal = targetMapObj ? targetMapObj.bank : 0;
+          if (connObj[c.direction] !== undefined) {
+            connObj[c.direction] = [c.map, bankVal, c.offset];
+          }
+        });
+
+        let connStr = "{\n";
+        for (const [dir, arr] of Object.entries(connObj)) {
+          if (arr) {
+            connStr += `      ${dir}: ["${arr[0]}", ${arr[1]}, ${arr[2]}],\n`;
+          } else {
+            connStr += `      ${dir}: null,\n`;
+          }
+        }
+        connStr += `    }`;
+
+        let singleMapStr = `  "${mName}": {\n` +
+          `    map: "${mData.map}",\n` +
+          `    bank: ${mData.bank},\n` +
+          `    dimensions: {\n` +
+          `      width: ${mData.dimensions.width},\n` +
+          `      height: ${mData.dimensions.height},\n` +
+          `      blockSize: ${mData.dimensions.blockSize}\n` +
+          `    },\n` +
+          `    mapType: "${mData.mapType}",\n` +
+          `    weather: "${mData.weather}",\n` +
+          `    isFlyable: ${mData.isFlyable},\n` +
+          `    isRunning: ${mData.isRunning},\n` +
+          `    music: "${mData.music}",\n` +
+          `    connections: ${connStr},\n` +
+          `    events: ${evtStr},\n` +
+          `    wildData: ${wildDataStr},\n` +
+          `    blockData: ${blockDataStr}\n` +
+          `  }`;
+        mapEntries.push(singleMapStr);
       }
-      eventsStr += "    }";
 
-      const fullOutput = `window.OverworldMaps = window.OverworldMaps || {};\nwindow.OverworldMaps["${mapName}"] = {\n  mapType: "${mapType}",\n  weather: "${weather}",\n  isFlyable: ${isFlyable},\n  isRunning: ${isRunning},\n  music: "audio/music/${music}",\n  dimensions: {\n    width: ${cols},\n    height: ${rows},\n    blockSize: 8\n  },\n  blockData: ${blockDataStr},\n  events: ${eventsStr}\n};`;
-
-      document.getElementById('outputCode').value = fullOutput;
+      fullMasterOutput += mapEntries.json ? mapEntries.join(",\n\n") : mapEntries.join(",\n\n") + "\n};";
+      document.getElementById('outputCode').value = fullMasterOutput;
     }
 
-    updateEventDropdown();
-    initGrid();
-    updateScriptDisplay();
+    window.onload = function() {
+      owTableLogger();
+      initDefaultMap();
+      updateEventDropdown();
+      document.getElementById('evtKeySelect').value = "NPC_Portia";
+      loadSelectedEvent();
+    };
   </script>
 </body>
 </html>

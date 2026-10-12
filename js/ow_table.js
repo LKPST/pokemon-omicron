@@ -5,6 +5,7 @@ window.OverworldTable = {
     genderBased: false,
     owType: 'NPC',
     owDimension: '16x32', // Standard GBA human NPC dimension
+    trueDimension: '32x48',
     isRunning: false,
     isFishing: false,
     isSurfing: false,
@@ -17,6 +18,7 @@ window.OverworldTable = {
     genderBased: false,
     owType: 'NPC',
     owDimension: '16x32',
+    trueDimension: '32x48',
     isRunning: true,
     isFishing: false,
     isSurfing: false,
@@ -29,6 +31,7 @@ window.OverworldTable = {
     genderBased: false,
     owType: 'NPC',
     owDimension: '16x32', // Standard GBA human NPC dimension
+    trueDimension: '32x48',
     isRunning: false,
     isFishing: false,
     isSurfing: false,
@@ -41,12 +44,26 @@ window.OverworldTable = {
     genderBased: false,
     owType: 'Pokemon',
     owDimension: '32x32', // Larger dimensions supported for overworld Pokémon
+    trueDimension: '32x48',
     isRunning: false,
     isFishing: false,
     isSurfing: false,
     isCycling: false,
     owSprite: 'graphics/overworld/hatterene_ow.png',
     shinySprite: 'graphics/overworld/hatterene_shiny_ow.png'
+  },
+  Criscanto_House: {
+    spriteID: 'criscanto_house_ow',
+    frames: 1,
+    genderBased: false,
+    owType: 'Building',
+    owDimension: '128x128', // Larger dimensions supported for overworld Pokémon
+    trueDimension: '128x128',
+    isRunning: false,
+    isFishing: false,
+    isSurfing: false,
+    isCycling: false,
+    owSprite: 'graphics/overworld/criscanto_town_house.png'
   }
 };
 
