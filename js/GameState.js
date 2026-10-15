@@ -184,8 +184,14 @@ class BattleScene extends Phaser.Scene {
       this.battleMusic.play();
     }
 
-    // 640x480 Widescreen/Boxed Battle Background
-    this.add.rectangle(320, 180, 640, 360, 0x88d8b0);
+    // Split-Screen Widescreen Backgrounds (Upper screen: 480x310, Lower screen: 480x310)
+    // Upper Main Screen Background
+    this.add.rectangle(240, 155, 480, 310, 0x88d8b0);
+    // Lower Control/Alternate Screen Background (DS-style bottom screen)
+    this.add.rectangle(240, 465, 480, 310, 0x2b2b2b);
+
+    // Divider line between screens
+    this.add.rectangle(240, 310, 480, 4, 0x111111).setDepth(30);
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.wasd = this.input.keyboard.addKeys({
@@ -670,11 +676,15 @@ class BattleScene extends Phaser.Scene {
 
 
   setupBattleUIElements() {
-    this.add.rectangle(320, 477, 636, 6, 0x3b3a32).setDepth(10);
-    this.add.rectangle(320, 420, 632, 112, 0x5a554a).setDepth(10);
-    this.add.rectangle(10, 420, 6, 108, 0x8c7355).setDepth(10);
-    this.add.rectangle(630, 420, 6, 108, 0x8c7355).setDepth(10);
-    this.add.rectangle(320, 415, 616, 96, 0xffffff).setDepth(10);
+    // Bottom Screen UI Panel layout adjusted for 480x620 split layout
+    // Main semi-transparent battle dialogue/menu container on the lower screen
+    this.add.rectangle(240, 495, 460, 6, 0x3b3a32).setDepth(10);
+    this.add.rectangle(240, 535, 456, 130, 0x5a554a).setDepth(10);
+    this.add.rectangle(20, 535, 6, 124, 0x8c7355).setDepth(10);
+    this.add.rectangle(460, 535, 6, 124, 0x8c7355).setDepth(10);
+    
+    // 🌟 SEMI-TRANSPARENT TEXTBOX: Alpha set to 0.8 (partially see-through)
+    this.add.rectangle(240, 532, 440, 112, 0xffffff, 0.80).setDepth(10);
 
     this.menuGfx = this.add.graphics().setDepth(11);
 
@@ -682,19 +692,18 @@ class BattleScene extends Phaser.Scene {
       const activeMon = window.GameStateManager ? window.GameStateManager.playerPartyMon1 : null;
       const monName = activeMon ? (activeMon.nickname || activeMon.species.replace('SPECIES_', '')) : 'Pokémon';
       
-      console.log("[BattleScene] 🎨 Setting up UI dialogue box. Target Mon Name:", monName);
-
       const rawDialogue = `What will\n${monName} do?`;
       const formattedDialogue = window.GameStateManager.parseText 
         ? window.GameStateManager.parseText(rawDialogue) 
         : rawDialogue;
 
-      this.fontRenderer.print(40, 385, formattedDialogue, 24); 
+      // Positioned neatly inside the semi-transparent lower screen box
+      this.fontRenderer.print(40, 485, formattedDialogue, 24); 
 
-      this.fontRenderer.print(400, 375, 'FIGHT', 20);
-      this.fontRenderer.print(530, 375, 'BAG', 20);
-      this.fontRenderer.print(400, 430, 'PARTY', 20);
-      this.fontRenderer.print(530, 430, 'RUN', 20);
+      this.fontRenderer.print(280, 480, 'FIGHT', 20);
+      this.fontRenderer.print(385, 480, 'BAG', 20);
+      this.fontRenderer.print(280, 545, 'PARTY', 20);
+      this.fontRenderer.print(385, 545, 'RUN', 20);
     }
 
     this.selectedMenuIndex = 0;
@@ -705,11 +714,12 @@ class BattleScene extends Phaser.Scene {
     if (!this.menuGfx) return;
     this.menuGfx.clear();
 
+    // Adjusted coordinates for the 480px width lower screen layout
     const buttons = [
-      { x: 375, y: 368, w: 110, h: 42, normal: 0xd9381e, active: 0xff5722, border: 0x4a0e04, dotX: 390, dotY: 389 },
-      { x: 500, y: 368, w: 110, h: 42, normal: 0x2196f3, active: 0x4fc3f7, border: 0x0a233b, dotX: 515, dotY: 389 },
-      { x: 375, y: 420, w: 110, h: 42, normal: 0x9c27b0, active: 0xba68c8, border: 0x24062e, dotX: 390, dotY: 441 },
-      { x: 500, y: 420, w: 110, h: 42, normal: 0xffeb3b, active: 0xfff59d, border: 0x3b3002, dotX: 515, dotY: 441 },
+      { x: 260, y: 472, w: 95, h: 46, normal: 0xd9381e, active: 0xff5722, border: 0x4a0e04, dotX: 275, dotY: 495 },
+      { x: 365, y: 472, w: 95, h: 46, normal: 0x2196f3, active: 0x4fc3f7, border: 0x0a233b, dotX: 380, dotY: 495 },
+      { x: 260, y: 535, w: 95, h: 46, normal: 0x9c27b0, active: 0xba68c8, border: 0x24062e, dotX: 275, dotY: 558 },
+      { x: 365, y: 535, w: 95, h: 46, normal: 0xffeb3b, active: 0xfff59d, border: 0x3b3002, dotX: 380, dotY: 558 },
     ];
 
     buttons.forEach((btn, index) => {

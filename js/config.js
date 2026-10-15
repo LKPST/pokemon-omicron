@@ -32,9 +32,9 @@ if (existingSave) {
   // Ensure config is fully defined here so main.js doesn't throw a ReferenceError
   const config = {
     type: Phaser.AUTO,
-    width: 640,
-    height: 480,
-    scene: [OverworldScene,BattleScene]
+    width: 480,
+    height: 620,
+    scene: [OverworldScene, BattleScene]
   };
   
   window.game = new Phaser.Game(config);
