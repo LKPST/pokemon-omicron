@@ -1,15 +1,47 @@
-/**
- * Pokémon Micron - Tiles Registry
- * Path: table/tiles.js
- */
-
-window.TileRegistry = {
-    0: { id: 0, name: "Normal Floor", type: "floor", passability: "walkable", image: "graphics/tiles/floor_normal.png" },
-    1: { id: 1, name: "Grass Patch", type: "grass", passability: "walkable", image: "graphics/tiles/grass.png" },
-    2: { id: 2, name: "Building Wall", type: "wall", passability: "solid", image: "graphics/tiles/wall.png" },
-    3: { id: 3, name: "Fishing Spot", type: "water", passability: "surfable", image: "graphics/tiles/water_fish.png" },
-    4: { id: 4, name: "Waterfall", type: "waterfall", passability: "waterfall", image: "graphics/tiles/waterfall.png" },
-    5: { id: 5, name: "Covering NPC Roof", type: "roof", passability: "overlay", image: "graphics/tiles/roof_overlay.png" }
-  };
-  
-  console.log("[TileRegistry] Loaded successfully.");
+window.OverworldTiles = {
+  0: {
+    tileID: 0,
+    tileName: "Grass Floor",
+    tileType: "Normal",
+    isAnimated: false,
+    frames: 1,
+    tileImage: "graphics/tiles/Grass.png",
+    tileDimension: "16x16",
+    isPassable: true
+  },
+  1: {
+    tileID: 1,
+    tileName: "Sand Grass",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 9,
+    columns: 3,
+    tileImage: "graphics/tiles/sand_grass.png",
+    tileDimension: "48x48",
+    isPassable: true
+  }
+  ,
+  2: {
+    tileID: 2,
+    tileName: "Inverted Sand Grass",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 9,
+    columns: 3,
+    tileImage: "graphics/tiles/invert_sand_grass.png",
+    tileDimension: "50x50",
+    isPassable: true
+  }
+  ,
+  3: {
+    tileID: 3,
+    tileName: "Sand",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 3,
+    columns: 1,
+    tileImage: "graphics/tiles/sand.png",
+    tileDimension: "16x48",
+    isPassable: true
+  }
+};

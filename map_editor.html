@@ -5,6 +5,8 @@
   <title>Pokémon Micron - Advanced Map & World Editor</title>
   
   <script src="js/ow_table.js"></script>
+  <script src="js/Overworld_map.js"></script>
+  <script src="tables/tiles.js"></script>
 
   <style>
     body { font-family: monospace; background: #121212; color: #e0e0e0; display: flex; height: 100vh; margin: 0; padding: 12px; box-sizing: border-box; gap: 15px; }
@@ -108,6 +110,50 @@
     .wild-group { background: #141414; border: 1px solid #2d2d2d; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
     .panel-header { display: flex; justify-content: space-between; align-items: center; }
 
+    /* Crisp Pixel-Art Rendering */
+    .tile, .palette-frame-option {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    /* Panel collapse/hide transition */
+    #output-panel {
+      width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: transform 0.25s ease, width 0.25s ease, opacity 0.2s ease;
+    }
+    #output-panel.hidden-panel {
+      transform: translateX(110%);
+      width: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      overflow: hidden;
+      opacity: 0;
+    }
+    
+    /* Floating Show Panel Button */
+    #showPanelBtn {
+      display: none;
+      position: fixed;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 100;
+      background: #00acc1;
+      color: white;
+      border: none;
+      padding: 14px 6px;
+      border-radius: 6px 0 0 6px;
+      cursor: pointer;
+      font-weight: bold;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      box-shadow: -2px 0 10px rgba(0,0,0,0.5);
+    }
+    #showPanelBtn:hover { background: #0097a7; }
+
     #modalOverlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
     #modalBox { background: #1e1e1e; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; width: 340px; border: 1px solid #3d3d3d; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
   </style>
@@ -134,7 +180,7 @@
       <button class="btn-success" style="flex:1;" onclick="promptNewMap()">+ New Map</button>
     </div>
     
-    <label>Map Identifier Name: <input type="text" id="mapName" value="Criscanto Town" oninput="updateMapNameKey()"></label>
+    <label>Map Identifier Name: <input type="text" id="mapName" value="" oninput="updateMapNameKey()"></label>
 
     <!-- Tab Header -->
     <div class="tab-header">
@@ -147,24 +193,16 @@
 
     <!-- TAB 1: Environment -->
     <div id="tab-env" class="tab-content active">
-      <div class="help-text">💡 Paint tiles onto active grid. Press <b>Ctrl+Z</b> to Undo, <b>Ctrl+Y</b> to Redo.</div>
+      <div class="help-text">💡 Click any tile or specific sub-frame in the palette below to select your brush. Press <b>Ctrl+Z</b> to Undo.</div>
       <label>Drawing Tool:</label>
-      <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
         <button id="toolPencil" class="tool-icon-btn active" onclick="setTool('pencil')" title="Pencil">✏️ Pencil</button>
         <button id="toolFill" class="tool-icon-btn" onclick="setTool('fill')" title="Fill Box">🪣 Fill Box</button>
       </div>
 
-      <label>Tile Property Brush:
-        <select id="tileBrush" onchange="updateBrushVisual()">
-          <option value="0">0: Normal Floor</option>
-          <option value="1">1: Grass Patch</option>
-          <option value="2">2: Building Wall</option>
-          <option value="3">3: Fishing Spot</option>
-          <option value="4">4: Waterfall</option>
-          <option value="5">5: Covering NPC Roof</option>
-        </select>
-      </label>
-      <div id="brushIndicator" style="height: 10px; background: #78c850; border-radius: 4px; border: 1px solid #333;"></div>
+      <label>Tile Palette (Select Brush):</label>
+      <div id="tilePaletteContainer" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; background: #141414; padding: 8px; border-radius: 6px; border: 1px solid #333;"></div>
+      <div style="margin-top: 6px; font-size: 10px; color: #aaa;" id="currentBrushLabel">Selected Brush: ID 0</div>
     </div>
 
     <!-- TAB 2: Connections -->
@@ -222,8 +260,8 @@
     <!-- TAB 5: Properties -->
     <div id="tab-props" class="tab-content">
       <div style="display: flex; gap: 10px;">
-        <label>Width: <input type="number" id="mapCols" value="10" min="5" max="30" onchange="resizeGrid()"></label>
-        <label>Height: <input type="number" id="mapRows" value="10" min="5" max="30" onchange="resizeGrid()"></label>
+        <label style="flex:1;">Width: <input type="number" id="mapCols" value="10" min="5" max="30" onchange="resizeGrid()"></label>
+        <label style="flex:1;">Height: <input type="number" id="mapRows" value="10" min="5" max="30" onchange="resizeGrid()"></label>
       </div>
 
       <label>Map Bank: <input type="number" id="mapBank" value="0" oninput="generateOutput()"></label>
@@ -270,12 +308,15 @@
     <div id="worldCanvasWrapper" class="world-stage"></div>
   </div>
 
-  <!-- RIGHT PANEL (Collapsible) -->
+  <!-- Floating Show Panel Button (Visible when panel is hidden) -->
+  <button id="showPanelBtn" onclick="toggleRightPanel()" title="Show Output Panels">◀ Show Output</button>
+
+  <!-- RIGHT PANEL -->
   <div class="panel" id="output-panel">
     <div class="sub-box" id="boxOutput">
       <div class="panel-header">
         <h3 style="margin:0; font-size:13px; color:#00acc1;">📋 Master `Overworld_map.txt` Output</h3>
-        <button onclick="toggleBox('boxOutput')">[ - ]</button>
+        <button class="btn-danger" onclick="toggleRightPanel()" title="Hide Panel" style="padding: 4px 8px; font-size: 10px;">➡ Hide</button>
       </div>
       <textarea id="outputCode" readonly></textarea>
       <button class="btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('outputCode').value); alert('Master Map Code Copied!');">Copy Master Map Output</button>
@@ -283,11 +324,10 @@
 
     <div class="sub-box" id="boxScript">
       <div class="panel-header">
-        <h3>📜 Script Engine Viewer</h3>
-        <button onclick="toggleBox('boxScript')">[ - ]</button>
+        <h3 style="margin:0; font-size:13px; color:#00acc1;">📜 Script Engine Viewer</h3>
       </div>
       <textarea id="scriptOutput" class="script-text" readonly></textarea>
-      <button onclick="navigator.clipboard.writeText(document.getElementById('scriptOutput').value); alert('Script Code Copied!');">Copy Script Code</button>
+      <button class="btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('scriptOutput').value); alert('Script Code Copied!');">Copy Script Code</button>
     </div>
   </div>
 
@@ -299,6 +339,18 @@
       SPECIES_EELEKTROSS_M: { name: 'Eelektross', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconEELEKTROSS_1.png' },
       SPECIES_LUCARIO_Z: { name: 'Lucario', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconLUCARIO_2.png' }
     };
+
+    function toggleRightPanel() {
+      const panel = document.getElementById('output-panel');
+      const showBtn = document.getElementById('showPanelBtn');
+      panel.classList.toggle('hidden-panel');
+      
+      if (panel.classList.contains('hidden-panel')) {
+        showBtn.style.display = 'block';
+      } else {
+        showBtn.style.display = 'none';
+      }
+    }
 
     function owTableLogger() {
       console.group("🔍 [OW Table Logger] Scanning window.OverworldTable...");
@@ -325,7 +377,7 @@
     let cols = 10, rows = 10;
     let gridData = [];
     let mapsRepository = {}; 
-    let currentMapKey = "Criscanto Town";
+    let currentMapKey = "";
     let activeTool = 'pencil';
     let activeTab = 'env';
     
@@ -340,9 +392,7 @@
       dawn: [{ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 }]
     };
 
-    let eventsList = {
-      NPC_Portia: { eventType: "NPC", owID: "Portia", script: "portia_battle_trigger", movementType: "MOVEMENT_TYPE_WANDER_LEFT_RIGHT", isTrainer: true, viewRadius: 3, xPos: 5, yPos: 3, flagID: "FLAG_DEFEATED_PORTIA" }
-    };
+    let eventsList = {};
 
     let isMouseDown = false;
     let fillStart = null;
@@ -443,34 +493,78 @@
       }
     });
 
+    window.addEventListener('mouseup', () => {
+      isMouseDown = false;
+      fillStart = null;
+    });
+
+    // 🌟 Dynamically load all maps found in window.OverworldMaps
     function initDefaultMap() {
-      cols = 10; rows = 10;
-      gridData = [
-        [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-        [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-        [2, 0, 1, 1, 0, 0, 1, 1, 0, 2],
-        [2, 0, 1, 1, 0, 0, 1, 1, 0, 2],
-        [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-        [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-        [2, 0, 1, 1, 0, 0, 1, 1, 0, 2],
-        [2, 0, 1, 1, 0, 0, 1, 1, 0, 2],
-        [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-        [2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
-      ];
-      mapsRepository[currentMapKey] = {
-        map: currentMapKey,
-        bank: 0,
-        mapType: "City",
-        weather: "Normal",
-        isFlyable: true,
-        isRunning: true,
-        music: "audio/music/criscanto_town.mp3",
-        connections: [],
-        wildEncounters: JSON.parse(JSON.stringify(wildEncounters)),
-        dimensions: { width: 10, height: 10, blockSize: 8 },
-        blockData: JSON.parse(JSON.stringify(gridData)),
-        events: JSON.parse(JSON.stringify(eventsList))
-      };
+      console.log("🔍 [Editor Logger] Scanning window.OverworldMaps...", window.OverworldMaps);
+      if (window.OverworldMaps && Object.keys(window.OverworldMaps).length > 0) {
+        for (const [mKey, mData] of Object.entries(window.OverworldMaps)) {
+          let formattedConnections = [];
+          if (mData.connections) {
+            for (const [dir, connInfo] of Object.entries(mData.connections)) {
+              if (connInfo && Array.isArray(connInfo)) {
+                formattedConnections.push({ direction: dir, map: connInfo[0], offset: connInfo[2] });
+              }
+            }
+          }
+
+          let formattedWild = {};
+          if (mData.wildData) {
+            for (const [timeKey, arr] of Object.entries(mData.wildData)) {
+              formattedWild[timeKey] = (arr || []).map(w => ({
+                pokemonName: Object.keys(PokemonDatabase).find(k => PokemonDatabase[k].name === w.pokemonName) || w.pokemonName,
+                minLevel: w.levelRange ? w.levelRange[0] : 5,
+                maxLevel: w.levelRange ? w.levelRange[1] : 7,
+                appearanceRate: w.appearanceRate || 20
+              }));
+            }
+          } else {
+            formattedWild = { morning: [], afternoon: [], night: [], dawn: [] };
+          }
+
+          mapsRepository[mKey] = {
+            map: mData.map || mKey,
+            bank: mData.bank ?? 0,
+            mapType: mData.mapType || "City",
+            weather: mData.weather || "Normal",
+            isFlyable: mData.isFlyable ?? true,
+            isRunning: mData.isRunning ?? true,
+            music: mData.music || "audio/music/criscanto_town.mp3",
+            connections: formattedConnections,
+            wildEncounters: formattedWild,
+            dimensions: mData.dimensions || { width: 10, height: 10, blockSize: 8 },
+            tileData: JSON.parse(JSON.stringify(mData.tileData || mData.blockData || [])), // 🌟 Fixed property name
+            events: JSON.parse(JSON.stringify(mData.events || {}))
+          };
+        }
+        currentMapKey = Object.keys(mapsRepository)[0];
+        console.log(`🗺️ [Editor Logger] Loaded ${Object.keys(mapsRepository).length} maps into repository:`, Object.keys(mapsRepository));
+      } else {
+        console.warn("⚠️ [Editor Logger] No window.OverworldMaps found. Initializing empty map.");
+        currentMapKey = "Criscanto Town";
+        cols = 10; rows = 10;
+        gridData = [];
+      const rawTileData = mData.tileData || mData.blockData;
+      for (let r = 0; r < rows; r++) {
+        let rowArr = [];
+        for (let c = 0; c < cols; c++) {
+          let val = (rawTileData && rawTileData[r] && rawTileData[r][c] !== undefined) ? rawTileData[r][c] : "0|0";
+          // Convert legacy numbers to string format if needed
+          if (typeof val === 'number') val = `${val}|0`;
+          rowArr.push(val);
+        }
+        gridData.push(rowArr);
+      }
+        mapsRepository[currentMapKey] = {
+          map: currentMapKey, bank: 0, mapType: "City", weather: "Normal", isFlyable: true, isRunning: true,
+          music: "audio/music/criscanto_town.mp3", connections: [], wildEncounters: JSON.parse(JSON.stringify(wildEncounters)),
+          dimensions: { width: 10, height: 10, blockSize: 8 }, blockData: JSON.parse(JSON.stringify(gridData)), events: {}
+        };
+      }
       updateMapSelectorDropdown();
       loadMapIntoEditor(currentMapKey);
     }
@@ -510,22 +604,70 @@
       
       cols = mData.dimensions.width;
       rows = mData.dimensions.height;
-      gridData = JSON.parse(JSON.stringify(mData.blockData));
-      eventsList = JSON.parse(JSON.stringify(mData.events));
+      
+      const rawGrid = mData.tileData || mData.blockData || [];
+      gridData = [];
+      for (let r = 0; r < rows; r++) {
+        let rowArr = [];
+        for (let c = 0; c < cols; c++) {
+          let val = (rawGrid[r] && rawGrid[r][c] !== undefined) ? rawGrid[r][c] : "0|0";
+          if (typeof val === 'number') {
+            val = `${val}|0`;
+          } else if (typeof val !== 'string') {
+            val = "0|0";
+          }
+          rowArr.push(val);
+        }
+        gridData.push(rowArr);
+      }
+      
       mapConnections = JSON.parse(JSON.stringify(mData.connections || []));
       wildEncounters = JSON.parse(JSON.stringify(mData.wildEncounters || { morning: [], afternoon: [], night: [], dawn: [] }));
-
-      undoStack = [];
-      redoStack = [];
+      eventsList = JSON.parse(JSON.stringify(mData.events || {}));
 
       updateEventDropdown();
-      renderWorldCanvas();
       renderConnectionsUI();
       renderWildUI();
+      renderWorldCanvas();
       generateOutput();
     }
 
+    function renderConnectionsUI() {
+      const container = document.getElementById('connectionsListContainer');
+      if (!container) return;
+      container.innerHTML = '';
+      mapConnections.forEach((conn, idx) => {
+        const card = document.createElement('div');
+        card.className = 'connection-card';
+        let mapOptionsHtml = '';
+        for (const mKey of Object.keys(mapsRepository)) {
+          if (mKey === currentMapKey) continue;
+          mapOptionsHtml += `<option value="${mKey}" ${conn.map === mKey ? 'selected' : ''}>${mKey}</option>`;
+        }
+
+        card.innerHTML = `
+          <div style="display:flex; gap:5px;">
+            <select onchange="updateConnection(${idx}, 'direction', this.value)">
+              <option value="up" ${conn.direction==='up'?'selected':''}>UP</option>
+              <option value="down" ${conn.direction==='down'?'selected':''}>DOWN</option>
+              <option value="left" ${conn.direction==='left'?'selected':''}>LEFT</option>
+              <option value="right" ${conn.direction==='right'?'selected':''}>RIGHT</option>
+            </select>
+            <select onchange="updateConnection(${idx}, 'map', this.value)">${mapOptionsHtml}</select>
+            <button class="btn-danger" onclick="removeConnection(${idx})">X</button>
+          </div>
+          <div style="display:flex; align-items:center; gap:5px; font-size:10px;">
+            <span>Offset:</span>
+            <input type="number" value="${conn.offset}" oninput="updateConnection(${idx}, 'offset', parseInt(this.value) || 0)">
+          </div>
+        `;
+        container.appendChild(card);
+      });
+      renderWorldCanvas();
+    }
+
     function saveCurrentMapState() {
+      if (!currentMapKey) return;
       mapsRepository[currentMapKey] = {
         map: currentMapKey,
         bank: parseInt(document.getElementById('mapBank').value) || 0,
@@ -537,7 +679,7 @@
         connections: JSON.parse(JSON.stringify(mapConnections)),
         wildEncounters: JSON.parse(JSON.stringify(wildEncounters)),
         dimensions: { width: cols, height: rows, blockSize: 8 },
-        blockData: JSON.parse(JSON.stringify(gridData)),
+        tileData: JSON.parse(JSON.stringify(gridData)), // 🌟 Fixed property name
         events: JSON.parse(JSON.stringify(eventsList))
       };
     }
@@ -545,16 +687,16 @@
     function updateMapNameKey() {
       const newName = document.getElementById('mapName').value.trim();
       if (!newName || newName === currentMapKey) return;
+      mapsRepository[newName] = mapsRepository[currentMapKey];
       delete mapsRepository[currentMapKey];
       currentMapKey = newName;
-      mapsRepository[currentMapKey] = {};
-      saveCurrentMapState();
+      mapsRepository[currentMapKey].map = newName;
       updateMapSelectorDropdown();
       generateOutput();
     }
 
     function promptNewMap() {
-      showModal("Enter new map name:", "Route_1", (newName) => {
+      showModal("Enter new map name:", "Route_2", (newName) => {
         if (!newName || mapsRepository[newName]) {
           alert("Invalid or existing map name!");
           return;
@@ -599,138 +741,182 @@
       let miniGrid = document.createElement('div');
       miniGrid.className = 'grid';
       miniGrid.style.gridTemplateColumns = `repeat(${targetCols}, 32px)`;
+      
       for (let r = 0; r < targetRows; r++) {
         for (let c = 0; c < targetCols; c++) {
-          const tile = document.createElement('div');
-          let val = (targetData && targetData[r] && targetData[r][c] !== undefined) ? targetData[r][c] : 0;
-          tile.className = `tile ${tileStyles[val] || 't-0'}`;
-          miniGrid.appendChild(tile);
+          const div = document.createElement('div');
+          div.className = 'tile';
+          div.style.imageRendering = 'pixelated';
+          div.style.overflow = 'hidden';
+          div.style.position = 'relative';
+          div.style.width = '32px';
+          div.style.height = '32px';
+
+          let val = (targetData && targetData[r] && targetData[r][c] !== undefined) ? targetData[r][c] : "0|0";
+          let cellString = typeof val === 'string' ? val : `${val}|0`;
+          let primaryLayer = cellString.split(',')[0].trim();
+          let [tIDStr, fIDStr] = primaryLayer.split('|');
+          let tileID = parseInt(tIDStr) || 0;
+          let frameID = parseInt(fIDStr) || 0;
+
+          const tileDef = window.OverworldTiles ? window.OverworldTiles[tileID] : null;
+
+          if (tileDef && tileDef.tileImage) {
+            if (tileDef.tileType === "Multi-tile") {
+              const colsPerRow = tileDef.columns || 3;
+              const col = frameID % colsPerRow;
+              const row = Math.floor(frameID / colsPerRow);
+              
+              const leftX = col * 32;
+              const topY = row * 32;
+              const nativeSheetWidth = colsPerRow * 32;
+
+              const img = document.createElement('img');
+              img.src = tileDef.tileImage;
+              img.style.cssText = `
+                position: absolute;
+                left: -${leftX}px;
+                top: -${topY}px;
+                width: ${nativeSheetWidth}px;
+                height: auto;
+                max-width: none;
+                image-rendering: pixelated;
+              `;
+              div.appendChild(img);
+
+            } else if (tileDef.tileType === "Multi-tile Pixel Split") {
+              const colsPerRow = tileDef.columns || 3;
+              const col = frameID % colsPerRow;
+              const row = Math.floor(frameID / colsPerRow);
+              
+              const leftX = 1 + (col * 16);
+              const topY = 1 + (row * 16);
+              const nativeSheetWidth = tileDef.tileDimension ? parseInt(tileDef.tileDimension.split('x')[0]) : (colsPerRow * 17); 
+              const scaledSheetWidth = nativeSheetWidth * 2;
+
+              const img = document.createElement('img');
+              img.src = tileDef.tileImage;
+              img.style.cssText = `
+                position: absolute;
+                left: -${leftX * 2}px;
+                top: -${topY * 2}px;
+                width: ${scaledSheetWidth}px;
+                height: auto;
+                max-width: none;
+                image-rendering: pixelated;
+              `;
+              div.appendChild(img);
+
+            } else {
+              const img = document.createElement('img');
+              img.src = tileDef.tileImage;
+              img.style.cssText = "width: 32px; height: 32px; image-rendering: pixelated;";
+              div.appendChild(img);
+            }
+          } else {
+            div.style.background = '#78c850';
+          }
+
+          miniGrid.appendChild(div);
         }
       }
       return miniGrid;
     }
 
     function renderWorldCanvas() {
+      console.group("🎨 [Editor Logger] Rendering World Canvas for Map:", currentMapKey);
       const wrapper = document.getElementById('worldCanvasWrapper');
       wrapper.innerHTML = '';
 
       const activeWrapper = document.createElement('div');
       activeWrapper.className = 'active-map-wrapper';
+      activeWrapper.style.position = 'relative';
 
       const container = document.createElement('div');
       container.id = 'gridElement';
       container.className = `grid ${activeTab !== 'env' ? 'hide-values' : ''}`;
       container.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
 
-      const showOw = document.getElementById('showOverworldToggle')?.checked ?? true;
-
+      // 1. Render Background Tiles Grid
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const div = document.createElement('div');
-          div.className = `tile ${tileStyles[gridData[r][c]] || 't-0'}`;
-          div.textContent = gridData[r][c];
-          div.dataset.r = r;
-          div.dataset.c = c;
           
-          let occupantKey = Object.keys(eventsList).find(k => {
-            const ev = eventsList[k];
-            return ev.xPos === c && ev.yPos === r;
-          });
+          const cellVal = (gridData[r] && gridData[r][c] !== undefined) ? gridData[r][c] : "0|0";
+          const cellString = typeof cellVal === 'string' ? cellVal : `${cellVal}|0`;
+          
+          const primaryLayer = cellString.split(',')[0].trim();
+          const [tIDStr, fIDStr] = primaryLayer.split('|');
+          const tileID = parseInt(tIDStr) || 0;
+          const frameID = parseInt(fIDStr) || 0;
 
-          if (occupantKey && activeTab === 'events') {
-            const occupant = eventsList[occupantKey];
-            const eType = occupant.eventType || 'NPC';
+          const tileDef = window.OverworldTiles ? window.OverworldTiles[tileID] : null;
 
-            const tableRef = window.OverworldTable || {};
-            const owData = tableRef[occupant.owID] || {};
-            const spriteUrl = owData.owSprite || `graphics/overworld/${(occupant.owID || '').toLowerCase()}.png`;
+          div.className = `tile`;
+          div.style.imageRendering = 'pixelated';
+          div.style.overflow = 'hidden';
+          div.style.position = 'relative';
 
-            if (showOw && occupant.owID) {
-              const frameBox = document.createElement('div');
-              frameBox.className = 'sprite-frame-container';
-
-              let dimStr = owData.trueDimension || '32x48';
-              let [w, h] = dimStr.split('x').map(Number);
+          if (tileDef && tileDef.tileImage) {
+            if (tileDef.tileType === "Multi-tile") {
+              const colsPerRow = tileDef.columns || 3;
+              const col = frameID % colsPerRow;
+              const row = Math.floor(frameID / colsPerRow);
               
-              const isBuilding = owData.owType === 'Building' || (owData.frames !== undefined && owData.frames <= 1);
+              const leftX = col * 32;
+              const topY = row * 32;
+              const nativeSheetWidth = colsPerRow * 32;
 
-              // 🔍 DETAILED RENDER & SCALE LOGGER
-              console.log(`🏠 [OW Render Logger] ID: ${occupant.owID} | Type: ${owData.owType || 'NPC'} | trueDimension: ${dimStr} | Parsed W:${w}, H:${h} | Scale: 100%`);
+              const img = document.createElement('img');
+              img.src = tileDef.tileImage;
+              img.style.cssText = `
+                position: absolute;
+                left: -${leftX}px;
+                top: -${topY}px;
+                width: ${nativeSheetWidth}px;
+                height: auto;
+                max-width: none;
+                image-rendering: pixelated;
+              `;
+              div.appendChild(img);
 
-              if (isBuilding) {
-                // Buildings render at full 100% scale without shrinking or clipping, anchored top-left
-                frameBox.style.width = `${w}px`;
-                frameBox.style.height = `${h}px`;
-                frameBox.style.bottom = `0px`;
-                frameBox.style.left = `0px`;
-                frameBox.style.transform = `none`;
+            } else if (tileDef.tileType === "Multi-tile Pixel Split") {
+              const colsPerRow = tileDef.columns || 3;
+              const col = frameID % colsPerRow;
+              const row = Math.floor(frameID / colsPerRow);
+              
+              const leftX = 1 + (col * 16);
+              const topY = 1 + (row * 16);
+              const nativeSheetWidth = tileDef.tileDimension ? parseInt(tileDef.tileDimension.split('x')[0]) : (colsPerRow * 17); 
+              const scaledSheetWidth = nativeSheetWidth * 2;
 
-                const img = document.createElement('img');
-                img.src = spriteUrl;
-                img.className = 'npc-sprite';
-                img.style.width = `${w}px`;
-                img.style.height = `${h}px`;
-                img.style.top = `0px`;
-                img.style.left = `0px`;
-                img.style.maxWidth = 'none';
-                img.style.maxHeight = 'none';
-                frameBox.appendChild(img);
-              } else {
-                // Multi-frame animated sprite sheet
-                frameBox.style.width = `${w}px`;
-                frameBox.style.height = `${h}px`;
-                frameBox.style.bottom = `0px`;
-                frameBox.style.left = `50%`;
-                frameBox.style.transform = `translateX(-50%)`;
+              const img = document.createElement('img');
+              img.src = tileDef.tileImage;
+              img.style.cssText = `
+                position: absolute;
+                left: -${leftX * 2}px;
+                top: -${topY * 2}px;
+                width: ${scaledSheetWidth}px;
+                height: auto;
+                max-width: none;
+                image-rendering: pixelated;
+              `;
+              div.appendChild(img);
 
-                const spriteBox = document.createElement('div');
-                spriteBox.className = 'npc-sprite-box';
-                spriteBox.style.width = `${w}px`;
-                spriteBox.style.height = `${h}px`;
-                spriteBox.style.backgroundImage = `url('${spriteUrl}')`;
-                spriteBox.style.backgroundPosition = `0px 0px`;
-                spriteBox.style.backgroundRepeat = `no-repeat`;
-                spriteBox.style.backgroundSize = `${w * 4}px ${h * 4}px`;
-                frameBox.appendChild(spriteBox);
-              }
-
-              frameBox.draggable = true;
-              frameBox.onclick = (e) => {
-                e.stopPropagation();
-                document.getElementById('evtKeySelect').value = occupantKey;
-                loadSelectedEvent();
-              };
-              frameBox.ondragstart = (e) => {
-                draggedEventKey = occupantKey;
-                e.dataTransfer.setData('text/plain', occupantKey);
-              };
-              div.appendChild(frameBox);
             } else {
-              const badge = document.createElement('div');
-              let badgeClass = 'badge-npc';
-              let badgeText = 'P';
-
-              if (eType === 'Script Tile') { badgeClass = 'badge-script'; badgeText = 'S'; }
-              else if (eType === 'Signpost') { badgeClass = 'badge-sign'; badgeText = 'S'; }
-              else if (eType === 'Tile') { badgeClass = 'badge-tile'; badgeText = 'T'; }
-              else if (eType === 'Warp') { badgeClass = 'badge-warp'; badgeText = 'W'; }
-
-              badge.className = `event-badge ${badgeClass}`;
-              badge.textContent = badgeText;
-              badge.draggable = true;
-              badge.onclick = (e) => {
-                e.stopPropagation();
-                document.getElementById('evtKeySelect').value = occupantKey;
-                loadSelectedEvent();
-              };
-              badge.ondragstart = (e) => {
-                draggedEventKey = occupantKey;
-                e.dataTransfer.setData('text/plain', occupantKey);
-              };
-              div.appendChild(badge);
+              const img = document.createElement('img');
+              img.src = tileDef.tileImage;
+              img.style.cssText = "width: 32px; height: 32px; image-rendering: pixelated;";
+              div.appendChild(img);
             }
+          } else {
+            div.style.background = '#78c850';
           }
 
+          div.dataset.r = r;
+          div.dataset.c = c;
+
+          // 🌟 Allow dropping event sprites onto any grid cell
           div.ondragover = (e) => e.preventDefault();
           div.ondrop = (e) => {
             e.preventDefault();
@@ -745,13 +931,32 @@
             }
           };
 
+          // Paint / Fill Handlers
           div.onmousedown = (e) => {
             if (activeTab !== 'env') return;
             isMouseDown = true;
             pushHistory();
-            const brush = parseInt(document.getElementById('tileBrush').value);
+            
+            const minF = Math.min(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
+            const maxF = Math.max(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
+            const tDef = window.OverworldTiles ? window.OverworldTiles[selectedTileID] : null;
+            const colsPerRow = tDef ? (tDef.columns || 3) : 3;
+
             if (activeTool === 'pencil') {
-              gridData[r][c] = brush;
+              const baseMinCol = minF % colsPerRow;
+              const baseMinRow = Math.floor(minF / colsPerRow);
+
+              for (let f = minF; f <= maxF; f++) {
+                const col = f % colsPerRow;
+                const row = Math.floor(f / colsPerRow);
+                const targetR = r + (row - baseMinRow);
+                const targetC = c + (col - baseMinCol);
+
+                if (targetR < rows && targetC < cols) {
+                  gridData[targetR][targetC] = `${selectedTileID}|${f}`;
+                }
+              }
+
               renderWorldCanvas();
               generateOutput();
             } else if (activeTool === 'fill') {
@@ -761,38 +966,110 @@
 
           div.onmouseenter = () => {
             if (isMouseDown && activeTool === 'pencil' && activeTab === 'env') {
-              const brush = parseInt(document.getElementById('tileBrush').value);
-              gridData[r][c] = brush;
+              const brushString = `${selectedTileID}|${selectedSubFrameIndex}`;
+              gridData[r][c] = brushString;
               renderWorldCanvas();
               generateOutput();
             }
-          };
-
-          div.onmouseup = () => {
-            if (isMouseDown && activeTool === 'fill' && fillStart && activeTab === 'env') {
-              const brush = parseInt(document.getElementById('tileBrush').value);
-              const rMin = Math.min(fillStart.r, r), rMax = Math.max(fillStart.r, r);
-              const cMin = Math.min(fillStart.c, c), cMax = Math.max(fillStart.c, c);
-              for (let y = rMin; y <= rMax; y++) {
-                for (let x = cMin; x <= cMax; x++) {
-                  gridData[y][x] = brush;
-                }
-              }
-              fillStart = null;
-              renderWorldCanvas();
-              generateOutput();
-            }
-            isMouseDown = false;
           };
 
           container.appendChild(div);
         }
       }
       activeWrapper.appendChild(container);
+
+      // 2. Render Event / NPC Sprites on a Separate Overlay Layer
+      const showOw = document.getElementById('showOverworldToggle')?.checked ?? true;
+      if (activeTab === 'events') {
+        const eventOverlay = document.createElement('div');
+        eventOverlay.style.cssText = "position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;";
+
+        for (const [occupantKey, occupant] of Object.entries(eventsList)) {
+          const c = occupant.xPos || 0;
+          const r = occupant.yPos || 0;
+          const eType = occupant.eventType || 'NPC';
+
+          const tableRef = window.OverworldTable || {};
+          const owData = tableRef[occupant.owID] || {};
+          const spriteUrl = owData.owSprite || `graphics/overworld/${(occupant.owID || '').toLowerCase()}.png`;
+
+          const cellWrapper = document.createElement('div');
+          cellWrapper.style.cssText = `position: absolute; left: ${c * 33}px; top: ${r * 33}px; width: 32px; height: 32px; pointer-events: auto;`;
+
+          if (showOw && occupant.owID) {
+            const frameBox = document.createElement('div');
+            frameBox.className = 'sprite-frame-container';
+
+            let dimStr = owData.trueDimension || '32x48';
+            let [w, h] = dimStr.split('x').map(Number);
+            const isBuilding = owData.owType === 'Building' || (owData.frames !== undefined && owData.frames <= 1);
+
+            if (isBuilding) {
+              frameBox.style.width = `${w}px`;
+              frameBox.style.height = `${h}px`;
+              frameBox.style.bottom = `0px`;
+              frameBox.style.left = `0px`;
+
+              const img = document.createElement('img');
+              img.src = spriteUrl;
+              img.style.cssText = `width: ${w}px; height: ${h}px; position: absolute; top: 0; left: 0; max-width: none; image-rendering: pixelated;`;
+              frameBox.appendChild(img);
+            } else {
+              frameBox.style.width = `${w}px`;
+              frameBox.style.height = `${h}px`;
+              frameBox.style.bottom = `0px`;
+              frameBox.style.left = `50%`;
+              frameBox.style.transform = `translateX(-50%)`;
+
+              const spriteBox = document.createElement('div');
+              spriteBox.style.cssText = `width: ${w}px; height: ${h}px; background-image: url('${spriteUrl}'); background-position: 0px 0px; background-repeat: no-repeat; background-size: ${w * 4}px ${h * 4}px; image-rendering: pixelated;`;
+              frameBox.appendChild(spriteBox);
+            }
+
+            frameBox.draggable = true;
+            frameBox.onclick = (e) => {
+              e.stopPropagation();
+              document.getElementById('evtKeySelect').value = occupantKey;
+              loadSelectedEvent();
+            };
+            frameBox.ondragstart = (e) => {
+              draggedEventKey = occupantKey;
+              e.dataTransfer.setData('text/plain', occupantKey);
+            };
+            cellWrapper.appendChild(frameBox);
+          } else {
+            const badge = document.createElement('div');
+            let badgeClass = 'badge-npc', badgeText = 'P';
+            if (eType === 'Script Tile') { badgeClass = 'badge-script'; badgeText = 'S'; }
+            else if (eType === 'Signpost') { badgeClass = 'badge-sign'; badgeText = 'S'; }
+            else if (eType === 'Tile') { badgeClass = 'badge-tile'; badgeText = 'T'; }
+            else if (eType === 'Warp') { badgeClass = 'badge-warp'; badgeText = 'W'; }
+
+            badge.className = `event-badge ${badgeClass}`;
+            badge.textContent = badgeText;
+            badge.draggable = true;
+            badge.onclick = (e) => {
+              e.stopPropagation();
+              document.getElementById('evtKeySelect').value = occupantKey;
+              loadSelectedEvent();
+            };
+            badge.ondragstart = (e) => {
+              draggedEventKey = occupantKey;
+              e.dataTransfer.setData('text/plain', occupantKey);
+            };
+            cellWrapper.appendChild(badge);
+          }
+
+          eventOverlay.appendChild(cellWrapper);
+        }
+        activeWrapper.appendChild(eventOverlay);
+      }
+
       wrapper.appendChild(activeWrapper);
 
-      if (activeTab === 'conn') {
-        mapConnections.forEach((conn, idx) => {
+      // 3. Render Connected Maps Previews
+      if (mapConnections && mapConnections.length > 0) {
+        mapConnections.forEach((conn) => {
           if (!mapsRepository[conn.map]) return;
           let targetMap = mapsRepository[conn.map];
 
@@ -801,10 +1078,10 @@
           
           let label = document.createElement('div');
           label.className = 'connected-label';
-          label.textContent = `${conn.direction.toUpperCase()}: ${conn.map} (Offset: ${conn.offset}) [Click to Switch]`;
+          label.textContent = `${conn.direction.toUpperCase()}: ${conn.map} (Offset: ${conn.offset})`;
           connWrapper.appendChild(label);
 
-          connWrapper.appendChild(renderFullSizeGrid(targetMap.dimensions.width, targetMap.dimensions.height, targetMap.blockData));
+          connWrapper.appendChild(renderFullSizeGrid(targetMap.dimensions.width, targetMap.dimensions.height, targetMap.tileData || targetMap.blockData));
 
           let tWidth = targetMap.dimensions.width * 33;
           let tHeight = targetMap.dimensions.height * 33;
@@ -835,80 +1112,13 @@
             document.getElementById('mapSelector').value = conn.map;
           };
 
-          connWrapper.onmousedown = (e) => {
-            draggingConnIndex = idx;
-            dragStartPos = { x: e.clientX, y: e.clientY };
-            e.stopPropagation();
-          };
-
           wrapper.appendChild(connWrapper);
         });
       }
+
+      console.groupEnd();
     }
-
-    window.onmousemove = (e) => {
-      if (draggingConnIndex === null) return;
-      let dx = e.clientX - dragStartPos.x;
-      let dy = e.clientY - dragStartPos.y;
-
-      let conn = mapConnections[draggingConnIndex];
-      if (conn.direction === 'up' || conn.direction === 'down') {
-        if (Math.abs(dx) > 16) {
-          conn.offset += Math.sign(dx);
-          dragStartPos.x = e.clientX;
-          renderConnectionsUI();
-          generateOutput();
-        }
-      } else {
-        if (Math.abs(dy) > 16) {
-          conn.offset += Math.sign(dy);
-          dragStartPos.y = e.clientY;
-          renderConnectionsUI();
-          generateOutput();
-        }
-      }
-    };
-
-    window.onmouseup = () => { 
-      isMouseDown = false; 
-      draggingConnIndex = null;
-      draggedEventKey = null;
-    };
-
-    function renderConnectionsUI() {
-      const container = document.getElementById('connectionsListContainer');
-      if (!container) return;
-      container.innerHTML = '';
-      mapConnections.forEach((conn, idx) => {
-        const card = document.createElement('div');
-        card.className = 'connection-card';
-        let mapOptionsHtml = '';
-        for (const mKey of Object.keys(mapsRepository)) {
-          if (mKey === currentMapKey) continue;
-          mapOptionsHtml += `<option value="${mKey}" ${conn.map === mKey ? 'selected' : ''}>${mKey}</option>`;
-        }
-
-        card.innerHTML = `
-          <div style="display:flex; gap:5px;">
-            <select onchange="updateConnection(${idx}, 'direction', this.value)">
-              <option value="up" ${conn.direction==='up'?'selected':''}>UP</option>
-              <option value="down" ${conn.direction==='down'?'selected':''}>DOWN</option>
-              <option value="left" ${conn.direction==='left'?'selected':''}>LEFT</option>
-              <option value="right" ${conn.direction==='right'?'selected':''}>RIGHT</option>
-            </select>
-            <select onchange="updateConnection(${idx}, 'map', this.value)">${mapOptionsHtml}</select>
-            <button class="btn-danger" onclick="removeConnection(${idx})">X</button>
-          </div>
-          <div style="display:flex; align-items:center; gap:5px; font-size:10px;">
-            <span>Offset:</span>
-            <input type="number" value="${conn.offset}" oninput="updateConnection(${idx}, 'offset', parseInt(this.value) || 0)">
-          </div>
-        `;
-        container.appendChild(card);
-      });
-      renderWorldCanvas();
-    }
-
+    
     function addConnection() {
       const existingKeys = Object.keys(mapsRepository).filter(k => k !== currentMapKey);
       if (existingKeys.length === 0) {
@@ -917,14 +1127,23 @@
       }
       let targetMapName = existingKeys[0];
       let dir = "down";
-      let oppositeDir = "up";
+
+      // Prevent duplicate directions on the same active map
+      if (mapConnections.some(c => c.direction === dir)) {
+        alert(`A connection already exists for the "${dir}" direction on this map!`);
+        return;
+      }
 
       mapConnections.push({ direction: dir, map: targetMapName, offset: 0 });
 
+      // Safely update reciprocal connection on the target map only
       if (mapsRepository[targetMapName]) {
         if (!mapsRepository[targetMapName].connections) mapsRepository[targetMapName].connections = [];
-        mapsRepository[targetMapName].connections = mapsRepository[targetMapName].connections.filter(c => c.map !== currentMapKey);
-        mapsRepository[targetMapName].connections.push({ direction: oppositeDir, map: currentMapKey, offset: 0 });
+        
+        let oppDir = { up: 'down', down: 'up', left: 'right', right: 'left' }[dir];
+        // Remove any conflicting reciprocal link on target map
+        mapsRepository[targetMapName].connections = mapsRepository[targetMapName].connections.filter(c => c.direction !== oppDir);
+        mapsRepository[targetMapName].connections.push({ direction: oppDir, map: currentMapKey, offset: 0 });
       }
 
       renderConnectionsUI();
@@ -933,18 +1152,26 @@
 
     function updateConnection(idx, field, val) {
       let newConn = mapConnections[idx];
+      let oldMap = newConn.map;
       newConn[field] = val;
+
+      // If target map changed, clean up old map's reciprocal link
+      if (field === 'map' && oldMap !== val && mapsRepository[oldMap]) {
+        if (mapsRepository[oldMap].connections) {
+          mapsRepository[oldMap].connections = mapsRepository[oldMap].connections.filter(c => c.map !== currentMapKey);
+        }
+      }
 
       let targetMapObj = mapsRepository[newConn.map];
       if (targetMapObj) {
         if (!targetMapObj.connections) targetMapObj.connections = [];
-        targetMapObj.connections = targetMapObj.connections.filter(c => c.map !== currentMapKey);
-        
         let oppDir = { up: 'down', down: 'up', left: 'right', right: 'left' }[newConn.direction];
+        
+        targetMapObj.connections = targetMapObj.connections.filter(c => c.map !== currentMapKey);
         targetMapObj.connections.push({ direction: oppDir, map: currentMapKey, offset: newConn.offset });
       }
 
-      renderWorldCanvas();
+      renderConnectionsUI();
       generateOutput();
     }
 
@@ -1214,6 +1441,7 @@
       document.getElementById('brushIndicator').style.background = colors[brushVal];
     }
 
+    // 🌟 Generates the ENTIRE Overworld_map.js code from start to end
     function generateOutput() {
       saveCurrentMapState();
       
@@ -1221,9 +1449,12 @@
       let mapEntries = [];
 
       for (const [mName, mData] of Object.entries(mapsRepository)) {
-        let blockDataStr = "[\n" + mData.blockData.map(row => "      [" + row.join(", ") + "]").join(",\n") + "\n    ]";
+        // 🌟 Pull live gridData for active map, or stored tileData for other repository maps
+        const targetTileData = (mName === currentMapKey) ? gridData : (mData.tileData || mData.blockData || []);
+        let tileDataStr = "[\n" + targetTileData.map(row => "      [\"" + row.join("\", \"") + "\"]").join(",\n") + "\n    ]";
         
         let wildDataStr = "{\n";
+        // ... (rest of wild data & event serialization remains the same)
         for (const [timeKey, arr] of Object.entries(mData.wildEncounters)) {
           wildDataStr += `      ${timeKey}: [\n`;
           (arr || []).forEach(w => {
@@ -1308,21 +1539,148 @@
           `    connections: ${connStr},\n` +
           `    events: ${evtStr},\n` +
           `    wildData: ${wildDataStr},\n` +
-          `    blockData: ${blockDataStr}\n` +
+          `    tileData: ${tileDataStr}\n` +
           `  }`;
         mapEntries.push(singleMapStr);
       }
 
-      fullMasterOutput += mapEntries.json ? mapEntries.join(",\n\n") : mapEntries.join(",\n\n") + "\n};";
+      fullMasterOutput += mapEntries.join(",\n\n") + "\n};";
       document.getElementById('outputCode').value = fullMasterOutput;
     }
 
+    let selectedTileID = 0;
+    let selectedSubFrameIndex = 0;
+    // 🌟 Multi-frame selection state
+    let selectedBrushSelection = { tileID: 0, startFrame: 0, endFrame: 0 };
+
+    function initTileBrushPalette() {
+      console.group("🔍 [Editor Logger] Initializing Visual Tile Palette");
+      const container = document.getElementById('tilePaletteContainer');
+      if (!container || !window.OverworldTiles) {
+        console.groupEnd();
+        return;
+      }
+
+      container.innerHTML = '';
+      container.onmousedown = (e) => e.stopPropagation();
+
+      for (const [tID, tDef] of Object.entries(window.OverworldTiles)) {
+        const colsPerRow = tDef.columns || 3;
+
+        const tileGroup = document.createElement('div');
+        tileGroup.style.cssText = "display: flex; flex-direction: column; gap: 4px; background: #1a1a1a; padding: 6px; border-radius: 4px; border: 1px solid #2d2d2d;";
+
+        const header = document.createElement('div');
+        header.style.cssText = "font-size: 10px; color: #00acc1; font-weight: bold;";
+        header.textContent = `ID ${tID}: ${tDef.tileName} (${tDef.tileType}) [Cols: ${colsPerRow}]`;
+        tileGroup.appendChild(header);
+
+        const framesGrid = document.createElement('div');
+        framesGrid.style.cssText = `display: grid; grid-template-columns: repeat(${colsPerRow}, 32px); gap: 4px;`;
+
+        const totalFrames = tDef.frames || 1;
+
+        for (let f = 0; f < totalFrames; f++) {
+          const frameBox = document.createElement('div');
+          frameBox.className = 'palette-frame-option';
+          
+          const minF = Math.min(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
+          const maxF = Math.max(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
+          const isSelected = (selectedTileID == tID && f >= minF && f <= maxF);
+          
+          frameBox.style.cssText = `
+            width: 32px; height: 32px; background: #252525; border: 2px solid ${isSelected ? '#00acc1' : '#444'};
+            border-radius: 4px; cursor: pointer; position: relative; box-sizing: border-box; overflow: hidden;
+          `;
+
+          if (tDef.tileType === "Multi-tile") {
+            const col = f % colsPerRow;
+            const row = Math.floor(f / colsPerRow);
+            
+            const leftX = col * 32;
+            const topY = row * 32;
+            const nativeSheetWidth = (colsPerRow * 16) + (colsPerRow + 1); 
+            const scaledSheetWidth = nativeSheetWidth * 2;
+
+            const img = document.createElement('img');
+            img.src = tDef.tileImage;
+            img.style.cssText = `
+              position: absolute;
+              left: -${leftX}px;
+              top: -${topY}px;
+              width: ${scaledSheetWidth}px;
+              height: auto;
+              max-width: none;
+              image-rendering: pixelated;
+            `;
+            frameBox.appendChild(img);
+
+          } else if (tDef.tileType === "Multi-tile Pixel Split") {
+            const col = f % colsPerRow;
+            const row = Math.floor(f / colsPerRow);
+            
+            const leftX = 1 + (col * 16);
+            const topY = 1 + (row * 16);
+            const nativeSheetWidth = tDef.tileDimension ? parseInt(tDef.tileDimension.split('x')[0]) : (colsPerRow * 17); 
+            const scaledSheetWidth = nativeSheetWidth * 2;
+
+            const img = document.createElement('img');
+            img.src = tDef.tileImage;
+            img.style.cssText = `
+              position: absolute;
+              left: -${leftX * 2}px;
+              top: -${topY * 2}px;
+              width: ${scaledSheetWidth}px;
+              height: auto;
+              max-width: none;
+              image-rendering: pixelated;
+            `;
+            frameBox.appendChild(img);
+
+          } else {
+            const img = document.createElement('img');
+            img.src = tDef.tileImage;
+            img.style.cssText = "width: 32px; height: 32px; image-rendering: pixelated;";
+            frameBox.appendChild(img);
+          }
+
+          // 🌟 Shift-click range selection support
+          frameBox.onclick = (e) => {
+            e.stopPropagation();
+            isMouseDown = false; 
+            selectedTileID = parseInt(tID);
+            
+            if (e.shiftKey && selectedBrushSelection.tileID === parseInt(tID)) {
+              selectedBrushSelection.endFrame = f;
+            } else {
+              selectedSubFrameIndex = f;
+              selectedBrushSelection = { tileID: parseInt(tID), startFrame: f, endFrame: f };
+            }
+
+            const activeMin = Math.min(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
+            const activeMax = Math.max(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
+            document.getElementById('currentBrushLabel').textContent = `Selected Brush: ID ${selectedTileID} (${tDef.tileName}) [Frames ${activeMin} - ${activeMax}]`;
+            initTileBrushPalette();
+          };
+
+          framesGrid.appendChild(frameBox);
+        }
+
+        tileGroup.appendChild(framesGrid);
+        container.appendChild(tileGroup);
+      }
+      console.groupEnd();
+    }
+
     window.onload = function() {
+      console.log("🚀 [Editor Logger] window.onload triggered.");
       owTableLogger();
       initDefaultMap();
+      initTileBrushPalette(); // 🌟 Replaces initTileBrushDropdown
       updateEventDropdown();
-      document.getElementById('evtKeySelect').value = "NPC_Portia";
+      document.getElementById('evtKeySelect').value = Object.keys(eventsList)[0] || "";
       loadSelectedEvent();
+      console.log("✅ [Editor Logger] Editor fully initialized.");
     };
   </script>
 </body>

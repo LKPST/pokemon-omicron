@@ -9,9 +9,9 @@ body {
 }
 
 #game-container {
-  /* Scale the native 240x160 GBA resolution up 3x or 4x cleanly */
-  width: 720px;
-  height: 480px;
+  /* Updated to match the new 480x620 portrait DS-style layout */
+  width: 480px;
+  height: 620px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.8);
   border: 4px solid #333;
   border-radius: 4px;
