@@ -64,6 +64,19 @@ window.OverworldTable = {
     isSurfing: false,
     isCycling: false,
     owSprite: 'graphics/overworld/criscanto_town_house.png'
+  },
+  Regular_Tree: {
+    spriteID: 'regular_tree_ow',
+    frames: 1,
+    genderBased: false,
+    owType: 'Building',
+    owDimension: '96x96', // Larger dimensions supported for overworld Pokémon
+    trueDimension: '96x96',
+    isRunning: false,
+    isFishing: false,
+    isSurfing: false,
+    isCycling: false,
+    owSprite: 'graphics/overworld/tree_regular.png'
   }
 };
 

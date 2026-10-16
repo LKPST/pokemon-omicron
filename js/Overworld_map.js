@@ -90,6 +90,17 @@ window.OverworldMaps = {
         yPos: 3,
         flagID: "FLAG_LILY_DEFEATED"
       },
+      NPC_1: {
+        eventType: "NPC",
+        owID: "Regular_Tree",
+        script: "portia_battle_trigger",
+        movementType: "MOVEMENT_TYPE_LOOK_AROUND",
+        isTrainer: true,
+        viewRadius: 3,
+        xPos: 0,
+        yPos: 0,
+        flagID: "FLAG_NPC_1_DEFEATED"
+      },
     },
     wildData: {
       morning: [
