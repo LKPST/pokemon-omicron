@@ -209,72 +209,63 @@ class OverworldScene extends Phaser.Scene {
       console.log(`🗺️ [Unified World Render] Map "${resolvedKey}" -> Rendering at World Offset: x=${offsetPos.x}, y=${offsetPos.y}`);
 
       // Call renderMapGrid with the explicit offset for this map
-      this.renderMapGrid(mapData, offsetPos.x, offsetPos.y);
+      this.renderMapGrid(mapData, offsetPos.x, offsetPos.y);this.renderMapGrid(mapData, offsetPos.x, offsetPos.y, resolvedKey);
     }
   }
 
-  renderMapGrid(mapData, offsetX, offsetY) {
+  renderMapGrid(mapData, offsetX, offsetY, label = '?') {
     const tileData = mapData.tileData || mapData.blockData || mapData.tiles || mapData.data || mapData.mapMatrix;
-    
-    if (!tileData || !Array.isArray(tileData) || tileData.length === 0) return;
-
-    const renderedMatrix = [];
+    if (!Array.isArray(tileData) || tileData.length === 0) {
+      console.warn(`[render] "${label}": no tile grid found. Keys on this map:`, Object.keys(mapData));
+      return;
+    }
+  
     const tileSize = 32;
-    let tileCount = 0;
-
+    const skipped = { noDef: new Set(), noTexture: new Set() };
+    let drawn = 0;
+  
     for (let row = 0; row < tileData.length; row++) {
-      if (!tileData[row] || !Array.isArray(tileData[row])) continue;
-      let renderedRow = [];
-
+      if (!Array.isArray(tileData[row])) continue;
+  
       for (let col = 0; col < tileData[row].length; col++) {
         let cellVal = tileData[row][col];
-        if (cellVal === undefined || cellVal === null) cellVal = "0|0";
         if (typeof cellVal === 'number') cellVal = `${cellVal}|0`;
-        if (typeof cellVal !== 'string') cellVal = "0|0";
-
-        renderedRow.push(cellVal);
-
+        if (typeof cellVal !== 'string') cellVal = '0|0';
+  
         const [tIDStr, fIDStr] = cellVal.split('|');
         const tileID = parseInt(tIDStr) || 0;
         const frameID = parseInt(fIDStr) || 0;
-
-        const tileDef = window.OverworldTiles ? window.OverworldTiles[tileID] : null;
-        if (!tileDef) continue;
-
+  
+        const tileDef = window.OverworldTiles && window.OverworldTiles[tileID];
+        if (!tileDef) { skipped.noDef.add(tileID); continue; }
+  
+        let key, frame, depth, scale;
+        if (tileDef.tileType === 'Multi-tile' || tileDef.tileType === 'Multi-tile Pixel Split') {
+          key = `tile_sheet_${tileID}`;
+          frame = Math.min(frameID, (tileDef.frames || 1) - 1);
+          depth = -50;  scale = 2;
+        } else if (tileDef.isAnimated && tileDef.frames > 1) {
+          key = `tile_anim_${tileID}`;
+          frame = 0;            // animation comes later
+          depth = -200; scale = 1;   // these sheets load as 32x32 frames
+        } else {
+          key = `tile_img_${tileID}`;
+          depth = -200; scale = 2;
+        }
+  
+        if (!this.textures.exists(key)) { skipped.noTexture.add(key); continue; }
+  
         const x = Math.round(offsetX + col * tileSize + tileSize / 2);
         const y = Math.round(offsetY + row * tileSize + tileSize / 2);
-
-        let tileImg;
-        let tileDepth = -100;
-
-        // 🌟 Restore correct multi-tile and normal scaling
-        if (tileDef.tileType === "Multi-tile" || tileDef.tileType === "Multi-tile Pixel Split") {
-          const textureKey = `tile_sheet_${tileID}`;
-          if (this.textures.exists(textureKey)) {
-            const maxFrames = tileDef.frames || 1;
-            const safeFrame = Math.min(frameID, maxFrames - 1);
-            
-            tileImg = this.add.image(x, y, textureKey, safeFrame);
-            tileImg.setScale(2); // Scale up 16x16 sub-frame cleanly to 32x32 world grid
-            tileDepth = -50;
-          }
-        } else {
-          const textureKey = `tile_img_${tileID}`;
-          if (this.textures.exists(textureKey)) {
-            tileImg = this.add.image(x, y, textureKey);
-            tileImg.setScale(2);
-            tileDepth = -200;
-          }
-        }
-
-        if (tileImg) {
-          tileImg.setDepth(tileDepth);
-          this.mapGroup.add(tileImg);
-          tileCount++;
-        }
+        const img = this.add.image(x, y, key, frame).setScale(scale).setDepth(depth);
+        this.mapGroup.add(img);
+        drawn++;
       }
-      renderedMatrix.push(renderedRow);
     }
+  
+    console.log(`[render] "${label}": drew ${drawn} tiles`);
+    if (skipped.noDef.size) console.warn(`[render] "${label}": tile IDs missing from OverworldTiles:`, [...skipped.noDef]);
+    if (skipped.noTexture.size) console.warn(`[render] "${label}": textures not loaded:`, [...skipped.noTexture]);
   }
 
   logCurrentTileDetails(gridX, gridY, mapKey = this.currentMapKey) {
