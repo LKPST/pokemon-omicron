@@ -1,1687 +1,339 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Pokémon Micron - Advanced Map & World Editor</title>
-  
-  <script src="js/ow_table.js"></script>
-  <script src="js/Overworld_map.js"></script>
-  <script src="tables/tiles.js"></script>
-
-  <style>
-    body { font-family: monospace; background: #121212; color: #e0e0e0; display: flex; height: 100vh; margin: 0; padding: 12px; box-sizing: border-box; gap: 15px; }
-    .panel { background: #1e1e1e; padding: 16px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; border: 1px solid #2d2d2d; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    #controls { width: 440px; }
-    #canvas-container { flex: 1; display: flex; justify-content: center; align-items: center; background: #0a0a0a; overflow: auto; position: relative; border: 1px solid #2d2d2d; border-radius: 8px; padding: 60px; }
-    #output-panel { width: 480px; display: flex; flex-direction: column; gap: 10px; transition: width 0.2s; }
-    .sub-box { display: flex; flex-direction: column; gap: 6px; min-height: 0; flex: 1; transition: height 0.2s; background: #1e1e1e; padding: 12px; border-radius: 8px; border: 1px solid #2d2d2d; }
-    .sub-box.collapsed { flex: 0 0 45px !important; overflow: hidden; }
-    .sub-box.collapsed textarea, .sub-box.collapsed button { display: none; }
-    
-    textarea { width: 100%; height: 100%; background: #141414; color: #76ff03; border: 1px solid #333; border-radius: 6px; font-family: monospace; padding: 10px; box-sizing: border-box; resize: none; font-size: 11px; }
-    .script-text { color: #00bcd4; }
-    
-    /* Tabs */
-    .tab-header { display: flex; gap: 4px; background: #141414; padding: 4px; border-radius: 6px; border: 1px solid #2d2d2d; }
-    .tab-btn { padding: 8px 12px; background: transparent; color: #888; border: none; cursor: pointer; border-radius: 4px; font-size: 11px; font-weight: bold; flex: 1; text-align: center; transition: all 0.2s; }
-    .tab-btn.active { background: #00acc1; color: white; box-shadow: 0 2px 6px rgba(0,172,193,0.3); }
-    .tab-content { display: none; flex-direction: column; gap: 10px; }
-    .tab-content.active { display: flex; }
-
-    button { padding: 7px 12px; background: #2d2d2d; color: #fff; border: 1px solid #3d3d3d; cursor: pointer; border-radius: 6px; font-size: 11px; font-weight: bold; transition: background 0.2s; }
-    button:hover { background: #3d3d3d; }
-    .btn-primary { background: #00acc1; border-color: #00838f; color: white; }
-    .btn-primary:hover { background: #0097a7; }
-    .btn-success { background: #43a047; border-color: #2e7d32; color: white; }
-    .btn-success:hover { background: #388e3c; }
-    .btn-danger { background: #e53935; border-color: #c62828; color: white; }
-    .btn-danger:hover { background: #d32f2f; }
-    .tool-icon-btn { padding: 8px 14px; background: #252525; border: 1px solid #383838; border-radius: 6px; cursor: pointer; font-size: 13px; color: #aaa; }
-    .tool-icon-btn.active { background: #00acc1; color: white; border-color: #00838f; }
-
-    .event-inspector-card { background: #141414; border: 1px solid #2d2d2d; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-
-    /* World Canvas Layout Engine */
-    .world-stage { position: relative; display: flex; justify-content: center; align-items: center; }
-    .active-map-wrapper { position: relative; z-index: 10; border: 2px solid #00acc1; box-shadow: 0 0 25px rgba(0,172,193,0.3); border-radius: 4px; }
-    
-    .connected-map-wrapper {
-      position: absolute; opacity: 0.75; border: 2px dashed #76ff03;
-      cursor: pointer; z-index: 5; user-select: none; transition: opacity 0.2s;
-    }
-    .connected-map-wrapper:hover { opacity: 1; border-color: #fff; }
-    .connected-label { background: rgba(0,0,0,0.9); color: #76ff03; font-size: 9px; padding: 3px 6px; position: absolute; top: -18px; left: 0; white-space: nowrap; border: 1px solid #76ff03; border-radius: 3px; }
-
-    .grid { display: grid; gap: 1px; background: #333; user-select: none; position: relative; }
-    .tile { width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; cursor: pointer; user-select: none; position: relative; overflow: visible; font-size: 9px; font-weight: bold; }
-    
-    .t-0 { background: #78c850; color: #222; }
-    .t-1 { background: #333; color: #888; }
-    .t-2 { background: #3b82f6; color: #fff; }
-    .t-3 { background: #06b6d4; color: #000; }
-    .t-4 { background: #6366f1; color: #fff; }
-    .t-5 { background: #a855f7; color: #fff; }
-
-    .hide-values .tile { color: transparent !important; }
-
-    .sprite-frame-container {
-      position: absolute; bottom: 0px; left: 0px;
-      overflow: visible; z-index: 10; pointer-events: auto; cursor: grab;
-    }
-    .sprite-frame-container:active { cursor: grabbing; }
-
-    .event-badge {
-      width: 26px; height: 26px; border-radius: 6px; color: #fff;
-      display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold;
-      z-index: 10; position: absolute; cursor: grab; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-    }
-    .event-badge:active { cursor: grabbing; }
-    .badge-npc { background: #e53935; }       /* Red */
-    .badge-script { background: #43a047; }    /* Green */
-    .badge-sign { background: #fb8c00; }      /* Orange */
-    .badge-tile { background: #1e88e5; }      /* Blue */
-    .badge-warp { background: #8e24aa; }      /* Violet */
-
-    .toggle-container {
-      display: flex; align-items: center; justify-content: space-between;
-      background: #141414; padding: 10px 14px; border-radius: 8px; border: 1px solid #2d2d2d;
-    }
-    .toggle-switch {
-      position: relative; display: inline-block; width: 40px; height: 22px;
-    }
-    .toggle-switch input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #333; transition: 0.3s; border-radius: 22px; border: 1px solid #444;
-    }
-    .slider:before {
-      position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px;
-      background-color: white; transition: 0.3s; border-radius: 50%;
-    }
-    input:checked + .slider { background-color: #00acc1; border-color: #00838f; }
-    input:checked + .slider:before { transform: translateX(18px); }
-
-    input[type="text"], input[type="number"], select { background: #141414; color: #fff; border: 1px solid #333; padding: 7px 10px; border-radius: 6px; width: 100%; box-sizing: border-box; font-family: monospace; font-size: 11px; }
-    input:focus, select:focus { border-color: #00acc1; outline: none; }
-    label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #aaa; font-weight: bold; }
-    .help-text { font-size: 11px; color: #888; background: #141414; padding: 8px; border-radius: 6px; border-left: 3px solid #00acc1; line-height: 1.4; }
-    
-    .connection-card, .event-card, .wild-card { background: #141414; padding: 10px; border-radius: 6px; border: 1px solid #2d2d2d; display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
-    .wild-group { background: #141414; border: 1px solid #2d2d2d; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .panel-header { display: flex; justify-content: space-between; align-items: center; }
-
-    /* Crisp Pixel-Art Rendering */
-    .tile, .palette-frame-option {
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
-    }
-
-    /* Panel collapse/hide transition */
-    #output-panel {
-      width: 480px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      transition: transform 0.25s ease, width 0.25s ease, opacity 0.2s ease;
-    }
-    #output-panel.hidden-panel {
-      transform: translateX(110%);
-      width: 0 !important;
-      padding: 0 !important;
-      border: none !important;
-      overflow: hidden;
-      opacity: 0;
-    }
-    
-    /* Floating Show Panel Button */
-    #showPanelBtn {
-      display: none;
-      position: fixed;
-      right: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      z-index: 100;
-      background: #00acc1;
-      color: white;
-      border: none;
-      padding: 14px 6px;
-      border-radius: 6px 0 0 6px;
-      cursor: pointer;
-      font-weight: bold;
-      writing-mode: vertical-rl;
-      text-orientation: mixed;
-      box-shadow: -2px 0 10px rgba(0,0,0,0.5);
-    }
-    #showPanelBtn:hover { background: #0097a7; }
-
-    #modalOverlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
-    #modalBox { background: #1e1e1e; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; width: 340px; border: 1px solid #3d3d3d; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-  </style>
-</head>
-<body>
-
-  <!-- MODAL -->
-  <div id="modalOverlay">
-    <div id="modalBox">
-      <h4 id="modalTitle" style="margin:0; color:#00acc1; font-size:14px;">Enter Value</h4>
-      <input type="text" id="modalInput" autofocus>
-      <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button onclick="closeModal(false)">Cancel</button>
-        <button class="btn-primary" onclick="closeModal(true)">Confirm</button>
-      </div>
-    </div>
+<html lang="en"><head><meta charset="utf-8"><title>Pokémon Micron – Map Editor</title>
+<!-- Everything is read from your tables. Adjust these paths if yours differ. The script engine is optional. -->
+<script src="js/ow_table.js"></script>
+<script src="js/Overworld_map.js"></script>
+<script src="tables/tiles.js"></script>
+<script src="tables/PokemonDatabase.js"></script>
+<script src="js/overworld_script_engine.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;display:flex;height:100vh;background:#111;color:#ddd;font:12px monospace}
+#side{width:330px;overflow-y:auto;padding:10px;background:#1b1b1b;border-right:1px solid #333;display:flex;flex-direction:column;gap:8px}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}#bar{display:flex;gap:6px;padding:6px;background:#1b1b1b;border-bottom:1px solid #333;align-items:center}
+canvas#cv{flex:1;width:100%;min-height:0;display:block;background:#0b0b0b}#status{padding:5px 8px;background:#1b1b1b;border-top:1px solid #333;color:#9ab}
+.row{display:flex;gap:4px;flex-wrap:wrap}button,select,input{background:#262626;color:#eee;border:1px solid #3a3a3a;border-radius:4px;padding:5px 7px;font:inherit}
+button{cursor:pointer}button:hover{background:#333}button.on{background:#00838f;border-color:#00acc1}
+select,input[type=text],input[type=number]{width:100%}label{display:flex;flex-direction:column;gap:2px;color:#999;margin:3px 0}
+#palette{max-height:260px;overflow:auto;background:#141414;border:1px solid #333;padding:6px;user-select:none}
+.ph{color:#00acc1;margin:6px 0 3px}.pg{display:grid;gap:2px}.pg canvas{width:34px;height:34px;border:2px solid #333;cursor:pointer;image-rendering:pixelated}.pg canvas.sel{border-color:#ffd600}
+details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6px}summary{cursor:pointer;color:#00acc1}
+.bad{color:#ff8a80;margin:2px 0}.ok{color:#76ff03}
+#side>*{flex:none}#palette{min-height:120px}.tabs{display:flex;gap:3px;flex-wrap:wrap}.tabs button{flex:1}.tabs button.on{background:#00838f}
+.tab{display:none;flex-direction:column;gap:8px}.tab.on{display:flex}
+</style></head><body>
+<div id="side">
+  <div class="row"><select id="mapSel" style="flex:1"></select><button id="newMap">+ Map</button></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="tab on" id="tab-env"><div class="row" id="layerBtns"></div><div class="row" id="tools"></div><div id="palette"></div><div id="brushInfo"></div></div>
+  <div class="tab" id="tab-events"><div class="row" id="addBtns"></div>
+    <div class="row"><button id="dupBtn">Duplicate (Ctrl+D)</button><button id="delBtn">Delete (Del)</button></div><div id="inspector"></div></div>
+  <div class="tab" id="tab-conn"><div id="conns"></div></div>
+  <div class="tab" id="tab-wild"><div id="wild"></div></div>
+  <div class="tab" id="tab-props"><div id="props"></div></div>
+  <details open><summary>Problems <span id="issueCount"></span></summary><div id="issues"></div></details>
+</div>
+<div id="main">
+  <div id="bar">
+    <button id="undoB">↶ Undo</button><button id="redoB">↷ Redo</button>
+    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button>
+    <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="gridT" checked> Grid</label>
+    <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="sprT" checked> Sprites</label>
+    <span style="color:#777">Wheel = zoom · Space/Middle/Right-drag = pan · Shift-click palette = pick · V P B R E I = tools</span>
   </div>
-
-  <!-- LEFT PANEL -->
-  <div class="panel" id="controls">
-    <h3 style="margin:0; color:#00acc1; font-size:15px;">🗺️ World & Map Editor</h3>
-    <div style="display: flex; gap: 6px;">
-      <select id="mapSelector" onchange="switchActiveMap(this.value)" style="flex:2; font-weight:bold;"></select>
-      <button class="btn-success" style="flex:1;" onclick="promptNewMap()">+ New Map</button>
-    </div>
-    
-    <label>Map Identifier Name: <input type="text" id="mapName" value="" oninput="updateMapNameKey()"></label>
-
-    <!-- Tab Header -->
-    <div class="tab-header">
-      <button class="tab-btn active" onclick="switchTab('env', this)">Environment</button>
-      <button class="tab-btn" onclick="switchTab('conn', this)">Connections</button>
-      <button class="tab-btn" onclick="switchTab('events', this)">Events</button>
-      <button class="tab-btn" onclick="switchTab('wild', this)">Wild</button>
-      <button class="tab-btn" onclick="switchTab('props', this)">Properties</button>
-    </div>
-
-    <!-- TAB 1: Environment -->
-    <div id="tab-env" class="tab-content active">
-      <div class="help-text">💡 Click any tile or specific sub-frame in the palette below to select your brush. Press <b>Ctrl+Z</b> to Undo.</div>
-      <label>Drawing Tool:</label>
-      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-        <button id="toolPencil" class="tool-icon-btn active" onclick="setTool('pencil')" title="Pencil">✏️ Pencil</button>
-        <button id="toolFill" class="tool-icon-btn" onclick="setTool('fill')" title="Fill Box">🪣 Fill Box</button>
-      </div>
-
-      <label>Tile Palette (Select Brush):</label>
-      <div id="tilePaletteContainer" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; background: #141414; padding: 8px; border-radius: 6px; border: 1px solid #333;"></div>
-      <div style="margin-top: 6px; font-size: 10px; color: #aaa;" id="currentBrushLabel">Selected Brush: ID 0</div>
-    </div>
-
-    <!-- TAB 2: Connections -->
-    <div id="tab-conn" class="tab-content">
-      <div class="help-text">Click any connected mini-map on canvas to switch to it instantly. Drag maps to adjust offsets.</div>
-      <div id="connectionsListContainer"></div>
-      <button class="btn-primary" onclick="addConnection()">+ Add Connection</button>
-    </div>
-
-    <!-- TAB 3: Events -->
-    <div id="tab-events" class="tab-content">
-      <div class="help-text">✨ Select an event below or <b>drag event sprites directly on the grid</b> to reposition them.</div>
-      
-      <div class="toggle-container">
-        <span style="font-size: 11px; font-weight: bold; color: #ccc;">Show Overworld Sprites</span>
-        <label class="toggle-switch">
-          <input type="checkbox" id="showOverworldToggle" checked onchange="renderWorldCanvas()">
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <label>Add New Event Type:</label>
-      <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('NPC')">+ NPC</button>
-        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('Script Tile')">+ Script</button>
-        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('Signpost')">+ Sign</button>
-        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('Tile')">+ Tile</button>
-        <button class="btn-primary" style="flex:1;" onclick="promptNewEvent('Warp')">+ Warp</button>
-      </div>
-      
-      <label style="margin-top:4px;">Active Event Key: 
-        <select id="evtKeySelect" onchange="loadSelectedEvent()"></select>
-      </label>
-
-      <div id="eventDetailsWrapper" style="display:none; flex-direction:column; gap:8px;" class="event-inspector-card">
-        <label>Event Type (Locked): 
-          <select id="evtType" disabled style="background:#1a1a1a; color:#777;">
-            <option value="NPC">NPC</option>
-            <option value="Script Tile">Script Tile</option>
-            <option value="Signpost">Signpost</option>
-            <option value="Tile">Tile</option>
-            <option value="Warp">Warp</option>
-          </select>
-        </label>
-        <div id="eventPropertiesContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
-      </div>
-    </div>
-
-    <!-- TAB 4: Wild Data -->
-    <div id="tab-wild" class="tab-content">
-      <div class="help-text">Configure encounter tables grouped by time of day with live sprite previews.</div>
-      <div id="wildListContainer"></div>
-    </div>
-
-    <!-- TAB 5: Properties -->
-    <div id="tab-props" class="tab-content">
-      <div style="display: flex; gap: 10px;">
-        <label style="flex:1;">Width: <input type="number" id="mapCols" value="10" min="5" max="30" onchange="resizeGrid()"></label>
-        <label style="flex:1;">Height: <input type="number" id="mapRows" value="10" min="5" max="30" onchange="resizeGrid()"></label>
-      </div>
-
-      <label>Map Bank: <input type="number" id="mapBank" value="0" oninput="generateOutput()"></label>
-      
-      <label>Map Type: 
-        <select id="mapType" onchange="generateOutput()">
-          <option value="City">City</option>
-          <option value="Town">Town</option>
-          <option value="Route">Route</option>
-          <option value="Cave">Cave</option>
-          <option value="Indoor">Indoor</option>
-        </select>
-      </label>
-
-      <label>Weather: 
-        <select id="mapWeather" onchange="generateOutput()">
-          <option value="Normal">Normal</option>
-          <option value="Rain">Rain</option>
-          <option value="Snow">Snow</option>
-          <option value="Fog">Fog</option>
-          <option value="Thunderstorm">Thunderstorm</option>
-          <option value="Volcanic Ash">Volcanic Ash</option>
-        </select>
-      </label>
-
-      <label>Music Path: 
-        <select id="mapMusic" onchange="generateOutput()">
-          <option value="audio/music/criscanto_town.mp3">criscanto_town.mp3</option>
-          <option value="audio/music/mus_route1.mp3">mus_route1.mp3</option>
-          <option value="audio/music/mus_pokemon_center.mp3">mus_pokemon_center.mp3</option>
-          <option value="audio/music/mus_trainer_battle.mp3">mus_trainer_battle.mp3</option>
-        </select>
-      </label>
-
-      <div style="display: flex; gap: 15px; margin-top: 6px;">
-        <label style="flex-direction:row; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="isFlyable" checked onchange="generateOutput()"> Is Flyable</label>
-        <label style="flex-direction:row; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="isRunning" checked onchange="generateOutput()"> Is Running</label>
-      </div>
-    </div>
-  </div>
-
-  <!-- CENTER PANEL -->
-  <div class="panel" id="canvas-container">
-    <div id="worldCanvasWrapper" class="world-stage"></div>
-  </div>
-
-  <!-- Floating Show Panel Button (Visible when panel is hidden) -->
-  <button id="showPanelBtn" onclick="toggleRightPanel()" title="Show Output Panels">◀ Show Output</button>
-
-  <!-- RIGHT PANEL -->
-  <div class="panel" id="output-panel">
-    <div class="sub-box" id="boxOutput">
-      <div class="panel-header">
-        <h3 style="margin:0; font-size:13px; color:#00acc1;">📋 Master `Overworld_map.txt` Output</h3>
-        <button class="btn-danger" onclick="toggleRightPanel()" title="Hide Panel" style="padding: 4px 8px; font-size: 10px;">➡ Hide</button>
-      </div>
-      <textarea id="outputCode" readonly></textarea>
-      <button class="btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('outputCode').value); alert('Master Map Code Copied!');">Copy Master Map Output</button>
-    </div>
-
-    <div class="sub-box" id="boxScript">
-      <div class="panel-header">
-        <h3 style="margin:0; font-size:13px; color:#00acc1;">📜 Script Engine Viewer</h3>
-      </div>
-      <textarea id="scriptOutput" class="script-text" readonly></textarea>
-      <button class="btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('scriptOutput').value); alert('Script Code Copied!');">Copy Script Code</button>
-    </div>
-  </div>
-
-  <script>
-    const PokemonDatabase = {
-      SPECIES_BULBASAUR: { name: 'Bulbasaur', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconSprite1001Bulbasaur.png' },
-      SPECIES_MEOWSCARADA: { name: 'Meowscarada', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconSprite1262Meowscarada.png' },
-      SPECIES_HATTERENE: { name: 'Hatterene', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconSprite1150Hatterene.png' },
-      SPECIES_EELEKTROSS_M: { name: 'Eelektross', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconEELEKTROSS_1.png' },
-      SPECIES_LUCARIO_Z: { name: 'Lucario', iconSprite: 'graphics/pokemon_battle_sprites/icons/gIconLUCARIO_2.png' }
-    };
-
-    function toggleRightPanel() {
-      const panel = document.getElementById('output-panel');
-      const showBtn = document.getElementById('showPanelBtn');
-      panel.classList.toggle('hidden-panel');
-      
-      if (panel.classList.contains('hidden-panel')) {
-        showBtn.style.display = 'block';
-      } else {
-        showBtn.style.display = 'none';
-      }
-    }
-
-    function owTableLogger() {
-      console.group("🔍 [OW Table Logger] Scanning window.OverworldTable...");
-      const table = window.OverworldTable || {};
-      const keys = Object.keys(table);
-      console.log(`Total Overworld Sprites Found: ${keys.length}`);
-      
-      let summaryTable = {};
-      keys.forEach(spriteID => {
-        const data = table[spriteID];
-        summaryTable[spriteID] = {
-          spriteID: data.spriteID || 'N/A',
-          spritePath: data.owSprite || 'N/A',
-          trueDimension: data.trueDimension || '32x32',
-          owType: data.owType || 'NPC',
-          ...data
-        };
-      });
-      console.table(summaryTable);
-      console.groupEnd();
-      return summaryTable;
-    }
-
-    let cols = 10, rows = 10;
-    let gridData = [];
-    let mapsRepository = {}; 
-    let currentMapKey = "";
-    let activeTool = 'pencil';
-    let activeTab = 'env';
-    
-    let undoStack = [];
-    let redoStack = [];
-
-    let mapConnections = [];
-    let wildEncounters = {
-      morning: [{ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 }],
-      afternoon: [{ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 }],
-      night: [{ pokemonName: "SPECIES_HATTERENE", minLevel: 5, maxLevel: 8, appearanceRate: 15 }],
-      dawn: [{ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 }]
-    };
-
-    let eventsList = {};
-
-    let isMouseDown = false;
-    let fillStart = null;
-    let draggingConnIndex = null;
-    let dragStartPos = { x: 0, y: 0 };
-    let draggedEventKey = null;
-    let modalCallback = null;
-
-    const tileStyles = ['t-0', 't-1', 't-2', 't-3', 't-4', 't-5'];
-
-    const movementTypesList = [
-      "MOVEMENT_TYPE_LOOK_AROUND",
-      "MOVEMENT_TYPE_WANDER_UP_AND_DOWN",
-      "MOVEMENT_TYPE_WANDER_LEFT_AND_RIGHT",
-      "MOVEMENT_TYPE_WANDER_AROUND",
-      "MOVEMENT_TYPE_FACE_UP",
-      "MOVEMENT_TYPE_FACE_DOWN",
-      "MOVEMENT_TYPE_FACE_LEFT",
-      "MOVEMENT_TYPE_FACE_RIGHT",
-      "MOVEMENT_TYPE_PLAYER",
-      "MOVEMENT_TYPE_INVISIBLE"
-    ];
-
-    const scriptLibrary = {
-      "portia_battle_trigger": `window.ScriptEngine["portia_battle_trigger"] = function() { DialogueManager.show("Portia: Let's battle!"); };`,
-      "lily_gift_trigger": `window.ScriptEngine["lily_gift_trigger"] = function() { GivePokemonSystem.give({ species: "SPECIES_EELEKTROSS_M", level: 15 }); };`,
-      "nurse_heal_trigger": `window.ScriptEngine["nurse_heal_trigger"] = function() { PartyHealer.healAll(); };`
-    };
-
-    function showModal(title, defaultVal, cb) {
-      document.getElementById('modalTitle').textContent = title;
-      const input = document.getElementById('modalInput');
-      input.value = defaultVal;
-      document.getElementById('modalOverlay').style.display = 'flex';
-      input.focus();
-      modalCallback = cb;
-    }
-
-    function closeModal(confirm) {
-      document.getElementById('modalOverlay').style.display = 'none';
-      if (confirm && modalCallback) {
-        modalCallback(document.getElementById('modalInput').value);
-      }
-      modalCallback = null;
-    }
-
-    document.getElementById('modalInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') closeModal(true);
-      if (e.key === 'Escape') closeModal(false);
-    });
-
-    function toggleBox(boxId) {
-      const box = document.getElementById(boxId);
-      box.classList.toggle('collapsed');
-      const btn = box.querySelector('.panel-header button');
-      btn.textContent = box.classList.contains('collapsed') ? '[ + ]' : '[ - ]';
-    }
-
-    function switchTab(tabID, btn) {
-      activeTab = tabID;
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-      document.getElementById(`tab-${tabID}`).classList.add('active');
-      btn.classList.add('active');
-
-      renderWorldCanvas();
-    }
-
-    function setTool(tool) {
-      activeTool = tool;
-      document.getElementById('toolPencil').classList.toggle('active', tool === 'pencil');
-      document.getElementById('toolFill').classList.toggle('active', tool === 'fill');
-    }
-
-    function pushHistory() {
-      undoStack.push(JSON.stringify(gridData));
-      if (undoStack.length > 50) undoStack.shift();
-      redoStack = [];
-    }
-
-    window.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        if (undoStack.length > 0) {
-          redoStack.push(JSON.stringify(gridData));
-          gridData = JSON.parse(undoStack.pop());
-          renderWorldCanvas();
-          generateOutput();
-        }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-        e.preventDefault();
-        if (redoStack.length > 0) {
-          undoStack.push(JSON.stringify(gridData));
-          gridData = JSON.parse(redoStack.pop());
-          renderWorldCanvas();
-          generateOutput();
-        }
-      }
-    });
-
-    window.addEventListener('mouseup', () => {
-      isMouseDown = false;
-      fillStart = null;
-    });
-
-    // 🌟 Dynamically load all maps found in window.OverworldMaps
-    function initDefaultMap() {
-      console.log("🔍 [Editor Logger] Scanning window.OverworldMaps...", window.OverworldMaps);
-      if (window.OverworldMaps && Object.keys(window.OverworldMaps).length > 0) {
-        for (const [mKey, mData] of Object.entries(window.OverworldMaps)) {
-          let formattedConnections = [];
-          if (mData.connections) {
-            for (const [dir, connInfo] of Object.entries(mData.connections)) {
-              if (connInfo && Array.isArray(connInfo)) {
-                formattedConnections.push({ direction: dir, map: connInfo[0], offset: connInfo[2] });
-              }
-            }
-          }
-
-          let formattedWild = {};
-          if (mData.wildData) {
-            for (const [timeKey, arr] of Object.entries(mData.wildData)) {
-              formattedWild[timeKey] = (arr || []).map(w => ({
-                pokemonName: Object.keys(PokemonDatabase).find(k => PokemonDatabase[k].name === w.pokemonName) || w.pokemonName,
-                minLevel: w.levelRange ? w.levelRange[0] : 5,
-                maxLevel: w.levelRange ? w.levelRange[1] : 7,
-                appearanceRate: w.appearanceRate || 20
-              }));
-            }
-          } else {
-            formattedWild = { morning: [], afternoon: [], night: [], dawn: [] };
-          }
-
-          mapsRepository[mKey] = {
-            map: mData.map || mKey,
-            bank: mData.bank ?? 0,
-            mapType: mData.mapType || "City",
-            weather: mData.weather || "Normal",
-            isFlyable: mData.isFlyable ?? true,
-            isRunning: mData.isRunning ?? true,
-            music: mData.music || "audio/music/criscanto_town.mp3",
-            connections: formattedConnections,
-            wildEncounters: formattedWild,
-            dimensions: mData.dimensions || { width: 10, height: 10, blockSize: 8 },
-            tileData: JSON.parse(JSON.stringify(mData.tileData || mData.blockData || [])), // 🌟 Fixed property name
-            events: JSON.parse(JSON.stringify(mData.events || {}))
-          };
-        }
-        currentMapKey = Object.keys(mapsRepository)[0];
-        console.log(`🗺️ [Editor Logger] Loaded ${Object.keys(mapsRepository).length} maps into repository:`, Object.keys(mapsRepository));
-      } else {
-        console.warn("⚠️ [Editor Logger] No window.OverworldMaps found. Initializing empty map.");
-        currentMapKey = "Criscanto Town";
-        cols = 10; rows = 10;
-        gridData = [];
-      const rawTileData = mData.tileData || mData.blockData;
-      for (let r = 0; r < rows; r++) {
-        let rowArr = [];
-        for (let c = 0; c < cols; c++) {
-          let val = (rawTileData && rawTileData[r] && rawTileData[r][c] !== undefined) ? rawTileData[r][c] : "0|0";
-          // Convert legacy numbers to string format if needed
-          if (typeof val === 'number') val = `${val}|0`;
-          rowArr.push(val);
-        }
-        gridData.push(rowArr);
-      }
-        mapsRepository[currentMapKey] = {
-          map: currentMapKey, bank: 0, mapType: "City", weather: "Normal", isFlyable: true, isRunning: true,
-          music: "audio/music/criscanto_town.mp3", connections: [], wildEncounters: JSON.parse(JSON.stringify(wildEncounters)),
-          dimensions: { width: 10, height: 10, blockSize: 8 }, blockData: JSON.parse(JSON.stringify(gridData)), events: {}
-        };
-      }
-      updateMapSelectorDropdown();
-      loadMapIntoEditor(currentMapKey);
-    }
-
-    function updateMapSelectorDropdown() {
-      const selector = document.getElementById('mapSelector');
-      if (!selector) return;
-      selector.innerHTML = '';
-      for (const mKey of Object.keys(mapsRepository)) {
-        const opt = document.createElement('option');
-        opt.value = mKey;
-        opt.textContent = mKey;
-        if (mKey === currentMapKey) opt.selected = true;
-        selector.appendChild(opt);
-      }
-    }
-
-    function switchActiveMap(mapKey) {
-      saveCurrentMapState();
-      currentMapKey = mapKey;
-      loadMapIntoEditor(mapKey);
-    }
-
-    function loadMapIntoEditor(mapKey) {
-      const mData = mapsRepository[mapKey];
-      if (!mData) return;
-
-      document.getElementById('mapName').value = mapKey;
-      document.getElementById('mapBank').value = mData.bank ?? 0;
-      document.getElementById('mapCols').value = mData.dimensions.width;
-      document.getElementById('mapRows').value = mData.dimensions.height;
-      document.getElementById('mapType').value = mData.mapType;
-      document.getElementById('mapWeather').value = mData.weather;
-      document.getElementById('mapMusic').value = mData.music;
-      document.getElementById('isFlyable').checked = mData.isFlyable;
-      document.getElementById('isRunning').checked = mData.isRunning;
-      
-      cols = mData.dimensions.width;
-      rows = mData.dimensions.height;
-      
-      const rawGrid = mData.tileData || mData.blockData || [];
-      gridData = [];
-      for (let r = 0; r < rows; r++) {
-        let rowArr = [];
-        for (let c = 0; c < cols; c++) {
-          let val = (rawGrid[r] && rawGrid[r][c] !== undefined) ? rawGrid[r][c] : "0|0";
-          if (typeof val === 'number') {
-            val = `${val}|0`;
-          } else if (typeof val !== 'string') {
-            val = "0|0";
-          }
-          rowArr.push(val);
-        }
-        gridData.push(rowArr);
-      }
-      
-      mapConnections = JSON.parse(JSON.stringify(mData.connections || []));
-      wildEncounters = JSON.parse(JSON.stringify(mData.wildEncounters || { morning: [], afternoon: [], night: [], dawn: [] }));
-      eventsList = JSON.parse(JSON.stringify(mData.events || {}));
-
-      updateEventDropdown();
-      renderConnectionsUI();
-      renderWildUI();
-      renderWorldCanvas();
-      generateOutput();
-    }
-
-    function renderConnectionsUI() {
-      const container = document.getElementById('connectionsListContainer');
-      if (!container) return;
-      container.innerHTML = '';
-      mapConnections.forEach((conn, idx) => {
-        const card = document.createElement('div');
-        card.className = 'connection-card';
-        let mapOptionsHtml = '';
-        for (const mKey of Object.keys(mapsRepository)) {
-          if (mKey === currentMapKey) continue;
-          mapOptionsHtml += `<option value="${mKey}" ${conn.map === mKey ? 'selected' : ''}>${mKey}</option>`;
-        }
-
-        card.innerHTML = `
-          <div style="display:flex; gap:5px;">
-            <select onchange="updateConnection(${idx}, 'direction', this.value)">
-              <option value="up" ${conn.direction==='up'?'selected':''}>UP</option>
-              <option value="down" ${conn.direction==='down'?'selected':''}>DOWN</option>
-              <option value="left" ${conn.direction==='left'?'selected':''}>LEFT</option>
-              <option value="right" ${conn.direction==='right'?'selected':''}>RIGHT</option>
-            </select>
-            <select onchange="updateConnection(${idx}, 'map', this.value)">${mapOptionsHtml}</select>
-            <button class="btn-danger" onclick="removeConnection(${idx})">X</button>
-          </div>
-          <div style="display:flex; align-items:center; gap:5px; font-size:10px;">
-            <span>Offset:</span>
-            <input type="number" value="${conn.offset}" oninput="updateConnection(${idx}, 'offset', parseInt(this.value) || 0)">
-          </div>
-        `;
-        container.appendChild(card);
-      });
-      renderWorldCanvas();
-    }
-
-    function saveCurrentMapState() {
-      if (!currentMapKey) return;
-      mapsRepository[currentMapKey] = {
-        map: currentMapKey,
-        bank: parseInt(document.getElementById('mapBank').value) || 0,
-        mapType: document.getElementById('mapType').value,
-        weather: document.getElementById('mapWeather').value,
-        isFlyable: document.getElementById('isFlyable').checked,
-        isRunning: document.getElementById('isRunning').checked,
-        music: document.getElementById('mapMusic').value,
-        connections: JSON.parse(JSON.stringify(mapConnections)),
-        wildEncounters: JSON.parse(JSON.stringify(wildEncounters)),
-        dimensions: { width: cols, height: rows, blockSize: 8 },
-        tileData: JSON.parse(JSON.stringify(gridData)), // 🌟 Fixed property name
-        events: JSON.parse(JSON.stringify(eventsList))
-      };
-    }
-
-    function updateMapNameKey() {
-      const newName = document.getElementById('mapName').value.trim();
-      if (!newName || newName === currentMapKey) return;
-      mapsRepository[newName] = mapsRepository[currentMapKey];
-      delete mapsRepository[currentMapKey];
-      currentMapKey = newName;
-      mapsRepository[currentMapKey].map = newName;
-      updateMapSelectorDropdown();
-      generateOutput();
-    }
-
-    function promptNewMap() {
-      showModal("Enter new map name:", "Route_2", (newName) => {
-        if (!newName || mapsRepository[newName]) {
-          alert("Invalid or existing map name!");
-          return;
-        }
-        saveCurrentMapState();
-        currentMapKey = newName;
-        cols = 10; rows = 10;
-        gridData = [];
-        for (let r = 0; r < rows; r++) {
-          let rowArr = [];
-          for (let c = 0; c < cols; c++) rowArr.push(0);
-          gridData.push(rowArr);
-        }
-        eventsList = {};
-        mapConnections = [];
-        wildEncounters = { morning: [], afternoon: [], night: [], dawn: [] };
-        
-        saveCurrentMapState();
-        updateMapSelectorDropdown();
-        loadMapIntoEditor(currentMapKey);
-      });
-    }
-
-    function resizeGrid() {
-      cols = parseInt(document.getElementById('mapCols').value);
-      rows = parseInt(document.getElementById('mapRows').value);
-      let newGrid = [];
-      for (let r = 0; r < rows; r++) {
-        let rowArr = [];
-        for (let c = 0; c < cols; c++) {
-          rowArr.push(gridData[r] && gridData[r][c] !== undefined ? gridData[r][c] : 0);
-        }
-        newGrid.push(rowArr);
-      }
-      pushHistory();
-      gridData = newGrid;
-      renderWorldCanvas();
-      generateOutput();
-    }
-
-    function renderFullSizeGrid(targetCols, targetRows, targetData) {
-      let miniGrid = document.createElement('div');
-      miniGrid.className = 'grid';
-      miniGrid.style.gridTemplateColumns = `repeat(${targetCols}, 32px)`;
-      
-      for (let r = 0; r < targetRows; r++) {
-        for (let c = 0; c < targetCols; c++) {
-          const div = document.createElement('div');
-          div.className = 'tile';
-          div.style.imageRendering = 'pixelated';
-          div.style.overflow = 'hidden';
-          div.style.position = 'relative';
-          div.style.width = '32px';
-          div.style.height = '32px';
-
-          let val = (targetData && targetData[r] && targetData[r][c] !== undefined) ? targetData[r][c] : "0|0";
-          let cellString = typeof val === 'string' ? val : `${val}|0`;
-          let primaryLayer = cellString.split(',')[0].trim();
-          let [tIDStr, fIDStr] = primaryLayer.split('|');
-          let tileID = parseInt(tIDStr) || 0;
-          let frameID = parseInt(fIDStr) || 0;
-
-          const tileDef = window.OverworldTiles ? window.OverworldTiles[tileID] : null;
-
-          if (tileDef && tileDef.tileImage) {
-            if (tileDef.tileType === "Multi-tile") {
-              const colsPerRow = tileDef.columns || 3;
-              const col = frameID % colsPerRow;
-              const row = Math.floor(frameID / colsPerRow);
-              
-              const leftX = col * 32;
-              const topY = row * 32;
-              const nativeSheetWidth = colsPerRow * 32;
-
-              const img = document.createElement('img');
-              img.src = tileDef.tileImage;
-              img.style.cssText = `
-                position: absolute;
-                left: -${leftX}px;
-                top: -${topY}px;
-                width: ${nativeSheetWidth}px;
-                height: auto;
-                max-width: none;
-                image-rendering: pixelated;
-              `;
-              div.appendChild(img);
-
-            } else if (tileDef.tileType === "Multi-tile Pixel Split") {
-              const colsPerRow = tileDef.columns || 3;
-              const col = frameID % colsPerRow;
-              const row = Math.floor(frameID / colsPerRow);
-              
-              const leftX = 1 + (col * 16);
-              const topY = 1 + (row * 16);
-              const nativeSheetWidth = tileDef.tileDimension ? parseInt(tileDef.tileDimension.split('x')[0]) : (colsPerRow * 17); 
-              const scaledSheetWidth = nativeSheetWidth * 2;
-
-              const img = document.createElement('img');
-              img.src = tileDef.tileImage;
-              img.style.cssText = `
-                position: absolute;
-                left: -${leftX * 2}px;
-                top: -${topY * 2}px;
-                width: ${scaledSheetWidth}px;
-                height: auto;
-                max-width: none;
-                image-rendering: pixelated;
-              `;
-              div.appendChild(img);
-
-            } else {
-              const img = document.createElement('img');
-              img.src = tileDef.tileImage;
-              img.style.cssText = "width: 32px; height: 32px; image-rendering: pixelated;";
-              div.appendChild(img);
-            }
-          } else {
-            div.style.background = '#78c850';
-          }
-
-          miniGrid.appendChild(div);
-        }
-      }
-      return miniGrid;
-    }
-
-    function renderWorldCanvas() {
-      console.group("🎨 [Editor Logger] Rendering World Canvas for Map:", currentMapKey);
-      const wrapper = document.getElementById('worldCanvasWrapper');
-      wrapper.innerHTML = '';
-
-      const activeWrapper = document.createElement('div');
-      activeWrapper.className = 'active-map-wrapper';
-      activeWrapper.style.position = 'relative';
-
-      const container = document.createElement('div');
-      container.id = 'gridElement';
-      container.className = `grid ${activeTab !== 'env' ? 'hide-values' : ''}`;
-      container.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
-
-      // 1. Render Background Tiles Grid
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const div = document.createElement('div');
-          
-          const cellVal = (gridData[r] && gridData[r][c] !== undefined) ? gridData[r][c] : "0|0";
-          const cellString = typeof cellVal === 'string' ? cellVal : `${cellVal}|0`;
-          
-          const primaryLayer = cellString.split(',')[0].trim();
-          const [tIDStr, fIDStr] = primaryLayer.split('|');
-          const tileID = parseInt(tIDStr) || 0;
-          const frameID = parseInt(fIDStr) || 0;
-
-          const tileDef = window.OverworldTiles ? window.OverworldTiles[tileID] : null;
-
-          div.className = `tile`;
-          div.style.imageRendering = 'pixelated';
-          div.style.overflow = 'hidden';
-          div.style.position = 'relative';
-
-          if (tileDef && tileDef.tileImage) {
-            if (tileDef.tileType === "Multi-tile") {
-              const colsPerRow = tileDef.columns || 3;
-              const col = frameID % colsPerRow;
-              const row = Math.floor(frameID / colsPerRow);
-              
-              const leftX = col * 32;
-              const topY = row * 32;
-              const nativeSheetWidth = colsPerRow * 32;
-
-              const img = document.createElement('img');
-              img.src = tileDef.tileImage;
-              img.style.cssText = `
-                position: absolute;
-                left: -${leftX}px;
-                top: -${topY}px;
-                width: ${nativeSheetWidth}px;
-                height: auto;
-                max-width: none;
-                image-rendering: pixelated;
-              `;
-              div.appendChild(img);
-
-            } else if (tileDef.tileType === "Multi-tile Pixel Split") {
-              const colsPerRow = tileDef.columns || 3;
-              const col = frameID % colsPerRow;
-              const row = Math.floor(frameID / colsPerRow);
-              
-              const leftX = 1 + (col * 16);
-              const topY = 1 + (row * 16);
-              const nativeSheetWidth = tileDef.tileDimension ? parseInt(tileDef.tileDimension.split('x')[0]) : (colsPerRow * 17); 
-              const scaledSheetWidth = nativeSheetWidth * 2;
-
-              const img = document.createElement('img');
-              img.src = tileDef.tileImage;
-              img.style.cssText = `
-                position: absolute;
-                left: -${leftX * 2}px;
-                top: -${topY * 2}px;
-                width: ${scaledSheetWidth}px;
-                height: auto;
-                max-width: none;
-                image-rendering: pixelated;
-              `;
-              div.appendChild(img);
-
-            } else {
-              const img = document.createElement('img');
-              img.src = tileDef.tileImage;
-              img.style.cssText = "width: 32px; height: 32px; image-rendering: pixelated;";
-              div.appendChild(img);
-            }
-          } else {
-            div.style.background = '#78c850';
-          }
-
-          div.dataset.r = r;
-          div.dataset.c = c;
-
-          // 🌟 Allow dropping event sprites onto any grid cell
-          div.ondragover = (e) => e.preventDefault();
-          div.ondrop = (e) => {
-            e.preventDefault();
-            if (draggedEventKey && eventsList[draggedEventKey]) {
-              eventsList[draggedEventKey].xPos = c;
-              eventsList[draggedEventKey].yPos = r;
-              document.getElementById('evtKeySelect').value = draggedEventKey;
-              loadSelectedEvent();
-              draggedEventKey = null;
-              renderWorldCanvas();
-              generateOutput();
-            }
-          };
-
-          // Paint / Fill Handlers
-          div.onmousedown = (e) => {
-            if (activeTab !== 'env') return;
-            isMouseDown = true;
-            pushHistory();
-            
-            const minF = Math.min(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
-            const maxF = Math.max(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
-            const tDef = window.OverworldTiles ? window.OverworldTiles[selectedTileID] : null;
-            const colsPerRow = tDef ? (tDef.columns || 3) : 3;
-
-            if (activeTool === 'pencil') {
-              const baseMinCol = minF % colsPerRow;
-              const baseMinRow = Math.floor(minF / colsPerRow);
-
-              for (let f = minF; f <= maxF; f++) {
-                const col = f % colsPerRow;
-                const row = Math.floor(f / colsPerRow);
-                const targetR = r + (row - baseMinRow);
-                const targetC = c + (col - baseMinCol);
-
-                if (targetR < rows && targetC < cols) {
-                  gridData[targetR][targetC] = `${selectedTileID}|${f}`;
-                }
-              }
-
-              renderWorldCanvas();
-              generateOutput();
-            } else if (activeTool === 'fill') {
-              fillStart = {r, c};
-            }
-          };
-
-          div.onmouseenter = () => {
-            if (isMouseDown && activeTool === 'pencil' && activeTab === 'env') {
-              const brushString = `${selectedTileID}|${selectedSubFrameIndex}`;
-              gridData[r][c] = brushString;
-              renderWorldCanvas();
-              generateOutput();
-            }
-          };
-
-          container.appendChild(div);
-        }
-      }
-      activeWrapper.appendChild(container);
-
-      // 2. Render Event / NPC Sprites on a Separate Overlay Layer
-      const showOw = document.getElementById('showOverworldToggle')?.checked ?? true;
-      if (activeTab === 'events') {
-        const eventOverlay = document.createElement('div');
-        eventOverlay.style.cssText = "position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20;";
-
-        for (const [occupantKey, occupant] of Object.entries(eventsList)) {
-          const c = occupant.xPos || 0;
-          const r = occupant.yPos || 0;
-          const eType = occupant.eventType || 'NPC';
-
-          const tableRef = window.OverworldTable || {};
-          const owData = tableRef[occupant.owID] || {};
-          const spriteUrl = owData.owSprite || `graphics/overworld/${(occupant.owID || '').toLowerCase()}.png`;
-
-          const cellWrapper = document.createElement('div');
-          cellWrapper.style.cssText = `position: absolute; left: ${c * 33}px; top: ${r * 33}px; width: 32px; height: 32px; pointer-events: auto;`;
-
-          if (showOw && occupant.owID) {
-            const frameBox = document.createElement('div');
-            frameBox.className = 'sprite-frame-container';
-
-            let dimStr = owData.trueDimension || '32x48';
-            let [w, h] = dimStr.split('x').map(Number);
-            const isBuilding = owData.owType === 'Building' || (owData.frames !== undefined && owData.frames <= 1);
-
-            if (isBuilding) {
-              frameBox.style.width = `${w}px`;
-              frameBox.style.height = `${h}px`;
-              frameBox.style.bottom = `0px`;
-              frameBox.style.left = `0px`;
-
-              const img = document.createElement('img');
-              img.src = spriteUrl;
-              img.style.cssText = `width: ${w}px; height: ${h}px; position: absolute; top: 0; left: 0; max-width: none; image-rendering: pixelated;`;
-              frameBox.appendChild(img);
-            } else {
-              frameBox.style.width = `${w}px`;
-              frameBox.style.height = `${h}px`;
-              frameBox.style.bottom = `0px`;
-              frameBox.style.left = `50%`;
-              frameBox.style.transform = `translateX(-50%)`;
-
-              const spriteBox = document.createElement('div');
-              spriteBox.style.cssText = `width: ${w}px; height: ${h}px; background-image: url('${spriteUrl}'); background-position: 0px 0px; background-repeat: no-repeat; background-size: ${w * 4}px ${h * 4}px; image-rendering: pixelated;`;
-              frameBox.appendChild(spriteBox);
-            }
-
-            frameBox.draggable = true;
-            frameBox.onclick = (e) => {
-              e.stopPropagation();
-              document.getElementById('evtKeySelect').value = occupantKey;
-              loadSelectedEvent();
-            };
-            frameBox.ondragstart = (e) => {
-              draggedEventKey = occupantKey;
-              e.dataTransfer.setData('text/plain', occupantKey);
-            };
-            cellWrapper.appendChild(frameBox);
-          } else {
-            const badge = document.createElement('div');
-            let badgeClass = 'badge-npc', badgeText = 'P';
-            if (eType === 'Script Tile') { badgeClass = 'badge-script'; badgeText = 'S'; }
-            else if (eType === 'Signpost') { badgeClass = 'badge-sign'; badgeText = 'S'; }
-            else if (eType === 'Tile') { badgeClass = 'badge-tile'; badgeText = 'T'; }
-            else if (eType === 'Warp') { badgeClass = 'badge-warp'; badgeText = 'W'; }
-
-            badge.className = `event-badge ${badgeClass}`;
-            badge.textContent = badgeText;
-            badge.draggable = true;
-            badge.onclick = (e) => {
-              e.stopPropagation();
-              document.getElementById('evtKeySelect').value = occupantKey;
-              loadSelectedEvent();
-            };
-            badge.ondragstart = (e) => {
-              draggedEventKey = occupantKey;
-              e.dataTransfer.setData('text/plain', occupantKey);
-            };
-            cellWrapper.appendChild(badge);
-          }
-
-          eventOverlay.appendChild(cellWrapper);
-        }
-        activeWrapper.appendChild(eventOverlay);
-      }
-
-      wrapper.appendChild(activeWrapper);
-
-      // 3. Render Connected Maps Previews
-      if (mapConnections && mapConnections.length > 0) {
-        mapConnections.forEach((conn) => {
-          if (!mapsRepository[conn.map]) return;
-          let targetMap = mapsRepository[conn.map];
-
-          let connWrapper = document.createElement('div');
-          connWrapper.className = 'connected-map-wrapper';
-          
-          let label = document.createElement('div');
-          label.className = 'connected-label';
-          label.textContent = `${conn.direction.toUpperCase()}: ${conn.map} (Offset: ${conn.offset})`;
-          connWrapper.appendChild(label);
-
-          connWrapper.appendChild(renderFullSizeGrid(targetMap.dimensions.width, targetMap.dimensions.height, targetMap.tileData || targetMap.blockData));
-
-          let tWidth = targetMap.dimensions.width * 33;
-          let tHeight = targetMap.dimensions.height * 33;
-          let aWidth = cols * 33;
-          let aHeight = rows * 33;
-
-          let posX = 0, posY = 0;
-          if (conn.direction === 'up') {
-            posX = conn.offset * 33;
-            posY = -tHeight;
-          } else if (conn.direction === 'down') {
-            posX = conn.offset * 33;
-            posY = aHeight;
-          } else if (conn.direction === 'left') {
-            posX = -tWidth;
-            posY = conn.offset * 33;
-          } else if (conn.direction === 'right') {
-            posX = aWidth;
-            posY = conn.offset * 33;
-          }
-
-          connWrapper.style.left = `${posX}px`;
-          connWrapper.style.top = `${posY}px`;
-
-          connWrapper.onclick = (e) => {
-            e.stopPropagation();
-            switchActiveMap(conn.map);
-            document.getElementById('mapSelector').value = conn.map;
-          };
-
-          wrapper.appendChild(connWrapper);
-        });
-      }
-
-      console.groupEnd();
-    }
-    
-    function addConnection() {
-      const existingKeys = Object.keys(mapsRepository).filter(k => k !== currentMapKey);
-      if (existingKeys.length === 0) {
-        alert("Create another map first before adding a connection!");
-        return;
-      }
-      let targetMapName = existingKeys[0];
-      let dir = "down";
-
-      // Prevent duplicate directions on the same active map
-      if (mapConnections.some(c => c.direction === dir)) {
-        alert(`A connection already exists for the "${dir}" direction on this map!`);
-        return;
-      }
-
-      mapConnections.push({ direction: dir, map: targetMapName, offset: 0 });
-
-      // Safely update reciprocal connection on the target map only
-      if (mapsRepository[targetMapName]) {
-        if (!mapsRepository[targetMapName].connections) mapsRepository[targetMapName].connections = [];
-        
-        let oppDir = { up: 'down', down: 'up', left: 'right', right: 'left' }[dir];
-        // Remove any conflicting reciprocal link on target map
-        mapsRepository[targetMapName].connections = mapsRepository[targetMapName].connections.filter(c => c.direction !== oppDir);
-        mapsRepository[targetMapName].connections.push({ direction: oppDir, map: currentMapKey, offset: 0 });
-      }
-
-      renderConnectionsUI();
-      generateOutput();
-    }
-
-    function updateConnection(idx, field, val) {
-      let newConn = mapConnections[idx];
-      let oldMap = newConn.map;
-      newConn[field] = val;
-
-      // If target map changed, clean up old map's reciprocal link
-      if (field === 'map' && oldMap !== val && mapsRepository[oldMap]) {
-        if (mapsRepository[oldMap].connections) {
-          mapsRepository[oldMap].connections = mapsRepository[oldMap].connections.filter(c => c.map !== currentMapKey);
-        }
-      }
-
-      let targetMapObj = mapsRepository[newConn.map];
-      if (targetMapObj) {
-        if (!targetMapObj.connections) targetMapObj.connections = [];
-        let oppDir = { up: 'down', down: 'up', left: 'right', right: 'left' }[newConn.direction];
-        
-        targetMapObj.connections = targetMapObj.connections.filter(c => c.map !== currentMapKey);
-        targetMapObj.connections.push({ direction: oppDir, map: currentMapKey, offset: newConn.offset });
-      }
-
-      renderConnectionsUI();
-      generateOutput();
-    }
-
-    function removeConnection(idx) {
-      let conn = mapConnections[idx];
-      if (conn && mapsRepository[conn.map]) {
-        let targetMapObj = mapsRepository[conn.map];
-        if (targetMapObj && targetMapObj.connections) {
-          targetMapObj.connections = targetMapObj.connections.filter(c => c.map !== currentMapKey);
-        }
-      }
-      mapConnections.splice(idx, 1);
-      renderConnectionsUI();
-      generateOutput();
-    }
-
-    function renderWildUI() {
-      const container = document.getElementById('wildListContainer');
-      if (!container) return;
-      container.innerHTML = '';
-
-      const times = ['morning', 'afternoon', 'night', 'dawn'];
-      times.forEach(timeKey => {
-        if (!wildEncounters[timeKey]) wildEncounters[timeKey] = [];
-        
-        let groupDiv = document.createElement('div');
-        groupDiv.className = 'wild-group';
-        
-        let header = document.createElement('div');
-        header.style.display = 'flex';
-        header.style.justifyContent = 'space-between';
-        header.style.alignItems = 'center';
-        header.innerHTML = `<b>🌞 ${timeKey.toUpperCase()}</b> <button class="btn-primary" onclick="addWildEntry('${timeKey}')">+ Add Pokemon</button>`;
-        groupDiv.appendChild(header);
-
-        wildEncounters[timeKey].forEach((wild, idx) => {
-          let card = document.createElement('div');
-          card.className = 'wild-card';
-          
-          let speciesOptions = '';
-          let currentIcon = '';
-          for (const [sKey, sObj] of Object.entries(PokemonDatabase)) {
-            if (sKey === wild.pokemonName) currentIcon = sObj.iconSprite;
-            speciesOptions += `<option value="${sKey}" ${wild.pokemonName === sKey ? 'selected' : ''}>${sObj.name} (${sKey})</option>`;
-          }
-
-          card.innerHTML = `
-            <div style="display:flex; gap:8px; align-items:center;">
-              <img src="${currentIcon || ''}" style="width:32px; height:32px; transform: scale(0.25); transform-origin: left center; image-rendering:pixelated;" onerror="this.style.display='none'">
-              <select style="flex:1;" onchange="updateWildEntry('${timeKey}', ${idx}, 'pokemonName', this.value); renderWildUI(); generateOutput();">
-                ${speciesOptions}
-              </select>
-              <button class="btn-danger" onclick="removeWildEntry('${timeKey}', ${idx})">X</button>
-            </div>
-            <div style="display:flex; gap:5px; font-size:10px;">
-              <label>Min Lv: <input type="number" value="${wild.minLevel}" oninput="updateWildEntry('${timeKey}', ${idx}, 'minLevel', parseInt(this.value))"></label>
-              <label>Max Lv: <input type="number" value="${wild.maxLevel}" oninput="updateWildEntry('${timeKey}', ${idx}, 'maxLevel', parseInt(this.value))"></label>
-              <label>Rate %: <input type="number" value="${wild.appearanceRate}" oninput="updateWildEntry('${timeKey}', ${idx}, 'appearanceRate', parseInt(this.value))"></label>
-            </div>
-          `;
-          groupDiv.appendChild(card);
-        });
-
-        container.appendChild(groupDiv);
-      });
-    }
-
-    function addWildEntry(timeKey) {
-      if (!wildEncounters[timeKey]) wildEncounters[timeKey] = [];
-      wildEncounters[timeKey].push({ pokemonName: "SPECIES_BULBASAUR", minLevel: 5, maxLevel: 7, appearanceRate: 20 });
-      renderWildUI();
-      generateOutput();
-    }
-
-    function updateWildEntry(timeKey, idx, field, val) {
-      wildEncounters[timeKey][idx][field] = val;
-      generateOutput();
-    }
-
-    function removeWildEntry(timeKey, idx) {
-      wildEncounters[timeKey].splice(idx, 1);
-      renderWildUI();
-      generateOutput();
-    }
-
-    function promptNewEvent(type) {
-      showModal(`Enter Event Key for ${type}:`, `${type.replace(' ', '_')}_1`, (keyName) => {
-        if (!keyName || eventsList[keyName]) {
-          if (keyName) alert("Event key already exists!");
-          return;
-        }
-
-        let newEvt = { eventType: type, xPos: 0, yPos: 0 };
-        if (type === 'NPC') {
-          const owKeys = Object.keys(window.OverworldTable || {});
-          newEvt.owID = owKeys[0] || "Portia";
-          newEvt.script = "portia_battle_trigger";
-          newEvt.movementType = "MOVEMENT_TYPE_WANDER_LEFT_RIGHT";
-          newEvt.isTrainer = true;
-          newEvt.viewRadius = 3;
-          newEvt.flagID = `FLAG_${keyName.toUpperCase()}_DEFEATED`;
-        } else if (type === 'Script Tile') {
-          newEvt.script = "portia_battle_trigger";
-          newEvt.scriptVar = "0001";
-          newEvt.varValue = 1;
-        } else if (type === 'Signpost') {
-          newEvt.script = "portia_battle_trigger";
-        } else if (type === 'Tile') {
-          newEvt.tileID = 0;
-        } else if (type === 'Warp') {
-          newEvt.targetMap = "Route_1";
-          newEvt.bankID = 0;
-          newEvt.warpNumber = 1;
-        }
-
-        eventsList[keyName] = newEvt;
-        updateEventDropdown();
-        document.getElementById('evtKeySelect').value = keyName;
-        loadSelectedEvent();
-        renderWorldCanvas();
-        generateOutput();
-      });
-    }
-
-    function updateEventDropdown() {
-      const select = document.getElementById('evtKeySelect');
-      if (!select) return;
-      let currentVal = select.value;
-      select.innerHTML = '<option value="">-- Select Event --</option>';
-      for (const k of Object.keys(eventsList)) {
-        const opt = document.createElement('option');
-        opt.value = k;
-        opt.textContent = k;
-        select.appendChild(opt);
-      }
-      if (eventsList[currentVal]) select.value = currentVal;
-    }
-
-    function loadSelectedEvent() {
-      const sel = document.getElementById('evtKeySelect').value;
-      const detailsWrapper = document.getElementById('eventDetailsWrapper');
-      const ev = eventsList[sel];
-
-      if (!sel || !ev) {
-        detailsWrapper.style.display = 'none';
-        return;
-      }
-
-      detailsWrapper.style.display = 'flex';
-      document.getElementById('evtType').value = ev.eventType || "NPC";
-      updateEventTypeSchema();
-    }
-
-    function updateEventTypeSchema() {
-      const sel = document.getElementById('evtKeySelect').value;
-      const ev = eventsList[sel];
-      if (!ev) return;
-
-      const type = ev.eventType || "NPC";
-      document.getElementById('evtType').value = type;
-      const container = document.getElementById('eventPropertiesContainer');
-      container.innerHTML = '';
-
-      if (type === 'NPC') {
-        let owOptions = '';
-        for (const owKey of Object.keys(window.OverworldTable || {})) {
-          owOptions += `<option value="${owKey}" ${ev.owID === owKey ? 'selected' : ''}>${owKey}</option>`;
-        }
-
-        let movOptions = '';
-        movementTypesList.forEach(m => {
-          movOptions += `<option value="${m}" ${ev.movementType === m ? 'selected' : ''}>${m}</option>`;
-        });
-
-        container.innerHTML = `
-          <label>Overworld Character (owID): 
-            <select id="schemaOwID" onchange="saveSchemaData(); generateOutput();">
-              ${owOptions}
-            </select>
-          </label>
-          <label>Script Name: <input type="text" id="schemaScript" value="${ev.script || ''}" oninput="saveSchemaData(); generateOutput();"></label>
-          <label>Movement Type: 
-            <select id="schemaMovement" onchange="saveSchemaData(); generateOutput();">
-              ${movOptions}
-            </select>
-          </label>
-          <div style="display:flex; gap:10px;">
-            <label class="checkbox-label" style="flex-direction:row; gap:6px; cursor:pointer;"><input type="checkbox" id="schemaTrainer" ${ev.isTrainer?'checked':''} onchange="saveSchemaData(); generateOutput();"> Is Trainer</label>
-            <label>View Radius: <input type="number" id="schemaView" value="${ev.viewRadius || 3}" oninput="saveSchemaData(); generateOutput();"></label>
-          </div>
-          <div style="display:flex; gap:10px;">
-            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-          </div>
-          <label>Flag ID: <input type="text" id="schemaFlag" value="${ev.flagID || ''}" oninput="saveSchemaData(); generateOutput();"></label>
-        `;
-      } else if (type === 'Script Tile') {
-        container.innerHTML = `
-          <div style="display:flex; gap:10px;">
-            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-          </div>
-          <label>Script: <input type="text" id="schemaScript" value="${ev.script || ''}" oninput="saveSchemaData(); generateOutput();"></label>
-          <div style="display:flex; gap:10px;">
-            <label>Var (0001-9999): <input type="text" id="schemaVar" value="${ev.scriptVar || '0001'}" placeholder="0001" oninput="saveSchemaData(); generateOutput();"></label>
-            <label>Value (1-255): <input type="number" id="schemaVal" value="${ev.varValue || 1}" min="1" max="255" oninput="saveSchemaData(); generateOutput();"></label>
-          </div>
-        `;
-      } else if (type === 'Signpost') {
-        container.innerHTML = `
-          <div style="display:flex; gap:10px;">
-            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-          </div>
-          <label>Script: <input type="text" id="schemaScript" value="${ev.script || ''}" oninput="saveSchemaData(); generateOutput();"></label>
-        `;
-      } else if (type === 'Tile') {
-        container.innerHTML = `
-          <label>Tile ID: <input type="number" id="schemaTileID" value="${ev.tileID || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-          <div style="display:flex; gap:10px;">
-            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-          </div>
-        `;
-      } else if (type === 'Warp') {
-        container.innerHTML = `
-          <label>Target Map: <input type="text" id="schemaTargetMap" value="${ev.targetMap || 'Route_1'}" oninput="saveSchemaData(); generateOutput();"></label>
-          <div style="display:flex; gap:10px;">
-            <label>Bank ID: <input type="number" id="schemaBank" value="${ev.bankID || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-            <label>Warp Number: <input type="number" id="schemaWarpNum" value="${ev.warpNumber || 1}" oninput="saveSchemaData(); generateOutput();"></label>
-          </div>
-          <div style="display:flex; gap:10px;">
-            <label>Grid X: <input type="number" id="schemaX" value="${ev.xPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-            <label>Grid Y: <input type="number" id="schemaY" value="${ev.yPos || 0}" oninput="saveSchemaData(); generateOutput();"></label>
-          </div>
-        `;
-      }
-      renderWorldCanvas();
-    }
-
-    function saveSchemaData() {
-      const sel = document.getElementById('evtKeySelect').value;
-      const ev = eventsList[sel];
-      if (!ev) return;
-      
-      if (document.getElementById('schemaX')) ev.xPos = parseInt(document.getElementById('schemaX').value) || 0;
-      if (document.getElementById('schemaY')) ev.yPos = parseInt(document.getElementById('schemaY').value) || 0;
-      if (document.getElementById('schemaScript')) ev.script = document.getElementById('schemaScript').value;
-      if (document.getElementById('schemaOwID')) ev.owID = document.getElementById('schemaOwID').value;
-      if (document.getElementById('schemaMovement')) ev.movementType = document.getElementById('schemaMovement').value;
-      if (document.getElementById('schemaTrainer')) ev.isTrainer = document.getElementById('schemaTrainer').checked;
-      if (document.getElementById('schemaView')) ev.viewRadius = parseInt(document.getElementById('schemaView').value) || 3;
-      if (document.getElementById('schemaFlag')) ev.flagID = document.getElementById('schemaFlag').value;
-      if (document.getElementById('schemaVar')) ev.scriptVar = document.getElementById('schemaVar').value;
-      if (document.getElementById('schemaVal')) ev.varValue = parseInt(document.getElementById('schemaVal').value) || 1;
-      if (document.getElementById('schemaTileID')) ev.tileID = parseInt(document.getElementById('schemaTileID').value) || 0;
-      if (document.getElementById('schemaTargetMap')) ev.targetMap = document.getElementById('schemaTargetMap').value;
-      if (document.getElementById('schemaBank')) ev.bankID = parseInt(document.getElementById('schemaBank').value) || 0;
-      if (document.getElementById('schemaWarpNum')) ev.warpNumber = parseInt(document.getElementById('schemaWarpNum').value) || 1;
-
-      renderWorldCanvas();
-    }
-
-    function updateBrushVisual() {
-      const brushVal = document.getElementById('tileBrush').value;
-      const colors = ['#78c850', '#333', '#3b82f6', '#06b6d4', '#6366f1', '#a855f7'];
-      document.getElementById('brushIndicator').style.background = colors[brushVal];
-    }
-
-    // 🌟 Generates the ENTIRE Overworld_map.js code from start to end
-    function generateOutput() {
-      saveCurrentMapState();
-      
-      let fullMasterOutput = `window.OverworldMaps = {\n`;
-      let mapEntries = [];
-
-      for (const [mName, mData] of Object.entries(mapsRepository)) {
-        // 🌟 Pull live gridData for active map, or stored tileData for other repository maps
-        const targetTileData = (mName === currentMapKey) ? gridData : (mData.tileData || mData.blockData || []);
-        let tileDataStr = "[\n" + targetTileData.map(row => "      [\"" + row.join("\", \"") + "\"]").join(",\n") + "\n    ]";
-        
-        let wildDataStr = "{\n";
-        // ... (rest of wild data & event serialization remains the same)
-        for (const [timeKey, arr] of Object.entries(mData.wildEncounters)) {
-          wildDataStr += `      ${timeKey}: [\n`;
-          (arr || []).forEach(w => {
-            let specObj = PokemonDatabase[w.pokemonName] || { name: w.pokemonName };
-            wildDataStr += `        { pokemonName: "${specObj.name}", levelRange: [${w.minLevel}, ${w.maxLevel}], appearanceRate: ${w.appearanceRate} },\n`;
-          });
-          wildDataStr += `      ],\n`;
-        }
-        wildDataStr += `    }`;
-
-        let evtStr = "{\n";
-        for (const [k, v] of Object.entries(mData.events)) {
-          evtStr += `      ${k}: {\n`;
-          evtStr += `        eventType: "${v.eventType || 'NPC'}",\n`;
-          
-          if (v.eventType === 'NPC') {
-            evtStr += `        owID: "${v.owID || 'Portia'}",\n`;
-            evtStr += `        script: "${v.script || ''}",\n`;
-            evtStr += `        movementType: "${v.movementType || 'MOVEMENT_TYPE_WANDER_LEFT_RIGHT'}",\n`;
-            evtStr += `        isTrainer: ${!!v.isTrainer},\n`;
-            evtStr += `        viewRadius: ${v.viewRadius || 3},\n`;
-            evtStr += `        xPos: ${v.xPos || 0},\n`;
-            evtStr += `        yPos: ${v.yPos || 0},\n`;
-            evtStr += `        flagID: "${v.flagID || ''}"\n`;
-          } else if (v.eventType === 'Script Tile') {
-            evtStr += `        xPos: ${v.xPos || 0},\n`;
-            evtStr += `        yPos: ${v.yPos || 0},\n`;
-            evtStr += `        script: "${v.script || ''}",\n`;
-            evtStr += `        scriptVar: "${v.scriptVar || '0001'}",\n`;
-            evtStr += `        varValue: ${v.varValue || 1}\n`;
-          } else if (v.eventType === 'Signpost') {
-            evtStr += `        xPos: ${v.xPos || 0},\n`;
-            evtStr += `        yPos: ${v.yPos || 0},\n`;
-            evtStr += `        script: "${v.script || ''}"\n`;
-          } else if (v.eventType === 'Tile') {
-            evtStr += `        tileID: ${v.tileID || 0},\n`;
-            evtStr += `        xPos: ${v.xPos || 0},\n`;
-            evtStr += `        yPos: ${v.yPos || 0}\n`;
-          } else if (v.eventType === 'Warp') {
-            evtStr += `        map: "${v.targetMap || 'Route_1'}",\n`;
-            evtStr += `        bankID: ${v.bankID || 0},\n`;
-            evtStr += `        warpNumber: ${v.warpNumber || 1},\n`;
-            evtStr += `        xPos: ${v.xPos || 0},\n`;
-            evtStr += `        yPos: ${v.yPos || 0}\n`;
-          }
-          evtStr += `      },\n`;
-        }
-        evtStr += "    }";
-
-        let connObj = { up: null, down: null, left: null, right: null };
-        (mData.connections || []).forEach(c => {
-          let targetMapObj = mapsRepository[c.map];
-          let bankVal = targetMapObj ? targetMapObj.bank : 0;
-          if (connObj[c.direction] !== undefined) {
-            connObj[c.direction] = [c.map, bankVal, c.offset];
-          }
-        });
-
-        let connStr = "{\n";
-        for (const [dir, arr] of Object.entries(connObj)) {
-          if (arr) {
-            connStr += `      ${dir}: ["${arr[0]}", ${arr[1]}, ${arr[2]}],\n`;
-          } else {
-            connStr += `      ${dir}: null,\n`;
-          }
-        }
-        connStr += `    }`;
-
-        let singleMapStr = `  "${mName}": {\n` +
-          `    map: "${mData.map}",\n` +
-          `    bank: ${mData.bank},\n` +
-          `    dimensions: {\n` +
-          `      width: ${mData.dimensions.width},\n` +
-          `      height: ${mData.dimensions.height},\n` +
-          `      blockSize: ${mData.dimensions.blockSize}\n` +
-          `    },\n` +
-          `    mapType: "${mData.mapType}",\n` +
-          `    weather: "${mData.weather}",\n` +
-          `    isFlyable: ${mData.isFlyable},\n` +
-          `    isRunning: ${mData.isRunning},\n` +
-          `    music: "${mData.music}",\n` +
-          `    connections: ${connStr},\n` +
-          `    events: ${evtStr},\n` +
-          `    wildData: ${wildDataStr},\n` +
-          `    tileData: ${tileDataStr}\n` +
-          `  }`;
-        mapEntries.push(singleMapStr);
-      }
-
-      fullMasterOutput += mapEntries.join(",\n\n") + "\n};";
-      document.getElementById('outputCode').value = fullMasterOutput;
-    }
-
-    let selectedTileID = 0;
-    let selectedSubFrameIndex = 0;
-    // 🌟 Multi-frame selection state
-    let selectedBrushSelection = { tileID: 0, startFrame: 0, endFrame: 0 };
-
-    function initTileBrushPalette() {
-      console.group("🔍 [Editor Logger] Initializing Visual Tile Palette");
-      const container = document.getElementById('tilePaletteContainer');
-      if (!container || !window.OverworldTiles) {
-        console.groupEnd();
-        return;
-      }
-
-      container.innerHTML = '';
-      container.onmousedown = (e) => e.stopPropagation();
-
-      for (const [tID, tDef] of Object.entries(window.OverworldTiles)) {
-        const colsPerRow = tDef.columns || 3;
-
-        const tileGroup = document.createElement('div');
-        tileGroup.style.cssText = "display: flex; flex-direction: column; gap: 4px; background: #1a1a1a; padding: 6px; border-radius: 4px; border: 1px solid #2d2d2d;";
-
-        const header = document.createElement('div');
-        header.style.cssText = "font-size: 10px; color: #00acc1; font-weight: bold;";
-        header.textContent = `ID ${tID}: ${tDef.tileName} (${tDef.tileType}) [Cols: ${colsPerRow}]`;
-        tileGroup.appendChild(header);
-
-        const framesGrid = document.createElement('div');
-        framesGrid.style.cssText = `display: grid; grid-template-columns: repeat(${colsPerRow}, 32px); gap: 4px;`;
-
-        const totalFrames = tDef.frames || 1;
-
-        for (let f = 0; f < totalFrames; f++) {
-          const frameBox = document.createElement('div');
-          frameBox.className = 'palette-frame-option';
-          
-          const minF = Math.min(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
-          const maxF = Math.max(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
-          const isSelected = (selectedTileID == tID && f >= minF && f <= maxF);
-          
-          frameBox.style.cssText = `
-            width: 32px; height: 32px; background: #252525; border: 2px solid ${isSelected ? '#00acc1' : '#444'};
-            border-radius: 4px; cursor: pointer; position: relative; box-sizing: border-box; overflow: hidden;
-          `;
-
-          if (tDef.tileType === "Multi-tile") {
-            const col = f % colsPerRow;
-            const row = Math.floor(f / colsPerRow);
-            
-            const leftX = col * 32;
-            const topY = row * 32;
-            const nativeSheetWidth = (colsPerRow * 16) + (colsPerRow + 1); 
-            const scaledSheetWidth = nativeSheetWidth * 2;
-
-            const img = document.createElement('img');
-            img.src = tDef.tileImage;
-            img.style.cssText = `
-              position: absolute;
-              left: -${leftX}px;
-              top: -${topY}px;
-              width: ${scaledSheetWidth}px;
-              height: auto;
-              max-width: none;
-              image-rendering: pixelated;
-            `;
-            frameBox.appendChild(img);
-
-          } else if (tDef.tileType === "Multi-tile Pixel Split") {
-            const col = f % colsPerRow;
-            const row = Math.floor(f / colsPerRow);
-            
-            const leftX = 1 + (col * 16);
-            const topY = 1 + (row * 16);
-            const nativeSheetWidth = tDef.tileDimension ? parseInt(tDef.tileDimension.split('x')[0]) : (colsPerRow * 17); 
-            const scaledSheetWidth = nativeSheetWidth * 2;
-
-            const img = document.createElement('img');
-            img.src = tDef.tileImage;
-            img.style.cssText = `
-              position: absolute;
-              left: -${leftX * 2}px;
-              top: -${topY * 2}px;
-              width: ${scaledSheetWidth}px;
-              height: auto;
-              max-width: none;
-              image-rendering: pixelated;
-            `;
-            frameBox.appendChild(img);
-
-          } else {
-            const img = document.createElement('img');
-            img.src = tDef.tileImage;
-            img.style.cssText = "width: 32px; height: 32px; image-rendering: pixelated;";
-            frameBox.appendChild(img);
-          }
-
-          // 🌟 Shift-click range selection support
-          frameBox.onclick = (e) => {
-            e.stopPropagation();
-            isMouseDown = false; 
-            selectedTileID = parseInt(tID);
-            
-            if (e.shiftKey && selectedBrushSelection.tileID === parseInt(tID)) {
-              selectedBrushSelection.endFrame = f;
-            } else {
-              selectedSubFrameIndex = f;
-              selectedBrushSelection = { tileID: parseInt(tID), startFrame: f, endFrame: f };
-            }
-
-            const activeMin = Math.min(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
-            const activeMax = Math.max(selectedBrushSelection.startFrame, selectedBrushSelection.endFrame);
-            document.getElementById('currentBrushLabel').textContent = `Selected Brush: ID ${selectedTileID} (${tDef.tileName}) [Frames ${activeMin} - ${activeMax}]`;
-            initTileBrushPalette();
-          };
-
-          framesGrid.appendChild(frameBox);
-        }
-
-        tileGroup.appendChild(framesGrid);
-        container.appendChild(tileGroup);
-      }
-      console.groupEnd();
-    }
-
-    window.onload = function() {
-      console.log("🚀 [Editor Logger] window.onload triggered.");
-      owTableLogger();
-      initDefaultMap();
-      initTileBrushPalette(); // 🌟 Replaces initTileBrushDropdown
-      updateEventDropdown();
-      document.getElementById('evtKeySelect').value = Object.keys(eventsList)[0] || "";
-      loadSelectedEvent();
-      console.log("✅ [Editor Logger] Editor fully initialized.");
-    };
-  </script>
-</body>
-</html>
+  <canvas id="cv" tabindex="0"></canvas><div id="status"></div>
+</div>
+<datalist id="musicList"></datalist>
+<script>
+const TS=32,$=id=>document.getElementById(id),clone=o=>JSON.parse(JSON.stringify(o)),uniq=a=>[...new Set(a)];
+const OT=()=>window.OverworldTable||{},TL=()=>window.OverworldTiles||{};
+let repo={},active='',tool='pencil',brush={tid:0,cells:[['0|0']],frames:new Set([0])},sel=null,cam={x:60,y:60,z:1};
+let hist=[],redoS=[],pending=false,unsaved=false,fileHandle=null,hover=null,stroke=null,rectA=null,drag=null,pan=null,pal=null,spaceDown=false,showGrid=true,showSpr=true;
+const cv=$('cv'),ctx=cv.getContext('2d');
+const EMPTY=l=>l>1?'':'0|0';
+const cellStr=(v,l=1)=>typeof v==='number'?`${v}|0`:(typeof v==='string'&&v.includes('|'))?v:(typeof v==='string'&&v.trim()!==''&&!isNaN(parseInt(v)))?`${parseInt(v)}|0`:EMPTY(l);
+let layer=1,viewMode='all',tab='env';
+const norm=s=>String(s==null?'':s).replace(/[\s_]/g,'').toLowerCase();
+const findKey=n=>{if(n==null)return null;if(repo[n])return n;return Object.keys(repo).find(k=>norm(k)===norm(n)||norm(repo[k].map)===norm(n))||null};
+const OPP={up:'down',down:'up',left:'right',right:'left'};
+
+// 5 tile layers: tileData_1 (bottom) … tileData_5 (top). Old single `tileData` becomes layer 1.
+function fit(m){const{width:w,height:h}=m.dimensions;for(let l=1;l<=5;l++){const src=m['tileData_'+l]||(l===1?m.tileData:null);
+  m['tileData_'+l]=Array.from({length:h},(_,r)=>Array.from({length:w},(_,c)=>cellStr(src?.[r]?.[c],l)))}delete m.tileData}
+function load(){repo=clone(window.OverworldMaps||{});for(const m of Object.values(repo)){m.dimensions||={width:10,height:10,blockSize:8};m.events||={};m.connections||={up:null,down:null,left:null,right:null};m.wildData||={morning:[],afternoon:[],night:[],dawn:[]};fit(m)}active=Object.keys(repo)[0]||''}
+
+// ---------- world layout (same rules as the game) ----------
+function layout(){const o={},keys=Object.keys(repo);
+  const place=(s,sx,sy)=>{o[s]={x:sx,y:sy};const q=[s];while(q.length){const k=q.shift(),m=repo[k],p=o[k];
+    for(const[d,c]of Object.entries(m.connections||{})){const n=c&&findKey(c[0]);if(!n||o[n])continue;const nm=repo[n],off=c[2]||0;let x,y;
+      if(d==='up'){x=p.x+off;y=p.y-nm.dimensions.height}else if(d==='down'){x=p.x+off;y=p.y+m.dimensions.height}
+      else if(d==='left'){x=p.x-nm.dimensions.width;y=p.y+off}else if(d==='right'){x=p.x+m.dimensions.width;y=p.y+off}else continue;
+      o[n]={x,y};q.push(n)}}};
+  if(keys.length)place(keys[0],0,0);
+  for(const k of keys){if(o[k])continue;let r=0;for(const[kk,p]of Object.entries(o))r=Math.max(r,p.x+repo[kk].dimensions.width);place(k,r+4,0)}
+  return o}
+
+// ---------- images / sprites ----------
+const imgs={};let pt;
+function img(p){if(!p)return null;let i=imgs[p];if(!i){i=imgs[p]=new Image();i.onload=()=>{i.ok=1;redraw();clearTimeout(pt);pt=setTimeout(buildPalette,60)};i.src=p}return i.ok?i:null}
+const sprs={};
+function spr(id){const e=OT()[id];if(!e)return null;if(sprs[id])return sprs[id];const i=img(e.owSprite);if(!i)return null;
+  const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),c=document.createElement('canvas');c.width=w;c.height=h;
+  const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(i,0,0,w,h,0,0,w,h);
+  try{const d=x.getImageData(0,0,w,h),p=d.data;if(p[3]){const k=[p[0],p[1],p[2]],st=[],seen=new Uint8Array(w*h);
+    const bg=j=>p[j*4+3]&&Math.abs(p[j*4]-k[0])<7&&Math.abs(p[j*4+1]-k[1])<7&&Math.abs(p[j*4+2]-k[2])<7;
+    const sd=(a,b)=>{const j=b*w+a;if(!seen[j]&&bg(j)){seen[j]=1;st.push(j)}};
+    for(let a=0;a<w;a++){sd(a,0);sd(a,h-1)}for(let b=0;b<h;b++){sd(0,b);sd(w-1,b)}
+    while(st.length){const j=st.pop();p[j*4+3]=0;const a=j%w,b=(j/w)|0;if(a>0)sd(a-1,b);if(a<w-1)sd(a+1,b);if(b>0)sd(a,b-1);if(b<h-1)sd(a,b+1)}
+    x.putImageData(d,0,0)}}catch(e){}
+  return sprs[id]=c}
+
+// Tile images: the colour of the first pixel is removed (edge flood per frame). Set removeBackground:false on a tile in tiles.js to skip it.
+const tcache={};
+function tileImg(d) {
+  return img(d.tileImage);
+}
+function drawTile(c,val,x,y,s){if(!val)return;c.imageSmoothingEnabled=false;const[t,f]=val.split('|').map(n=>parseInt(n)||0),d=TL()[t];
+  if(!d||!d.tileImage){c.fillStyle='#78c850';c.fillRect(x,y,s,s);return}
+  const i=tileImg(d);if(!i){c.fillStyle='#456';c.fillRect(x,y,s,s);return}
+  if(/^Multi-tile/.test(d.tileType)){const n=d.columns||3;c.drawImage(i,(f%n)*16,Math.floor(f/n)*16,16,16,x,y,s,s)}
+  else if(d.isAnimated&&d.frames>1)c.drawImage(i,0,0,32,32,x,y,s,s);else c.drawImage(i,x,y,s,s)}
+
+// ---------- event geometry ----------
+const BADGE={Warp:['#8e24aa','W'],Script:['#43a047','S'],'Script Tile':['#43a047','S'],Signpost:['#fb8c00','!'],Tile:['#1e88e5','T'],NPC:['#e53935','N']};
+function isBuilding(ev){return OT()[ev.owID]?.owType==='Building'}
+function evRect(p,ev){const ox=p.x*TS,oy=p.y*TS,e=OT()[ev.owID];
+  if(showSpr&&e&&ev.eventType==='NPC'){const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),cx=ox+ev.xPos*TS+16;
+    return isBuilding(ev)?{x:cx-w/2,y:oy+(ev.yPos+1)*TS-h,w,h}:{x:cx-w/2,y:oy+ev.yPos*TS+16-h*.85,w,h}}
+  return{x:ox+ev.xPos*TS,y:oy+ev.yPos*TS,w:TS,h:TS}}
+function footprint(ev){const e=OT()[ev.owID];if(!e||!isBuilding(ev))return null;const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),fw=Math.ceil(w/32),fh=Math.ceil(h/32);
+  return{x0:ev.xPos-Math.floor((fw-1)/2),x1:ev.xPos+Math.floor(fw/2),y0:ev.yPos-(fh-1),y1:ev.yPos}}
+
+// ---------- drawing ----------
+let queued=false;function redraw(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;draw()})}
+function draw(){const W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#0b0b0b';ctx.fillRect(0,0,W,H);ctx.setTransform(cam.z,0,0,cam.z,cam.x,cam.y);ctx.imageSmoothingEnabled=false;
+  const L=layout();
+  for(const[k,m]of Object.entries(repo)){const p=L[k],{width:w,height:h}=m.dimensions;
+    for(let l=1;l<=5;l++){if(viewMode==='active'&&l!==layer)continue;if(viewMode==='below'&&l>layer)continue;const g=m['tileData_'+l];for(let r=0;r<h;r++)for(let c=0;c<w;c++)drawTile(ctx,g[r][c],(p.x+c)*TS,(p.y+r)*TS,TS)}
+    if(showGrid&&cam.z>.4){ctx.strokeStyle='rgba(255,255,255,.13)';ctx.lineWidth=1/cam.z;ctx.beginPath();
+      for(let c=0;c<=w;c++){ctx.moveTo((p.x+c)*TS,p.y*TS);ctx.lineTo((p.x+c)*TS,(p.y+h)*TS)}
+      for(let r=0;r<=h;r++){ctx.moveTo(p.x*TS,(p.y+r)*TS);ctx.lineTo((p.x+w)*TS,(p.y+r)*TS)}ctx.stroke()}
+    if(k!==active){ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillRect(p.x*TS,p.y*TS,w*TS,h*TS)}
+    ctx.strokeStyle=k===active?'#00e5ff':'#76ff03';ctx.lineWidth=2/cam.z;ctx.strokeRect(p.x*TS,p.y*TS,w*TS,h*TS);
+    ctx.fillStyle='#fff';ctx.font=`${12/cam.z}px monospace`;ctx.fillText(k,p.x*TS,p.y*TS-4/cam.z)}
+  for(const[k,m]of Object.entries(repo)){const p=L[k];
+    for(const[ek,ev]of Object.entries(m.events)){
+      const fp=footprint(ev);if(fp){ctx.fillStyle='rgba(255,0,0,.14)';ctx.fillRect((p.x+fp.x0)*TS,(p.y+fp.y0)*TS,(fp.x1-fp.x0+1)*TS,(fp.y1-fp.y0+1)*TS)}
+      const R=evRect(p,ev),s=ev.eventType==='NPC'&&showSpr?spr(ev.owID):null;
+      if(s)ctx.drawImage(s,R.x,R.y,R.w,R.h);
+      else{const[col,ch]=BADGE[ev.eventType]||['#777','?'];ctx.fillStyle=col;ctx.globalAlpha=.85;ctx.fillRect(R.x+3,R.y+3,TS-6,TS-6);ctx.globalAlpha=1;
+        ctx.fillStyle='#fff';ctx.font='bold 16px monospace';ctx.textAlign='center';ctx.fillText(ch,R.x+TS/2,R.y+TS/2+6);ctx.textAlign='left'}
+      if(sel&&sel.map===k&&sel.key===ek){ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;ctx.strokeRect(R.x,R.y,R.w,R.h)}}}
+  if(hover&&repo[hover.map]){const p=L[hover.map],n=tool==='pencil'?brush.cells:[[0]];ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;
+    ctx.strokeRect((p.x+hover.gx)*TS,(p.y+hover.gy)*TS,n[0].length*TS,n.length*TS)}
+  if(rectA&&hover&&rectA.map===hover.map){const p=L[rectA.map],a=Math.min(rectA.gx,hover.gx),b=Math.min(rectA.gy,hover.gy),
+    c=Math.abs(rectA.gx-hover.gx)+1,d=Math.abs(rectA.gy-hover.gy)+1;ctx.fillStyle='rgba(0,229,255,.25)';ctx.fillRect((p.x+a)*TS,(p.y+b)*TS,c*TS,d*TS)}
+  if(drag&&hover){const p=L[hover.map];ctx.setLineDash([4/cam.z,3/cam.z]);ctx.strokeStyle='#fff';ctx.strokeRect((p.x+hover.gx-drag.ox)*TS,(p.y+hover.gy-drag.oy)*TS,TS,TS);ctx.setLineDash([])}
+}
+
+// ---------- history ----------
+const snap=()=>JSON.stringify(repo);
+function touch(){if(pending)return;hist.push(snap());if(hist.length>100)hist.shift();redoS=[];pending=true;unsaved=true}
+function commit(fn){touch();fn();pending=false;changed()}
+function restore(s){repo=JSON.parse(s);if(!repo[active])active=Object.keys(repo)[0]||'';if(sel&&!repo[sel.map]?.events[sel.key])sel=null;refreshAll()}
+function undo(){if(!hist.length)return;redoS.push(snap());restore(hist.pop())}
+function redo(){if(!redoS.length)return;hist.push(snap());restore(redoS.pop())}
+
+// ---------- coordinates / hit tests ----------
+const toWorld=(mx,my)=>({x:(mx-cam.x)/cam.z,y:(my-cam.y)/cam.z});
+function cellAt(wx,wy){const L=layout();for(const[k,p]of Object.entries(L)){const m=repo[k],gx=Math.floor(wx/TS)-p.x,gy=Math.floor(wy/TS)-p.y;
+  if(gx>=0&&gy>=0&&gx<m.dimensions.width&&gy<m.dimensions.height)return{map:k,gx,gy}}return null}
+function eventAt(wx,wy){const L=layout();let hit=null;for(const[k,m]of Object.entries(repo))for(const[ek,ev]of Object.entries(m.events)){
+  const R=evRect(L[k],ev);if(wx>=R.x&&wx<R.x+R.w&&wy>=R.y&&wy<R.y+R.h)hit={map:k,key:ek}}return hit}
+
+// ---------- painting ----------
+function setCell(k,r,c,v){const g=repo[k]['tileData_'+layer];if(!g[r]||g[r][c]===undefined||g[r][c]===v)return;touch();g[r][c]=v}
+function stamp(k,gx,gy,pat){pat.forEach((row,r)=>row.forEach((v,c)=>setCell(k,gy+r,gx+c,v)))}
+function line(a,b,fn){let x=a.gx,y=a.gy;const dx=Math.abs(b.gx-x),dy=Math.abs(b.gy-y),sx=x<b.gx?1:-1,sy=y<b.gy?1:-1;let e=dx-dy;
+  for(;;){fn(x,y);if(x===b.gx&&y===b.gy)break;const e2=2*e;if(e2>-dy){e-=dy;x+=sx}if(e2<dx){e+=dx;y+=sy}}}
+function floodFill(k,gx,gy,pat){const g=repo[k]['tileData_'+layer],t=g[gy][gx],h=g.length,w=g[0].length,seen=new Set([gy*w+gx]),q=[[gx,gy]],cells=[];
+  while(q.length){const[x,y]=q.pop();cells.push([x,y]);for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;
+    if(nx<0||ny<0||nx>=w||ny>=h||seen.has(ny*w+nx)||g[ny][nx]!==t)continue;seen.add(ny*w+nx);q.push([nx,ny])}}
+  const ph=pat.length,pw=pat[0].length;for(const[x,y]of cells)setCell(k,y,x,pat[((y-gy)%ph+ph)%ph][((x-gx)%pw+pw)%pw])}
+function fillRect(a,b,pat){const x0=Math.min(a.gx,b.gx),x1=Math.max(a.gx,b.gx),y0=Math.min(a.gy,b.gy),y1=Math.max(a.gy,b.gy),ph=pat.length,pw=pat[0].length;
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)setCell(a.map,y,x,pat[(y-y0)%ph][(x-x0)%pw])}
+
+// ---------- mouse ----------
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('mousedown',e=>{cv.focus();
+  if(e.button===1||e.button===2||spaceDown){pan={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};return}
+  const w=toWorld(e.offsetX,e.offsetY),cell=cellAt(w.x,w.y);if(!cell)return;
+  if(cell.map!==active){active=cell.map;refreshAll()}
+  const val=brush.cells,erase=[[EMPTY(layer)]];
+  if(tool==='select'){const h=eventAt(w.x,w.y);sel=h;if(h){const ev=repo[h.map].events[h.key];drag={ox:cell.gx-ev.xPos,oy:cell.gy-ev.yPos,from:h}}buildInspector();redraw();return}
+  if(tool==='pencil'||tool==='erase'){stroke={last:cell,pat:tool==='erase'?erase:val};stamp(cell.map,cell.gx,cell.gy,stroke.pat);redraw()}
+  else if(tool==='fill'){floodFill(cell.map,cell.gx,cell.gy,val);redraw()}
+  else if(tool==='rect'){rectA=cell}
+  else if(tool==='pick'){brush={tid:-1,cells:[[repo[cell.map]['tileData_'+layer][cell.gy][cell.gx]]],frames:new Set()};markPalette();info()}});
+window.addEventListener('mousemove',e=>{
+  if(pan){cam.x=pan.cx+e.clientX-pan.x;cam.y=pan.cy+e.clientY-pan.y;redraw();return}
+  if(e.target!==cv)return;const w=toWorld(e.offsetX,e.offsetY),cell=cellAt(w.x,w.y);hover=cell;
+  if(stroke&&cell&&cell.map===stroke.last.map){line(stroke.last,cell,(x,y)=>stamp(cell.map,x,y,stroke.pat));stroke.last=cell}
+  status();redraw()});
+window.addEventListener('mouseup',()=>{
+  if(!(stroke||rectA||drag||pan||pal))return;
+  if(rectA&&hover&&hover.map===rectA.map)fillRect(rectA,hover,brush.cells);
+  if(drag&&hover){const{from}=drag,ev=repo[from.map].events[from.key],m=repo[hover.map];
+    const nx=Math.max(0,Math.min(m.dimensions.width-1,hover.gx-drag.ox)),ny=Math.max(0,Math.min(m.dimensions.height-1,hover.gy-drag.oy));
+    if(hover.map!==from.map||nx!==ev.xPos||ny!==ev.yPos){touch();
+      if(hover.map!==from.map){delete repo[from.map].events[from.key];let nk=from.key,i=2;while(m.events[nk])nk=`${from.key}_${i++}`;m.events[nk]=ev;sel={map:hover.map,key:nk};active=hover.map}
+      ev.xPos=nx;ev.yPos=ny}}
+  stroke=null;rectA=null;drag=null;pan=null;pal=null;pending=false;changed()});
+cv.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY<0?1.15:1/1.15,z=Math.max(.2,Math.min(4,cam.z*f));
+  cam.x=e.offsetX-(e.offsetX-cam.x)*(z/cam.z);cam.y=e.offsetY-(e.offsetY-cam.y)*(z/cam.z);cam.z=z;redraw();status()},{passive:false});
+
+// ---------- keyboard ----------
+window.addEventListener('keyup',e=>{if(e.code==='Space')spaceDown=false});
+window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)&&e.target.type!=='checkbox')return;
+  const k=e.key.toLowerCase(),mod=e.ctrlKey||e.metaKey;
+  if(e.code==='Space'){spaceDown=true;e.preventDefault();return}
+  if(mod&&k==='z'){e.preventDefault();e.shiftKey?redo():undo()}else if(mod&&k==='y'){e.preventDefault();redo()}
+  else if(mod&&k==='d'){e.preventDefault();duplicate()}else if(mod&&k==='s'){e.preventDefault();save()}
+  else if(k==='delete'||k==='backspace'){e.preventDefault();delEvent()}
+  else if(k.startsWith('arrow')&&sel){e.preventDefault();const d={arrowleft:[-1,0],arrowright:[1,0],arrowup:[0,-1],arrowdown:[0,1]}[k];
+    commit(()=>{const ev=repo[sel.map].events[sel.key],m=repo[sel.map];ev.xPos=Math.max(0,Math.min(m.dimensions.width-1,ev.xPos+d[0]));ev.yPos=Math.max(0,Math.min(m.dimensions.height-1,ev.yPos+d[1]))})}
+  else if(!mod&&/^[1-5]$/.test(k)){setLayer(+k)}
+  else if(!mod){const t={v:'select',p:'pencil',b:'fill',r:'rect',e:'erase',i:'pick'}[k];if(t)setTool(t);else if(k==='g'){$('gridT').click()}}});
+
+// ---------- events: add / duplicate / delete ----------
+const SCHEMA={
+  NPC:[['owID','select','ow'],['script','select','script'],['movementType','select','move'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
+  Script:[['script','select','script']],'Script Tile':[['script','select','script'],['scriptVar','text'],['varValue','num']],
+  Signpost:[['script','select','script']],Tile:[['tileID','num']],
+  Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};
+const allEv=()=>Object.values(repo).flatMap(m=>Object.values(m.events));
+const OPTS={ow:()=>Object.keys(OT()),map:()=>Object.keys(repo),
+  script:()=>uniq([...Object.keys(window.OverworldScriptEngine?.scripts||{}),...allEv().map(e=>e.script).filter(Boolean)]),
+  move:()=>uniq(['MOVEMENT_TYPE_LOOK_AROUND','MOVEMENT_TYPE_WANDER_LEFT_RIGHT','MOVEMENT_TYPE_WANDER_UP_AND_DOWN',...allEv().map(e=>e.movementType).filter(Boolean)]),
+  facing:()=>['Down','Up','Left','Right'],warpType:()=>['Normal','Teleport','Hole'],
+  warp:ev=>Object.entries(repo[findKey(ev.map)]?.events||{}).filter(([,v])=>v.eventType==='Warp').map(([k])=>k)};
+function newEv(t){const m=repo[active],e={eventType:t,xPos:hover?.map===active?hover.gx:0,yPos:hover?.map===active?hover.gy:0};
+  if(t==='NPC'){e.owID=Object.keys(OT()).find(k=>OT()[k].owType!=='Building')||'';e.script='';e.movementType='MOVEMENT_TYPE_LOOK_AROUND';e.isTrainer=false;e.viewRadius=3;e.flagID=''}
+  if(t==='Script'||t==='Signpost')e.script='';if(t==='Tile')e.tileID=0;
+  if(t==='Warp'){e.map=Object.keys(repo).find(k=>k!==active)||active;e.facing='Down';e.warpType='Normal'}return e}
+function addEvent(t){commit(()=>{const ev=newEv(t),m=repo[active];let k=`${t.replace(/\s/g,'_')}_1`,i=1;while(m.events[k])k=`${t.replace(/\s/g,'_')}_${++i}`;m.events[k]=ev;sel={map:active,key:k}})}
+function duplicate(){if(!sel)return;commit(()=>{const m=repo[sel.map],ev=clone(m.events[sel.key]);ev.xPos=Math.min(m.dimensions.width-1,ev.xPos+1);
+  let k=`${sel.key}_copy`,i=1;while(m.events[k])k=`${sel.key}_copy${++i}`;m.events[k]=ev;sel={map:sel.map,key:k}})}
+function delEvent(){if(!sel)return;commit(()=>{delete repo[sel.map].events[sel.key];sel=null})}
+
+// ---------- UI builders ----------
+function inp(type,val,set,optsFn){let e;
+  if(optsFn){e=document.createElement('select');let o=optsFn();if(val!=null&&val!==''&&!o.includes(val))o=[val,...o];e.add(new Option('(none)',''));o.forEach(v=>e.add(new Option(v,v)));e.value=val??''}
+  else if(type==='bool'){e=document.createElement('input');e.type='checkbox';e.checked=!!val}
+  else{e=document.createElement('input');e.type=type.startsWith('num')?'number':'text';e.value=val??''}
+  e.onchange=()=>commit(()=>set(type==='bool'?e.checked:(type==='text'||optsFn)?e.value:(e.value===''?undefined:Number(e.value))));return e}
+function rowTo(box,label,el){const l=document.createElement('label');l.textContent=label;l.appendChild(el);box.appendChild(l)}
+function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&repo[sel.map]?.events[sel.key];
+  if(!ev){I.innerHTML='<i>Pick the Select tool (V) and click an event.</i>';return}
+  const m=repo[sel.map];
+  rowTo(I,`Key (${ev.eventType} on ${sel.map})`,inp('text',sel.key,v=>{if(v&&!m.events[v]){m.events[v]=ev;delete m.events[sel.key];sel.key=v}}));
+  const xy=document.createElement('div');xy.className='row';I.appendChild(xy);
+  rowTo(xy,'X',inp('num',ev.xPos,v=>ev.xPos=v??0));rowTo(xy,'Y',inp('num',ev.yPos,v=>ev.yPos=v??0));
+  for(const[f,t,o]of SCHEMA[ev.eventType]||[]){
+    rowTo(I,f,inp(t==='select'?'text':t,ev[f],v=>{v===undefined||v===''?delete ev[f]:ev[f]=v},o?()=>OPTS[o](ev):null))}}
+function renameMap(o,n){if(!n||repo[n])return;const r={};for(const[k,m]of Object.entries(repo))r[k===o?n:k]=m;repo=r;repo[n].map=n;
+  for(const m of Object.values(repo)){for(const c of Object.values(m.connections))if(c&&findKey(c[0])===null&&norm(c[0])===norm(o))c[0]=n;
+    for(const e of Object.values(m.events))if(e.map&&norm(e.map)===norm(o))e.map=n}active=n;if(sel?.map===o)sel.map=n}
+function setConn(dir,name,off){const m=repo[active],old=m.connections[dir],oldT=old&&repo[findKey(old[0])];
+  if(oldT&&oldT.connections[OPP[dir]]&&findKey(oldT.connections[OPP[dir]][0])===active)oldT.connections[OPP[dir]]=null;
+  if(!name){m.connections[dir]=null;return}const t=repo[findKey(name)];m.connections[dir]=[name,t?.bank??0,off||0];
+  if(t){t.connections||={};t.connections[OPP[dir]]=[active,m.bank??0,-(off||0)]}}
+function buildProps(){const P=$('props');P.innerHTML='';const m=repo[active];if(!m)return;
+  rowTo(P,'Name',inp('text',active,v=>renameMap(active,v.trim())));
+  const wh=document.createElement('div');wh.className='row';P.appendChild(wh);
+  rowTo(wh,'Width',inp('num',m.dimensions.width,v=>{m.dimensions.width=Math.max(1,Math.min(60,v||1));fit(m)}));
+  rowTo(wh,'Height',inp('num',m.dimensions.height,v=>{m.dimensions.height=Math.max(1,Math.min(60,v||1));fit(m)}));
+  rowTo(P,'Map type',inp('text',m.mapType,v=>m.mapType=v,()=>uniq(['City','Town','Route','Cave','Indoor',...Object.values(repo).map(x=>x.mapType).filter(Boolean)])));
+  // Weather names are the ones the game's weather system understands
+  rowTo(P,'Weather',inp('text',m.weather||'Normal',v=>m.weather=v,()=>['Normal','Sunny','Drought','Rain','Thunderstorm','Snow','Fog','Sandstorm','Volcanic Ash']));
+  const mu=inp('text',m.music,v=>m.music=v);mu.setAttribute('list','musicList');rowTo(P,'Music path',mu);
+  $('musicList').innerHTML=uniq(Object.values(repo).map(x=>x.music).filter(Boolean)).map(v=>`<option value="${v}">`).join('');
+  rowTo(P,'Bank',inp('num',m.bank??0,v=>m.bank=v??0));
+  rowTo(P,'Flyable',inp('bool',m.isFlyable,v=>m.isFlyable=v));rowTo(P,'Running',inp('bool',m.isRunning,v=>m.isRunning=v));
+  const h=document.createElement('div');h.textContent='Connections (reciprocal link is kept in sync)';h.style.color='#00acc1';const CN=$('conns');CN.innerHTML='';CN.appendChild(h);
+  for(const dir of['up','down','left','right']){const c=m.connections[dir],r=document.createElement('div');r.className='row';CN.appendChild(r);
+    rowTo(r,dir,inp('text',c&&c[0],v=>setConn(dir,v,c?c[2]:0),()=>Object.keys(repo).filter(k=>k!==active)));
+    rowTo(r,'offset',inp('num',c?c[2]:0,v=>setConn(dir,c&&c[0],v??0)))}}
+
+function issues(){const out=[];
+  for(const[k,m]of Object.entries(repo)){
+    for(const[dir,c]of Object.entries(m.connections||{}))if(c&&!findKey(c[0]))out.push(`${k}: connection ${dir} → "${c[0]}" does not exist`);
+    for(const[ek,e]of Object.entries(m.events)){const at=`${k}/${ek}`;
+      if(e.xPos<0||e.yPos<0||e.xPos>=m.dimensions.width||e.yPos>=m.dimensions.height)out.push(`${at}: outside the map`);
+      if(e.eventType==='NPC'){if(!OT()[e.owID])out.push(`${at}: owID "${e.owID}" not in OverworldTable`);
+        const ge=window.OverworldScriptEngine?.scripts;if(ge&&e.script&&!ge[e.script])out.push(`${at}: script "${e.script}" not found`)}
+      if(e.eventType==='Warp'){const t=findKey(e.map);if(!t)out.push(`${at}: target map "${e.map}" does not exist`);
+        else if(e.targetWarp&&!repo[t].events[e.targetWarp])out.push(`${at}: targetWarp "${e.targetWarp}" not in ${t}`)}}
+    const seen={};for(const[ek,e]of Object.entries(m.events))if(e.eventType==='NPC'){const id=`${e.xPos},${e.yPos}`;if(seen[id])out.push(`${k}: ${ek} and ${seen[id]} share tile ${id}`);seen[id]=ek}}
+  return out}
+function buildIssues(){const l=issues();$('issueCount').textContent=l.length?`(${l.length})`:'✓';$('issues').innerHTML=l.length?l.map(x=>`<div class=bad>• ${x}</div>`).join(''):'<div class=ok>No problems found</div>'}
+
+function setTool(t){tool=t;document.querySelectorAll('#tools button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));redraw()}
+function info(){const b=brush.cells;$('brushInfo').textContent=`Brush: ${b[0].length}×${b.length} → ${b[0][0]}${b.length*b[0].length>1?' …':''}`}
+function markPalette(){document.querySelectorAll('#palette canvas').forEach(c=>c.classList.toggle('sel',+c.dataset.t===brush.tid&&brush.frames.has(+c.dataset.f)));info()}
+function buildPalette(){const P=$('palette');P.innerHTML='';
+  for(const[t,d]of Object.entries(TL())){const n=d.columns||1,h=document.createElement('div');h.className='ph';h.textContent=`${t}: ${d.tileName} (${d.tileType})`;P.appendChild(h);
+    const g=document.createElement('div');g.className='pg';g.style.gridTemplateColumns=`repeat(${n},34px)`;
+    for(let f=0;f<(d.frames||1);f++){const c=document.createElement('canvas');c.width=c.height=32;drawTile(c.getContext('2d'),`${t}|${f}`,0,0,32);Object.assign(c.dataset,{t,f,n});g.appendChild(c)}P.appendChild(g)}
+  markPalette()}
+function setBrushRect(t,n,a,b){const r0=Math.min(Math.floor(a/n),Math.floor(b/n)),r1=Math.max(Math.floor(a/n),Math.floor(b/n)),c0=Math.min(a%n,b%n),c1=Math.max(a%n,b%n),cells=[],fr=new Set();
+  for(let r=r0;r<=r1;r++){const row=[];for(let c=c0;c<=c1;c++){const f=r*n+c;row.push(`${t}|${f}`);fr.add(f)}cells.push(row)}brush={tid:+t,cells,frames:fr};markPalette()}
+$('palette').addEventListener('mousedown',e=>{const c=e.target;if(c.tagName!=='CANVAS')return;pal={t:c.dataset.t,n:+c.dataset.n,f0:+c.dataset.f};setBrushRect(pal.t,pal.n,pal.f0,pal.f0);if(tool==='select'||tool==='pick'||tool==='erase')setTool('pencil')});
+$('palette').addEventListener('mouseover',e=>{if(pal&&e.target.tagName==='CANVAS'&&e.target.dataset.t===pal.t)setBrushRect(pal.t,pal.n,pal.f0,+e.target.dataset.f)});
+
+function status(){const L=layout();$('status').textContent=`${active} | ${hover?`${hover.map} (${hover.gx}, ${hover.gy}) ${repo[hover.map]['tileData_'+layer][hover.gy][hover.gx]}`:'—'} | zoom ${Math.round(cam.z*100)}% | undo ${hist.length} redo ${redoS.length}${unsaved?' | ● unsaved':''}`}
+function changed(){buildInspector();buildProps();buildWild();buildIssues();updateSel();status();redraw()}
+function updateSel(){const s=$('mapSel');s.innerHTML='';Object.keys(repo).forEach(k=>s.add(new Option(k,k)));s.value=active}
+function refreshAll(){changed()}
+function focus(k){const p=layout()[k];if(p){cam.x=60-p.x*TS*cam.z;cam.y=60-p.y*TS*cam.z}}
+
+// ---------- output ----------
+function ser(v,ind=''){if(v===null||typeof v!=='object')return JSON.stringify(v);const n=ind+'  ';
+  if(Array.isArray(v)){if(v.every(x=>x===null||typeof x!=='object'))return'['+v.map(x=>JSON.stringify(x)).join(', ')+']';return'[\n'+v.map(x=>n+ser(x,n)).join(',\n')+'\n'+ind+']'}
+  const ks=Object.keys(v);if(!ks.length)return'{}';return'{\n'+ks.map(k=>n+JSON.stringify(k)+': '+ser(v[k],n)).join(',\n')+'\n'+ind+'}'}
+const out=()=>'window.OverworldMaps = '+ser(repo)+';\n';
+async function save(){const t=out();
+  if(window.showSaveFilePicker){try{fileHandle||=await showSaveFilePicker({suggestedName:'Overworld_map.js',types:[{description:'JavaScript',accept:{'text/javascript':['.js']}}]});
+    const w=await fileHandle.createWritable();await w.write(t);await w.close();unsaved=false;status();return}catch(e){if(e.name==='AbortError')return;fileHandle=null}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/javascript'}));a.download='Overworld_map.js';a.click();unsaved=false;status()}
+
+function setLayer(n){layer=n;document.querySelectorAll('#layerBtns button').forEach(b=>b.classList.toggle('on',+b.dataset.l===n));status();redraw()}
+function setTab(t){tab=t;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.id==='tab-'+t));document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  if(t==='env'){setTool(tool==='select'?'pencil':tool)}else setTool('select');redraw()}
+function buildWild(){const W=$('wild');W.innerHTML='';const m=repo[active];if(!m)return;
+  const names=uniq([...(typeof PokemonDatabase!=='undefined'?Object.values(PokemonDatabase).map(x=>x.name):[]),...Object.values(repo).flatMap(x=>Object.values(x.wildData||{}).flat().map(w=>w.pokemonName))]).filter(n=>n&&n!=='None');
+  for(const t of['morning','afternoon','night','dawn']){const arr=m.wildData[t]||=[],hd=document.createElement('div');hd.className='row';hd.innerHTML=`<b style="flex:1;color:#00acc1">${t.toUpperCase()}</b>`;
+    const ab=document.createElement('button');ab.textContent='+ Pokémon';ab.onclick=()=>commit(()=>arr.push({pokemonName:names[0]||'',levelRange:[5,7],appearanceRate:20}));hd.appendChild(ab);W.appendChild(hd);
+    arr.forEach((w,i)=>{const r=document.createElement('div');r.className='row';r.style.cssText='border:1px solid #333;padding:4px;border-radius:4px';W.appendChild(r);
+      rowTo(r,'Species',inp('text',w.pokemonName,v=>w.pokemonName=v,()=>names));rowTo(r,'Min Lv',inp('num',w.levelRange[0],v=>w.levelRange[0]=v??1));
+      rowTo(r,'Max Lv',inp('num',w.levelRange[1],v=>w.levelRange[1]=v??1));rowTo(r,'Rate %',inp('num',w.appearanceRate,v=>w.appearanceRate=v??0));
+      const d=document.createElement('button');d.textContent='Remove';d.onclick=()=>commit(()=>arr.splice(i,1));r.appendChild(d)})}}
+// ---------- boot ----------
+$('tools').innerHTML=[['pencil','P Pencil'],['fill','B Fill'],['rect','R Rect'],['erase','E Erase'],['pick','I Pick']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
+$('tools').onclick=e=>{if(e.target.dataset.t)setTool(e.target.dataset.t)};
+$('addBtns').innerHTML=Object.keys(SCHEMA).filter(t=>t!=='Script Tile').map(t=>`<button data-a="${t}">+ ${t}</button>`).join('');
+$('addBtns').onclick=e=>{if(e.target.dataset.a)addEvent(e.target.dataset.a)};
+$('dupBtn').onclick=duplicate;$('delBtn').onclick=delEvent;$('undoB').onclick=undo;$('redoB').onclick=redo;$('saveB').onclick=save;
+$('copyB').onclick=()=>navigator.clipboard.writeText(out());
+$('gridT').onchange=e=>{showGrid=e.target.checked;redraw()};$('sprT').onchange=e=>{showSpr=e.target.checked;redraw()};
+$('mapSel').onchange=e=>{active=e.target.value;focus(active);refreshAll()};
+$('newMap').onclick=()=>{let n=prompt('New map name:','Route_X');if(!n||repo[n])return;commit(()=>{repo[n]={map:n,bank:0,dimensions:{width:10,height:10,blockSize:8},mapType:'Route',weather:'Normal',isFlyable:true,isRunning:true,
+  music:repo[active]?.music||'',connections:{up:null,down:null,left:null,right:null},events:{},wildData:{morning:[],afternoon:[],night:[],dawn:[]},tileData:[]};fit(repo[n]);active=n});focus(n)};
+window.addEventListener('resize',redraw);window.addEventListener('beforeunload',e=>{if(unsaved){e.preventDefault();e.returnValue=''}});
+$('tabs').innerHTML=[['env','Environment'],['events','Events'],['conn','Connections'],['wild','Wild'],['props','Properties']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
+$('tabs').onclick=e=>{if(e.target.dataset.t)setTab(e.target.dataset.t)};
+$('layerBtns').innerHTML=[1,2,3,4,5].map(n=>`<button data-l="${n}">L${n}${n==1?' ▼ bottom':n==5?' ▲ top':''}</button>`).join('')+'<select id="viewMode"><option value="all">Show all layers</option><option value="below">Active + below</option><option value="active">Active only</option></select>';
+$('layerBtns').onclick=e=>{if(e.target.dataset.l)setLayer(+e.target.dataset.l)};
+$('layerBtns').onchange=e=>{if(e.target.id==='viewMode'){viewMode=e.target.value;redraw()}};
+load();buildPalette();setLayer(1);changed();setTab('env');
+</script></body></html>

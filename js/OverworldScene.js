@@ -1,3 +1,506 @@
+// ===========================================================================
+// WEATHER
+// The weather of the map the player is standing in comes from the `weather:`
+// field in overworld_map.js. Supported values (case, spaces, "_" and "-" are
+// ignored, so "Volcanic Ash", "volcanic_ash" and "VolcanicAsh" all work):
+//   Normal · Sunny · Drought · Rain · Thunderstorm · Snow · Fog · Sandstorm · Volcanic Ash
+// The weather of the map you are standing in covers every connected map that is
+// visible on screen. It only changes (with a fade) when the player ENTERS a map
+// with different weather. Weather lives in the world, so it does not follow the camera.
+// To change how a weather looks, edit OW_WEATHER_TYPES below.
+// ===========================================================================
+
+const OW_WEATHER_DEPTH = 5000;
+
+// Sprite background removal: the colour of the first pixel (top-left) of an OW sprite sheet
+// is treated as the background. If that pixel is already transparent, nothing is done.
+//   'edge' = only remove that colour where it touches the frame border (safe: keeps white
+//            hats, eyes, etc. inside the sprite)
+//   'all'  = remove every pixel of that colour in the sheet
+const OW_BG_MODE = 'edge';
+const OW_BG_TOLERANCE = 6;   // how far (0-255 per channel) a colour may differ and still count as background
+
+const OW_WEATHER_ALIASES = {
+  '': 'none', normal: 'none', none: 'none', clear: 'none',
+  sunny: 'sunny', sun: 'sunny',
+  drought: 'drought', harshsunlight: 'drought',
+  rain: 'rain', rainy: 'rain',
+  thunderstorm: 'thunderstorm', thunder: 'thunderstorm',
+  snow: 'snow', snowy: 'snow',
+  fog: 'fog', foggy: 'fog',
+  sandstorm: 'sandstorm', sand: 'sandstorm',
+  volcanicash: 'ash', ash: 'ash', ashfall: 'ash',
+};
+
+// overlay   : color wash (color, alpha, optional pulse {amount, speed}, optional shift {to, speed}
+//             which slowly blends the colour towards `to` and back)
+// particles : one entry or a list. texture, density (per 100,000 world pixels of screen),
+//             vx/vy (px per second), alpha / scale ranges, tint, align, sway,
+//             splash {chance} (drops land on the "floor" and make a ripple)
+// fog       : drifting cloud layers
+// lightning : random flashes
+const OW_WEATHER_TYPES = {
+  none: {},
+
+  sunny: {
+    overlay: {
+      color: 0xfff0b0, alpha: 0.14,
+      pulse: { amount: 0.04, speed: 0.8 },
+      shift: { to: 0xffd27a, speed: 0.6 },
+    },
+  },
+
+  drought: {
+    overlay: {
+      color: 0xffb347, alpha: 0.24,
+      pulse: { amount: 0.05, speed: 1.2 },
+      shift: { to: 0xff6a1f, speed: 0.9 },
+    },
+    particles: {
+      texture: 'owx_dot', density: 22,
+      vx: [-6, 6], vy: [-45, -20],
+      alpha: [0.12, 0.3], scale: [0.5, 1.1],
+      tint: 0xfff2c0, sway: { amp: [6, 16], freq: [0.8, 1.8] },
+    },
+  },
+
+  rain: {
+    overlay: { color: 0x14213d, alpha: 0.16 },
+    particles: {
+      texture: 'owx_drop', density: 90,
+      vx: [-150, -110], vy: [700, 900],
+      alpha: [0.35, 0.6], scale: [1, 1],
+      tint: 0xbcd7ff, align: true,
+      splash: { chance: 0.7 },
+    },
+  },
+
+  thunderstorm: {
+    overlay: { color: 0x0a1020, alpha: 0.36 },
+    particles: {
+      texture: 'owx_drop', density: 170,
+      vx: [-260, -200], vy: [900, 1150],
+      alpha: [0.4, 0.7], scale: [1, 1.3],
+      tint: 0xa8c4f0, align: true,
+      splash: { chance: 0.5 },
+    },
+    lightning: { minDelay: 3000, maxDelay: 9000 },
+  },
+
+  snow: {
+    overlay: { color: 0xcfe0ff, alpha: 0.08 },
+    particles: {
+      texture: 'owx_dot', density: 60,
+      vx: [-15, 15], vy: [35, 80],
+      alpha: [0.7, 1], scale: [0.5, 1.0],
+      tint: 0xffffff, sway: { amp: [10, 28], freq: [0.6, 1.6] },
+    },
+  },
+
+  ash: {
+    overlay: { color: 0x3b322d, alpha: 0.32 },
+    particles: {
+      texture: 'owx_dot', density: 55,
+      vx: [-30, -8], vy: [40, 75],
+      alpha: [0.5, 0.85], scale: [0.4, 0.9],
+      tint: 0x8a8580, sway: { amp: [6, 18], freq: [0.5, 1.2] },
+    },
+  },
+
+  fog: {
+    overlay: { color: 0xdfe6ea, alpha: 0.14 },
+    fog: [
+      { texture: 'owx_fogA', alpha: 0.34, vx: 12, vy: 2 },
+      { texture: 'owx_fogB', alpha: 0.26, vx: 22, vy: -3 },
+    ],
+  },
+
+  sandstorm: {
+    overlay: { color: 0xb89455, alpha: 0.30, pulse: { amount: 0.05, speed: 0.7 } },
+    particles: [
+      {
+        texture: 'owx_dot', density: 140,
+        vx: [-720, -480], vy: [20, 90],
+        alpha: [0.35, 0.75], scale: [0.35, 0.8],
+        tint: 0xd8b878,
+      },
+      {
+        texture: 'owx_drop', density: 35,
+        vx: [-900, -650], vy: [30, 100],
+        alpha: [0.25, 0.5], scale: [1, 1.8],
+        tint: 0xe6cc94, align: true,
+      },
+    ],
+  },
+};
+
+const owLerpColor = (a, b, t) => {
+  const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+  const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+  return (Math.round(ar + (br - ar) * t) << 16) | (Math.round(ag + (bg - ag) * t) << 8) | Math.round(ab + (bb - ab) * t);
+};
+
+class OverworldWeatherSystem {
+  constructor(scene) {
+    this.scene = scene;
+    this.layers = [];
+    this.currentType = null;
+    this.mapKey = null;
+    this.warned = new Set();
+    OverworldWeatherSystem.ensureTextures(scene);
+  }
+
+  static ensureTextures(scene) {
+    const tm = scene.textures;
+    const make = (key, w, h, draw) => {
+      if (tm.exists(key)) return;
+      const g = scene.make.graphics({ x: 0, y: 0, add: false });
+      draw(g);
+      g.generateTexture(key, w, h);
+      g.destroy();
+    };
+    make('owx_px', 2, 2, g => { g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 2, 2); });
+    make('owx_drop', 2, 14, g => { g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 2, 14); });
+    make('owx_dot', 8, 8, g => { g.fillStyle(0xffffff, 1); g.fillCircle(4, 4, 3.5); });
+    // Small flat ring used for rain ripples on the ground
+    make('owx_ring', 16, 8, g => { g.lineStyle(1.5, 0xffffff, 1); g.strokeEllipse(8, 4, 13, 5); });
+
+    const makeFog = (key, seed, blobs, minR, maxR) => {
+      if (tm.exists(key)) return;
+      const size = 512;
+      const tex = tm.createCanvas(key, size, size);
+      const ctx = tex.getContext();
+      let s = seed;
+      const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+      for (let i = 0; i < blobs; i++) {
+        const r = minR + rnd() * (maxR - minR);
+        const bx = rnd() * size;
+        const by = rnd() * size;
+        for (const ox of [-size, 0, size]) {
+          for (const oy of [-size, 0, size]) {
+            const cx = bx + ox, cy = by + oy;
+            if (cx + r < 0 || cx - r > size || cy + r < 0 || cy - r > size) continue;
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+            grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+          }
+        }
+      }
+      tex.refresh();
+    };
+    makeFog('owx_fogA', 7, 14, 60, 170);
+    makeFog('owx_fogB', 13, 9, 90, 210);
+  }
+
+  rand(a, b) { return a + Math.random() * (b - a); }
+  range(r) { return this.rand(r[0], r[1]); }
+
+  normalize(name) {
+    const key = String(name == null ? '' : name).toLowerCase().replace(/[\s_\-]/g, '');
+    const type = OW_WEATHER_ALIASES[key];
+    if (type) return type;
+    if (!this.warned.has(key)) {
+      this.warned.add(key);
+      console.warn(`[weather] Unknown weather "${name}" in overworld_map.js. Use: Normal, Sunny, Drought, Rain, Thunderstorm, Snow, Fog, Sandstorm or Volcanic Ash.`);
+    }
+    return 'none';
+  }
+
+  // Call whenever the current map changes (and once when the scene starts)
+  set(name, instant = false, mapKey = null) {
+    if (mapKey) this.mapKey = mapKey;
+    const type = this.normalize(name);
+
+    if (type === this.currentType) {
+      // Same weather: keep it running, just re-cover the maps connected to the new map
+      const layer = this.layers.find(l => !l.leaving && l.type === type);
+      if (layer) this.setRegions(layer, this.computeRegions());
+      return;
+    }
+
+    this.currentType = type;
+    for (const layer of this.layers.slice()) {
+      if (!layer.leaving) this.fadeOut(layer, instant);
+    }
+    if (type !== 'none') this.layers.push(this.createLayer(type, instant));
+  }
+
+  // The weather of the current map covers EVERY connected map (all of them can be on screen).
+  computeRegions() {
+    return Object.values(this.scene.getConnectedMapRects());
+  }
+
+  createLayer(type, instant) {
+    const cfg = OW_WEATHER_TYPES[type];
+    const layer = {
+      type, cfg, fade: instant ? 1 : 0, leaving: false, time: 0,
+      groups: [].concat(cfg.particles || []).map(spec => ({ spec, items: [] })),
+      regions: [], regionObjs: [], sig: '', bolt: 0,
+      splashes: [], splashPool: [],
+    };
+    if (cfg.lightning) layer.bolt = this.rand(cfg.lightning.minDelay, cfg.lightning.maxDelay);
+
+    this.setRegions(layer, this.computeRegions());
+
+    if (!instant) {
+      this.scene.tweens.add({ targets: layer, fade: 1, duration: 1500, ease: 'Sine.easeInOut' });
+    }
+    return layer;
+  }
+
+  setRegions(layer, rects) {
+    const sig = rects.map(r => `${r.x},${r.y},${r.w},${r.h}`).sort().join('|');
+    if (sig === layer.sig) return;
+    layer.sig = sig;
+    this.destroyRegionObjects(layer);
+    layer.regions = rects;
+    layer.regionObjs = rects.map(r => this.buildRegionObjects(layer, r));
+  }
+
+  buildRegionObjects(layer, r) {
+    const scene = this.scene;
+    const cfg = layer.cfg;
+    const box = (depth, tint) => scene.add.image(r.x, r.y, 'owx_px')
+      .setOrigin(0, 0).setDepth(depth).setTint(tint).setDisplaySize(r.w, r.h).setAlpha(0);
+
+    const o = { r, overlay: null, flash: null, fogs: [] };
+    if (cfg.overlay) o.overlay = box(OW_WEATHER_DEPTH, cfg.overlay.color);
+    if (cfg.fog) {
+      o.fogs = cfg.fog.map(f => scene.add.tileSprite(r.x, r.y, r.w, r.h, f.texture)
+        .setOrigin(0, 0).setDepth(OW_WEATHER_DEPTH).setAlpha(0));
+    }
+    if (cfg.lightning) o.flash = box(OW_WEATHER_DEPTH + 2, 0xffffff);
+    return o;
+  }
+
+  destroyRegionObjects(layer) {
+    for (const o of layer.regionObjs) {
+      if (o.overlay) o.overlay.destroy();
+      if (o.flash) o.flash.destroy();
+      o.fogs.forEach(f => f.destroy());
+    }
+    layer.regionObjs = [];
+  }
+
+  fadeOut(layer, instant) {
+    layer.leaving = true;
+    this.scene.tweens.killTweensOf(layer);
+    if (instant) {
+      this.destroyLayer(layer);
+      return;
+    }
+    this.scene.tweens.add({
+      targets: layer, fade: 0, duration: 900,
+      onComplete: () => this.destroyLayer(layer),
+    });
+  }
+
+  destroyLayer(layer) {
+    const i = this.layers.indexOf(layer);
+    if (i >= 0) this.layers.splice(i, 1);
+    this.scene.tweens.killTweensOf(layer);
+    for (const g of layer.groups) {
+      g.items.forEach(p => p.img.destroy());
+      g.items = [];
+    }
+    layer.splashes.forEach(s => s.img.destroy());
+    layer.splashPool.forEach(img => img.destroy());
+    layer.splashes = [];
+    layer.splashPool = [];
+    this.destroyRegionObjects(layer);
+  }
+
+  destroy() {
+    for (const layer of this.layers.slice()) this.destroyLayer(layer);
+    this.layers = [];
+    this.currentType = null;
+  }
+
+  // The visible area in WORLD coordinates (zoom aware). Particles live in the world,
+  // so they stay put when the camera moves.
+  getView() {
+    const wv = this.scene.cameras.main.worldView;
+    return { left: wv.x, top: wv.y, right: wv.right, bottom: wv.bottom, w: wv.width, h: wv.height };
+  }
+
+  inRegions(regions, wx, wy) {
+    for (let i = 0; i < regions.length; i++) {
+      const r = regions[i];
+      if (wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h) return true;
+    }
+    return false;
+  }
+
+  update(delta) {
+    if (!this.layers.length) return;
+    const dt = Math.min(delta, 50) / 1000;
+    const view = this.getView();
+
+    for (const layer of this.layers.slice()) {
+      layer.time += dt;
+      const cfg = layer.cfg;
+
+      for (const o of layer.regionObjs) {
+        if (o.overlay) {
+          const ov = cfg.overlay;
+          let a = ov.alpha;
+          if (ov.pulse) a += Math.sin(layer.time * ov.pulse.speed) * ov.pulse.amount;
+          o.overlay.setAlpha(Math.max(0, a) * layer.fade);
+          if (ov.shift) {
+            const t = (Math.sin(layer.time * ov.shift.speed) + 1) / 2;
+            o.overlay.setTint(owLerpColor(ov.color, ov.shift.to, t));
+          }
+        }
+        o.fogs.forEach((f, i) => {
+          const spec = cfg.fog[i];
+          f.setAlpha(spec.alpha * layer.fade);
+          f.tilePositionX = o.r.x - layer.time * spec.vx;
+          f.tilePositionY = o.r.y - layer.time * spec.vy;
+        });
+      }
+
+      for (const g of layer.groups) this.updateParticles(layer, g, view, dt);
+      this.updateSplashes(layer, dt);
+
+      if (cfg.lightning && !layer.leaving) {
+        layer.bolt -= dt * 1000;
+        if (layer.bolt <= 0) {
+          this.strike(layer);
+          layer.bolt = this.rand(cfg.lightning.minDelay, cfg.lightning.maxDelay);
+        }
+      }
+    }
+  }
+
+  updateParticles(layer, group, view, dt) {
+    const spec = group.spec;
+    const items = group.items;
+
+    const want = Math.min(600, Math.max(1, Math.round(spec.density * (view.w * view.h) / 100000)));
+    while (items.length < want) items.push(this.spawnParticle(spec, view));
+    while (items.length > want) items.pop().img.destroy();
+
+    const regions = layer.regions;
+
+    for (const p of items) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+
+      // Particles wrap around the (slightly padded) visible area, so the density stays even
+      // when the camera moves, while every particle keeps its place in the world.
+      const L = view.left - p.m, R = view.right + p.m, T = view.top - p.m, B = view.bottom + p.m;
+      if (p.x < L || p.x > R) {
+        p.x = Phaser.Math.Wrap(p.x, L, R);
+        if (!spec.splash) p.y = T + Math.random() * (B - T);
+      }
+
+      if (spec.splash) {
+        // Rain: each drop falls to a random "ground" height, makes a ripple, then restarts
+        if (p.y >= p.land) {
+          if (Math.random() < spec.splash.chance && p.land >= view.top && this.inRegions(regions, p.x, p.land)) {
+            this.addSplash(layer, p.x, p.land);
+          }
+          this.resetParticle(p, spec, view, false);
+        } else if (p.land < view.top || p.land > view.bottom + 30) {
+          this.resetParticle(p, spec, view, false);
+        }
+      } else if (p.y < T || p.y > B) {
+        p.y = Phaser.Math.Wrap(p.y, T, B);
+        p.x = L + Math.random() * (R - L);
+      }
+
+      const sway = p.amp ? Math.sin(layer.time * p.freq + p.phase) * p.amp : 0;
+      const sx = p.x + sway;
+      p.img.setPosition(sx, p.y);
+      p.img.setAlpha(this.inRegions(regions, sx, p.y) ? p.a * layer.fade : 0);
+    }
+  }
+
+  spawnParticle(spec, view) {
+    const img = this.scene.add.image(0, 0, spec.texture)
+      .setDepth(OW_WEATHER_DEPTH + 1)
+      .setTint(spec.tint || 0xffffff).setAlpha(0);
+    const p = { img, x: 0, y: 0, vx: 0, vy: 0, a: 1, m: 10, amp: 0, freq: 0, phase: 0, land: 0 };
+    this.resetParticle(p, spec, view, true);
+    return p;
+  }
+
+  resetParticle(p, spec, view, initial) {
+    p.vx = this.range(spec.vx);
+    p.vy = this.range(spec.vy);
+    p.a = this.range(spec.alpha);
+    p.img.setScale(this.range(spec.scale));
+    p.m = Math.max(p.img.displayWidth, p.img.displayHeight) * 0.5 + 8;
+
+    if (spec.sway) {
+      p.amp = this.range(spec.sway.amp);
+      p.freq = this.range(spec.sway.freq);
+      p.phase = Math.random() * Math.PI * 2;
+    } else {
+      p.amp = 0;
+    }
+    if (spec.align) p.img.setRotation(Math.atan2(-p.vx, p.vy));
+
+    if (spec.splash) {
+      p.land = view.top + view.h * (0.3 + Math.random() * 0.7);
+      p.x = view.left - 40 + Math.random() * (view.w + 80);
+      p.y = initial
+        ? view.top + Math.random() * (p.land - view.top)
+        : view.top - p.m - Math.random() * 20;
+      return;
+    }
+
+    p.x = view.left + Math.random() * view.w;
+    p.y = view.top + Math.random() * view.h;
+  }
+
+  addSplash(layer, x, y) {
+    if (layer.splashes.length >= 160) return;
+    const img = layer.splashPool.pop()
+      || this.scene.add.image(0, 0, 'owx_ring').setDepth(OW_WEATHER_DEPTH + 1).setTint(0xdbe9ff);
+    img.setPosition(x, y).setScale(0.4).setAlpha(0.6 * layer.fade).setVisible(true);
+    layer.splashes.push({ img, t: 0, dur: 0.3 + Math.random() * 0.15 });
+  }
+
+  updateSplashes(layer, dt) {
+    for (let i = layer.splashes.length - 1; i >= 0; i--) {
+      const s = layer.splashes[i];
+      s.t += dt;
+      const k = s.t / s.dur;
+      if (k >= 1) {
+        s.img.setVisible(false);
+        layer.splashPool.push(s.img);
+        layer.splashes.splice(i, 1);
+        continue;
+      }
+      s.img.setScale(0.4 + k * 1.1).setAlpha(0.6 * (1 - k) * layer.fade);
+    }
+  }
+
+  strike(layer) {
+    const flashes = layer.regionObjs.map(o => o.flash).filter(Boolean);
+    if (!flashes.length) return;
+    const scene = this.scene;
+    const setAll = a => flashes.forEach(f => { if (f.active) f.setAlpha(a); });
+
+    scene.tweens.killTweensOf(flashes);
+    setAll(0.85);
+    scene.time.delayedCall(70, () => setAll(0.15));
+    scene.time.delayedCall(140, () => setAll(0.7));
+    scene.time.delayedCall(210, () => {
+      const live = flashes.filter(f => f.active);
+      if (live.length) scene.tweens.add({ targets: live, alpha: 0, duration: 380, ease: 'Quad.easeOut' });
+    });
+  }
+}
+
+const OW_DIRS = {
+  up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 },
+};
+
 class OverworldScene extends Phaser.Scene {
   constructor() {
     super('OverworldScene');
@@ -7,31 +510,36 @@ class OverworldScene extends Phaser.Scene {
     this.playerGridX = 1;
     this.playerGridY = 1;
     this.isMoving = false;
-    
-    this.currentMapKey = window.GameStateManager && window.GameStateManager.saveData && window.GameStateManager.saveData.mapID 
-      ? window.GameStateManager.saveData.mapID 
+
+    this.currentMapKey = window.GameStateManager && window.GameStateManager.saveData && window.GameStateManager.saveData.mapID
+      ? window.GameStateManager.saveData.mapID
       : Object.keys(window.OverworldMaps)[0];
+  }
+
+  init() {
+    this.player = null;
+    this.npcs = [];
+    this.triggers = [];
+    this.isMoving = false;
+    this.warping = false;
+    this.worldOffsets = null;
+    this.spinTimer = null;
   }
 
   preload() {
     BaseScene.prototype.preload.call(this);
-    
-    // 1. Load all tile assets correctly
+
     if (window.OverworldTiles) {
       for (const [tID, tileDef] of Object.entries(window.OverworldTiles)) {
         if (!tileDef.tileImage) continue;
-        
+
         if (tileDef.tileType === "Multi-tile" || tileDef.tileType === "Multi-tile Pixel Split") {
           this.load.spritesheet(`tile_sheet_${tID}`, tileDef.tileImage, {
-            frameWidth: 16,
-            frameHeight: 16,
-            margin: 0,
-            spacing: 0
+            frameWidth: 16, frameHeight: 16, margin: 0, spacing: 0
           });
         } else if (tileDef.isAnimated && tileDef.frames > 1) {
           this.load.spritesheet(`tile_anim_${tID}`, tileDef.tileImage, {
-            frameWidth: 32,
-            frameHeight: 32
+            frameWidth: 32, frameHeight: 32
           });
         } else {
           this.load.image(`tile_img_${tID}`, tileDef.tileImage);
@@ -45,18 +553,27 @@ class OverworldScene extends Phaser.Scene {
           this.load.audio(`map_music_${mapData.music}`, mapData.music);
         }
 
-        // 🌟 2. Correctly check texture existence using this.textures instead of this.load.texture
         if (mapData.events) {
           for (const [eKey, eventData] of Object.entries(mapData.events)) {
             if (eventData.eventType === 'NPC' && eventData.owID && window.OverworldTable) {
               const tableEntry = window.OverworldTable[eventData.owID];
               if (tableEntry && tableEntry.owSprite) {
                 const textureKey = tableEntry.spriteID || `${eventData.owID.toLowerCase()}_ow`;
-                if (!this.textures.exists(textureKey)) {
-                  this.load.spritesheet(textureKey, tableEntry.owSprite, {
-                    frameWidth: 32,
-                    frameHeight: 48
-                  });
+                const size = this.getOWFrameSize(tableEntry, eventData.owID);
+
+                if (size) {
+                  if (this.textures.exists(textureKey)) {
+                    const f = this.textures.getFrame(textureKey, 0);
+                    if (f.width !== size.w || f.height !== size.h) {
+                      this.textures.remove(textureKey);
+                    }
+                  }
+                  if (!this.textures.exists(textureKey)) {
+                    this.load.spritesheet(textureKey, tableEntry.owSprite, {
+                      frameWidth: size.w,
+                      frameHeight: size.h
+                    });
+                  }
                 }
               }
             }
@@ -68,10 +585,13 @@ class OverworldScene extends Phaser.Scene {
     if (window.OverworldTable && window.OverworldTable['Brendan']) {
       const bEntry = window.OverworldTable['Brendan'];
       if (!this.textures.exists('brendan_ow')) {
-        this.load.spritesheet('brendan_ow', bEntry.owSprite, {
-          frameWidth: 32,
-          frameHeight: 48,
-        });
+        const size = this.getOWFrameSize(bEntry, 'Brendan');
+        if (size) {
+          this.load.spritesheet('brendan_ow', bEntry.owSprite, {
+            frameWidth: size.w,
+            frameHeight: size.h
+          });
+        }
       }
     }
   }
@@ -85,53 +605,179 @@ class OverworldScene extends Phaser.Scene {
       localStorage.setItem('pokemon_micron_save', JSON.stringify(window.GameStateManager.saveData));
     }
 
+    this.buildWorldOffsets();
+    this.processSpriteBackgrounds();   // [NEW] remove sprite backgrounds before sprites are created
     this.updateMapMusic(this.currentMapKey);
 
     this.renderUnifiedWorld();
-    this.spawnPlayer();
     this.spawnAllEvents();
+    this.spawnPlayer();
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    // [CHANGED] lerp 1 = camera sits exactly on the player every frame (no trailing delay)
+    this.cameras.main.startFollow(this.player, true, 1, 1);
     this.cameras.main.setRoundPixels(true);
+
+    this.weather = new OverworldWeatherSystem(this);
+    this.weather.set(this.currentMap.weather, true, this.currentMapKey);
+    window.debugWeather = (name) => this.weather.set(name, false, this.currentMapKey);
+    this.events.once('shutdown', () => { if (this.weather) this.weather.destroy(); });
 
     this.time.addEvent({
       delay: 3000,
       loop: true,
-      callback: () => {
-        this.updateNPCMovement();
-      },
+      callback: () => this.updateNPCMovement(),
+    });
+
+    // [NEW] safety net: if the music stopped for any reason, start it again
+    this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => this.updateMapMusic(this.currentMapKey),
     });
   }
 
+  // ===========================================================================
+  // MUSIC: loops forever, only changes when the new map uses a different track
+  // ===========================================================================
   updateMapMusic(mapKey) {
     const mapData = window.OverworldMaps[mapKey];
     if (!mapData || !mapData.music) return;
 
-    const musicAssetKey = `map_music_${mapData.music}`;
-    if (window.currentGlobalMusic && window.currentGlobalMusicPath === mapData.music && window.currentGlobalMusic.isPlaying) {
+    const path = mapData.music;
+    const key = `map_music_${path}`;
+    const cur = window.currentGlobalMusic;
+    const alive = cur && cur.manager && !cur.pendingRemove;
+
+    // Same track: leave it alone (just make sure it is still running and looping)
+    if (alive && window.currentGlobalMusicPath === path) {
+      if (cur.setLoop) cur.setLoop(true);
+      if (cur.isPaused) cur.resume();
+      else if (!cur.isPlaying && !this.sound.locked) cur.play();
       return;
     }
 
-    if (window.currentGlobalMusic && window.currentGlobalMusic.isPlaying) {
-      window.currentGlobalMusic.stop();
+    // Different track: stop the old one
+    if (alive) {
+      cur.stop();
+      cur.destroy();
     }
+    window.currentGlobalMusic = null;
+    window.currentGlobalMusicPath = null;
 
-    window.currentGlobalMusicPath = mapData.music;
-    if (this.cache.audio.exists(musicAssetKey)) {
-      window.currentGlobalMusic = this.sound.add(musicAssetKey, { loop: true, volume: 0.5 });
-      window.currentGlobalMusic.play();
+    if (!this.cache.audio.exists(key)) return;
+
+    this.sound.pauseOnBlur = false;   // keep playing when the tab loses focus
+    const snd = this.sound.add(key, { loop: true, volume: 0.5 });
+    snd.on('complete', () => { if (window.currentGlobalMusic === snd && snd.manager) snd.play(); });
+    window.currentGlobalMusic = snd;
+    window.currentGlobalMusicPath = path;
+    snd.play();
+  }
+
+  // ===========================================================================
+  // SPRITE BACKGROUND REMOVAL (colour of the first pixel)
+  // ===========================================================================
+  processSpriteBackgrounds() {
+    const keys = new Set(['brendan_ow']);
+    for (const entry of Object.values(window.OverworldTable || {})) {
+      if (!entry || !entry.owSprite) continue;
+      keys.add(entry.spriteID || null);
+    }
+    for (const [id, entry] of Object.entries(window.OverworldTable || {})) {
+      if (entry && entry.owSprite) keys.add(entry.spriteID || `${id.toLowerCase()}_ow`);
+    }
+    keys.delete(null);
+    for (const key of keys) {
+      if (this.textures.exists(key)) this.removeSpriteBackground(key);
     }
   }
 
+  removeSpriteBackground(key) {
+    const tex = this.textures.get(key);
+    if (!tex || tex.owBgDone) return;
+
+    const f0 = tex.get(0);
+    if (!f0) return;
+    const fw = f0.width, fh = f0.height;
+    const img = tex.getSourceImage();
+    const W = img.width, H = img.height;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+
+    let data;
+    try {
+      data = ctx.getImageData(0, 0, W, H);
+    } catch (e) {
+      console.warn(`[bg] Can't read pixels of "${key}" (browser security, run the game from a local server):`, e.message);
+      tex.owBgDone = true;
+      return;
+    }
+    const px = data.data;
+
+    // First pixel already transparent -> nothing to do
+    if (px[3] === 0) { tex.owBgDone = true; return; }
+
+    const kr = px[0], kg = px[1], kb = px[2];
+    const tol = OW_BG_TOLERANCE;
+    const isBg = (i) => px[i + 3] > 0
+      && Math.abs(px[i] - kr) <= tol && Math.abs(px[i + 1] - kg) <= tol && Math.abs(px[i + 2] - kb) <= tol;
+
+    if (OW_BG_MODE === 'all') {
+      for (let i = 0; i < px.length; i += 4) if (isBg(i)) px[i + 3] = 0;
+    } else {
+      // Flood fill inward from the border of every frame
+      const cols = Math.floor(W / fw), rows = Math.floor(H / fh);
+      const visited = new Uint8Array(W * H);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x0 = c * fw, y0 = r * fh;
+          const stack = [];
+          const seed = (x, y) => {
+            const idx = y * W + x;
+            if (!visited[idx] && isBg(idx * 4)) { visited[idx] = 1; stack.push(idx); }
+          };
+          for (let x = 0; x < fw; x++) { seed(x0 + x, y0); seed(x0 + x, y0 + fh - 1); }
+          for (let y = 0; y < fh; y++) { seed(x0, y0 + y); seed(x0 + fw - 1, y0 + y); }
+          while (stack.length) {
+            const idx = stack.pop();
+            px[idx * 4 + 3] = 0;
+            const x = idx % W, y = (idx / W) | 0;
+            if (x > x0) seed(x - 1, y);
+            if (x < x0 + fw - 1) seed(x + 1, y);
+            if (y > y0) seed(x, y - 1);
+            if (y < y0 + fh - 1) seed(x, y + 1);
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(data, 0, 0);
+
+    // Replace the texture with the cleaned canvas and re-slice it into the same frames
+    this.textures.remove(key);
+    const nt = this.textures.addCanvas(key, canvas);
+    const cols = Math.floor(W / fw), rows = Math.floor(H / fh);
+    let i = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) nt.add(i++, 0, c * fw, r * fh, fw, fh);
+    }
+    nt.owBgDone = true;
+  }
+
+  // ===========================================================================
+  // MAP NAME / WORLD LAYOUT
+  // ===========================================================================
   findMapKeyByName(nameOrKey) {
-    if (!window.OverworldMaps) return null;
+    if (!window.OverworldMaps || nameOrKey == null) return null;
     if (window.OverworldMaps[nameOrKey]) return nameOrKey;
-    
-    // Normalize spaces and underscores for bulletproof matching
-    const normalizedTarget = nameOrKey.replace(/[\s_]/g, '').toLowerCase();
+
+    const normalizedTarget = String(nameOrKey).replace(/[\s_]/g, '').toLowerCase();
 
     for (const [key, data] of Object.entries(window.OverworldMaps)) {
       const normalizedKey = key.replace(/[\s_]/g, '').toLowerCase();
@@ -144,54 +790,75 @@ class OverworldScene extends Phaser.Scene {
     return null;
   }
 
-  getMapWorldOffset(targetKey, rootKey = Object.keys(window.OverworldMaps)[0], visited = new Set()) {
-    const resolvedTarget = this.findMapKeyByName(targetKey);
-    const resolvedRoot = this.findMapKeyByName(rootKey);
+  resolveConn(conn) {
+    return conn && conn[0] ? this.findMapKeyByName(conn[0]) : null;
+  }
 
-    if (!resolvedTarget || !resolvedRoot) return { x: 0, y: 0 };
-    if (resolvedTarget === resolvedRoot) return { x: 0, y: 0 };
-    if (visited.has(resolvedRoot)) return { x: 0, y: 0 };
-    visited.add(resolvedRoot);
+  // [CHANGED] Computed once. Maps that are not connected to the first map are placed on their
+  // own "island" far to the right, so they no longer draw on top of the first map (needed for warps).
+  buildWorldOffsets() {
+    const maps = window.OverworldMaps;
+    const offs = {};
 
-    const rootMap = window.OverworldMaps[resolvedRoot];
-    if (!rootMap || !rootMap.connections) return { x: 0, y: 0 };
-
-    for (const [dir, connInfo] of Object.entries(rootMap.connections)) {
-      if (!connInfo || !connInfo[0]) continue;
-      
-      const connectedMapKey = this.findMapKeyByName(connInfo[0]);
-      const offset = connInfo[2] || 0;
-      const connectedMap = connectedMapKey ? window.OverworldMaps[connectedMapKey] : null;
-      if (!connectedMap || !connectedMapKey) continue;
-      
-      let offsetX = 0;
-      let offsetY = 0;
-
-      if (dir === 'up') {
-        offsetX = offset * 32;
-        offsetY = -(connectedMap.dimensions.height * 32);
-      } else if (dir === 'down') {
-        offsetX = offset * 32;
-        offsetY = rootMap.dimensions.height * 32;
-      } else if (dir === 'left') {
-        offsetX = -(connectedMap.dimensions.width * 32);
-        offsetY = offset * 32;
-      } else if (dir === 'right') {
-        offsetX = rootMap.dimensions.width * 32;
-        offsetY = offset * 32;
+    const place = (startKey, sx, sy) => {
+      offs[startKey] = { x: sx, y: sy };
+      const queue = [startKey];
+      while (queue.length) {
+        const key = queue.shift();
+        const m = maps[key];
+        const o = offs[key];
+        for (const [dir, conn] of Object.entries(m.connections || {})) {
+          const nk = this.resolveConn(conn);
+          if (!nk || offs[nk]) continue;
+          const n = maps[nk];
+          const shift = (conn[2] || 0) * 32;
+          let x, y;
+          if (dir === 'up') { x = o.x + shift; y = o.y - n.dimensions.height * 32; }
+          else if (dir === 'down') { x = o.x + shift; y = o.y + m.dimensions.height * 32; }
+          else if (dir === 'left') { x = o.x - n.dimensions.width * 32; y = o.y + shift; }
+          else if (dir === 'right') { x = o.x + m.dimensions.width * 32; y = o.y + shift; }
+          else continue;
+          offs[nk] = { x, y };
+          queue.push(nk);
+        }
       }
+    };
 
-      if (connectedMapKey === resolvedTarget) {
-        return { x: offsetX, y: offsetY };
-      }
+    const keys = Object.keys(maps);
+    place(keys[0], 0, 0);
+    for (const k of keys) {
+      if (offs[k]) continue;
+      let right = 0;
+      for (const [kk, o] of Object.entries(offs)) right = Math.max(right, o.x + maps[kk].dimensions.width * 32);
+      place(k, right + 20 * 32, 0);
+    }
+    this.worldOffsets = offs;
+  }
 
-      const subResult = this.getMapWorldOffset(resolvedTarget, connectedMapKey, visited);
-      if (subResult.x !== 0 || subResult.y !== 0 || connectedMapKey === resolvedTarget) {
-        return { x: offsetX + subResult.x, y: offsetY + subResult.y };
+  getMapWorldOffset(targetKey) {
+    if (!this.worldOffsets) this.buildWorldOffsets();
+    const k = this.findMapKeyByName(targetKey);
+    return (k && this.worldOffsets[k]) || { x: 0, y: 0 };
+  }
+
+  // World rectangles of the current map and every map connected to it (what can be on screen)
+  getConnectedMapRects() {
+    const maps = window.OverworldMaps;
+    const rects = {};
+    const start = maps[this.currentMapKey] ? this.currentMapKey : Object.keys(maps)[0];
+    const seen = new Set([start]);
+    const queue = [start];
+    while (queue.length) {
+      const key = queue.shift();
+      const m = maps[key];
+      const off = this.getMapWorldOffset(key);
+      rects[key] = { x: off.x, y: off.y, w: m.dimensions.width * 32, h: m.dimensions.height * 32 };
+      for (const conn of Object.values(m.connections || {})) {
+        const nk = this.resolveConn(conn);
+        if (nk && !seen.has(nk)) { seen.add(nk); queue.push(nk); }
       }
     }
-
-    return { x: 0, y: 0 };
+    return rects;
   }
 
   renderUnifiedWorld() {
@@ -203,67 +870,106 @@ class OverworldScene extends Phaser.Scene {
     if (!window.OverworldMaps) return;
 
     for (const [mapKey, mapData] of Object.entries(window.OverworldMaps)) {
-      const resolvedKey = typeof this.findMapKeyByName === 'function' ? this.findMapKeyByName(mapKey) : mapKey;
-      const offsetPos = this.getMapWorldOffset(resolvedKey);
-      
-      console.log(`🗺️ [Unified World Render] Map "${resolvedKey}" -> Rendering at World Offset: x=${offsetPos.x}, y=${offsetPos.y}`);
-
-      // Call renderMapGrid with the explicit offset for this map
-      this.renderMapGrid(mapData, offsetPos.x, offsetPos.y);this.renderMapGrid(mapData, offsetPos.x, offsetPos.y, resolvedKey);
+      const offsetPos = this.getMapWorldOffset(mapKey);
+      this.renderMapGrid(mapData, offsetPos.x, offsetPos.y, mapKey);
     }
   }
 
+  getTileGrid(mapData) {
+    if (!mapData) return null;
+
+    for (const k of ['tileData_1', 'tileData', 'blockData', 'tiles', 'data', 'mapMatrix', 'grid', 'matrix', 'layout']) {
+      const v = mapData[k];
+      if (Array.isArray(v) && Array.isArray(v[0])) return v;
+    }
+
+    for (const [k, v] of Object.entries(mapData)) {
+      if (Array.isArray(v) && Array.isArray(v[0])) return v;
+      if (Array.isArray(v) && v[0] && typeof v[0] === 'object') {
+        const inner = Object.values(v[0]).find(x => Array.isArray(x) && Array.isArray(x[0]));
+        if (inner) return inner;
+      }
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const inner = Object.values(v).find(x => Array.isArray(x) && Array.isArray(x[0]));
+        if (inner) return inner;
+      }
+    }
+    return null;
+  }
+
+  // Up to 5 stacked tile layers: tileData_1 (bottom) ... tileData_5 (top).
+  // An old single `tileData` grid counts as layer 1. Empty cells ("") are skipped.
+  getTileLayers(mapData) {
+    const out = [];
+    for (let l = 1; l <= 5; l++) {
+      const g = mapData[`tileData_${l}`];
+      if (Array.isArray(g) && Array.isArray(g[0])) out.push({ layer: l, grid: g });
+    }
+    if (!out.length) {
+      const g = this.getTileGrid(mapData);
+      if (g) out.push({ layer: 1, grid: g });
+    }
+    return out;
+  }
+
+  parseTileCell(v) {
+    if (typeof v === 'number') v = `${v}|0`;
+    if (typeof v !== 'string' || v.trim() === '') return null;
+    const [a, b] = v.split('|');
+    const id = parseInt(a);
+    if (Number.isNaN(id) || id < 0) return null;
+    return { tileID: id, frameID: parseInt(b) || 0 };
+  }
+
   renderMapGrid(mapData, offsetX, offsetY, label = '?') {
-    const tileData = mapData.tileData || mapData.blockData || mapData.tiles || mapData.data || mapData.mapMatrix;
-    if (!Array.isArray(tileData) || tileData.length === 0) {
-      console.warn(`[render] "${label}": no tile grid found. Keys on this map:`, Object.keys(mapData));
+    const layers = this.getTileLayers(mapData);
+    if (!layers.length) {
+      console.warn(`[render] "${label}": no tile layers found. Keys on this map:`, Object.keys(mapData));
       return;
     }
-  
+
     const tileSize = 32;
     const skipped = { noDef: new Set(), noTexture: new Set() };
     let drawn = 0;
-  
-    for (let row = 0; row < tileData.length; row++) {
-      if (!Array.isArray(tileData[row])) continue;
-  
-      for (let col = 0; col < tileData[row].length; col++) {
-        let cellVal = tileData[row][col];
-        if (typeof cellVal === 'number') cellVal = `${cellVal}|0`;
-        if (typeof cellVal !== 'string') cellVal = '0|0';
-  
-        const [tIDStr, fIDStr] = cellVal.split('|');
-        const tileID = parseInt(tIDStr) || 0;
-        const frameID = parseInt(fIDStr) || 0;
-  
-        const tileDef = window.OverworldTiles && window.OverworldTiles[tileID];
-        if (!tileDef) { skipped.noDef.add(tileID); continue; }
-  
-        let key, frame, depth, scale;
-        if (tileDef.tileType === 'Multi-tile' || tileDef.tileType === 'Multi-tile Pixel Split') {
-          key = `tile_sheet_${tileID}`;
-          frame = Math.min(frameID, (tileDef.frames || 1) - 1);
-          depth = -50;  scale = 2;
-        } else if (tileDef.isAnimated && tileDef.frames > 1) {
-          key = `tile_anim_${tileID}`;
-          frame = 0;            // animation comes later
-          depth = -200; scale = 1;   // these sheets load as 32x32 frames
-        } else {
-          key = `tile_img_${tileID}`;
-          depth = -200; scale = 2;
+
+    for (const { layer, grid } of layers) {
+      for (let row = 0; row < grid.length; row++) {
+        if (!Array.isArray(grid[row])) continue;
+        for (let col = 0; col < grid[row].length; col++) {
+          const cell = this.parseTileCell(grid[row][col]);
+          if (!cell) continue;
+          const { tileID, frameID } = cell;
+
+          const tileDef = window.OverworldTiles && window.OverworldTiles[tileID];
+          if (!tileDef) { skipped.noDef.add(tileID); continue; }
+
+          let key, frame = 0, scale, multi = false;
+          if (tileDef.tileType === 'Multi-tile' || tileDef.tileType === 'Multi-tile Pixel Split') {
+            key = `tile_sheet_${tileID}`;
+            frame = Math.min(frameID, (tileDef.frames || 1) - 1);
+            scale = 2; multi = true;
+          } else if (tileDef.isAnimated && tileDef.frames > 1) {
+            key = `tile_anim_${tileID}`;
+            scale = 1;
+          } else {
+            key = `tile_img_${tileID}`;
+            scale = 2;
+          }
+
+          if (!this.textures.exists(key)) { skipped.noTexture.add(key); continue; }
+
+          // layer 1 is the lowest (-300), layer 5 the highest (-100); all stay below NPCs and the player
+          const depth = -300 + (layer - 1) * 50 + (multi ? 10 : 0);
+          const x = Math.round(offsetX + col * tileSize + tileSize / 2);
+          const y = Math.round(offsetY + row * tileSize + tileSize / 2);
+          const img = this.add.image(x, y, key, frame).setScale(scale).setDepth(depth);
+          this.mapGroup.add(img);
+          drawn++;
         }
-  
-        if (!this.textures.exists(key)) { skipped.noTexture.add(key); continue; }
-  
-        const x = Math.round(offsetX + col * tileSize + tileSize / 2);
-        const y = Math.round(offsetY + row * tileSize + tileSize / 2);
-        const img = this.add.image(x, y, key, frame).setScale(scale).setDepth(depth);
-        this.mapGroup.add(img);
-        drawn++;
       }
     }
-  
-    console.log(`[render] "${label}": drew ${drawn} tiles`);
+
+    console.log(`[render] "${label}": drew ${drawn} tiles on ${layers.length} layer(s)`);
     if (skipped.noDef.size) console.warn(`[render] "${label}": tile IDs missing from OverworldTiles:`, [...skipped.noDef]);
     if (skipped.noTexture.size) console.warn(`[render] "${label}": textures not loaded:`, [...skipped.noTexture]);
   }
@@ -271,35 +977,38 @@ class OverworldScene extends Phaser.Scene {
   logCurrentTileDetails(gridX, gridY, mapKey = this.currentMapKey) {
     const targetMap = window.OverworldMaps[mapKey];
     if (!targetMap) return;
-
-    const tileData = targetMap.tileData || targetMap.blockData;
-    if (!tileData || !tileData[gridY] || tileData[gridY][gridX] === undefined) return;
-
-    let cellVal = tileData[gridY][gridX];
-    if (typeof cellVal === 'number') cellVal = `${cellVal}|0`;
-    if (typeof cellVal !== 'string') cellVal = "0|0";
-
-    const [tIDStr, fIDStr] = cellVal.split('|');
-    const tileID = parseInt(tIDStr) || 0;
-    const frameID = parseInt(fIDStr) || 0;
-
-    const tileDef = window.OverworldTiles ? window.OverworldTiles[tileID] : {};
-    const colsPerRow = tileDef.columns || 3;
-    const col = frameID % colsPerRow;
-    const row = Math.floor(frameID / colsPerRow);
-
-    console.group(`🔍 [Tile Inspector] Step Details on Map: "${mapKey}" at Grid (${gridX}, ${gridY})`);
-    console.log(`• Tile ID: ${tileID} (${tileDef.tileName || 'Unknown'})`);
-    console.log(`• Tile Type: ${tileDef.tileType || 'Normal'}`);
-    console.log(`• Sub-Frame Index: ${frameID}`);
-    console.log(`• Sheet Column & Row: Col ${col}, Row ${row} (Cols Per Row: ${colsPerRow})`);
-    console.log(`• Dimensions: ${tileDef.tileDimension || '32x32'}`);
-    console.log(`• Passable: ${tileDef.isPassable !== false ? 'Yes 🟢' : 'No 🔴'}`);
-    console.log(`• Raw Cell String: "${cellVal}"`);
+    console.group(`🔍 [Tile Inspector] "${mapKey}" at (${gridX}, ${gridY})`);
+    for (const { layer, grid } of this.getTileLayers(targetMap)) {
+      const c = this.parseTileCell(grid[gridY] && grid[gridY][gridX]);
+      if (!c) { console.log(`• Layer ${layer}: empty`); continue; }
+      const def = (window.OverworldTiles && window.OverworldTiles[c.tileID]) || {};
+      console.log(`• Layer ${layer}: tile ${c.tileID} (${def.tileName || 'Unknown'}) frame ${c.frameID} · passable: ${def.isPassable !== false ? 'yes' : 'NO'}`);
+    }
     console.groupEnd();
   }
 
+  findFreeSpawnTile(startX, startY) {
+    const { width, height } = this.currentMap.dimensions;
+    const seen = new Set();
+    const queue = [[startX, startY]];
+
+    while (queue.length) {
+      const [x, y] = queue.shift();
+      const k = `${x},${y}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (x < 0 || y < 0 || x >= width || y >= height) continue;
+      if (this.isPassable(x, y)) return { x, y };
+      queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    return { x: startX, y: startY };
+  }
+
   spawnPlayer() {
+    const free = this.findFreeSpawnTile(this.playerGridX, this.playerGridY);
+    this.playerGridX = free.x;
+    this.playerGridY = free.y;
+
     const mapOffset = this.getMapWorldOffset(this.currentMapKey);
     const px = Math.round(mapOffset.x + this.playerGridX * 32 + 16);
     const py = Math.round(mapOffset.y + this.playerGridY * 32 + 16);
@@ -312,16 +1021,20 @@ class OverworldScene extends Phaser.Scene {
     }
   }
 
+  // ===========================================================================
+  // EVENTS
+  // ===========================================================================
   spawnAllEvents() {
     if (this.npcGroup) {
       this.npcGroup.destroy(true);
     }
     this.npcGroup = this.add.group();
     this.npcs = [];
+    this.triggers = [];
 
     for (const [mapKey, mapData] of Object.entries(window.OverworldMaps)) {
       const offsetPos = this.getMapWorldOffset(mapKey);
-      this.spawnMapEvents(mapData, mapKey, offsetPos.x, offsetPos.y); // 🌟 Pass mapKey here
+      this.spawnMapEvents(mapData, mapKey, offsetPos.x, offsetPos.y);
     }
   }
 
@@ -329,6 +1042,20 @@ class OverworldScene extends Phaser.Scene {
     if (!mapData.events) return;
 
     for (const [key, eventData] of Object.entries(mapData.events)) {
+      // [NEW] Warp and Script events are walk-on triggers. They are NOT added to this.npcs,
+      // so they never block the player (isPassable only checks this.npcs).
+      if (eventData.eventType === 'Warp' || eventData.eventType === 'Script' || eventData.eventType === 'Script Tile') {
+        this.triggers.push({
+          type: eventData.eventType === 'Warp' ? 'Warp' : 'Script',
+          key,
+          mapKey,
+          config: eventData,
+          wx: Math.round(offsetX / 32) + (eventData.xPos || 0),
+          wy: Math.round(offsetY / 32) + (eventData.yPos || 0),
+        });
+        continue;
+      }
+
       if (eventData.eventType === 'NPC' && eventData.owID) {
         const tableEntry = window.OverworldTable[eventData.owID];
         if (!tableEntry) continue;
@@ -336,15 +1063,24 @@ class OverworldScene extends Phaser.Scene {
         const textureKey = tableEntry.spriteID || `${eventData.owID.toLowerCase()}_ow`;
         if (!this.textures.exists(textureKey)) continue;
 
-        const x = Math.round(offsetX + eventData.xPos * 32 + 16);
-        const y = Math.round(offsetY + eventData.yPos * 32 + 16);
+        const frame0 = this.textures.getFrame(textureKey, 0);
+        const isBuilding = tableEntry.owType === 'Building';
 
-        const npcSprite = this.add.sprite(x, y, textureKey, 0).setOrigin(0.5, 0.85);
+        const x = Math.round(offsetX + eventData.xPos * 32 + 16);
+        const y = Math.round(offsetY + eventData.yPos * 32 + (isBuilding ? 32 : 16));
+
+        const npcSprite = this.add.sprite(x, y, textureKey, 0)
+          .setOrigin(0.5, isBuilding ? 1 : 0.85);
+
+        npcSprite.footprint = isBuilding
+          ? { w: Math.ceil(frame0.width / 32), h: Math.ceil(frame0.height / 32) }
+          : { w: 1, h: 1 };
+
         npcSprite.direction = 'down';
         npcSprite.eventConfig = eventData;
-        npcSprite.mapName = mapKey; // 🌟 Store the exact map registry key, not the display name
+        npcSprite.mapName = mapKey;
         npcSprite.setDepth(y);
-        
+
         this.npcs.push(npcSprite);
         this.npcGroup.add(npcSprite);
       }
@@ -367,10 +1103,23 @@ class OverworldScene extends Phaser.Scene {
     });
   }
 
+  npcOccupiesTile(npc, worldTX, worldTY) {
+    const isBuilding = npc.originY === 1;
+    const baseX = Math.round((npc.x - 16) / 32);
+    const baseY = Math.round((npc.y - (isBuilding ? 32 : 16)) / 32);
+    const fp = npc.footprint || { w: 1, h: 1 };
+
+    const minX = baseX - Math.floor((fp.w - 1) / 2);
+    const maxX = baseX + Math.floor(fp.w / 2);
+    const minY = baseY - (fp.h - 1);
+
+    return worldTX >= minX && worldTX <= maxX && worldTY >= minY && worldTY <= baseY;
+  }
+
   isPassable(gridX, gridY) {
     const cols = this.currentMap.dimensions.width;
     const rows = this.currentMap.dimensions.height;
-    const connections = this.currentMap.connections;
+    const connections = this.currentMap.connections || {};
 
     let targetMap = this.currentMap;
     let targetMapKey = this.currentMapKey;
@@ -378,65 +1127,55 @@ class OverworldScene extends Phaser.Scene {
     let localY = gridY;
 
     if (gridY < 0) {
-      if (connections && connections.up && window.OverworldMaps[connections.up[0]]) {
-        targetMapKey = connections.up[0];
-        targetMap = window.OverworldMaps[targetMapKey];
-        localX = gridX - connections.up[2];
-        localY = targetMap.dimensions.height - 1;
-      } else {
-        return false;
-      }
+      const k = this.resolveConn(connections.up);
+      if (!k) return false;
+      targetMapKey = k;
+      targetMap = window.OverworldMaps[k];
+      localX = gridX - (connections.up[2] || 0);
+      localY = targetMap.dimensions.height - 1;
     } else if (gridY >= rows) {
-      if (connections && connections.down && window.OverworldMaps[connections.down[0]]) {
-        targetMapKey = connections.down[0];
-        targetMap = window.OverworldMaps[targetMapKey];
-        localX = gridX - connections.down[2];
-        localY = 0;
-      } else {
-        return false;
-      }
+      const k = this.resolveConn(connections.down);
+      if (!k) return false;
+      targetMapKey = k;
+      targetMap = window.OverworldMaps[k];
+      localX = gridX - (connections.down[2] || 0);
+      localY = 0;
     } else if (gridX < 0) {
-      if (connections && connections.left && window.OverworldMaps[connections.left[0]]) {
-        targetMapKey = connections.left[0];
-        targetMap = window.OverworldMaps[targetMapKey];
-        localX = targetMap.dimensions.width - 1;
-        localY = gridY - connections.left[2];
-      } else {
-        return false;
-      }
+      const k = this.resolveConn(connections.left);
+      if (!k) return false;
+      targetMapKey = k;
+      targetMap = window.OverworldMaps[k];
+      localX = targetMap.dimensions.width - 1;
+      localY = gridY - (connections.left[2] || 0);
     } else if (gridX >= cols) {
-      if (connections && connections.right && window.OverworldMaps[connections.right[0]]) {
-        targetMapKey = connections.right[0];
-        targetMap = window.OverworldMaps[targetMapKey];
-        localX = 0;
-        localY = gridY - connections.right[2];
-      } else {
-        return false;
-      }
+      const k = this.resolveConn(connections.right);
+      if (!k) return false;
+      targetMapKey = k;
+      targetMap = window.OverworldMaps[k];
+      localX = 0;
+      localY = gridY - (connections.right[2] || 0);
     }
 
-    const tileData = targetMap.tileData || targetMap.blockData;
-    if (!tileData || localY < 0 || localY >= tileData.length || localX < 0 || localX >= tileData[0].length) {
-      return false;
+    // A tile is blocked if ANY of its layers is not passable
+    const layers = this.getTileLayers(targetMap);
+    if (!layers.length) return false;
+    const base = layers[0].grid;
+    if (localY < 0 || localY >= base.length || localX < 0 || localX >= base[0].length) return false;
+    for (const { grid } of layers) {
+      const c = this.parseTileCell(grid[localY] && grid[localY][localX]);
+      if (!c) continue;
+      const def = window.OverworldTiles ? window.OverworldTiles[c.tileID] : null;
+      if (def && def.isPassable === false) return false;
     }
 
-    let cellVal = tileData[localY][localX];
-    if (typeof cellVal === 'string') cellVal = cellVal.split('|')[0];
-    const tileID = parseInt(cellVal) || 0;
-
-    const tileDef = window.OverworldTiles ? window.OverworldTiles[tileID] : null;
-    if (tileDef && tileDef.isPassable === false) {
-      return false;
-    }
-
+    // Only NPCs/buildings block. Warp and Script triggers are not in this.npcs.
     if (this.npcs) {
-      for (const npc of this.npcs) {
-        const npcMapName = npc.mapName || this.currentMapKey;
-        const npcMapOffset = this.getMapWorldOffset(npcMapName);
-        const npcGridX = Math.round((npc.x - npcMapOffset.x - 16) / 32);
-        const npcGridY = Math.round((npc.y - npcMapOffset.y - 16) / 32);
+      const targetOffset = this.getMapWorldOffset(targetMapKey);
+      const worldTX = Math.round(targetOffset.x / 32) + localX;
+      const worldTY = Math.round(targetOffset.y / 32) + localY;
 
-        if (targetMapKey === npcMapName && npcGridX === localX && npcGridY === localY) {
+      for (const npc of this.npcs) {
+        if (this.npcOccupiesTile(npc, worldTX, worldTY)) {
           return false;
         }
       }
@@ -445,7 +1184,10 @@ class OverworldScene extends Phaser.Scene {
     return true;
   }
 
-  movePlayerTo(targetX, targetY, direction) {
+  // ===========================================================================
+  // MOVEMENT
+  // ===========================================================================
+  movePlayerTo(targetX, targetY, direction, onDone) {
     this.isMoving = true;
     const mapOffset = this.getMapWorldOffset(this.currentMapKey);
 
@@ -468,6 +1210,8 @@ class OverworldScene extends Phaser.Scene {
         this.isMoving = false;
 
         this.logCurrentTileDetails(targetX, targetY, this.currentMapKey);
+        if (onDone) onDone();
+        else this.handleTriggers();
       },
     });
   }
@@ -475,23 +1219,14 @@ class OverworldScene extends Phaser.Scene {
   tryInteract() {
     if (!this.npcs || this.npcs.length === 0) return;
 
-    const mapOffset = this.getMapWorldOffset(this.currentMapKey);
-    const playerGridX = Math.round((this.player.x - mapOffset.x - 16) / 32);
-    const playerGridY = Math.round((this.player.y - mapOffset.y - 16) / 32);
-
-    let targetX = playerGridX;
-    let targetY = playerGridY;
+    let targetX = Math.round((this.player.x - 16) / 32);
+    let targetY = Math.round((this.player.y - 16) / 32);
     if (this.player.direction === 'up') targetY -= 1;
     else if (this.player.direction === 'down') targetY += 1;
     else if (this.player.direction === 'left') targetX -= 1;
     else if (this.player.direction === 'right') targetX += 1;
 
-    const targetNPC = this.npcs.find(npc => {
-      const npcMapOffset = this.getMapWorldOffset(npc.mapName || this.currentMapKey);
-      const npcGridX = Math.round((npc.x - npcMapOffset.x - 16) / 32);
-      const npcGridY = Math.round((npc.y - npcMapOffset.y - 16) / 32);
-      return npcGridX === targetX && npcGridY === targetY;
-    });
+    const targetNPC = this.npcs.find(npc => this.npcOccupiesTile(npc, targetX, targetY));
 
     if (targetNPC && targetNPC.eventConfig) {
       this.activeNPC = targetNPC;
@@ -502,17 +1237,233 @@ class OverworldScene extends Phaser.Scene {
     }
   }
 
+  // ===========================================================================
+  // WALK-ON TRIGGERS (Script + Warp)
+  // ===========================================================================
+  handleTriggers() {
+    if (this.warping || !this.triggers || !this.triggers.length) return;
+
+    const off = this.getMapWorldOffset(this.currentMapKey);
+    const wx = Math.round(off.x / 32) + this.playerGridX;
+    const wy = Math.round(off.y / 32) + this.playerGridY;
+    const t = this.triggers.find(tr => tr.wx === wx && tr.wy === wy);
+    if (!t) return;
+
+    if (t.type === 'Warp') {
+      this.runWarp(t.config);
+    } else if (t.type === 'Script' && t.config.script && window.OverworldScriptEngine) {
+      this.activeNPC = null;
+      window.OverworldScriptEngine.runScript(this, t.config.script);
+    }
+  }
+
+  // ===========================================================================
+  // WARPS
+  // Warp event fields (in overworld_map.js):
+  //   xPos, yPos   : the tile that triggers the warp (on the map the event is in)
+  //   map          : target map
+  //   targetWarp   : (optional) name of a Warp event in the target map, e.g. "Warp_1".
+  //                  The player arrives on that warp's tile. "warpName" also works.
+  //   targetX/Y    : (optional) exact arrival tile; wins over targetWarp
+  //   facing       : "Up" | "Down" | "Left" | "Right" (how the player faces on arrival)
+  //   warpType     : "Teleport" | "Normal" | "Hole"
+  // If neither targetWarp nor targetX/Y is given, the player arrives at the first Warp in the
+  // target map that points back to this map, or at the centre of the map as a last resort.
+  // ===========================================================================
+  runWarp(cfg) {
+    if (this.warping) return;
+
+    const targetKey = this.findMapKeyByName(cfg.map);
+    if (!targetKey) {
+      console.warn(`[warp] Target map "${cfg.map}" not found.`);
+      return;
+    }
+
+    const dest = this.resolveWarpDestination(cfg, targetKey);
+    const facing = String(cfg.facing || this.player.direction || 'down').toLowerCase();
+    const dir = OW_DIRS[facing] ? facing : 'down';
+    const type = String(cfg.warpType || 'Normal').toLowerCase().replace(/[\s_\-]/g, '');
+
+    this.warping = true;
+    this.isMoving = true;
+
+    if (type === 'teleport') this.warpTeleport(targetKey, dest, dir);
+    else if (type === 'hole') this.warpHole(targetKey, dest, dir);
+    else this.warpNormal(targetKey, dest, dir);
+  }
+
+  resolveWarpDestination(cfg, targetKey) {
+    const tm = window.OverworldMaps[targetKey];
+    if (cfg.targetX != null && cfg.targetY != null) return { x: cfg.targetX, y: cfg.targetY };
+
+    const events = tm.events || {};
+    const name = cfg.targetWarp || cfg.warpName;
+    let w = name ? events[name] : null;
+    if (!w) {
+      w = Object.values(events).find(e => e.eventType === 'Warp' && this.findMapKeyByName(e.map) === this.currentMapKey);
+    }
+    if (w) return { x: w.xPos || 0, y: w.yPos || 0 };
+
+    return { x: Math.floor(tm.dimensions.width / 2), y: Math.floor(tm.dimensions.height / 2) };
+  }
+
+  // Moves the player (and the current-map state) to a tile of another map. No animation.
+  placePlayerAt(mapKey, gx, gy) {
+    this.currentMapKey = mapKey;
+    this.currentMap = window.OverworldMaps[mapKey];
+    this.playerGridX = gx;
+    this.playerGridY = gy;
+
+    if (window.GameStateManager && window.GameStateManager.saveData) {
+      window.GameStateManager.saveData.mapID = mapKey;
+      localStorage.setItem('pokemon_micron_save', JSON.stringify(window.GameStateManager.saveData));
+    }
+
+    this.updateMapMusic(mapKey);
+    if (this.weather) this.weather.set(this.currentMap.weather, false, mapKey);
+
+    const off = this.getMapWorldOffset(mapKey);
+    this.player.setPosition(Math.round(off.x + gx * 32 + 16), Math.round(off.y + gy * 32 + 16));
+  }
+
+  startSpin() {
+    const order = ['down', 'left', 'up', 'right'];
+    let i = 0;
+    this.stopSpinTimer();
+    this.spinTimer = this.time.addEvent({
+      delay: 60, loop: true,
+      callback: () => this.player.setFrame(window.getOverworldFrame(order[i++ % 4], 0)),
+    });
+  }
+
+  stopSpinTimer() {
+    if (this.spinTimer) { this.spinTimer.remove(false); this.spinTimer = null; }
+  }
+
+  faceAfterWarp(dir) {
+    this.stopSpinTimer();
+    this.player.direction = dir;
+    this.player.setFrame(window.getOverworldFrame(dir, 0));
+  }
+
+  finishWarp() {
+    this.player.setScale(1).setAlpha(1);
+    this.cameras.main.startFollow(this.player, true, 1, 1);
+    this.warping = false;
+    this.isMoving = false;
+  }
+
+  // Teleport: player spins up and out of the exit map, then spins down into the new map
+  warpTeleport(targetKey, dest, dir) {
+    const cam = this.cameras.main;
+    cam.stopFollow();
+    this.startSpin();
+
+    this.tweens.add({
+      targets: this.player,
+      y: this.player.y - 220, alpha: 0,
+      duration: 700, ease: 'Quad.easeIn',
+      onComplete: () => {
+        this.placePlayerAt(targetKey, dest.x, dest.y);
+        const landX = this.player.x, landY = this.player.y;
+        cam.centerOn(landX, landY);
+        this.player.setPosition(landX, landY - 220).setAlpha(0);
+
+        this.tweens.add({
+          targets: this.player,
+          y: landY, alpha: 1,
+          duration: 700, ease: 'Quad.easeOut',
+          onComplete: () => {
+            this.faceAfterWarp(dir);
+            this.finishWarp();
+          },
+        });
+      },
+    });
+  }
+
+  // Normal: screen fades to black, player appears on the target tile and walks one step the way they face
+  warpNormal(targetKey, dest, dir) {
+    const cam = this.cameras.main;
+    cam.fadeOut(250, 0, 0, 0);
+    cam.once('camerafadeoutcomplete', () => {
+      this.placePlayerAt(targetKey, dest.x, dest.y);
+      this.faceAfterWarp(dir);
+      cam.centerOn(this.player.x, this.player.y);
+      cam.fadeIn(250, 0, 0, 0);
+
+      this.time.delayedCall(300, () => {
+        const d = OW_DIRS[dir];
+        const nx = this.playerGridX + d.dx, ny = this.playerGridY + d.dy;
+        const { width, height } = this.currentMap.dimensions;
+        const inside = nx >= 0 && ny >= 0 && nx < width && ny < height;
+        if (inside && this.isPassable(nx, ny)) {
+          this.movePlayerTo(nx, ny, dir, () => this.finishWarp());
+        } else {
+          this.finishWarp();
+        }
+      });
+    });
+  }
+
+  // Hole: a hole opens under the player, who falls in; they drop in from above on the other side
+  warpHole(targetKey, dest, dir) {
+    const cam = this.cameras.main;
+    cam.stopFollow();
+    this.stopSpinTimer();
+
+    const hole = this.add.ellipse(this.player.x, this.player.y, 4, 2, 0x000000, 0.9)
+      .setDepth(this.player.y - 1);
+
+    this.tweens.add({
+      targets: hole, displayWidth: 30, displayHeight: 14,
+      duration: 300, ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: this.player,
+          y: this.player.y + 14, scaleX: 0.2, scaleY: 0.2, alpha: 0,
+          duration: 450, ease: 'Quad.easeIn',
+          onComplete: () => {
+            hole.destroy();
+            this.placePlayerAt(targetKey, dest.x, dest.y);
+            const landX = this.player.x, landY = this.player.y;
+            cam.centerOn(landX, landY);
+            this.player.setScale(1).setAlpha(1).setPosition(landX, landY - 320);
+            this.player.direction = dir;
+            this.player.setFrame(window.getOverworldFrame(dir, 0));
+
+            this.tweens.add({
+              targets: this.player,
+              y: landY, duration: 650, ease: 'Bounce.easeOut',
+              onComplete: () => {
+                cam.shake(120, 0.004);
+                this.faceAfterWarp(dir);
+                this.finishWarp();
+              },
+            });
+          },
+        });
+      },
+    });
+  }
+
+  // ===========================================================================
+  // UPDATE
+  // ===========================================================================
   update(time, delta) {
+    if (this.weather) this.weather.update(delta);
+
+    // [CHANGED] depth is updated every frame (also while walking), before the early return
+    if (this.player && this.npcs) {
+      this.player.setDepth(this.player.y);
+      this.npcs.forEach(npc => npc.setDepth(npc.y));
+    }
+
     if (this.isLocked || this.isMoving) return;
 
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.tryInteract();
       return;
-    }
-
-    if (this.player && this.npcs) {
-      this.player.setDepth(this.player.y);
-      this.npcs.forEach(npc => npc.setDepth(npc.y));
     }
 
     let dx = 0;
@@ -560,24 +1511,38 @@ class OverworldScene extends Phaser.Scene {
   checkMapBoundaryTransition(gridX, gridY) {
     const cols = this.currentMap.dimensions.width;
     const rows = this.currentMap.dimensions.height;
-    const connections = this.currentMap.connections;
+    const c = this.currentMap.connections;
 
-    if (!connections) return null;
+    if (!c) return null;
 
-    if (gridY < 0 && connections.up && window.OverworldMaps[connections.up[0]]) {
-      return { mapKey: connections.up[0], entryX: gridX - connections.up[2], entryY: window.OverworldMaps[connections.up[0]].dimensions.height - 1 };
+    if (gridY < 0) {
+      const k = this.resolveConn(c.up);
+      if (k) return { mapKey: k, entryX: gridX - (c.up[2] || 0), entryY: window.OverworldMaps[k].dimensions.height - 1 };
     }
-    if (gridY >= rows && connections.down && window.OverworldMaps[connections.down[0]]) {
-      return { mapKey: connections.down[0], entryX: gridX - connections.down[2], entryY: 0 };
+    if (gridY >= rows) {
+      const k = this.resolveConn(c.down);
+      if (k) return { mapKey: k, entryX: gridX - (c.down[2] || 0), entryY: 0 };
     }
-    if (gridX < 0 && connections.left && window.OverworldMaps[connections.left[0]]) {
-      return { mapKey: connections.left[0], entryX: window.OverworldMaps[connections.left[0]].dimensions.width - 1, entryY: gridY - connections.left[2] };
+    if (gridX < 0) {
+      const k = this.resolveConn(c.left);
+      if (k) return { mapKey: k, entryX: window.OverworldMaps[k].dimensions.width - 1, entryY: gridY - (c.left[2] || 0) };
     }
-    if (gridX >= cols && connections.right && window.OverworldMaps[connections.right[0]]) {
-      return { mapKey: connections.right[0], entryX: 0, entryY: gridY - connections.right[2] };
+    if (gridX >= cols) {
+      const k = this.resolveConn(c.right);
+      if (k) return { mapKey: k, entryX: 0, entryY: gridY - (c.right[2] || 0) };
     }
 
     return null;
+  }
+
+  getOWFrameSize(tableEntry, id = '?') {
+    const raw = tableEntry && tableEntry.trueDimension;
+    const m = /^\s*(\d+)\s*[xX]\s*(\d+)\s*$/.exec(raw || '');
+    if (!m) {
+      console.error(`[OW] "${id}" has no valid trueDimension (got "${raw}"), so its sprite can't be sliced.`);
+      return null;
+    }
+    return { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
   }
 
   executeSeamlessTransition(transitionData, direction) {
@@ -594,6 +1559,9 @@ class OverworldScene extends Phaser.Scene {
 
     this.updateMapMusic(this.currentMapKey);
 
+    // Entering a map with different weather fades the old one out and the new one in
+    if (this.weather) this.weather.set(this.currentMap.weather, false, this.currentMapKey);
+
     const mapOffset = this.getMapWorldOffset(this.currentMapKey);
     const destX = Math.round(mapOffset.x + this.playerGridX * 32 + 16);
     const destY = Math.round(mapOffset.y + this.playerGridY * 32 + 16);
@@ -609,6 +1577,7 @@ class OverworldScene extends Phaser.Scene {
       onComplete: () => {
         this.player.setFrame(window.getOverworldFrame(direction, 0));
         this.isMoving = false;
+        this.handleTriggers();
       }
     });
   }

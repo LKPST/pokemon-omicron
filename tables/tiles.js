@@ -44,4 +44,16 @@ window.OverworldTiles = {
     tileDimension: "16x48",
     isPassable: true
   }
+  ,
+  4: {
+    tileID: 4,
+    tileName: "Tree",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 36,
+    columns: 6,
+    tileImage: "graphics/tiles/tree_regular.png",
+    tileDimension: "96x96",
+    isPassable: true
+  }
 };

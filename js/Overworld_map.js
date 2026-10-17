@@ -8,7 +8,7 @@ window.OverworldMaps = {
       blockSize: 8
     },
     mapType: "City",
-    weather: "Normal",
+    weather: "Drought",
     isFlyable: true,
     isRunning: true,
     music: "audio/music/criscanto_town.mp3",
@@ -26,9 +26,41 @@ window.OverworldMaps = {
         movementType: "MOVEMENT_TYPE_WANDER_LEFT_RIGHT",
         isTrainer: true,
         viewRadius: 3,
-        xPos: 5,
-        yPos: 3,
+        xPos: 7,
+        yPos: 4,
         flagID: "FLAG_DEFEATED_PORTIA"
+      },
+      NPC_1: {
+        eventType: "NPC",
+        owID: "Criscanto_House",
+        script: "portia_battle_trigger",
+        movementType: "MOVEMENT_TYPE_LOOK_AROUND",
+        isTrainer: true,
+        viewRadius: 3,
+        xPos: 3,
+        yPos: 4,
+        flagID: "FLAG_NPC_1_DEFEATED"
+      },
+      NPC_2: {
+        eventType: "NPC",
+        owID: "Regular_Tree",
+        script: "portia_battle_trigger",
+        movementType: "MOVEMENT_TYPE_LOOK_AROUND",
+        isTrainer: true,
+        viewRadius: 3,
+        xPos: 0,
+        yPos: 4,
+        flagID: "FLAG_NPC_2_DEFEATED"
+      },
+      Warp_1: {  //Warp ID (warpNumber) for this will be 0 since it's the first warp"
+        eventType: "Warp",
+        map: "Route_3",
+        bankID: 0,
+        warpNumber: 1,
+        facing: "Left",
+        warpType: "Normal",
+        xPos: 3,
+        yPos: 5
       },
     },
     wildData: {
@@ -236,6 +268,27 @@ window.OverworldMaps = {
       right: null,
     },
     events: {
+      NPC_1: {
+        eventType: "NPC",
+        owID: "Criscanto_House",
+        script: "portia_battle_trigger",
+        movementType: "MOVEMENT_TYPE_LOOK_AROUND",
+        isTrainer: true,
+        viewRadius: 3,
+        xPos: 3,
+        yPos: 4,
+        flagID: "FLAG_NPC_1_DEFEATED"
+      },
+      Warp_1: {  //Warp ID (warpNumber) for this will be 0 since it's the first warp"
+        eventType: "Warp",
+        map: "Route_1",
+        bankID: 0,
+        warpNumber: 1,
+        facing: "Left",
+        warpType: "Teleport", 
+        xPos: 0,
+        yPos: 0
+      },
     },
     wildData: {
       morning: [
