@@ -350,4 +350,16 @@ window.OverworldTiles = {
     tileDimension: "16x48",
     isPassable: true
   }
+  ,
+  30: {
+    tileID: 30,
+    tileName: "Tree Connect",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 3,
+    columns: 1,
+    tileImage: "graphics/tiles/tree_connect.png",
+    tileDimension: "16x48",
+    isPassable: true
+  }
 };
