@@ -607,14 +607,27 @@ PokemonSummary.logging = true;
 const psLog = (...a) => { if (PokemonSummary.logging) console.log('%c[PS]', 'color:#7fa4ff;font-weight:bold', ...a); };
 function psScenes() {
   const out = [];
-  try { for (const g of (root.Phaser && root.Phaser.GAMES) || []) for (const s of g.scene.getScenes(false)) out.push({ s, active: g.scene.isActive(s.scene.key) }); } catch (e) { psLog('could not list scenes:', e.message); }
+  try { for (const g of psGames()) for (const s of g.scene.getScenes(false)) out.push({ s, active: g.scene.isActive(s.scene.key) }); } catch (e) { psLog('could not list scenes:', e.message); }
   return out;
+}
+// Phaser.GAMES is empty in newer Phaser builds, so the game object is searched for: Phaser.GAMES, then any global that is a Phaser.Game
+// (a `const game = new Phaser.Game()` is not on window, so also try typeof game / phaserGame), then PokemonSummary.game if you set it.
+let psGameCache = null;
+function psGames() {
+  const found = new Set(), P = root.Phaser, isGame = g => g && typeof g === 'object' && g.scene && typeof g.scene.getScenes === 'function' && g.loop;
+  if (PokemonSummary.game && isGame(PokemonSummary.game)) found.add(PokemonSummary.game);
+  if (psGameCache && isGame(psGameCache)) found.add(psGameCache);
+  if (P && P.GAMES) for (const g of P.GAMES) if (isGame(g)) found.add(g);
+  const tryGlobal = f => { try { const g = f(); if (isGame(g)) found.add(g); } catch (e) { /* not declared */ } };
+  tryGlobal(() => game); tryGlobal(() => phaserGame); tryGlobal(() => gameInstance); tryGlobal(() => window.game);
+  if (!found.size) { try { for (const k of Object.getOwnPropertyNames(root)) { let v; try { v = root[k]; } catch (e) { continue; } if (isGame(v)) { found.add(v); break; } } } catch (e) { /* ignore */ } }
+  const arr = [...found]; if (arr[0]) psGameCache = arr[0]; return arr;
 }
 function psState() {
   const all = psScenes(), ow = all.map(o => o.s).find(s => s && s.player && s.OverworldMaps === undefined && s.currentMapKey !== undefined) || all.map(o => o.s).find(s => s && s.player);
   return {
     loaded: true, open: PokemonSummary.active,
-    phaser: !!root.Phaser, games: root.Phaser && root.Phaser.GAMES ? root.Phaser.GAMES.length : 0,
+    phaser: !!root.Phaser, games: psGames().length,
     scenes: all.map(o => `${o.s.scene.key}${o.active ? ' (active)' : ''}`),
     overworldScene: ow ? ow.scene.key : null,
     sceneHasEnterKey: !!(ow && ow.enterKey),
@@ -632,7 +645,7 @@ window.addEventListener('keydown', e => {
   setTimeout(() => {
     if (PokemonSummary.active) { psLog('opened by the scene'); return; }
     const all = psScenes().filter(o => o.active).map(o => o.s), sc = all.find(s => s.player && s.currentMapKey !== undefined) || all.find(s => s.player);
-    if (!sc) { psLog('NOT OPENED: no active scene with a player was found. Scenes:', st.scenes); return; }
+    if (!sc) { psLog('NOT OPENED: no active scene with a player was found. Scenes:', st.scenes, '| games found:', st.games, '| If games is 0 add this line after you create the game: PokemonSummary.game = game;'); return; }
     if (sc.scriptRunning) { psLog('NOT OPENED: a script is running'); return; }
     if (sc.isLocked) { psLog('NOT OPENED: scene.isLocked is true'); return; }
     if (sc.isMoving) { psLog('NOT OPENED: the player is moving'); return; }
