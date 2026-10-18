@@ -23,7 +23,7 @@ window.OverworldMaps = {
         "eventType": "NPC",
         "owID": "Portia",
         "script": "portia_battle_trigger",
-        "movementType": "MOVEMENT_TYPE_WANDER_LEFT_RIGHT",
+        "movementType": "MOVEMENT_TYPE_HOP_AROUND",
         "isTrainer": true,
         "viewRadius": 3,
         "xPos": 14,
