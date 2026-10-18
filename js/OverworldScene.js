@@ -10,6 +10,19 @@
 // To change how a weather looks, edit OW_WEATHER_TYPES below.
 // ===========================================================================
 
+// [TABLE] The overworld table. Found as window.OverworldTable, or as a plain `const OverworldTable = {...}` / `OVERWORLD_TABLE` in another script
+// (a const at the top of a script is NOT on window, so window.OverworldTable alone would miss it).
+function OW_TABLE() {
+  if (window.OverworldTable) return window.OverworldTable;
+  let t = null;
+  try { if (typeof OverworldTable !== 'undefined') t = OverworldTable; } catch (e) { /* not declared */ }
+  if (!t) { try { if (typeof OverworldTables !== 'undefined') t = OverworldTables; } catch (e) { /* not declared */ } }
+  if (!t) { try { if (typeof OW_TABLES !== 'undefined') t = OW_TABLES; } catch (e) { /* not declared */ } }
+  if (t) window.OverworldTable = t;
+  else if (!OW_TABLE.warned) { OW_TABLE.warned = true; console.error('[OW] OverworldTable was not found. Check that its script is loaded (and has no error) BEFORE overworld_scene.js in index.html.'); }
+  return t;
+}
+
 const OW_WEATHER_DEPTH = 5000;
 // How many tiles the border block is drawn beyond the edge of the maps. Weather covers the same area.
 const OW_BORDER_RANGE = 14;
@@ -581,8 +594,8 @@ class OverworldScene extends Phaser.Scene {
 
         if (mapData.events) {
           for (const [eKey, eventData] of Object.entries(mapData.events)) {
-            if (eventData.eventType === 'NPC' && eventData.owID && window.OverworldTable) {
-              const tableEntry = window.OverworldTable[eventData.owID];
+            if (eventData.eventType === 'NPC' && eventData.owID && OW_TABLE()) {
+              const tableEntry = OW_TABLE()[eventData.owID];
               if (tableEntry && tableEntry.owSprite) {
                 const textureKey = tableEntry.spriteID || `${eventData.owID.toLowerCase()}_ow`;
                 const size = this.getOWFrameSize(tableEntry, eventData.owID);
@@ -608,8 +621,9 @@ class OverworldScene extends Phaser.Scene {
       }
     }
 
-    if (window.OverworldTable && window.OverworldTable['Brendan']) {
-      const bEntry = window.OverworldTable['Brendan'];
+    if (OW_TABLE() && !OW_TABLE()['Brendan']) console.error("[OW] The overworld table has no 'Brendan' entry, so the player sprite cannot load. Keys:", Object.keys(OW_TABLE()).slice(0, 12));
+    if (OW_TABLE() && OW_TABLE()['Brendan']) {
+      const bEntry = OW_TABLE()['Brendan'];
       if (!this.textures.exists('brendan_ow')) {
         const size = this.getOWFrameSize(bEntry, 'Brendan');
         if (size) {
@@ -715,11 +729,11 @@ class OverworldScene extends Phaser.Scene {
   // ===========================================================================
   processSpriteBackgrounds() {
     const keys = new Set(['brendan_ow']);
-    for (const entry of Object.values(window.OverworldTable || {})) {
+    for (const entry of Object.values(OW_TABLE() || {})) {
       if (!entry || !entry.owSprite) continue;
       keys.add(entry.spriteID || null);
     }
-    for (const [id, entry] of Object.entries(window.OverworldTable || {})) {
+    for (const [id, entry] of Object.entries(OW_TABLE() || {})) {
       if (entry && entry.owSprite) keys.add(entry.spriteID || `${id.toLowerCase()}_ow`);
     }
     keys.delete(null);
@@ -1196,7 +1210,7 @@ class OverworldScene extends Phaser.Scene {
       }
 
       if (eventData.eventType === 'NPC' && eventData.owID) {
-        const tableEntry = window.OverworldTable[eventData.owID];
+        const tableEntry = OW_TABLE()[eventData.owID];
         if (!tableEntry) continue;
         // [SCRIPTS] hidden with the hideobject command
         if (window.OverworldScriptEngine && window.OverworldScriptEngine.isHidden(mapKey, key)) continue;
