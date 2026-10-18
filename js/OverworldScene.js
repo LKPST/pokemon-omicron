@@ -1648,9 +1648,10 @@ class OverworldScene extends Phaser.Scene {
     if (this.isLocked || this.isMoving) { Phaser.Input.Keyboard.JustDown(this.enterKey); return; }
 
     // [SUMMARY] Enter -> summary screen of the party in the save (GameStateManager.saveData.party)
-    if (Phaser.Input.Keyboard.JustDown(this.enterKey) && window.PokemonSummary) {
+    if (Phaser.Input.Keyboard.JustDown(this.enterKey)) {
       this.idleMs = 0;
-      window.PokemonSummary.open(this);
+      if (window.PokemonSummary) window.PokemonSummary.open(this);
+      else console.error('[SUMMARY] Enter pressed, but js/PokemonSummary.js is not loaded (window.PokemonSummary is missing). Check the script tag and the console for errors in that file.');
       return;
     }
 
