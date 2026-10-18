@@ -291,9 +291,16 @@ function createSummary(env) {
     return { id: '000', name: pretty(k) || 'Unknown', t: ['TYPE_NORMAL'], b: [50, 50, 50, 50, 50, 50], abs: [], sprite: '', icon: '', cry: '' };
   }
   function moveTable() { try { return (env.moves && env.moves()) || null; } catch (e) { return null; } }
+  let mvIdx = null, mvIdxFor = null;
+  function findMove(MT, id, key) {      // exact key, the table's own get(), then a loose match (MOVE_CLOSECOMBAT = MOVE_CLOSE_COMBAT)
+    let e = MT[id] || MT[id.toUpperCase()]; if (e && typeof e === 'object') return e;
+    if (typeof MT.get === 'function') { try { e = MT.get(id); if (e) return e; } catch (er) { /* ignore */ } }
+    if (mvIdxFor !== MT) { mvIdxFor = MT; mvIdx = new Map(); for (const k of Object.keys(MT)) mvIdx.set(k.toUpperCase().replace(/^MOVE_/, '').replace(/[^A-Z0-9]/g, ''), MT[k]); }
+    return mvIdx.get(key) || null;
+  }
   function moveInfo(x) {
     const id = typeof x === 'string' ? x : String((x && (x.moveId || x.id || x.name || x.move)) || ''), MT = moveTable();
-    const key = id.toUpperCase().replace(/^MOVE_/, '').replace(/[^A-Z0-9]/g, ''), e = MT && (MT[id] || MT[id.toUpperCase()]), d = MV[key];
+    const key = id.toUpperCase().replace(/^MOVE_/, '').replace(/[^A-Z0-9]/g, ''), e = MT && findMove(MT, id, key), d = MV[key];
     let name, type, pow, acc, ppMax, desc;
     if (e) { name = e.name || e.moveName || pretty(id); type = e.type || e.moveType; pow = e.power ?? e.basePower ?? e.pow ?? 0; acc = e.accuracy ?? e.acc ?? 0; ppMax = e.pp ?? e.maxPP; desc = e.description || e.desc || e.effectText || ''; }
     else if (d) { [name, type, pow, acc, ppMax, desc] = d; }
