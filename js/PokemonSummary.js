@@ -599,4 +599,46 @@ const PokemonSummary = {
   },
 };
 root.PokemonSummary = PokemonSummary;
+
+// ---------------------------------------------------------------- Enter key + logger (works even if the scene file has no [SUMMARY] patch)
+// Every Enter press prints a "[PS]" line to the console with what the game looked like at that moment.
+// Switch it off with PokemonSummary.logging = false.  PokemonSummary.debug() prints the state any time.
+PokemonSummary.logging = true;
+const psLog = (...a) => { if (PokemonSummary.logging) console.log('%c[PS]', 'color:#7fa4ff;font-weight:bold', ...a); };
+function psScenes() {
+  const out = [];
+  try { for (const g of (root.Phaser && root.Phaser.GAMES) || []) for (const s of g.scene.getScenes(false)) out.push({ s, active: g.scene.isActive(s.scene.key) }); } catch (e) { psLog('could not list scenes:', e.message); }
+  return out;
+}
+function psState() {
+  const all = psScenes(), ow = all.map(o => o.s).find(s => s && s.player && s.OverworldMaps === undefined && s.currentMapKey !== undefined) || all.map(o => o.s).find(s => s && s.player);
+  return {
+    loaded: true, open: PokemonSummary.active,
+    phaser: !!root.Phaser, games: root.Phaser && root.Phaser.GAMES ? root.Phaser.GAMES.length : 0,
+    scenes: all.map(o => `${o.s.scene.key}${o.active ? ' (active)' : ''}`),
+    overworldScene: ow ? ow.scene.key : null,
+    sceneHasEnterKey: !!(ow && ow.enterKey),
+    scriptRunning: ow ? !!ow.scriptRunning : null, isLocked: ow ? !!ow.isLocked : null, isMoving: ow ? !!ow.isMoving : null,
+    partySize: gameParty().length, saveParty: !!(root.GameStateManager && root.GameStateManager.saveData && root.GameStateManager.saveData.party),
+    types: typeof TypeTable !== 'undefined', db: typeof PokemonDatabase !== 'undefined',
+  };
+}
+PokemonSummary.debug = () => { const s = psState(); console.log('[PS] state', s); return s; };
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.repeat) return;
+  const st = psState(); psLog('Enter pressed', st);
+  if (PokemonSummary.active) return;
+  // the scene's own [SUMMARY] code opens it on its next update; if it has not, we do it here after a short wait
+  setTimeout(() => {
+    if (PokemonSummary.active) { psLog('opened by the scene'); return; }
+    const all = psScenes().filter(o => o.active).map(o => o.s), sc = all.find(s => s.player && s.currentMapKey !== undefined) || all.find(s => s.player);
+    if (!sc) { psLog('NOT OPENED: no active scene with a player was found. Scenes:', st.scenes); return; }
+    if (sc.scriptRunning) { psLog('NOT OPENED: a script is running'); return; }
+    if (sc.isLocked) { psLog('NOT OPENED: scene.isLocked is true'); return; }
+    if (sc.isMoving) { psLog('NOT OPENED: the player is moving'); return; }
+    psLog('the scene did not open it, opening from the key listener (is the [SUMMARY] patch in overworld_scene.js?)');
+    const ok = PokemonSummary.open(sc); psLog('open() returned', ok);
+  }, 60);
+});
+psLog('PokemonSummary.js loaded. Press Enter in the game; PokemonSummary.debug() prints the state.', psState());
 })(window);
