@@ -23,10 +23,10 @@ window.OverworldMovement = (() => {
   }
 
   // One tile step (ms = duration, hop = small jump arc)
-  function step(e, dir, done, ms = 240, hop = false) {
+  function step(e, dir, done, ms = 240, hop = false, force = false) {
     const s = e.scene, [dx, dy] = DIRS[dir];
     e.direction = dir;
-    if (!canStep(s, e, dx, dy)) { e.setFrame(frame(dir, 0)); done && done(); return; }
+    if (!force && !canStep(s, e, dx, dy)) { e.setFrame(frame(dir, 0)); done && done(); return; }
     e.alt = e.alt === 1 ? 2 : 1;
     e.setFrame(frame(dir, e.alt));
     const x0 = e.x, y0 = e.y;
@@ -63,22 +63,24 @@ window.OverworldMovement = (() => {
 
   // Actions: look_<dir> walk_<dir> run_<dir> jump_<dir> walk_in_place_<dir> look_random look_player
   //          spin_cw spin_ccw jump_in_place wait
-  function execute(e, action, onComplete) {
+  // opts.force = true: scripted movement, walks through anything (no collision, no wander radius)
+  function execute(e, action, onComplete, opts) {
     const s = e.scene; if (!s) return;
+    const force = !!(opts && opts.force);
     const m = /^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.exec(action);
     if (m) {
       const [, k, d] = m;
       if (k === 'look') { e.direction = d; e.setFrame(frame(d, 0)); onComplete && onComplete(); }
-      else if (k === 'walk') step(e, d, onComplete, 240);
-      else if (k === 'run') step(e, d, onComplete, 120);
-      else if (k === 'jump') step(e, d, onComplete, 300, true);
+      else if (k === 'walk') step(e, d, onComplete, 240, false, force);
+      else if (k === 'run') step(e, d, onComplete, 120, false, force);
+      else if (k === 'jump') step(e, d, onComplete, 300, true, force);
       else inPlace(e, d, onComplete);
       return;
     }
-    if (action === 'look_random') return execute(e, 'look_' + pick(Object.keys(DIRS)), onComplete);
+    if (action === 'look_random') return execute(e, 'look_' + pick(Object.keys(DIRS)), onComplete, opts);
     if (action === 'look_player') {
       const dx = s.player.x - e.x, dy = s.player.y - e.y;
-      return execute(e, 'look_' + (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')), onComplete);
+      return execute(e, 'look_' + (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')), onComplete, opts);
     }
     if (action === 'spin_cw') return spin(e, true, onComplete);
     if (action === 'spin_ccw') return spin(e, false, onComplete);
@@ -124,7 +126,7 @@ window.OverworldMovement = (() => {
 
   function tick(e) {
     const t = e.eventConfig && e.eventConfig.movementType, fn = types[t];
-    if (!fn || e.busy || !e.scene || e.scene.isLocked || e.texture.frameTotal < 4) return;   // buildings/trees have 1 frame
+    if (!fn || e.busy || !e.scene || e.scene.isLocked || e.scene.scriptRunning || e.texture.frameTotal < 4) return;   // buildings/trees have 1 frame
     if (!e.home) e.home = tileOf(e);
     const a = fn(e);
     if (!a) return;
