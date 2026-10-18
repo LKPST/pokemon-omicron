@@ -602,10 +602,11 @@ root.PokemonSummaryCore = createSummary;
 const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', q: 'left', ArrowRight: 'right', d: 'right', e: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b' };
 const SAVE_KEY = 'pokemon_micron_save';
 function gameParty() {
-  const gs = root.GameStateManager;
-  let party = gs && gs.saveData && gs.saveData.party;
-  if (!party || !party.some(Boolean)) { try { const o = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); party = o && (o.party || (o.saveData && o.saveData.party)); } catch (e) { party = null; } }
-  return (party || []).filter(Boolean);
+  const gs = root.GameStateManager, pick = o => { let p = o && (o.party || o.playerParty || (o.saveData && o.saveData.party)); if (p && !Array.isArray(p) && typeof p === 'object') p = Object.values(p); return Array.isArray(p) ? p.filter(m => m && typeof m === 'object') : []; };
+  let party = pick(gs && gs.saveData);
+  if (!party.length) party = pick(gs);
+  if (!party.length) { for (const k of [SAVE_KEY, 'save', 'saveData', 'pokemon_save']) { try { const o = JSON.parse(localStorage.getItem(k) || 'null'); party = pick(o); if (party.length) break; } catch (e) { /* not json */ } } }
+  return party;
 }
 const PokemonSummary = {
   active: false,
@@ -614,7 +615,8 @@ const PokemonSummary = {
   open(scene, opts = {}) {
     if (this.active || !scene) return false;
     const party = gameParty();
-    if (!party.length) { console.warn('[PokemonSummary] the party is empty, nothing to show'); return false; }
+    console.info('[PokemonSummary] open: ' + party.length + ' Pokemon in the party');
+    if (!party.length) { console.warn('[PokemonSummary] the party is empty: GameStateManager.saveData.party has no Pokemon, and no local save was found'); return false; }
     // (typeof works for tables declared with `const` in your other scripts, window.X would not)
     const core = createSummary({
       urlFor: p => p,
