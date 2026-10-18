@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Palette Swap Sheets</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#14161c;color:#dde;font:13px system-ui,sans-serif;padding:18px;max-width:1150px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}.sub{color:#8a93a6;margin-bottom:16px;line-height:1.5}
+section{background:#1c1f28;border:1px solid #2c3140;border-radius:10px;padding:16px;margin-bottom:16px}
+section.off{opacity:.45;pointer-events:none}
+h2{font-size:15px;margin:0 0 4px;color:#7fa4ff}h2 span{display:inline-block;background:#3a6df0;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;margin-right:8px;font-size:12px}
+.hint{color:#8a93a6;line-height:1.5;margin:4px 0 10px}code{background:#262a36;padding:1px 5px;border-radius:4px;color:#cfe}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+button,select,input{font:inherit;background:#262a36;color:#eef;border:1px solid #3a4052;border-radius:6px;padding:7px 11px}
+button{cursor:pointer}button:hover{background:#343b50}button.pri{background:#3a6df0;border-color:#5d8aff}button.ok{background:#2e8b57;border-color:#3fb37a}button:disabled{opacity:.4;cursor:default}
+.drop{border:2px dashed #3a4052;border-radius:8px;padding:14px;text-align:center;color:#8a93a6}.drop.hot{border-color:#5d8aff;background:#222a40;color:#cfe}
+.stats{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;color:#9ab}.stats b{color:#fff}
+.tw{max-height:320px;overflow:auto;border:1px solid #2c3140;border-radius:6px}
+table{width:100%;border-collapse:collapse}th,td{padding:5px 8px;text-align:left;border-bottom:1px solid #262a36;white-space:nowrap}
+th{position:sticky;top:0;background:#222634;color:#9ab;font-weight:600}
+.good{color:#6fe3a0}.bad{color:#ff8a80}.warn{color:#ffd166}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:10px}
+.card{background:#222634;border:1px solid #2c3140;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.card img{width:100%;image-rendering:pixelated;background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/12px 12px;border-radius:4px}
+.card .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#9ab}
+.frames{display:flex;gap:6px;color:#8a93a6;font-size:11px}.frames i{font-style:normal;background:#262a36;padding:2px 6px;border-radius:4px}
+#msg{position:sticky;bottom:0;background:#222a40;border:1px solid #3a6df0;border-radius:8px;padding:8px 12px;margin-top:10px;display:none}
+progress{width:220px}
+</style></head><body>
+<h1>Palette Swap Sheets</h1>
+<div class="sub">Folder A (reference) and Folder B (images to update) are paired by Sprite ID + name. Each pair becomes one sheet named <code>gSprite&lt;ID&gt;&lt;Name&gt;.png</code> with four frames:
+  <b>A original · A with B's palette · B with A's palette · B original</b>. Everything runs in your browser.</div>
+
+<section id="s1">
+  <h2><span>1</span>Folder A – reference</h2>
+  <div class="hint">Files named <code>gFrontSprite</code> / <code>gBackShinySprite</code> (…) + <code>Sprite ID</code> + <code>Name</code>, e.g. <code>gFrontSprite001Bulbasaur.png</code>. The ID and name are extracted from the file names.</div>
+  <div class="drop" id="dropA">Drop Folder A (or its files) here</div>
+  <div class="row"><button class="pri" id="bAd">Choose Folder A</button><button id="bAf">Choose files</button><button id="bAc">Clear</button>
+    <input type="file" id="fAd" webkitdirectory multiple hidden><input type="file" id="fAf" accept="image/*" multiple hidden></div>
+  <div class="stats" id="stA"></div>
+</section>
+
+<section id="s2" class="off">
+  <h2><span>2</span>Folder B – images to update</h2>
+  <div class="hint">Same naming format. Each file is tied to the Folder A file with the same Sprite ID and name, whatever the prefix (<code>gFrontSprite001Bulbasaur</code> ↔ <code>gBackShinySprite001Bulbasaur</code>).</div>
+  <div class="drop" id="dropB">Drop Folder B (or its files) here</div>
+  <div class="row"><button class="pri" id="bBd">Choose Folder B</button><button id="bBf">Choose files</button><button id="bBc">Clear</button>
+    <input type="file" id="fBd" webkitdirectory multiple hidden><input type="file" id="fBf" accept="image/*" multiple hidden></div>
+  <div class="stats" id="stB"></div>
+  <div class="tw"><table><thead><tr><th>Folder B file</th><th>ID</th><th>Paired with (Folder A)</th><th>Status</th></tr></thead><tbody id="tbB"></tbody></table></div>
+</section>
+
+<section id="s3" class="off">
+  <h2><span>3</span>Make the sheets</h2>
+  <div class="row">
+    <label>Match colours <select id="method">
+      <option value="rank">by brightness (dark→dark, light→light) – recommended</option>
+      <option value="freq">by usage (most-used colour → most-used colour)</option>
+      <option value="near">nearest colour</option></select></label>
+    <label class="in"><input type="checkbox" id="slot0" checked> Palette slot 0 is transparent when the PNG has no transparency info</label>
+    <label>Frames of different sizes <select id="padMode"><option value="center">pad to the largest, centred</option><option value="bottom">pad to the largest, bottom-aligned</option><option value="tl">pad to the largest, top-left</option></select></label>
+  </div>
+  <div class="row"><button class="ok" id="bGo" disabled>Generate sheets</button><progress id="prog" value="0" max="1" style="display:none"></progress><span id="progT" style="color:#8a93a6"></span></div>
+  <div class="row"><button class="pri" id="bZip" disabled>Download all as ZIP</button></div>
+  <div class="frames"><span>Frames, left → right:</span><i>1 A original</i><i>2 A + B palette</i><i>3 B + A palette</i><i>4 B original</i></div>
+  <div class="grid" id="grid"></div>
+</section>
+<section id="s4" class="off">
+  <h2><span>4</span>Pokémon database</h2>
+  <div class="hint">Builds <code>PokemonDatabase.js</code> from the Sprite IDs and names extracted from Folder A (<code>SPECIES_NAME</code>, variants as <code>SPECIES_NAME_C1</code>…).
+    Paths: <code>battleSprite</code> = <code>…/battle/gSprite&lt;ID&gt;&lt;Name&gt;.png</code>, <code>iconSprite</code> = <code>…/icons/gIconSprite&lt;ID&gt;&lt;Name&gt;.png</code>, <code>cry</code> = <code>audio/cries/gCry&lt;Name&gt;.wav</code>.
+    The name and variant are split from the file name automatically; fix any that are wrong in the table. Load your current <code>PokemonDatabase.js</code> to keep the stats of Pokémon that already exist.</div>
+  <div class="row"><button class="pri" id="bDbU">Load existing PokemonDatabase.js</button><span id="dbInfo" style="color:#8a93a6">none loaded (all stats will be placeholders)</span><input type="file" id="fDb" accept=".js,.txt" hidden></div>
+  <div class="row"><label class="in"><input type="checkbox" id="keepOld" checked> keep species from the loaded file that have no matching sprite</label>
+    <label class="in"><input type="checkbox" id="incB"> also include names found only in Folder B</label></div>
+  <div class="stats" id="stDb"></div>
+  <div class="tw"><table><thead><tr><th>Sprite ID</th><th>Name</th><th>Variant</th><th>Key</th></tr></thead><tbody id="tbDb"></tbody></table></div>
+  <div class="row"><button class="ok" id="bDb" disabled>Download PokemonDatabase.js</button></div>
+</section>
+<div id="msg"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const IMG=/\.(png|gif|webp|bmp)$/i;
+let A=[],B=[],results=[];     // A/B: [{file,path,prefix,id,rest,key}]
+const msg=t=>{const m=$('msg');m.textContent=t;m.style.display=t?'block':'none'};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const normId=s=>String(s).replace(/^0+(?=\d)/,'');
+
+// ---------- parsing ----------
+function parse(file){
+  const path=(file.webkitRelativePath||file.fullPath||file.name).replace(/^\//,'');
+  const m=/^g([A-Za-z]*?)Sprite(\d+)(.*)\.(png|gif|webp|bmp)$/i.exec(file.name);
+  if(!m)return null;
+  return{file,path,prefix:'g'+m[1]+'Sprite',id:m[2],rest:m[3],key:normId(m[2])+'|'+m[3].toLowerCase()}}
+function load(list,target){
+  const files=[...list].filter(f=>IMG.test(f.name)),seen=new Set(target.map(x=>x.path));let ok=0,bad=[];
+  for(const f of files){const p=parse(f);if(!p){bad.push(f.name);continue}if(seen.has(p.path))continue;seen.add(p.path);target.push(p);ok++}
+  target.sort((a,b)=>normId(a.id)-normId(b.id)||a.rest.localeCompare(b.rest)||a.prefix.localeCompare(b.prefix));
+  msg(`${ok} file(s) read${bad.length?`, ${bad.length} ignored because the name does not look like gXxxSprite<ID><Name>: ${bad.slice(0,4).join(', ')}${bad.length>4?'…':''}`:''}.`)}
+
+// ---------- pairing ----------
+const mapA=()=>{const exact=new Map(),byId=new Map();for(const a of A){if(!exact.has(a.key))exact.set(a.key,a);const k=normId(a.id);if(!byId.has(k))byId.set(k,[]);byId.get(k).push(a)}return{exact,byId}};
+function pair(b,ix){
+  if(b.override!==undefined)return b.override?{a:b.override,status:'manual'}:{a:null,status:'skipped'};
+  const e=ix.exact.get(b.key);if(e)return{a:e,status:'ok'};
+  const c=ix.byId.get(normId(b.id));
+  if(c&&c.length===1)return{a:c[0],status:'idonly'};
+  if(c&&c.length>1)return{a:null,status:'ambiguous'};
+  return{a:null,status:'none'}}
+const LBL={ok:['good','paired (ID + name)'],idonly:['warn','paired by ID only (names differ)'],manual:['good','paired by hand'],skipped:['warn','skipped'],ambiguous:['bad','several Folder A files share this ID – choose one'],none:['bad','no Folder A file with this ID']};
+let pairs=[];
+function renderA(){
+  const ids=new Set(A.map(a=>normId(a.id))),pre={};A.forEach(a=>pre[a.prefix]=(pre[a.prefix]||0)+1);
+  $('stA').innerHTML=`<span><b>${A.length}</b> files</span><span><b>${ids.size}</b> Sprite IDs</span>`+Object.entries(pre).map(([k,v])=>`<span>${esc(k)}: <b>${v}</b></span>`).join('');
+  $('s2').classList.toggle('off',!A.length);renderB()}
+function renderB(){
+  setTimeout(renderDb,0);
+  const ix=mapA();pairs=B.map(b=>({b,...pair(b,ix)}));
+  const good=pairs.filter(p=>p.a).length,bad=pairs.filter(p=>!p.a&&p.status!=='skipped').length;
+  $('stB').innerHTML=`<span><b>${B.length}</b> files</span><span class="good"><b>${good}</b> paired</span><span class="${bad?'bad':''}"><b>${bad}</b> need attention</span>`;
+  $('tbB').innerHTML=pairs.slice(0,2000).map((p,i)=>{
+    const cands=ix.byId.get(normId(p.b.id))||[];
+    const sel=`<select data-i="${i}"><option value="">${p.a?esc(p.a.path):'— none (skip) —'}</option>${cands.filter(c=>c!==p.a).map(c=>`<option value="${A.indexOf(c)}">${esc(c.path)}</option>`).join('')}${p.a?'<option value="-1">— none (skip) —</option>':''}</select>`;
+    return`<tr><td>${esc(p.b.path)}</td><td>${p.b.id}</td><td>${sel}</td><td class="${LBL[p.status][0]}">${LBL[p.status][1]}</td></tr>`}).join('')||'<tr><td colspan=4 style="color:#8a93a6">No files yet.</td></tr>';
+  $('s3').classList.toggle('off',!good);$('bGo').disabled=!good}
+$('tbB').addEventListener('change',e=>{const i=e.target.dataset.i;if(i==null)return;const v=e.target.value;if(v==='')return;
+  B[+i].override=v==='-1'?null:A[+v];renderB()});
+
+// ---------- file input / drop ----------
+async function readEntries(items){const out=[];
+  const walk=async en=>{if(en.isFile)await new Promise(r=>en.file(f=>{Object.defineProperty(f,'fullPath',{value:en.fullPath});out.push(f);r()},r));
+    else if(en.isDirectory){const rd=en.createReader();let b;do{b=await new Promise(r=>rd.readEntries(r,()=>r([])));for(const x of b)await walk(x)}while(b.length)}};
+  for(const it of items){const en=it.webkitGetAsEntry&&it.webkitGetAsEntry();if(en)await walk(en)}return out}
+function wire(prefix,target,after){
+  $('b'+prefix+'d').onclick=()=>$('f'+prefix+'d').click();$('b'+prefix+'f').onclick=()=>$('f'+prefix+'f').click();
+  for(const k of['d','f'])$('f'+prefix+k).onchange=e=>{load(e.target.files,target());e.target.value='';after()};
+  $('b'+prefix+'c').onclick=()=>{target().length=0;after();msg('')};
+  const z=$('drop'+prefix);z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('hot')});z.addEventListener('dragleave',()=>z.classList.remove('hot'));
+  z.addEventListener('drop',async e=>{e.preventDefault();z.classList.remove('hot');const its=[...e.dataTransfer.items||[]];
+    load(its.length&&its[0].webkitGetAsEntry?await readEntries(its):e.dataTransfer.files,target());after()})}
+wire('A',()=>A,renderA);wire('B',()=>B,renderB);
+window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>e.preventDefault());
+
+// ---------- palette maths ----------
+const lum=c=>.299*c[0]+.587*c[1]+.114*c[2];
+const dist=(a,b)=>{const r=a[0]-b[0],g=a[1]-b[1],bl=a[2]-b[2];return 2*r*r+4*g*g+3*bl*bl};
+function palOf(img){const d=img.data,m=new Map();
+  for(let i=0;i<d.length;i+=4)if(d[i+3]>0){const k=(d[i]<<16)|(d[i+1]<<8)|d[i+2];m.set(k,(m.get(k)||0)+1)}
+  return[...m.entries()].map(([k,n])=>({rgb:[k>>16,(k>>8)&255,k&255],n}))}
+function nearest(pal,c){let best=pal[0].rgb,bd=1e18;for(const p of pal){const d=dist(p.rgb,c);if(d<bd){bd=d;best=p.rgb}}return best}
+function buildMap(src,ref,method){      // src/ref: palettes → Map(srcKey → rgb)
+  const m=new Map();if(!src.length||!ref.length)return m;
+  const key=c=>(c[0]<<16)|(c[1]<<8)|c[2];
+  if(method==='near'){for(const s of src)m.set(key(s.rgb),nearest(ref,s.rgb))}
+  else if(method==='freq'){const S=[...src].sort((a,b)=>b.n-a.n),R=[...ref].sort((a,b)=>b.n-a.n);S.forEach((s,i)=>m.set(key(s.rgb),i<R.length?R[i].rgb:nearest(ref,s.rgb)))}
+  else{const S=[...src].sort((a,b)=>lum(a.rgb)-lum(b.rgb)),R=[...ref].sort((a,b)=>lum(a.rgb)-lum(b.rgb));
+    S.forEach((s,i)=>m.set(key(s.rgb),R[S.length===1?Math.floor(R.length/2):Math.round(i*(R.length-1)/(S.length-1))].rgb))}
+  return m}
+function recolor(img,map){const out=new ImageData(new Uint8ClampedArray(img.data),img.width,img.height),d=out.data;
+  for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;const t=map.get((d[i]<<16)|(d[i+1]<<8)|d[i+2]);if(t){d[i]=t[0];d[i+1]=t[1];d[i+2]=t[2]}}return out}
+// ---------- indexed PNG reader (keeps the palette order) ----------
+async function readPng(file){
+  const buf=new Uint8Array(await file.arrayBuffer()),sig=[137,80,78,71,13,10,26,10];
+  if(buf.length<33||sig.some((v,i)=>buf[i]!==v))return null;
+  const dv=new DataView(buf.buffer);let p=8,ihdr=null,plte=null,trns=null;const idat=[];
+  while(p+8<=buf.length){const len=dv.getUint32(p),type=String.fromCharCode(buf[p+4],buf[p+5],buf[p+6],buf[p+7]),d=buf.subarray(p+8,p+8+len);
+    if(type==='IHDR')ihdr={w:dv.getUint32(p+8),h:dv.getUint32(p+12),depth:d[8],ct:d[9],il:d[12]};
+    else if(type==='PLTE')plte=d;else if(type==='tRNS')trns=d;else if(type==='IDAT')idat.push(d);else if(type==='IEND')break;
+    p+=12+len}
+  if(!ihdr||ihdr.ct!==3||ihdr.il!==0||!plte||!idat.length||![1,2,4,8].includes(ihdr.depth))return null;
+  const zl=new Blob(idat),raw=new Uint8Array(await new Response(zl.stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer());
+  const {w,h,depth}=ihdr,rb=Math.ceil(w*depth/8),out=new Uint8Array(rb*h);
+  for(let y=0;y<h;y++){const f=raw[y*(rb+1)],src=raw.subarray(y*(rb+1)+1,(y+1)*(rb+1)),cur=out.subarray(y*rb,(y+1)*rb),prev=y?out.subarray((y-1)*rb,y*rb):null;
+    for(let x=0;x<rb;x++){const a=x?cur[x-1]:0,b=prev?prev[x]:0,c=x&&prev?prev[x-1]:0;let v=src[x];
+      if(f===1)v+=a;else if(f===2)v+=b;else if(f===3)v+=(a+b)>>1;
+      else if(f===4){const pa=Math.abs(b-c),pb=Math.abs(a-c),pc=Math.abs(a+b-2*c);v+=(pa<=pb&&pa<=pc)?a:(pb<=pc?b:c)}
+      cur[x]=v&255}}
+  const idx=new Uint8Array(w*h),mask=(1<<depth)-1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const bit=x*depth,byte=out[y*rb+(bit>>3)];idx[y*w+x]=(byte>>(8-depth-(bit&7)))&mask}
+  const n=plte.length/3|0,pal=[],alpha=[];for(let i=0;i<n;i++){pal.push([plte[i*3],plte[i*3+1],plte[i*3+2]]);alpha.push(trns&&i<trns.length?trns[i]:255)}
+  return{w,h,idx,pal,alpha,hasTrns:!!trns}}
+// draw an indexed image using `pal` for the colours (own palette = original). Slots beyond the other palette keep their own colour.
+function drawIndexed(img,pal,slot0){const o=new ImageData(img.w,img.h),d=o.data;
+  for(let i=0;i<img.idx.length;i++){const s=img.idx[i];let a=img.alpha[s]??255;if(!img.hasTrns&&slot0&&s===0)a=0;
+    const c=pal[s]||img.pal[s]||[0,0,0];d[i*4]=c[0];d[i*4+1]=c[1];d[i*4+2]=c[2];d[i*4+3]=a}
+  return o}
+async function readImg(file){const bm=await createImageBitmap(file),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;
+  const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(bm,0,0);return g.getImageData(0,0,c.width,c.height)}
+
+// ---------- generate ----------
+const toBlob=c=>new Promise(r=>c.toBlob(r,'image/png'));
+$('bGo').onclick=async()=>{
+  const todo=pairs.filter(p=>p.a),method=$('method').value,padMode=$('padMode').value;
+  results.forEach(r=>URL.revokeObjectURL(r.url));results=[];$('grid').innerHTML='';
+  $('bGo').disabled=true;$('prog').style.display='inline-block';$('prog').max=todo.length;let done=0,fail=[];const warn=[],sizeWarn=[],fallback=[];
+  for(const p of todo){
+    try{
+      const xa=await readPng(p.a.file),xb=await readPng(p.b.file),slot0=$('slot0').checked;
+      let ia,ib,aWithB,bWithA,mode;
+      if(xa&&xb){   // both indexed: swap palettes slot by slot
+        mode='indexed';ia=drawIndexed(xa,xa.pal,slot0);ib=drawIndexed(xb,xb.pal,slot0);
+        aWithB=drawIndexed(xa,xb.pal,slot0);bWithA=drawIndexed(xb,xa.pal,slot0);
+        if(xa.pal.length!==xb.pal.length)sizeWarn.push(`${p.b.path} (${xa.pal.length} vs ${xb.pal.length} colours)`)}
+      else{         // not indexed: guess by colour
+        mode='matched by colour';ia=await readImg(p.a.file);ib=await readImg(p.b.file);const pa=palOf(ia),pb=palOf(ib);
+        if(!pa.length||!pb.length)throw new Error('image has no visible pixels');
+        aWithB=recolor(ia,buildMap(pa,pb,method));bWithA=recolor(ib,buildMap(pb,pa,method));fallback.push(p.b.path)}
+      const frames=[ia,aWithB,bWithA,ib],W=Math.max(...frames.map(f=>f.width)),H=Math.max(...frames.map(f=>f.height));
+      if(frames.some(f=>f.width!==W||f.height!==H))warn.push(p.b.path);
+      const c=document.createElement('canvas');c.width=W*4;c.height=H;const g=c.getContext('2d');
+      frames.forEach((f,i)=>{const t=document.createElement('canvas');t.width=f.width;t.height=f.height;t.getContext('2d').putImageData(f,0,0);
+        const ox=padMode==='tl'?0:Math.floor((W-f.width)/2),oy=padMode==='tl'?0:padMode==='bottom'?H-f.height:Math.floor((H-f.height)/2);
+        g.drawImage(t,i*W+ox,oy)});
+      const name=`gSprite${p.a.id}${p.a.rest}.png`,blob=await toBlob(c),url=URL.createObjectURL(blob);
+      results.push({name,blob,url,b:p.b.path,a:p.a.path,mode});
+    }catch(e){fail.push(`${p.b.path} (${e.message})`)}
+    $('prog').value=++done;$('progT').textContent=`${done}/${todo.length}`;if(done%5===0)await new Promise(r=>setTimeout(r));
+  }
+  $('bGo').disabled=false;$('prog').style.display='none';
+  // names must be unique inside the ZIP
+  const used=new Map();for(const r of results){const k=r.name.toLowerCase(),n=used.get(k)||0;used.set(k,n+1);if(n)r.name=r.name.replace(/\.png$/,`_${n+1}.png`)}
+  $('grid').innerHTML=results.map((r,i)=>`<div class="card"><img src="${r.url}" alt=""><div class="t" title="${esc(r.a)} + ${esc(r.b)}">${esc(r.name)} <span style="color:${r.mode==='indexed'?'#6fe3a0':'#ffd166'}">· ${r.mode}</span></div><button data-i="${i}">Download this sheet</button></div>`).join('');
+  $('bZip').disabled=!results.length;
+  msg(`${results.length} sheet(s) created.${fallback.length?` ${fallback.length} pair(s) were NOT indexed PNGs and were matched by colour instead (e.g. ${fallback[0]}).`:''}${sizeWarn.length?` ${sizeWarn.length} pair(s) have different palette sizes – extra slots keep their own colour (e.g. ${sizeWarn[0]}).`:''}${warn.length?` ${warn.length} had frames of different sizes and were padded (e.g. ${warn[0]}).`:''}${fail.length?` ${fail.length} failed: ${fail.slice(0,3).join('; ')}${fail.length>3?'…':''}`:''}`)};
+$('grid').addEventListener('click',e=>{const i=e.target.dataset.i;if(i!=null)dl(results[+i].blob,results[+i].name)});
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}
+
+// ---------- ZIP ----------
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=u=>{let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+async function buildZip(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;const now=new Date(),
+  dt=((now.getFullYear()-1980)<<9|(now.getMonth()+1)<<5|now.getDate()),tm=(now.getHours()<<11|now.getMinutes()<<5|now.getSeconds()>>1);
+  for(const f of files){const data=new Uint8Array(await f.blob.arrayBuffer()),size=data.length,crc=crc32(data),nm=enc.encode(f.name),h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);h.setUint32(14,crc,true);h.setUint32(18,size,true);h.setUint32(22,size,true);h.setUint16(26,nm.length,true);
+    parts.push(h.buffer,nm,f.blob);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);c.setUint32(16,crc,true);c.setUint32(20,size,true);c.setUint32(24,size,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);cd.push(c.buffer,nm);
+    off+=30+nm.length+size}
+  let cs=0;for(const p of cd)cs+=p.byteLength;parts.push(...cd);
+  const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,files.length,true);z.setUint16(10,files.length,true);z.setUint32(12,cs,true);z.setUint32(16,off,true);parts.push(z.buffer);
+  return new Blob(parts,{type:'application/zip'})}
+$('bZip').onclick=async()=>{if(!results.length)return;msg('Packing…');dl(await buildZip(results),'palette_sheets.zip');msg(`ZIP downloaded with ${results.length} sheet(s).`)};
+
+// ---------- PokemonDatabase.js ----------
+let oldDb=null;const dbEdits={};
+const TEMPLATE={name:'',baseHP:0,baseAttack:0,baseDefense:0,baseSpAttack:0,baseSpDefense:0,baseSpeed:0,type1:'TYPE_NORMAL',type2:'TYPE_NONE',catchRate:45,expYield:64,
+  evYield_HP:0,evYield_Attack:0,evYield_Defense:0,evYield_SpAttack:0,evYield_SpDefense:0,evYield_Speed:0,item1:'ITEM_NONE',item2:'ITEM_NONE',genderRatio:50,eggCycles:20,friendship:50,
+  growthRate:'GROWTH_MEDIUM_FAST',eggGroup1:'EGG_GROUP_NONE',eggGroup2:'EGG_GROUP_NONE',ability1:'ABILITY_NONE',ability2:'ABILITY_NONE',hiddenAbility:'ABILITY_NONE',safariZoneFleeRate:0,
+  noFlip:false,coolValue:0,cuteValue:0,smartValue:0,toughValue:0,beautyValue:0,battleSprite:'',iconSprite:'',cry:'',xPosFront:503,yPosFront:107,xPosBack:129,yPosBack:359};
+const PATH={battle:'graphics/pokemon_battle_sprites/battle/gSprite',icon:'graphics/pokemon_battle_sprites/icons/gIconSprite',cry:'audio/cries/'};
+const VARIANT=/(C\d+|Gmax|Eternamax|Mega[XY]?|Primal|Alolan?|Galarian?|Hisuian?|Paldean?|Origin|Therian|Crowned)$/;
+const splitName=r=>{const m=VARIANT.exec(r);return m&&m.index>0?{name:r.slice(0,m.index),variant:m[1]}:{name:r,variant:''}};
+const keyPart=s=>String(s).toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+function dbEntries(){
+  const src=[...A];if($('incB').checked){const have=new Set(A.map(a=>a.key));for(const b of B)if(!have.has(b.key))src.push(b)}
+  const list=[],seenEk=new Set(),seenKey=new Set();
+  for(const s of src){if(seenEk.has(s.key))continue;seenEk.add(s.key);
+    const d=splitName(s.rest),e=dbEdits[s.key]||{},name=e.name??d.name,variant=e.variant??d.variant;
+    let key='SPECIES_'+keyPart(name)+(variant?'_'+keyPart(variant):'');if(seenKey.has(key))key+='_'+normId(s.id);if(seenKey.has(key))continue;seenKey.add(key);
+    list.push({ek:s.key,id:s.id,name,variant,key,ext:`${s.id}${name}${variant}`})}
+  return list.sort((a,b)=>normId(a.id)-normId(b.id)||a.key.localeCompare(b.key))}
+function entryFor(s){const old=oldDb&&oldDb[s.key],e={};
+  for(const k of Object.keys(TEMPLATE))e[k]=old&&old[k]!==undefined?old[k]:TEMPLATE[k];
+  e.name=old&&old.name?old.name:s.name;
+  e.battleSprite=`${PATH.battle}${s.ext}.png`;e.iconSprite=`${PATH.icon}${s.ext}.png`;e.cry=`${PATH.cry}gCry${s.name}.wav`;return e}
+const q=v=>typeof v==='string'?`'${v.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}'`:String(v);
+const LONG=new Set(['battleSprite','iconSprite','cry','frontSprite','backSprite','backShinySprite','frontShinySprite']);
+const serEntry=(key,e)=>`  ${key}: {\n`+Object.entries(e).map(([k,v])=>LONG.has(k)&&typeof v==='string'&&v?`    ${k}:\n      ${q(v)},`:`    ${k}: ${q(v)},`).join('\n')+'\n  },';
+function buildDb(){const sp=dbEntries(),keys=new Set(sp.map(s=>s.key)),out=[];
+  out.push(serEntry('SPECIES_NONE',oldDb&&oldDb.SPECIES_NONE?oldDb.SPECIES_NONE:{...TEMPLATE,name:'None',type1:'TYPE_NONE',catchRate:0,expYield:0,genderRatio:0,friendship:0,eggCycles:0,xPosFront:0,yPosFront:0,xPosBack:0,yPosBack:0}));
+  for(const s of sp)out.push(serEntry(s.key,entryFor(s)));let kept=0;
+  if(oldDb&&$('keepOld').checked)for(const[k,v]of Object.entries(oldDb)){if(k==='SPECIES_NONE'||keys.has(k))continue;out.push(serEntry(k,v));kept++}
+  return{text:`// tables/PokemonDatabase.js\n\nconst PokemonDatabase = {\n${out.join('\n')}\n};\n`,count:sp.length,kept}}
+function renderDb(){
+  const sp=dbEntries(),on=A.length>0;$('s4').classList.toggle('off',!on);
+  const merged=oldDb?sp.filter(s=>oldDb[s.key]).length:0;
+  $('stDb').innerHTML=`<span><b>${sp.length}</b> species</span>${oldDb?`<span class="good"><b>${merged}</b> keep their existing stats</span><span><b>${sp.length-merged}</b> new (placeholders)</span>`:''}`;
+  $('bDb').disabled=!sp.length;
+  $('tbDb').innerHTML=sp.slice(0,2000).map(s=>`<tr><td>${s.id}</td><td><input data-ek="${esc(s.ek)}" data-f="name" value="${esc(s.name)}"></td><td><input data-ek="${esc(s.ek)}" data-f="variant" value="${esc(s.variant)}" style="width:110px"></td><td class="keycell" data-ek="${esc(s.ek)}">${esc(s.key)}</td></tr>`).join('')||'<tr><td colspan=4 style="color:#8a93a6">Load Folder A first.</td></tr>'}
+$('tbDb').addEventListener('change',e=>{const ek=e.target.dataset.ek;if(ek==null)return;(dbEdits[ek]||(dbEdits[ek]={}))[e.target.dataset.f]=e.target.value.trim();
+  const s=dbEntries().find(x=>x.ek===ek),c=[...document.querySelectorAll('.keycell')].find(x=>x.dataset.ek===ek);if(s&&c)c.textContent=s.key});
+$('keepOld').onchange=renderDb;$('incB').onchange=renderDb;
+$('bDbU').onclick=()=>$('fDb').click();
+$('fDb').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const t=await f.text();oldDb=new Function(t+'\n;return typeof PokemonDatabase!=="undefined"?PokemonDatabase:(window.PokemonDatabase||null)')();
+    if(!oldDb||typeof oldDb!=='object')throw 0;$('dbInfo').textContent=`${f.name}: ${Object.keys(oldDb).length} species loaded`;msg('Existing database loaded.')}
+  catch(x){oldDb=null;$('dbInfo').textContent='could not read that file';msg('That file could not be read (expected: const PokemonDatabase = {...}).')}
+  renderDb()};
+$('bDb').onclick=()=>{const r=buildDb();dl(new Blob([r.text],{type:'text/javascript'}),'PokemonDatabase.js');msg(`PokemonDatabase.js downloaded: ${r.count} species${r.kept?` + ${r.kept} kept from your old file`:''}.`)};
+renderA();
+</script></body></html>
