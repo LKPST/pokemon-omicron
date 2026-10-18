@@ -11,6 +11,8 @@
 // ===========================================================================
 
 const OW_WEATHER_DEPTH = 5000;
+// How many tiles the border block is drawn beyond the edge of the maps. Weather covers the same area.
+const OW_BORDER_RANGE = 14;
 
 // Sprite background removal: the colour of the first pixel (top-left) of an OW sprite sheet
 // is treated as the background. If that pixel is already transparent, nothing is done.
@@ -228,8 +230,27 @@ class OverworldWeatherSystem {
   }
 
   // The weather of the current map covers EVERY connected map (all of them can be on screen).
+  // The weather also covers the border area around those maps (OW_BORDER_RANGE tiles). The expanded rectangles
+  // overlap, so they are merged into non-overlapping bands (otherwise overlays would stack and look darker).
   computeRegions() {
-    return Object.values(this.scene.getConnectedMapRects());
+    const M = OW_BORDER_RANGE * 32;
+    const rects = Object.values(this.scene.getConnectedMapRects()).map(r => ({ x: r.x - M, y: r.y - M, w: r.w + 2 * M, h: r.h + 2 * M }));
+    const xs = [...new Set(rects.flatMap(r => [r.x, r.x + r.w]))].sort((a, b) => a - b);
+    const ys = [...new Set(rects.flatMap(r => [r.y, r.y + r.h]))].sort((a, b) => a - b);
+    const out = [];
+    for (let j = 0; j < ys.length - 1; j++) {
+      const cy = (ys[j] + ys[j + 1]) / 2;
+      let run = null;
+      const flush = () => { if (run) { out.push({ x: run.x0, y: ys[j], w: run.x1 - run.x0, h: ys[j + 1] - ys[j] }); run = null; } };
+      for (let i = 0; i < xs.length - 1; i++) {
+        const cx = (xs[i] + xs[i + 1]) / 2;
+        if (rects.some(r => cx > r.x && cx < r.x + r.w && cy > r.y && cy < r.y + r.h)) {
+          if (run) run.x1 = xs[i + 1]; else run = { x0: xs[i], x1: xs[i + 1] };
+        } else flush();
+      }
+      flush();
+    }
+    return out;
   }
 
   createLayer(type, instant) {
@@ -917,7 +938,7 @@ class OverworldScene extends Phaser.Scene {
   renderBorders() {
     const maps = window.OverworldMaps;
     if (!maps) return;
-    const T = 32, BORDER_RANGE = 14;
+    const T = 32, BORDER_RANGE = OW_BORDER_RANGE;
     const info = [];
     for (const [k, m] of Object.entries(maps)) {
       const off = this.getMapWorldOffset(k);

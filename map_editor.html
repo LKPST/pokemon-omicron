@@ -1,11 +1,21 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Pokémon Micron – Map Editor</title>
-<!-- Everything is read from your tables. Adjust these paths if yours differ. The script engine is optional. -->
-<script src="js/ow_table.js"></script>
-<script src="js/Overworld_map.js"></script>
-<script src="tables/tiles.js"></script>
-<script src="tables/PokemonDatabase.js"></script>
-<script src="js/overworld_script_engine.js"></script>
+<!-- Everything is read from your tables. The loader below looks for each file in several common folders
+     (js/, tables/, same folder, ../js/, ../tables/, ../ ...) and remembers where it found them. The script engine and movement files are optional. -->
+<script>
+window.__ready=(async()=>{
+  const DIRS=['js/','tables/','','../js/','../tables/','../','data/','../data/','../../js/','../../'];
+  const FILES=[['ow_table.js','OW_table.js','overworld_table.js','OverworldTable.js'],['Overworld_map.js','overworld_map.js'],['tiles.js','Tiles.js'],
+    ['PokemonDatabase.js','pokemondatabase.js'],['overworld_script_engine.js'],['overworld_movement.js']];
+  let mem={};try{mem=JSON.parse(localStorage.edPaths||'{}')}catch(e){}
+  const tryLoad=src=>new Promise(r=>{const s=document.createElement('script');s.src=src;s.onload=()=>r(true);s.onerror=()=>{s.remove();r(false)};document.head.appendChild(s)});
+  window.__missing=[];
+  for(const names of FILES){let ok=false;const cand=[];if(mem[names[0]])cand.push(mem[names[0]]);for(const d of DIRS)for(const n of names)cand.push(d+n);
+    for(const c of [...new Set(cand)]){if(await tryLoad(c)){mem[names[0]]=c;ok=true;break}}
+    if(!ok){window.__missing.push(names[0]);delete mem[names[0]]}}
+  try{localStorage.edPaths=JSON.stringify(mem)}catch(e){}
+})();
+</script>
 <style>
 *{box-sizing:border-box}body{margin:0;display:flex;height:100vh;background:#111;color:#ddd;font:12px monospace}
 #side{width:330px;overflow-y:auto;padding:10px;background:#1b1b1b;border-right:1px solid #333;display:flex;flex-direction:column;gap:8px}
@@ -19,12 +29,14 @@ select,input[type=text],input[type=number]{width:100%}label{display:flex;flex-di
 details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6px}summary{cursor:pointer;color:#00acc1}
 .bad{color:#ff8a80;margin:2px 0}.ok{color:#76ff03}
 #side>*{flex:none}#palette{min-height:120px}.tabs{display:flex;gap:3px;flex-wrap:wrap}.tabs button{flex:1}.tabs button.on{background:#00838f}
+#bcv{border:1px solid #444;background:repeating-conic-gradient(#2a2a2a 0 25%,#222 0 50%) 0 0/16px 16px;cursor:crosshair;display:block;max-width:100%}
 .tab{display:none;flex-direction:column;gap:8px}.tab.on{display:flex}
 </style></head><body>
 <div id="side">
   <div class="row"><select id="mapSel" style="flex:1"></select><button id="newMap">+ Map</button></div>
   <div class="tabs" id="tabs"></div>
-  <div class="tab on" id="tab-env"><div class="row" id="layerBtns"></div><div class="row" id="tools"></div><div id="palette"></div><div id="brushInfo"></div></div>
+  <div class="tab on" id="tab-env"><div class="row" id="layerBtns"></div><div class="row" id="tools"></div><div id="palWrap"><div id="palette"></div><div id="brushInfo"></div></div></div>
+  <div class="tab" id="tab-border"><div id="borderUI"></div></div>
   <div class="tab" id="tab-events"><div class="row" id="addBtns"></div>
     <div class="row"><button id="dupBtn">Duplicate (Ctrl+D)</button><button id="delBtn">Delete (Del)</button></div><div id="inspector"></div></div>
   <div class="tab" id="tab-conn"><div id="conns"></div></div>
@@ -38,18 +50,25 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
     <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="gridT" checked> Grid</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="sprT" checked> Sprites</label>
+    <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="borT" checked> Border</label>
+    <input id="assetBase" placeholder="asset root (auto)" title="Folder that contains graphics/ , relative to this page. Found automatically; type ../ or similar to force it." style="width:120px">
     <span style="color:#777">Wheel = zoom · Space/Middle/Right-drag = pan · Shift-click palette = pick · V P B R E I = tools</span>
   </div>
   <canvas id="cv" tabindex="0"></canvas><div id="status"></div>
 </div>
 <datalist id="musicList"></datalist>
 <script>
+window.__ready.then(()=>{
 const TS=32,$=id=>document.getElementById(id),clone=o=>JSON.parse(JSON.stringify(o)),uniq=a=>[...new Set(a)];
 const OT=()=>window.OverworldTable||{},TL=()=>window.OverworldTiles||{};
 let repo={},active='',tool='pencil',brush={tid:0,cells:[['0|0']],frames:new Set([0])},sel=null,cam={x:60,y:60,z:1};
 let hist=[],redoS=[],pending=false,unsaved=false,fileHandle=null,hover=null,stroke=null,rectA=null,drag=null,pan=null,pal=null,spaceDown=false,showGrid=true,showSpr=true;
 const cv=$('cv'),ctx=cv.getContext('2d');
 const EMPTY=l=>l>1?'':'0|0';
+// cell = "tileID|frameID|behavior"  0 passable · 1 blocked · 2 passable, NPC below · 3 surfable · 4 diveable
+const passOf=v=>parseInt((v||'').split('|')[2])||0;
+const setPass=(v,p)=>{const[a,b]=v.split('|');return `${a}|${b||0}|${p}`};
+let pass=0,clip=null;
 const cellStr=(v,l=1)=>typeof v==='number'?`${v}|0`:(typeof v==='string'&&v.includes('|'))?v:(typeof v==='string'&&v.trim()!==''&&!isNaN(parseInt(v)))?`${parseInt(v)}|0`:EMPTY(l);
 let layer=1,viewMode='all',tab='env';
 const norm=s=>String(s==null?'':s).replace(/[\s_]/g,'').toLowerCase();
@@ -59,7 +78,12 @@ const OPP={up:'down',down:'up',left:'right',right:'left'};
 // 5 tile layers: tileData_1 (bottom) … tileData_5 (top). Old single `tileData` becomes layer 1.
 function fit(m){const{width:w,height:h}=m.dimensions;for(let l=1;l<=5;l++){const src=m['tileData_'+l]||(l===1?m.tileData:null);
   m['tileData_'+l]=Array.from({length:h},(_,r)=>Array.from({length:w},(_,c)=>cellStr(src?.[r]?.[c],l)))}delete m.tileData}
-function load(){repo=clone(window.OverworldMaps||{});for(const m of Object.values(repo)){m.dimensions||={width:10,height:10,blockSize:8};m.events||={};m.connections||={up:null,down:null,left:null,right:null};m.wildData||={morning:[],afternoon:[],night:[],dawn:[]};fit(m)}active=Object.keys(repo)[0]||''}
+// ---------- border block (borderData) ----------
+// Repeats around the maps. Default 2x2, up to 5 layers, always impassable. Cells are "tile|frame|1"; "" = empty.
+const bcell=v=>typeof v==='string'&&/^\d+\|/.test(v)?v:'';
+function fitBorder(m,w,h){const b=m.borderData||={};w=Math.max(1,Math.min(16,w||b.width||2));h=Math.max(1,Math.min(16,h||b.height||2));b.width=w;b.height=h;
+  for(let l=1;l<=5;l++){const s=b['tileData_'+l];b['tileData_'+l]=Array.from({length:h},(_,r)=>Array.from({length:w},(_,c)=>bcell(s?.[r]?.[c])))}}
+function load(){repo=clone(window.OverworldMaps||{});for(const m of Object.values(repo)){m.dimensions||={width:10,height:10,blockSize:8};m.events||={};m.connections||={up:null,down:null,left:null,right:null};m.wildData||={morning:[],afternoon:[],night:[],dawn:[]};fit(m);fitBorder(m)}active=Object.keys(repo)[0]||''}
 
 // ---------- world layout (same rules as the game) ----------
 function layout(){const o={},keys=Object.keys(repo);
@@ -74,7 +98,12 @@ function layout(){const o={},keys=Object.keys(repo);
 
 // ---------- images / sprites ----------
 const imgs={};let pt;
-function img(p){if(!p)return null;let i=imgs[p];if(!i){i=imgs[p]=new Image();i.onload=()=>{i.ok=1;redraw();clearTimeout(pt);pt=setTimeout(buildPalette,60)};i.src=p}return i.ok?i:null}
+let assetBase='';try{assetBase=localStorage.edAssets||''}catch(e){}
+const PREF=['','../','../../','../../../','/'];
+function img(p){if(!p)return null;let i=imgs[p];if(!i){i=imgs[p]=new Image();i.n=-1;
+  const go=()=>{i.n++;const b=i.n===0?assetBase:PREF[i.n-1];i.pre=b;i.src=(/^(https?:|data:|\/)/.test(p)?'':b)+p};
+  i.onload=()=>{i.ok=1;if(i.pre!==assetBase){assetBase=i.pre;try{localStorage.edAssets=assetBase}catch(e){}$('assetBase').value=assetBase}redraw();clearTimeout(pt);pt=setTimeout(buildPalette,60)};
+  i.onerror=()=>{if(i.n<PREF.length)go()};go()}return i.ok?i:null}
 const sprs={};
 function spr(id){const e=OT()[id];if(!e)return null;if(sprs[id])return sprs[id];const i=img(e.owSprite);if(!i)return null;
   const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),c=document.createElement('canvas');c.width=w;c.height=h;
@@ -87,16 +116,23 @@ function spr(id){const e=OT()[id];if(!e)return null;if(sprs[id])return sprs[id];
     x.putImageData(d,0,0)}}catch(e){}
   return sprs[id]=c}
 
-// Tile images: the colour of the first pixel is removed (edge flood per frame). Set removeBackground:false on a tile in tiles.js to skip it.
-const tcache={};
-function tileImg(d) {
-  return img(d.tileImage);
-}
+function tileImg(d){return img(d.tileImage)}
 function drawTile(c,val,x,y,s){if(!val)return;c.imageSmoothingEnabled=false;const[t,f]=val.split('|').map(n=>parseInt(n)||0),d=TL()[t];
   if(!d||!d.tileImage){c.fillStyle='#78c850';c.fillRect(x,y,s,s);return}
   const i=tileImg(d);if(!i){c.fillStyle='#456';c.fillRect(x,y,s,s);return}
   if(/^Multi-tile/.test(d.tileType)){const n=d.columns||3;c.drawImage(i,(f%n)*16,Math.floor(f/n)*16,16,16,x,y,s,s)}
-  else if(d.isAnimated&&d.frames>1)c.drawImage(i,0,0,32,32,x,y,s,s);else c.drawImage(i,x,y,s,s)}
+  else if(d.isAnimated){const[w,h]=String(d.tileDimension||'16x16').split('x').map(Number);c.drawImage(i,0,0,w||16,h||16,x,y,s,s)}else c.drawImage(i,x,y,s,s)}
+
+const BR=14;
+function ownerOf(IN,x,y){let best=null,bd=1e9;for(const i of IN){const d=Math.max(i.x-x,x-(i.x+i.w-1),i.y-y,y-(i.y+i.h-1));if(d<=0)return null;if(d<bd){bd=d;best=i}}return bd<=BR?best:null}
+function drawBorders(L,W,H){const IN=Object.entries(repo).map(([k,m])=>({m,x:L[k].x,y:L[k].y,w:m.dimensions.width,h:m.dimensions.height}));
+  const x0=Math.floor(-cam.x/cam.z/TS)-1,x1=Math.ceil((W-cam.x)/cam.z/TS)+1,y0=Math.floor(-cam.y/cam.z/TS)-1,y1=Math.ceil((H-cam.y)/cam.z/TS)+1;
+  if((x1-x0)*(y1-y0)>40000)return;ctx.globalAlpha=.85;
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const o=ownerOf(IN,x,y);if(!o)continue;const b=o.m.borderData;if(!b)continue;
+    const bx=((x-o.x)%b.width+b.width)%b.width,by=((y-o.y)%b.height+b.height)%b.height;let any=false;
+    for(let l=1;l<=5;l++){const v=b['tileData_'+l][by][bx];if(v){any=true;drawTile(ctx,v,x*TS,y*TS,TS)}}
+    if(any){ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(x*TS,y*TS,TS,TS)}}
+  ctx.globalAlpha=1}
 
 // ---------- event geometry ----------
 const BADGE={Warp:['#8e24aa','W'],Script:['#43a047','S'],'Script Tile':['#43a047','S'],Signpost:['#fb8c00','!'],Tile:['#1e88e5','T'],NPC:['#e53935','N']};
@@ -113,8 +149,11 @@ let queued=false;function redraw(){if(queued)return;queued=true;requestAnimation
 function draw(){const W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}
   ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#0b0b0b';ctx.fillRect(0,0,W,H);ctx.setTransform(cam.z,0,0,cam.z,cam.x,cam.y);ctx.imageSmoothingEnabled=false;
   const L=layout();
+  if($('borT').checked)drawBorders(L,W,H);
   for(const[k,m]of Object.entries(repo)){const p=L[k],{width:w,height:h}=m.dimensions;
     for(let l=1;l<=5;l++){if(viewMode==='active'&&l!==layer)continue;if(viewMode==='below'&&l>layer)continue;const g=m['tileData_'+l];for(let r=0;r<h;r++)for(let c=0;c<w;c++)drawTile(ctx,g[r][c],(p.x+c)*TS,(p.y+r)*TS,TS)}
+    if($('bhvT').checked){const g=m['tileData_'+layer],C=['','rgba(255,0,0,.35)','rgba(80,120,255,.35)','rgba(0,220,220,.35)','rgba(170,0,255,.35)'];
+      for(let r=0;r<h;r++)for(let c=0;c<w;c++){const q=passOf(g[r][c]);if(q){ctx.fillStyle=C[q];ctx.fillRect((p.x+c)*TS,(p.y+r)*TS,TS,TS);ctx.fillStyle='#fff';ctx.font='bold 12px monospace';ctx.fillText(q,(p.x+c)*TS+4,(p.y+r)*TS+14)}}}
     if(showGrid&&cam.z>.4){ctx.strokeStyle='rgba(255,255,255,.13)';ctx.lineWidth=1/cam.z;ctx.beginPath();
       for(let c=0;c<=w;c++){ctx.moveTo((p.x+c)*TS,p.y*TS);ctx.lineTo((p.x+c)*TS,(p.y+h)*TS)}
       for(let r=0;r<=h;r++){ctx.moveTo(p.x*TS,(p.y+r)*TS);ctx.lineTo((p.x+w)*TS,(p.y+r)*TS)}ctx.stroke()}
@@ -129,7 +168,7 @@ function draw(){const W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W||cv.hei
       else{const[col,ch]=BADGE[ev.eventType]||['#777','?'];ctx.fillStyle=col;ctx.globalAlpha=.85;ctx.fillRect(R.x+3,R.y+3,TS-6,TS-6);ctx.globalAlpha=1;
         ctx.fillStyle='#fff';ctx.font='bold 16px monospace';ctx.textAlign='center';ctx.fillText(ch,R.x+TS/2,R.y+TS/2+6);ctx.textAlign='left'}
       if(sel&&sel.map===k&&sel.key===ek){ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;ctx.strokeRect(R.x,R.y,R.w,R.h)}}}
-  if(hover&&repo[hover.map]){const p=L[hover.map],n=tool==='pencil'?brush.cells:[[0]];ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;
+  if(hover&&repo[hover.map]){const p=L[hover.map],n=tool==='pencil'?brush.cells:tool==='paste'&&clip?Array.from({length:clip.h},()=>Array(clip.w).fill(0)):[[0]];ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;
     ctx.strokeRect((p.x+hover.gx)*TS,(p.y+hover.gy)*TS,n[0].length*TS,n.length*TS)}
   if(rectA&&hover&&rectA.map===hover.map){const p=L[rectA.map],a=Math.min(rectA.gx,hover.gx),b=Math.min(rectA.gy,hover.gy),
     c=Math.abs(rectA.gx-hover.gx)+1,d=Math.abs(rectA.gy-hover.gy)+1;ctx.fillStyle='rgba(0,229,255,.25)';ctx.fillRect((p.x+a)*TS,(p.y+b)*TS,c*TS,d*TS)}
@@ -152,7 +191,12 @@ function eventAt(wx,wy){const L=layout();let hit=null;for(const[k,m]of Object.en
   const R=evRect(L[k],ev);if(wx>=R.x&&wx<R.x+R.w&&wy>=R.y&&wy<R.y+R.h)hit={map:k,key:ek}}return hit}
 
 // ---------- painting ----------
-function setCell(k,r,c,v){const g=repo[k]['tileData_'+layer];if(!g[r]||g[r][c]===undefined||g[r][c]===v)return;touch();g[r][c]=v}
+function setCell(k,r,c,v,l=layer){const g=repo[k]['tileData_'+l];if(!g[r]||g[r][c]===undefined||g[r][c]===v)return;touch();g[r][c]=v}
+// Copy a rectangle (all layers, or only the active one) and paste it with the Paste tool
+function doCopy(a,b){const m=repo[a.map],x0=Math.min(a.gx,b.gx),x1=Math.max(a.gx,b.gx),y0=Math.min(a.gy,b.gy),y1=Math.max(a.gy,b.gy),all=$('copyAll').checked,L={};
+  for(let l=1;l<=5;l++){if(!all&&l!==layer)continue;L[l]=[];for(let y=y0;y<=y1;y++)L[l].push(m['tileData_'+l][y].slice(x0,x1+1))}
+  clip={w:x1-x0+1,h:y1-y0+1,L,single:!all};setTool('paste');$('brushInfo').textContent=`Clipboard: ${clip.w}×${clip.h}, ${Object.keys(L).length} layer(s) – click/drag to paste`}
+function stampClip(k,gx,gy){if(!clip)return;for(const[l,g]of Object.entries(clip.L)){const tl=clip.single?layer:+l;g.forEach((row,r)=>row.forEach((v,c)=>setCell(k,gy+r,gx+c,v,tl)))}}
 function stamp(k,gx,gy,pat){pat.forEach((row,r)=>row.forEach((v,c)=>setCell(k,gy+r,gx+c,v)))}
 function line(a,b,fn){let x=a.gx,y=a.gy;const dx=Math.abs(b.gx-x),dy=Math.abs(b.gy-y),sx=x<b.gx?1:-1,sy=y<b.gy?1:-1;let e=dx-dy;
   for(;;){fn(x,y);if(x===b.gx&&y===b.gy)break;const e2=2*e;if(e2>-dy){e-=dy;x+=sx}if(e2<dx){e+=dx;y+=sy}}}
@@ -167,29 +211,32 @@ function fillRect(a,b,pat){const x0=Math.min(a.gx,b.gx),x1=Math.max(a.gx,b.gx),y
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('mousedown',e=>{cv.focus();
   if(e.button===1||e.button===2||spaceDown){pan={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};return}
+  if(tab==='border')return;
   const w=toWorld(e.offsetX,e.offsetY),cell=cellAt(w.x,w.y);if(!cell)return;
   if(cell.map!==active){active=cell.map;refreshAll()}
   const val=brush.cells,erase=[[EMPTY(layer)]];
   if(tool==='select'){const h=eventAt(w.x,w.y);sel=h;if(h){const ev=repo[h.map].events[h.key];drag={ox:cell.gx-ev.xPos,oy:cell.gy-ev.yPos,from:h}}buildInspector();redraw();return}
-  if(tool==='pencil'||tool==='erase'){stroke={last:cell,pat:tool==='erase'?erase:val};stamp(cell.map,cell.gx,cell.gy,stroke.pat);redraw()}
+  if(tool==='pencil'||tool==='erase'||tool==='paste'||tool==='behav'){
+    const fn=tool==='paste'?(m,x,y)=>stampClip(m,x,y):tool==='behav'?(m,x,y)=>{const v=repo[m]['tileData_'+layer][y]?.[x];if(v)setCell(m,y,x,setPass(v,pass))}:(m,x,y)=>stamp(m,x,y,tool==='erase'?erase:val);
+    stroke={last:cell,fn};fn(cell.map,cell.gx,cell.gy);redraw()}
   else if(tool==='fill'){floodFill(cell.map,cell.gx,cell.gy,val);redraw()}
-  else if(tool==='rect'){rectA=cell}
-  else if(tool==='pick'){brush={tid:-1,cells:[[repo[cell.map]['tileData_'+layer][cell.gy][cell.gx]]],frames:new Set()};markPalette();info()}});
+  else if(tool==='rect'||tool==='copy'){rectA=cell}
+  else if(tool==='pick'){brush={tid:-1,cells:[[repo[cell.map]['tileData_'+layer][cell.gy][cell.gx]]],frames:new Set()};pass=passOf(brush.cells[0][0]);$('passSel').value=pass;markPalette();info()}});
 window.addEventListener('mousemove',e=>{
   if(pan){cam.x=pan.cx+e.clientX-pan.x;cam.y=pan.cy+e.clientY-pan.y;redraw();return}
   if(e.target!==cv)return;const w=toWorld(e.offsetX,e.offsetY),cell=cellAt(w.x,w.y);hover=cell;
-  if(stroke&&cell&&cell.map===stroke.last.map){line(stroke.last,cell,(x,y)=>stamp(cell.map,x,y,stroke.pat));stroke.last=cell}
+  if(stroke&&cell&&cell.map===stroke.last.map){line(stroke.last,cell,(x,y)=>stroke.fn(cell.map,x,y));stroke.last=cell}
   status();redraw()});
 window.addEventListener('mouseup',()=>{
-  if(!(stroke||rectA||drag||pan||pal))return;
-  if(rectA&&hover&&hover.map===rectA.map)fillRect(rectA,hover,brush.cells);
+  if(!(stroke||rectA||drag||pan||pal||bstroke))return;
+  if(rectA&&hover&&hover.map===rectA.map)tool==='copy'?doCopy(rectA,hover):fillRect(rectA,hover,brush.cells);
   if(drag&&hover){const{from}=drag,ev=repo[from.map].events[from.key],m=repo[hover.map];
     const nx=Math.max(0,Math.min(m.dimensions.width-1,hover.gx-drag.ox)),ny=Math.max(0,Math.min(m.dimensions.height-1,hover.gy-drag.oy));
     if(hover.map!==from.map||nx!==ev.xPos||ny!==ev.yPos){touch();
       if(hover.map!==from.map){delete repo[from.map].events[from.key];let nk=from.key,i=2;while(m.events[nk])nk=`${from.key}_${i++}`;m.events[nk]=ev;sel={map:hover.map,key:nk};active=hover.map}
       ev.xPos=nx;ev.yPos=ny}}
-  stroke=null;rectA=null;drag=null;pan=null;pal=null;pending=false;changed()});
-cv.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY<0?1.15:1/1.15,z=Math.max(.2,Math.min(4,cam.z*f));
+  stroke=null;rectA=null;drag=null;pan=null;pal=null;bstroke=null;pending=false;changed()});
+cv.addEventListener('wheel',e=>{e.preventDefault();const f=Math.max(1/1.12,Math.min(1.12,Math.exp(-e.deltaY*.0012))),z=Math.max(.25,Math.min(2,cam.z*f));
   cam.x=e.offsetX-(e.offsetX-cam.x)*(z/cam.z);cam.y=e.offsetY-(e.offsetY-cam.y)*(z/cam.z);cam.z=z;redraw();status()},{passive:false});
 
 // ---------- keyboard ----------
@@ -203,7 +250,7 @@ window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.t
   else if(k.startsWith('arrow')&&sel){e.preventDefault();const d={arrowleft:[-1,0],arrowright:[1,0],arrowup:[0,-1],arrowdown:[0,1]}[k];
     commit(()=>{const ev=repo[sel.map].events[sel.key],m=repo[sel.map];ev.xPos=Math.max(0,Math.min(m.dimensions.width-1,ev.xPos+d[0]));ev.yPos=Math.max(0,Math.min(m.dimensions.height-1,ev.yPos+d[1]))})}
   else if(!mod&&/^[1-5]$/.test(k)){setLayer(+k)}
-  else if(!mod){const t={v:'select',p:'pencil',b:'fill',r:'rect',e:'erase',i:'pick'}[k];if(t)setTool(t);else if(k==='g'){$('gridT').click()}}});
+  else if(!mod){const t={v:'select',p:'pencil',b:'fill',r:'rect',e:'erase',i:'pick',h:'behav',c:'copy'}[k];if(t)setTool(t);else if(k==='g'){$('gridT').click()}}});
 
 // ---------- events: add / duplicate / delete ----------
 const SCHEMA={
@@ -214,7 +261,7 @@ const SCHEMA={
 const allEv=()=>Object.values(repo).flatMap(m=>Object.values(m.events));
 const OPTS={ow:()=>Object.keys(OT()),map:()=>Object.keys(repo),
   script:()=>uniq([...Object.keys(window.OverworldScriptEngine?.scripts||{}),...allEv().map(e=>e.script).filter(Boolean)]),
-  move:()=>uniq(['MOVEMENT_TYPE_LOOK_AROUND','MOVEMENT_TYPE_WANDER_LEFT_RIGHT','MOVEMENT_TYPE_WANDER_UP_AND_DOWN',...allEv().map(e=>e.movementType).filter(Boolean)]),
+  move:()=>uniq([...Object.keys(window.OverworldMovement?.types||{}),'MOVEMENT_TYPE_LOOK_AROUND','MOVEMENT_TYPE_WANDER_LEFT_RIGHT','MOVEMENT_TYPE_WANDER_UP_AND_DOWN',...allEv().map(e=>e.movementType).filter(Boolean)]),
   facing:()=>['Down','Up','Left','Right'],warpType:()=>['Normal','Teleport','Hole'],
   warp:ev=>Object.entries(repo[findKey(ev.map)]?.events||{}).filter(([,v])=>v.eventType==='Warp').map(([k])=>k)};
 function newEv(t){const m=repo[active],e={eventType:t,xPos:hover?.map===active?hover.gx:0,yPos:hover?.map===active?hover.gy:0};
@@ -287,12 +334,12 @@ function buildPalette(){const P=$('palette');P.innerHTML='';
     for(let f=0;f<(d.frames||1);f++){const c=document.createElement('canvas');c.width=c.height=32;drawTile(c.getContext('2d'),`${t}|${f}`,0,0,32);Object.assign(c.dataset,{t,f,n});g.appendChild(c)}P.appendChild(g)}
   markPalette()}
 function setBrushRect(t,n,a,b){const r0=Math.min(Math.floor(a/n),Math.floor(b/n)),r1=Math.max(Math.floor(a/n),Math.floor(b/n)),c0=Math.min(a%n,b%n),c1=Math.max(a%n,b%n),cells=[],fr=new Set();
-  for(let r=r0;r<=r1;r++){const row=[];for(let c=c0;c<=c1;c++){const f=r*n+c;row.push(`${t}|${f}`);fr.add(f)}cells.push(row)}brush={tid:+t,cells,frames:fr};markPalette()}
-$('palette').addEventListener('mousedown',e=>{const c=e.target;if(c.tagName!=='CANVAS')return;pal={t:c.dataset.t,n:+c.dataset.n,f0:+c.dataset.f};setBrushRect(pal.t,pal.n,pal.f0,pal.f0);if(tool==='select'||tool==='pick'||tool==='erase')setTool('pencil')});
+  for(let r=r0;r<=r1;r++){const row=[];for(let c=c0;c<=c1;c++){const f=r*n+c;row.push(`${t}|${f}|${pass}`);fr.add(f)}cells.push(row)}brush={tid:+t,cells,frames:fr};markPalette()}
+$('palette').addEventListener('mousedown',e=>{const c=e.target;if(c.tagName!=='CANVAS')return;pal={t:c.dataset.t,n:+c.dataset.n,f0:+c.dataset.f};setBrushRect(pal.t,pal.n,pal.f0,pal.f0);if(tab==='env'&&(tool==='select'||tool==='pick'||tool==='erase'))setTool('pencil');if(tab==='border'&&btool==='erase'){btool='pencil';buildBorder()}});
 $('palette').addEventListener('mouseover',e=>{if(pal&&e.target.tagName==='CANVAS'&&e.target.dataset.t===pal.t)setBrushRect(pal.t,pal.n,pal.f0,+e.target.dataset.f)});
 
 function status(){const L=layout();$('status').textContent=`${active} | ${hover?`${hover.map} (${hover.gx}, ${hover.gy}) ${repo[hover.map]['tileData_'+layer][hover.gy][hover.gx]}`:'—'} | zoom ${Math.round(cam.z*100)}% | undo ${hist.length} redo ${redoS.length}${unsaved?' | ● unsaved':''}`}
-function changed(){buildInspector();buildProps();buildWild();buildIssues();updateSel();status();redraw()}
+function changed(){buildInspector();buildProps();buildBorder();buildWild();buildIssues();updateSel();status();redraw()}
 function updateSel(){const s=$('mapSel');s.innerHTML='';Object.keys(repo).forEach(k=>s.add(new Option(k,k)));s.value=active}
 function refreshAll(){changed()}
 function focus(k){const p=layout()[k];if(p){cam.x=60-p.x*TS*cam.z;cam.y=60-p.y*TS*cam.z}}
@@ -307,8 +354,8 @@ async function save(){const t=out();
     const w=await fileHandle.createWritable();await w.write(t);await w.close();unsaved=false;status();return}catch(e){if(e.name==='AbortError')return;fileHandle=null}}
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/javascript'}));a.download='Overworld_map.js';a.click();unsaved=false;status()}
 
-function setLayer(n){layer=n;document.querySelectorAll('#layerBtns button').forEach(b=>b.classList.toggle('on',+b.dataset.l===n));status();redraw()}
-function setTab(t){tab=t;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.id==='tab-'+t));document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+function setLayer(n){layer=n;drawBorderEd();document.querySelectorAll('button[data-l]').forEach(b=>b.classList.toggle('on',+b.dataset.l===n));status();redraw()}
+function setTab(t){tab=t;if(t==='env'||t==='border')$('tab-'+t).appendChild($('palWrap'));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.id==='tab-'+t));document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   if(t==='env'){setTool(tool==='select'?'pencil':tool)}else setTool('select');redraw()}
 function buildWild(){const W=$('wild');W.innerHTML='';const m=repo[active];if(!m)return;
   const names=uniq([...(typeof PokemonDatabase!=='undefined'?Object.values(PokemonDatabase).map(x=>x.name):[]),...Object.values(repo).flatMap(x=>Object.values(x.wildData||{}).flat().map(w=>w.pokemonName))]).filter(n=>n&&n!=='None');
@@ -318,8 +365,42 @@ function buildWild(){const W=$('wild');W.innerHTML='';const m=repo[active];if(!m
       rowTo(r,'Species',inp('text',w.pokemonName,v=>w.pokemonName=v,()=>names));rowTo(r,'Min Lv',inp('num',w.levelRange[0],v=>w.levelRange[0]=v??1));
       rowTo(r,'Max Lv',inp('num',w.levelRange[1],v=>w.levelRange[1]=v??1));rowTo(r,'Rate %',inp('num',w.appearanceRate,v=>w.appearanceRate=v??0));
       const d=document.createElement('button');d.textContent='Remove';d.onclick=()=>commit(()=>arr.splice(i,1));r.appendChild(d)})}}
+// ---------- border editor tab ----------
+let btool='pencil',bstroke=null;
+const bclamp=v=>Math.max(1,Math.min(16,v||1));
+function bset(b,l,r,c,v){const g=b['tileData_'+l];if(!g[r]||g[r][c]===undefined||g[r][c]===v)return;touch();g[r][c]=v}
+function bstamp(b,x,y,pat){pat.forEach((row,r)=>row.forEach((v,c)=>{if(x+c<b.width&&y+r<b.height)bset(b,layer,y+r,x+c,v?setPass(v,1):v)}))}
+function bfill(b,x,y,pat){const g=b['tileData_'+layer],t=g[y][x],seen=new Set([y*b.width+x]),q=[[x,y]],cells=[];
+  while(q.length){const[cx,cy]=q.pop();cells.push([cx,cy]);for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=cx+dx,ny=cy+dy;
+    if(nx<0||ny<0||nx>=b.width||ny>=b.height||seen.has(ny*b.width+nx)||g[ny][nx]!==t)continue;seen.add(ny*b.width+nx);q.push([nx,ny])}}
+  const ph=pat.length,pw=pat[0].length;for(const[cx,cy]of cells){const v=pat[((cy-y)%ph+ph)%ph][((cx-x)%pw+pw)%pw];bset(b,layer,cy,cx,v?setPass(v,1):v)}}
+function drawBorderEd(){const c=$('bcv');if(!c)return;const m=repo[active],b=m&&m.borderData;if(!b)return;const cs=c.width/b.width,g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);g.imageSmoothingEnabled=false;
+  for(let l=1;l<=5;l++)for(let r=0;r<b.height;r++)for(let q=0;q<b.width;q++){const v=b['tileData_'+l][r][q];if(v){g.globalAlpha=l===layer?1:.55;drawTile(g,v,q*cs,r*cs,cs)}}
+  g.globalAlpha=1;g.strokeStyle='rgba(255,255,255,.35)';g.lineWidth=1;g.beginPath();for(let q=0;q<=b.width;q++){g.moveTo(q*cs+.5,0);g.lineTo(q*cs+.5,c.height)}for(let r=0;r<=b.height;r++){g.moveTo(0,r*cs+.5);g.lineTo(c.width,r*cs+.5)}g.stroke()}
+function buildBorder(){const U=$('borderUI');if(!U)return;U.innerHTML='';const m=repo[active];if(!m)return;const b=m.borderData;if(!b)return;
+  const n=document.createElement('div');n.style.cssText='color:#9ab;line-height:1.4';n.innerHTML='Border block for <b>'+active+'</b>. It repeats over the black space around the maps and is always impassable. Pick tiles in the palette below, then paint the pattern here. Faded tiles belong to other layers.';U.appendChild(n);
+  const wh=document.createElement('div');wh.className='row';U.appendChild(wh);
+  rowTo(wh,'Width (1-16)',inp('num',b.width,v=>fitBorder(m,bclamp(v),b.height)));rowTo(wh,'Height (1-16)',inp('num',b.height,v=>fitBorder(m,b.width,bclamp(v))));
+  const lb=document.createElement('div');lb.className='row';lb.innerHTML=[1,2,3,4,5].map(i=>`<button data-l="${i}" class="${i===layer?'on':''}">L${i}</button>`).join('');lb.onclick=ev=>{if(ev.target.dataset.l)setLayer(+ev.target.dataset.l)};U.appendChild(lb);
+  const tb=document.createElement('div');tb.className='row';tb.innerHTML=[['pencil','Pencil'],['fill','Fill'],['erase','Erase']].map(([t,l])=>`<button data-bt="${t}" class="${t===btool?'on':''}">${l}</button>`).join('');
+  tb.onclick=ev=>{if(ev.target.dataset.bt){btool=ev.target.dataset.bt;tb.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.bt===btool))}};U.appendChild(tb);
+  const c=document.createElement('canvas');c.id='bcv';const cs=Math.max(16,Math.min(64,Math.floor(300/Math.max(b.width,b.height))));c.width=b.width*cs;c.height=b.height*cs;U.appendChild(c);
+  const bp=ev=>{const r=c.getBoundingClientRect(),x=Math.floor((ev.clientX-r.left)/r.width*b.width),y=Math.floor((ev.clientY-r.top)/r.height*b.height);return x>=0&&y>=0&&x<b.width&&y<b.height?{gx:x,gy:y}:null};
+  const act=p=>{if(btool==='pencil')bstamp(b,p.gx,p.gy,brush.cells);else if(btool==='erase')bset(b,layer,p.gy,p.gx,'');else bfill(b,p.gx,p.gy,brush.cells);drawBorderEd();redraw()};
+  c.oncontextmenu=ev=>ev.preventDefault();
+  c.onmousedown=ev=>{if(ev.button)return;const p=bp(ev);if(!p)return;bstroke={last:p};act(p)};
+  c.onmousemove=ev=>{if(!bstroke||btool==='fill')return;const p=bp(ev);if(!p)return;line(bstroke.last,p,(x,y)=>act({gx:x,gy:y}));bstroke.last=p};
+  const ab=document.createElement('div');ab.className='row';U.appendChild(ab);
+  const mk=(t,f)=>{const x=document.createElement('button');x.textContent=t;x.onclick=f;ab.appendChild(x)};
+  mk('Clear layer',()=>commit(()=>{b['tileData_'+layer]=b['tileData_'+layer].map(r=>r.map(()=>''))}));
+  mk('Clear all layers',()=>commit(()=>{for(let l=1;l<=5;l++)b['tileData_'+l]=b['tileData_'+l].map(r=>r.map(()=>''))}));
+  mk('Apply to ALL maps',()=>{if(confirm('Copy this border to every map?'))commit(()=>{for(const o of Object.values(repo))if(o!==m)o.borderData=clone(b)})});
+  const src=document.createElement('select');src.add(new Option('Copy border from…',''));Object.keys(repo).filter(k=>k!==active).forEach(k=>src.add(new Option(k,k)));
+  src.onchange=()=>{if(src.value){const f=src.value;commit(()=>{m.borderData=clone(repo[f].borderData)})}};U.appendChild(src);
+  drawBorderEd();
+  if(tab==='border'&&U.nextSibling!==$('palWrap'))U.after($('palWrap'))}
 // ---------- boot ----------
-$('tools').innerHTML=[['pencil','P Pencil'],['fill','B Fill'],['rect','R Rect'],['erase','E Erase'],['pick','I Pick']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
+$('tools').innerHTML=[['pencil','P Pencil'],['fill','B Fill'],['rect','R Rect'],['erase','E Erase'],['pick','I Pick'],['behav','H Behavior'],['copy','C Copy'],['paste','Paste']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
 $('tools').onclick=e=>{if(e.target.dataset.t)setTool(e.target.dataset.t)};
 $('addBtns').innerHTML=Object.keys(SCHEMA).filter(t=>t!=='Script Tile').map(t=>`<button data-a="${t}">+ ${t}</button>`).join('');
 $('addBtns').onclick=e=>{if(e.target.dataset.a)addEvent(e.target.dataset.a)};
@@ -329,11 +410,15 @@ $('gridT').onchange=e=>{showGrid=e.target.checked;redraw()};$('sprT').onchange=e
 $('mapSel').onchange=e=>{active=e.target.value;focus(active);refreshAll()};
 $('newMap').onclick=()=>{let n=prompt('New map name:','Route_X');if(!n||repo[n])return;commit(()=>{repo[n]={map:n,bank:0,dimensions:{width:10,height:10,blockSize:8},mapType:'Route',weather:'Normal',isFlyable:true,isRunning:true,
   music:repo[active]?.music||'',connections:{up:null,down:null,left:null,right:null},events:{},wildData:{morning:[],afternoon:[],night:[],dawn:[]},tileData:[]};fit(repo[n]);active=n});focus(n)};
+$('assetBase').value=assetBase;$('assetBase').onchange=e=>{assetBase=e.target.value.trim();try{localStorage.edAssets=assetBase}catch(x){}for(const k in imgs)delete imgs[k];for(const k in sprs)delete sprs[k];buildPalette();redraw()};
+if(window.__missing&&window.__missing.length)setTimeout(()=>{$('status').textContent='Not found (optional unless it is a table): '+window.__missing.join(', ')},100);
 window.addEventListener('resize',redraw);window.addEventListener('beforeunload',e=>{if(unsaved){e.preventDefault();e.returnValue=''}});
-$('tabs').innerHTML=[['env','Environment'],['events','Events'],['conn','Connections'],['wild','Wild'],['props','Properties']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
+$('tabs').innerHTML=[['env','Environment'],['border','Border'],['events','Events'],['conn','Connections'],['wild','Wild'],['props','Properties']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
 $('tabs').onclick=e=>{if(e.target.dataset.t)setTab(e.target.dataset.t)};
-$('layerBtns').innerHTML=[1,2,3,4,5].map(n=>`<button data-l="${n}">L${n}${n==1?' ▼ bottom':n==5?' ▲ top':''}</button>`).join('')+'<select id="viewMode"><option value="all">Show all layers</option><option value="below">Active + below</option><option value="active">Active only</option></select>';
+$('layerBtns').innerHTML=[1,2,3,4,5].map(n=>`<button data-l="${n}">L${n}${n==1?' ▼ bottom':n==5?' ▲ top':''}</button>`).join('')+'<select id="viewMode"><option value="all">Show all layers</option><option value="below">Active + below</option><option value="active">Active only</option></select><select id="passSel"><option value="0">Behavior 0 · Passable</option><option value="1">1 · Blocked</option><option value="2">2 · Passable, NPC below</option><option value="3">3 · Surfable</option><option value="4">4 · Diveable</option></select><label style="flex-direction:row;gap:4px"><input type="checkbox" id="copyAll" checked> copy all layers</label><label style="flex-direction:row;gap:4px"><input type="checkbox" id="bhvT" checked> show behavior</label>';
 $('layerBtns').onclick=e=>{if(e.target.dataset.l)setLayer(+e.target.dataset.l)};
-$('layerBtns').onchange=e=>{if(e.target.id==='viewMode'){viewMode=e.target.value;redraw()}};
+$('layerBtns').onchange=e=>{const id=e.target.id;if(id==='viewMode'){viewMode=e.target.value;redraw()}
+  else if(id==='passSel'){pass=+e.target.value;brush.cells=brush.cells.map(r=>r.map(v=>v?setPass(v,pass):v));info();redraw()}else if(id==='bhvT')redraw()};
 load();buildPalette();setLayer(1);changed();setTab('env');
+});
 </script></body></html>

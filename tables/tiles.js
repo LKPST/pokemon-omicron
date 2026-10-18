@@ -6,8 +6,7 @@ window.OverworldTiles = {
     isAnimated: false,
     frames: 1,
     tileImage: "graphics/tiles/Grass.png",
-    tileDimension: "16x16",
-    isPassable: true
+    tileDimension: "16x16"
   },
   1: {
     tileID: 1,
@@ -17,8 +16,7 @@ window.OverworldTiles = {
     frames: 9,
     columns: 3,
     tileImage: "graphics/tiles/sand_grass.png",
-    tileDimension: "48x48",
-    isPassable: true
+    tileDimension: "48x48"
   }
   ,
   2: {
@@ -29,8 +27,7 @@ window.OverworldTiles = {
     frames: 9,
     columns: 3,
     tileImage: "graphics/tiles/invert_sand_grass.png",
-    tileDimension: "50x50",
-    isPassable: true
+    tileDimension: "50x50"
   }
   ,
   3: {
@@ -41,8 +38,7 @@ window.OverworldTiles = {
     frames: 3,
     columns: 1,
     tileImage: "graphics/tiles/sand.png",
-    tileDimension: "16x48",
-    isPassable: true
+    tileDimension: "16x48"
   }
   ,
   4: {
@@ -53,8 +49,7 @@ window.OverworldTiles = {
     frames: 9,
     columns: 3,
     tileImage: "graphics/tiles/tree_tile.png",
-    tileDimension: "48x48",
-    isPassable: true
+    tileDimension: "48x48"
   }
   ,
   5: {
@@ -64,8 +59,7 @@ window.OverworldTiles = {
     isAnimated: false,
     frames: 1,
     tileImage: "graphics/tiles/Log.png",
-    tileDimension: "16x16",
-    isPassable: true
+    tileDimension: "16x16"
   }
   ,
   6: {
@@ -76,8 +70,7 @@ window.OverworldTiles = {
     frames: 18,
     columns: 6,
     tileImage: "graphics/tiles/bushes.png",
-    tileDimension: "96x48",
-    isPassable: true
+    tileDimension: "96x48"
   }
   ,
   7: {
@@ -88,8 +81,7 @@ window.OverworldTiles = {
     frames: 96/16 * 32/16,
     columns: 96/16,
     tileImage: "graphics/tiles/bench_sides.png",
-    tileDimension: "96x32",
-    isPassable: true
+    tileDimension: "96x32"
   }
   ,
   8: {
@@ -100,8 +92,7 @@ window.OverworldTiles = {
     frames: 4,
     columns: 2,
     tileImage: "graphics/tiles/bench.png",
-    tileDimension: "32x32",
-    isPassable: true
+    tileDimension: "32x32"
   }
   ,
   9: {
@@ -112,19 +103,17 @@ window.OverworldTiles = {
     frames: 80/16 * 48/16,
     columns: 80/16,
     tileImage: "graphics/tiles/fence_wood.png",
-    tileDimension: "80x48",
-    isPassable: true
+    tileDimension: "80x48"
   }
   ,
   10: {
     tileID: 10,
     tileName: "Flower",
-    tileType: "Normal",
-    isAnimated: true,
+    tileType: "Multi-tile",
+    isAnimated: false,
     frames: 1,
     tileImage: "graphics/tiles/flower.png",
-    tileDimension: "16x16",
-    isPassable: true
+    tileDimension: "16x16"
   }
   ,
   11: {
@@ -132,22 +121,20 @@ window.OverworldTiles = {
     tileName: "Flowers",
     tileType: "Multi-tile",
     isAnimated: true,
-    frames: 64/16,
-    columns: 1,
+    frames: 64/16 * 112/16,
+    columns: 64/16,
     tileImage: "graphics/tiles/flowers.png",
-    tileDimension: "64x112",
-    isPassable: true
+    tileDimension: "64x112"
   }
   ,
   12: {
     tileID: 12,
     tileName: "Grass Floor",
     tileType: "Multi-tile",
-    isAnimated: true,
+    isAnimated: false,
     frames: 1,
     tileImage: "graphics/tiles/grass_floor.png",
-    tileDimension: "16x16",
-    isPassable: true
+    tileDimension: "16x16"
   }
   ,
   13: {
@@ -157,8 +144,7 @@ window.OverworldTiles = {
     isAnimated: false,
     frames: 1,
     tileImage: "graphics/tiles/grass_patch_wild.png",
-    tileDimension: "16x16",
-    isPassable: true
+    tileDimension: "16x16"
   }
   ,
   14: {
@@ -169,8 +155,7 @@ window.OverworldTiles = {
     frames: 160/16 * 48/16,
     columns: 160/16,
     tileImage: "graphics/tiles/grass_patches.png",
-    tileDimension: "160x48",
-    isPassable: true
+    tileDimension: "160x48"
   }
   ,
   15: {
@@ -181,8 +166,7 @@ window.OverworldTiles = {
     frames: 2,
     columns: 2,
     tileImage: "graphics/tiles/huge_crop.png",
-    tileDimension: "32x16",
-    isPassable: true
+    tileDimension: "32x16"
   }
   ,
   16: {
@@ -193,8 +177,7 @@ window.OverworldTiles = {
     frames: 64/16 * 64/16,
     columns: 64/16,
     tileImage: "graphics/tiles/mailbox.png",
-    tileDimension: "64x64",
-    isPassable: true
+    tileDimension: "64x64"
   }
   ,
   17: {
@@ -204,8 +187,7 @@ window.OverworldTiles = {
     isAnimated: false,
     frames: 1,
     tileImage: "graphics/tiles/mountain_rock.png",
-    tileDimension: "16x16",
-    isPassable: true
+    tileDimension: "16x16"
   }
   ,
   18: {
@@ -216,8 +198,7 @@ window.OverworldTiles = {
     frames: 64/16 * 32/16,
     columns: 64/16,
     tileImage: "graphics/tiles/mountain_rocks.png",
-    tileDimension: "64x32",
-    isPassable: true
+    tileDimension: "64x32"
   }
   ,
   19: {
@@ -228,8 +209,7 @@ window.OverworldTiles = {
     frames: 240/16 * 128/16,
     columns: 240/16,
     tileImage: "graphics/tiles/mountain.png",
-    tileDimension: "240x128",
-    isPassable: true
+    tileDimension: "240x128"
   }
   ,
   20: {
@@ -240,8 +220,7 @@ window.OverworldTiles = {
     frames: 112/16 * 96/16,
     columns: 112/16,
     tileImage: "graphics/tiles/players_house.png",
-    tileDimension: "112x96",
-    isPassable: true
+    tileDimension: "112x96"
   }
   ,
   21: {
@@ -252,8 +231,7 @@ window.OverworldTiles = {
     frames: 112/16 * 96/16,
     columns: 96/16,
     tileImage: "graphics/tiles/rival_house.png",
-    tileDimension: "96x112",
-    isPassable: true
+    tileDimension: "96x112"
   }
   ,
   22: {
@@ -264,8 +242,7 @@ window.OverworldTiles = {
     frames: 48/16 * 48/16,
     columns: 48/16,
     tileImage: "graphics/tiles/signposts.png",
-    tileDimension: "48x48",
-    isPassable: true
+    tileDimension: "48x48"
   }
   ,
   23: {
@@ -275,8 +252,7 @@ window.OverworldTiles = {
     isAnimated: false,
     frames: 1,
     tileImage: "graphics/tiles/small_bush.png",
-    tileDimension: "16x16",
-    isPassable: true
+    tileDimension: "16x16"
   }
   ,
   24: {
@@ -287,8 +263,7 @@ window.OverworldTiles = {
     frames: 2,
     columns: 1,
     tileImage: "graphics/tiles/small_tree.png",
-    tileDimension: "16x32",
-    isPassable: true
+    tileDimension: "16x32"
   }
   ,
   25: {
@@ -299,8 +274,7 @@ window.OverworldTiles = {
     frames: 80/16 * 80/16,
     columns: 80/16,
     tileImage: "graphics/tiles/town_house.png",
-    tileDimension: "80x80",
-    isPassable: true
+    tileDimension: "80x80"
   }
   ,
   26: {
@@ -311,8 +285,7 @@ window.OverworldTiles = {
     frames: 9,
     columns: 3,
     tileImage: "graphics/tiles/tree_tile.png",
-    tileDimension: "48x48",
-    isPassable: true
+    tileDimension: "48x48"
   }
   ,
   27: {
@@ -323,8 +296,7 @@ window.OverworldTiles = {
     frames: 2,
     columns: 1,
     tileImage: "graphics/tiles/tree_connect_all.png",
-    tileDimension: "16x32",
-    isPassable: true
+    tileDimension: "16x32"
   }
   ,
   28: {
@@ -335,8 +307,7 @@ window.OverworldTiles = {
     frames: 3,
     columns: 3,
     tileImage: "graphics/tiles/tree_connect_down.png",
-    tileDimension: "48x16",
-    isPassable: true
+    tileDimension: "48x16"
   }
   ,
   29: {
@@ -347,8 +318,7 @@ window.OverworldTiles = {
     frames: 3,
     columns: 1,
     tileImage: "graphics/tiles/tree_connect.png",
-    tileDimension: "16x48",
-    isPassable: true
+    tileDimension: "16x48"
   }
   ,
   30: {
@@ -359,7 +329,6 @@ window.OverworldTiles = {
     frames: 3,
     columns: 1,
     tileImage: "graphics/tiles/tree_connect.png",
-    tileDimension: "16x48",
-    isPassable: true
+    tileDimension: "16x48"
   }
 };
