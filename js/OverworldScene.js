@@ -641,6 +641,8 @@ class OverworldScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    // [SUMMARY] Enter opens the party / summary screen (js/PokemonSummary.js)
+    this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
     // [DUAL SCREEN] the overworld only uses the TOP screen (480x320 = the GBA screen at 2x). The bottom screen is left free.
     // Change the size in OW_TEXT.screen (overworld_textbox.js).
@@ -1616,13 +1618,27 @@ class OverworldScene extends Phaser.Scene {
       this.npcs.forEach(npc => npc.setDepth(npc.y));
     }
 
+    // [SUMMARY] while the summary screen is open the overworld does nothing (the screen reads the keys itself)
+    if (window.PokemonSummary && window.PokemonSummary.isOpen()) {
+      Phaser.Input.Keyboard.JustDown(this.enterKey);
+      Phaser.Input.Keyboard.JustDown(this.spaceKey);
+      return;
+    }
+
     // [SCRIPTS] no input while a script runs (and for a moment after, so the button that closed the last message does not start it again)
     if (this.scriptRunning || (this.scriptEndedAt && this.time.now - this.scriptEndedAt < 300)) {
       Phaser.Input.Keyboard.JustDown(this.spaceKey);
       return;
     }
 
-    if (this.isLocked || this.isMoving) return;
+    if (this.isLocked || this.isMoving) { Phaser.Input.Keyboard.JustDown(this.enterKey); return; }
+
+    // [SUMMARY] Enter -> summary screen of the party in the save (GameStateManager.saveData.party)
+    if (Phaser.Input.Keyboard.JustDown(this.enterKey) && window.PokemonSummary) {
+      this.idleMs = 0;
+      window.PokemonSummary.open(this);
+      return;
+    }
 
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.idleMs = 0;
