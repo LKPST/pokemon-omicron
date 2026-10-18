@@ -368,22 +368,30 @@ function createSummary(env) {
   // Pokemon icon sheets come with a solid background colour (the colour of the top-left pixel). It is made transparent here:
   // only background that touches the edge of the sheet is removed (flood fill), so same-coloured pixels inside the Pokemon stay.
   const iconKeyed = new WeakMap();
-  function keyedIcon(img) {
+  function keyedIcon(img, label) {
     if (iconKeyed.has(img)) return iconKeyed.get(img);
-    let out = img;
+    let out = img, note = 'no opaque background found';
     try {
-      const w = img.naturalWidth, h = img.naturalHeight, c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(img, 0, 0); const id = x.getImageData(0, 0, w, h), d = id.data;
-      if (d[3] === 255) {
-        const r0 = d[0], g0 = d[1], b0 = d[2], tol = 6, seen = new Uint8Array(w * h), stack = [];
-        const match = p => d[p * 4 + 3] === 255 && Math.abs(d[p * 4] - r0) <= tol && Math.abs(d[p * 4 + 1] - g0) <= tol && Math.abs(d[p * 4 + 2] - b0) <= tol;
+      const w = img.naturalWidth, h = img.naturalHeight, n = h >= w * 2 ? Math.round(h / w) : 1, fh = Math.floor(h / n), c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
+      x.drawImage(img, 0, 0); const id = x.getImageData(0, 0, w, h), d = id.data, seeds = [];
+      for (let f = 0; f < n; f++) { const y0 = f * fh, y1 = y0 + fh - 1; for (let i = 0; i < w; i++) { seeds.push(y0 * w + i, y1 * w + i); } for (let j = y0; j <= y1; j++) seeds.push(j * w, j * w + w - 1); }
+      const cnt = new Map(); for (const p of seeds) if (d[p * 4 + 3] === 255) { const k = ((d[p * 4] >> 4) << 8) | ((d[p * 4 + 1] >> 4) << 4) | (d[p * 4 + 2] >> 4), e = cnt.get(k) || { n: 0, r: 0, g: 0, b: 0 }; e.n++; e.r += d[p * 4]; e.g += d[p * 4 + 1]; e.b += d[p * 4 + 2]; cnt.set(k, e); }
+      const cands = []; const addC = (r, g, b) => { if (!cands.some(q => Math.abs(q[0] - r) <= 6 && Math.abs(q[1] - g) <= 6 && Math.abs(q[2] - b) <= 6)) cands.push([r, g, b]); };
+      for (let f = 0; f < n; f++) { const p = f * fh * w; if (d[p * 4 + 3] === 255) addC(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]); }
+      let top = null; for (const e of cnt.values()) if (!top || e.n > top.n) top = e; if (top) addC(Math.round(top.r / top.n), Math.round(top.g / top.n), Math.round(top.b / top.n));
+      if (cands.length) {
+        const tol = 18, seen = new Uint8Array(w * h), stack = [];
+        const match = p => { if (d[p * 4 + 3] !== 255) return false; for (const q of cands) if (Math.abs(d[p * 4] - q[0]) <= tol && Math.abs(d[p * 4 + 1] - q[1]) <= tol && Math.abs(d[p * 4 + 2] - q[2]) <= tol) return true; return false; };
+        const fOf = p => Math.min(n - 1, Math.floor(Math.floor(p / w) / fh));
         const push = p => { if (!seen[p] && match(p)) { seen[p] = 1; stack.push(p); } };
-        for (let i = 0; i < w; i++) { push(i); push((h - 1) * w + i); } for (let j = 0; j < h; j++) { push(j * w); push(j * w + w - 1); }
-        while (stack.length) { const p = stack.pop(), px = p % w, py = (p - px) / w; if (px > 0) push(p - 1); if (px < w - 1) push(p + 1); if (py > 0) push(p - w); if (py < h - 1) push(p + w); }
-        for (let p = 0; p < w * h; p++) if (seen[p]) d[p * 4 + 3] = 0;
-        x.putImageData(id, 0, 0); out = c;
+        for (const p of seeds) push(p);
+        while (stack.length) { const p = stack.pop(), px = p % w, py = (p - px) / w, f0 = fOf(p); const tryP = q => { if (fOf(q) === f0) push(q); };
+          if (px > 0) tryP(p - 1); if (px < w - 1) tryP(p + 1); if (py > 0) tryP(p - w); if (py < h - 1) tryP(p + w); }
+        let cntR = 0; for (let p = 0; p < w * h; p++) if (seen[p]) { d[p * 4 + 3] = 0; cntR++; }
+        x.putImageData(id, 0, 0); out = c; note = `${w}x${h}, ${n} frame(s), background ${cands.map(q => 'rgb(' + q.join(',') + ')').join(' / ')} removed, ${cntR} px`;
       }
-    } catch (e) { out = img; }
+    } catch (e) { out = img; note = 'could not process: ' + e.message; }
+    try { console.log('[PS] icon background: ' + (label || '') + ' -> ' + note); } catch (e) { /* no console */ }
     iconKeyed.set(img, out); return out;
   }
   function drawIcon(c, m, x, y, sel, i) {
@@ -391,7 +399,7 @@ function createSummary(env) {
     if (!e || e.fail || !m.icon) { ball(c, x + 9, y + 14, m.ball, 2); return; }
     if (!e.ok) return;
     const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = ih >= iw * 2 ? 2 : 1, fh = Math.floor(ih / n), fr = n > 1 ? Math.floor(S.t / (sel ? .16 : .7) + i) % 2 : 0;
-    c.imageSmoothingEnabled = false; c.drawImage(keyedIcon(e.img), 0, fr * fh, iw, fh, x + Math.round((32 - iw) / 2), y + 32 - fh, iw, fh);
+    c.imageSmoothingEnabled = false; c.drawImage(keyedIcon(e.img, m.icon), 0, fr * fh, iw, fh, x + Math.round((32 - iw) / 2), y + 32 - fh, iw, fh);
   }
   const genderGlyph = (c, g, xr, y) => { if (g === 'M') TR(c, '♂', xr, y, 'blue'); else if (g === 'F') TR(c, '♀', xr, y, 'red'); };
   function hpBar(c, x, y, w, h, frac, sel) {
@@ -581,7 +589,7 @@ const PokemonSummary = {
     const core = createSummary({
       urlFor: p => p,
       db: () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null),
-      types: () => (typeof TypeTable !== 'undefined' ? TypeTable : null),
+      types: () => (typeof TypeTable !== 'undefined' ? TypeTable : (PokemonSummary._tt || null)),
       moves: () => (typeof MoveDatabase !== 'undefined' && MoveDatabase) || (typeof MoveTable !== 'undefined' && MoveTable) || (typeof MoveTables !== 'undefined' && MoveTables) || null,
       party: () => gameParty(),
       glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
@@ -603,6 +611,12 @@ const PokemonSummary = {
       this.upd = (time, delta) => { core.update(Math.min(.05, delta / 1000)); core.render(this.ctx); this.tex.refresh(); };
       scene.events.on('update', this.upd);
     });
+    if (typeof TypeTable === 'undefined' && !this._tt) {   // not loaded by a script tag: fetch it and say exactly what went wrong
+      const url = opts.typeTablesUrl || 'tables/TypeTables.js';
+      fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url + ' (file missing or named wrongly: it must be exactly tables/TypeTables.js)'); return r.text(); })
+        .then(txt => { const o = new Function('window', txt + '\n;return typeof TypeTable!=="undefined"?TypeTable:null')({}); if (!o) throw new Error(url + ' loaded but it does not define TypeTable'); this._tt = o; console.warn('[PS] TypeTable was not defined by a <script> tag, so ' + url + ' was fetched instead. Add <script src="' + url + '"></script> to index.html.'); if (this.active) core.rebuild(true); })
+        .catch(e => console.error('[PS] TypeTables.js problem: ' + e.message));
+    }
     this.active = true;
     this.kd = e => {
       const k = KEYS[e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key]; if (!k) return;
