@@ -545,6 +545,9 @@ class OverworldScene extends Phaser.Scene {
     this.warping = false;
     this.worldOffsets = null;
     this.spinTimer = null;
+    this.scriptRunning = false;   // [SCRIPTS]
+    this.scriptEndedAt = 0;
+    this.camMoved = false;
   }
 
   preload() {
@@ -638,6 +641,11 @@ class OverworldScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+    // [DUAL SCREEN] the overworld only uses the TOP screen (480x320 = the GBA screen at 2x). The bottom screen is left free.
+    // Change the size in OW_TEXT.screen (overworld_textbox.js).
+    const scr = (window.OW_TEXT && window.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 };
+    this.cameras.main.setViewport(scr.x, scr.y, scr.w, scr.h);
 
     // [CHANGED] lerp 1 = camera sits exactly on the player every frame (no trailing delay)
     this.cameras.main.startFollow(this.player, true, 1, 1);
@@ -1188,6 +1196,8 @@ class OverworldScene extends Phaser.Scene {
       if (eventData.eventType === 'NPC' && eventData.owID) {
         const tableEntry = window.OverworldTable[eventData.owID];
         if (!tableEntry) continue;
+        // [SCRIPTS] hidden with the hideobject command
+        if (window.OverworldScriptEngine && window.OverworldScriptEngine.isHidden(mapKey, key)) continue;
 
         const textureKey = tableEntry.spriteID || `${eventData.owID.toLowerCase()}_ow`;
         if (!this.textures.exists(textureKey)) continue;
@@ -1207,6 +1217,7 @@ class OverworldScene extends Phaser.Scene {
 
         npcSprite.direction = 'down';
         npcSprite.eventConfig = eventData;
+        npcSprite.eventKey = key;   // [SCRIPTS] lets scripts say applymovement NPC_Portia
         npcSprite.mapName = mapKey;
         npcSprite.setDepth(y);
 
@@ -1217,7 +1228,7 @@ class OverworldScene extends Phaser.Scene {
   }
 
   updateNPCMovement() {
-    if (this.isLocked || !this.npcs || this.npcs.length === 0) return;
+    if (this.isLocked || this.scriptRunning || !this.npcs || this.npcs.length === 0) return;
 
     this.npcs.forEach(npc => {
       if (window.OverworldMovement && window.OverworldMovement.tick) { window.OverworldMovement.tick(npc); return; }
@@ -1360,8 +1371,9 @@ class OverworldScene extends Phaser.Scene {
     const targetNPC = this.npcs.find(npc => this.npcOccupiesTile(npc, targetX, targetY));
 
     if (targetNPC && targetNPC.eventConfig) {
-      this.activeNPC = targetNPC;
       const scriptName = targetNPC.eventConfig.script;
+      if (!scriptName || this.scriptRunning) return;
+      this.activeNPC = targetNPC;
       if (window.OverworldScriptEngine) {
         window.OverworldScriptEngine.runScript(this, scriptName);
       }
@@ -1379,10 +1391,14 @@ class OverworldScene extends Phaser.Scene {
     const wy = Math.round(off.y / 32) + this.playerGridY;
     const t = this.triggers.find(tr => tr.wx === wx && tr.wy === wy);
     if (!t) return;
+    if (this.scriptRunning) return;
 
     if (t.type === 'Warp') {
       this.runWarp(t.config);
     } else if (t.type === 'Script' && t.config.script && window.OverworldScriptEngine) {
+      // [SCRIPTS] Script Tile: only runs while the variable `scriptVar` equals `varValue`
+      const sv = t.config.scriptVar;
+      if (sv && window.OverworldScriptEngine.getVar(sv) !== (Number(t.config.varValue) || 0)) return;
       this.activeNPC = null;
       window.OverworldScriptEngine.runScript(this, t.config.script);
     }
@@ -1598,6 +1614,12 @@ class OverworldScene extends Phaser.Scene {
     if (this.player && this.npcs) {
       this.player.setDepth(this.player.y);
       this.npcs.forEach(npc => npc.setDepth(npc.y));
+    }
+
+    // [SCRIPTS] no input while a script runs (and for a moment after, so the button that closed the last message does not start it again)
+    if (this.scriptRunning || (this.scriptEndedAt && this.time.now - this.scriptEndedAt < 300)) {
+      Phaser.Input.Keyboard.JustDown(this.spaceKey);
+      return;
     }
 
     if (this.isLocked || this.isMoving) return;
