@@ -365,12 +365,33 @@ function createSummary(env) {
       tmpX.globalCompositeOperation = 'source-atop'; tmpX.fillStyle = `rgba(255,255,255,${flash})`; tmpX.fillRect(0, 0, dw, dh); tmpX.globalCompositeOperation = 'source-over'; c.drawImage(tmpC, dx, dy);
     } else c.drawImage(e.img, fr * fi.fw, 0, fi.fw, fi.fh, dx, dy, dw, dh);
   }
+  // Pokemon icon sheets come with a solid background colour (the colour of the top-left pixel). It is made transparent here:
+  // only background that touches the edge of the sheet is removed (flood fill), so same-coloured pixels inside the Pokemon stay.
+  const iconKeyed = new WeakMap();
+  function keyedIcon(img) {
+    if (iconKeyed.has(img)) return iconKeyed.get(img);
+    let out = img;
+    try {
+      const w = img.naturalWidth, h = img.naturalHeight, c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
+      x.drawImage(img, 0, 0); const id = x.getImageData(0, 0, w, h), d = id.data;
+      if (d[3] === 255) {
+        const r0 = d[0], g0 = d[1], b0 = d[2], tol = 6, seen = new Uint8Array(w * h), stack = [];
+        const match = p => d[p * 4 + 3] === 255 && Math.abs(d[p * 4] - r0) <= tol && Math.abs(d[p * 4 + 1] - g0) <= tol && Math.abs(d[p * 4 + 2] - b0) <= tol;
+        const push = p => { if (!seen[p] && match(p)) { seen[p] = 1; stack.push(p); } };
+        for (let i = 0; i < w; i++) { push(i); push((h - 1) * w + i); } for (let j = 0; j < h; j++) { push(j * w); push(j * w + w - 1); }
+        while (stack.length) { const p = stack.pop(), px = p % w, py = (p - px) / w; if (px > 0) push(p - 1); if (px < w - 1) push(p + 1); if (py > 0) push(p - w); if (py < h - 1) push(p + w); }
+        for (let p = 0; p < w * h; p++) if (seen[p]) d[p * 4 + 3] = 0;
+        x.putImageData(id, 0, 0); out = c;
+      }
+    } catch (e) { out = img; }
+    iconKeyed.set(img, out); return out;
+  }
   function drawIcon(c, m, x, y, sel, i) {
     const e = getImg(m.icon);
     if (!e || e.fail || !m.icon) { ball(c, x + 9, y + 14, m.ball, 2); return; }
     if (!e.ok) return;
     const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = ih >= iw * 2 ? 2 : 1, fh = Math.floor(ih / n), fr = n > 1 ? Math.floor(S.t / (sel ? .16 : .7) + i) % 2 : 0;
-    c.imageSmoothingEnabled = false; c.drawImage(e.img, 0, fr * fh, iw, fh, x + Math.round((32 - iw) / 2), y + 32 - fh, iw, fh);
+    c.imageSmoothingEnabled = false; c.drawImage(keyedIcon(e.img), 0, fr * fh, iw, fh, x + Math.round((32 - iw) / 2), y + 32 - fh, iw, fh);
   }
   const genderGlyph = (c, g, xr, y) => { if (g === 'M') TR(c, '♂', xr, y, 'blue'); else if (g === 'F') TR(c, '♀', xr, y, 'red'); };
   function hpBar(c, x, y, w, h, frac, sel) {
