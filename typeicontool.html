@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Type Icon Editor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#14161c;color:#dde;font:13px system-ui,sans-serif;padding:18px;max-width:1200px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}.sub{color:#8a93a6;margin-bottom:14px;line-height:1.5}
+section{background:#1c1f28;border:1px solid #2c3140;border-radius:10px;padding:14px;margin-bottom:14px}
+h2{font-size:14px;margin:0 0 6px;color:#7fa4ff}
+.hint{color:#8a93a6;line-height:1.5;margin:4px 0 8px}code{background:#262a36;padding:1px 5px;border-radius:4px;color:#cfe}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+button,select,input,textarea{font:inherit;background:#262a36;color:#eef;border:1px solid #3a4052;border-radius:6px;padding:6px 10px}
+button{cursor:pointer}button:hover{background:#343b50}button.pri{background:#3a6df0;border-color:#5d8aff}button.ok{background:#2e8b57;border-color:#3fb37a}button.del{border-color:#8a3a3a}
+input[type=number]{width:62px;padding:5px 6px}input[type=text]{width:110px}input[type=color]{padding:0;width:38px;height:30px}
+label.in{display:flex;gap:6px;align-items:center;color:#9ab}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px}
+@media(max-width:900px){.main{grid-template-columns:1fr}}
+.sheetwrap{background:repeating-conic-gradient(#2a2e3a 0 25%,#222633 0 50%) 0 0/16px 16px;border:1px solid #2c3140;border-radius:6px;overflow:auto;max-height:620px;position:relative}
+.sheetbox{position:relative;line-height:0}
+#sheet,#over{image-rendering:pixelated;display:block}
+#over{position:absolute;left:0;top:0;cursor:crosshair}
+.tw{max-height:360px;overflow:auto;border:1px solid #2c3140;border-radius:6px}
+table{width:100%;border-collapse:collapse}th,td{padding:4px 6px;text-align:left;border-bottom:1px solid #262a36;white-space:nowrap}
+th{position:sticky;top:0;background:#222634;color:#9ab;font-weight:600}
+tr.sel td{background:#26324f}tr:hover td{background:#252b3d}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px;border:1px solid #0006}
+.good{color:#6fe3a0}.bad{color:#ff8a80}.warn{color:#ffd166}
+.form{display:grid;grid-template-columns:70px 1fr;gap:6px 8px;align-items:center}
+.form>*{min-width:0}.form .r4{display:flex;gap:3px;flex-wrap:wrap;align-items:center}.form .r4 input{width:52px}
+#mat{border-collapse:separate;border-spacing:1px}
+#mat th,#mat td{padding:0;text-align:center;width:24px;height:22px;font-size:11px;border:0;position:static;background:#222634}
+#mat th.h{color:#9ab;font-weight:600}
+#mat td{cursor:pointer;background:#232736;color:#778}
+#mat td.e2{background:#2e8b57;color:#fff}#mat td.e5{background:#b8782c;color:#fff}#mat td.e0{background:#101218;color:#fff}
+#mat td:hover{outline:1px solid #7fa4ff}
+.badges{display:flex;gap:6px;align-items:center;min-height:28px}
+.pv{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:8px}
+.pv canvas{image-rendering:pixelated;background:repeating-conic-gradient(#2a2e3a 0 25%,#222633 0 50%) 0 0/12px 12px;border-radius:6px}
+#msg{position:sticky;bottom:0;background:#222a40;border:1px solid #3a6df0;border-radius:8px;padding:8px 12px;margin-top:10px;display:none;z-index:5}
+textarea#out{width:100%;height:240px;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre}
+</style></head><body>
+<h1>Type Icon Editor</h1>
+<div class="sub">Upload your type icon sheet, tell it where each type's icon is, edit the type data (names, colours, who beats whom) and download <code>tables/TypeTables.js</code>.
+  The summary screen reads that file and draws your icons. The sheet is the one in the picture you sent (CFRU), already loaded as an example: <b>upload your own PNG</b> to replace it.</div>
+
+<section>
+  <div class="row">
+    <button class="pri" id="bSheet">Upload icon sheet</button>
+    <label class="in">Path in your game <input type="text" id="sheetPath" value="graphics/ui/type_icons.png" style="width:260px"></label>
+    <label class="in"><input type="checkbox" id="keyBg" checked> top-left pixel colour is transparent</label>
+    <label class="in">tolerance <input type="number" id="tol" value="24" min="0" max="120"></label>
+    <label class="in">zoom <select id="zoom"><option>2</option><option>3</option><option selected>5</option><option>6</option><option>8</option></select></label>
+    <input type="file" id="fSheet" accept="image/*" hidden>
+  </div>
+  <div class="row">
+    <button id="bTT">Load existing TypeTables.js</button>
+    <button id="bNames">Import type_names.string</button>
+    <button id="bH">Import type_tables.h</button>
+    <button id="bDb">Load PokemonDatabase.js</button>
+    <button id="bFolder">Choose project folder</button>
+    <input type="file" id="fTT" accept=".js,.txt" hidden><input type="file" id="fNames" accept=".string,.txt" hidden><input type="file" id="fH" accept=".h,.txt" hidden><input type="file" id="fDb" accept=".js,.txt" hidden><input type="file" id="fFolder" webkitdirectory multiple hidden>
+  </div>
+</section>
+
+<div class="main">
+  <section>
+    <h2>Icon sheet <span id="sheetInfo" style="color:#8a93a6;font-weight:400"></span></h2>
+    <div class="hint">Select a type in the list, then <b>drag a box on the sheet</b> around its icon. Click an existing box to select that type. Boxes snap to whole pixels.</div>
+    <div class="sheetwrap"><div class="sheetbox"><canvas id="sheet"></canvas><canvas id="over"></canvas></div></div>
+  </section>
+  <section>
+    <h2>Selected type</h2>
+    <div class="form" id="form">
+      <label>Key</label><input type="text" id="fKey" style="width:100%">
+      <label>ID</label><input type="number" id="fId" style="width:90px">
+      <label>Name</label><input type="text" id="fName" style="width:100%">
+      <label>Short</label><span><input type="text" id="fShort" maxlength="6" style="width:90px"> <span class="hint">max 6 (gTypeNames)</span></span>
+      <label>Colour</label><input type="color" id="fColor">
+      <label>Icon box</label><span class="r4">x<input type="number" id="fx"> y<input type="number" id="fy"> w<input type="number" id="fw"> h<input type="number" id="fh"></span>
+    </div>
+    <div class="row"><button id="bClear">No icon (text badge)</button><button class="del" id="bDel">Delete type</button><button id="bAdd">+ Add type</button></div>
+    <div class="badges" id="selBadge"></div>
+    <h2 style="margin-top:12px">Auto-fit a grid</h2>
+    <div class="hint">For a sheet where the icons sit in a regular grid. Cells are read left to right, top to bottom, and assigned to the names in the order box (<code>-</code> skips a cell).</div>
+    <div class="row">x0<input type="number" id="gx" value="0"> y0<input type="number" id="gy" value="16"> cell w<input type="number" id="gw" value="32"> pitch h<input type="number" id="gp" value="16"> icon h<input type="number" id="gh" value="12"> cols<input type="number" id="gc" value="4"></div>
+    <textarea id="gorder" style="width:100%;height:76px;font:12px ui-monospace,monospace"></textarea>
+    <div class="row"><button id="bGrid">Apply grid</button></div>
+  </section>
+</div>
+
+<section>
+  <h2>Types</h2>
+  <div class="tw"><table><thead><tr><th>ID</th><th>Key</th><th>Name</th><th>Short</th><th>Colour</th><th>Icon box</th><th>Beats / resisted by</th></tr></thead><tbody id="tbT"></tbody></table></div>
+</section>
+
+<section>
+  <h2>Who beats whom</h2>
+  <div class="hint">Rows attack, columns defend. Click a cell to cycle: <b style="color:#6fe3a0">×2</b> → <b style="color:#e0a050">×½</b> → <b>×0</b> → empty (×1). Loaded from your <code>type_tables.h</code>.</div>
+  <div style="overflow:auto"><table id="mat"></table></div>
+</section>
+
+<section>
+  <h2>Check against PokemonDatabase.js</h2>
+  <div class="hint">Load <code>PokemonDatabase.js</code> (or choose the project folder) to see which types your species use, whether each has an icon, and to preview a species with its sprite, icon and cry.</div>
+  <div id="dbInfo" class="hint">No database loaded.</div>
+  <div class="tw" id="dbTw" style="display:none;max-height:240px"><table><thead><tr><th>Type</th><th>Species using it</th><th>In table</th><th>Icon</th></tr></thead><tbody id="tbDb"></tbody></table></div>
+  <div class="row"><label class="in">Species preview <input type="text" id="spIn" list="spList" placeholder="type a name, e.g. Lucario" style="width:240px"></label><datalist id="spList"></datalist><button id="bCry" disabled>▶ Cry</button></div>
+  <div class="pv" id="pv"></div>
+</section>
+
+<section>
+  <h2>TypeTables.js</h2>
+  <div class="hint">Save it as <code>tables/TypeTables.js</code> and put the icon sheet at the path above. In <code>index.html</code>, load <code>tables/TypeTables.js</code> before <code>js/PokemonSummary.js</code>.</div>
+  <div class="row"><button class="ok" id="bSave">Download TypeTables.js</button><button id="bCopy">Copy</button><span id="saveInfo" style="color:#8a93a6"></span></div>
+  <textarea id="out" readonly spellcheck="false"></textarea>
+</section>
+<div id="msg"></div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const msg=t=>{const m=$('msg');m.textContent=t;m.style.display=t?'block':'none'};
+const pretty=s=>String(s||'').replace(/^TYPE_/,'').toLowerCase().split(/[_\s]+/).filter(Boolean).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');
+
+// ------------------------------------------------ defaults (names from type_names.string, effectiveness from type_tables.h, icon boxes measured on your sheet)
+const DEF_EFF={"TYPE_NORMAL":{"TYPE_ROCK":0.5,"TYPE_STEEL":0.5,"TYPE_GHOST":0},"TYPE_FIRE":{"TYPE_FIRE":0.5,"TYPE_WATER":0.5,"TYPE_GRASS":2,"TYPE_ICE":2,"TYPE_BUG":2,"TYPE_ROCK":0.5,"TYPE_DRAGON":0.5,"TYPE_STEEL":2},"TYPE_WATER":{"TYPE_FIRE":2,"TYPE_WATER":0.5,"TYPE_GRASS":0.5,"TYPE_GROUND":2,"TYPE_ROCK":2,"TYPE_DRAGON":0.5},"TYPE_ELECTRIC":{"TYPE_WATER":2,"TYPE_ELECTRIC":0.5,"TYPE_GRASS":0.5,"TYPE_GROUND":0,"TYPE_FLYING":2,"TYPE_DRAGON":0.5},"TYPE_GRASS":{"TYPE_FIRE":0.5,"TYPE_WATER":2,"TYPE_GRASS":0.5,"TYPE_POISON":0.5,"TYPE_GROUND":2,"TYPE_FLYING":0.5,"TYPE_BUG":0.5,"TYPE_ROCK":2,"TYPE_DRAGON":0.5,"TYPE_STEEL":0.5},"TYPE_ICE":{"TYPE_WATER":0.5,"TYPE_GRASS":2,"TYPE_ICE":0.5,"TYPE_GROUND":2,"TYPE_FLYING":2,"TYPE_DRAGON":2,"TYPE_STEEL":0.5,"TYPE_FIRE":0.5},"TYPE_FIGHTING":{"TYPE_NORMAL":2,"TYPE_ICE":2,"TYPE_POISON":0.5,"TYPE_FLYING":0.5,"TYPE_PSYCHIC":0.5,"TYPE_BUG":0.5,"TYPE_FAIRY":0.5,"TYPE_ROCK":2,"TYPE_DARK":2,"TYPE_STEEL":2,"TYPE_GHOST":0},"TYPE_POISON":{"TYPE_GRASS":2,"TYPE_FAIRY":2,"TYPE_POISON":0.5,"TYPE_GROUND":0.5,"TYPE_ROCK":0.5,"TYPE_GHOST":0.5,"TYPE_STEEL":0},"TYPE_GROUND":{"TYPE_FIRE":2,"TYPE_ELECTRIC":2,"TYPE_GRASS":0.5,"TYPE_POISON":2,"TYPE_FLYING":0,"TYPE_BUG":0.5,"TYPE_ROCK":2,"TYPE_STEEL":2},"TYPE_FLYING":{"TYPE_ELECTRIC":0.5,"TYPE_GRASS":2,"TYPE_FIGHTING":2,"TYPE_BUG":2,"TYPE_ROCK":0.5,"TYPE_STEEL":0.5},"TYPE_PSYCHIC":{"TYPE_FIGHTING":2,"TYPE_POISON":2,"TYPE_PSYCHIC":0.5,"TYPE_DARK":0,"TYPE_STEEL":0.5},"TYPE_BUG":{"TYPE_FIRE":0.5,"TYPE_GRASS":2,"TYPE_FIGHTING":0.5,"TYPE_POISON":0.5,"TYPE_FLYING":0.5,"TYPE_PSYCHIC":2,"TYPE_GHOST":0.5,"TYPE_DARK":2,"TYPE_STEEL":0.5,"TYPE_FAIRY":0.5},"TYPE_ROCK":{"TYPE_FIRE":2,"TYPE_ICE":2,"TYPE_FIGHTING":0.5,"TYPE_GROUND":0.5,"TYPE_FLYING":2,"TYPE_BUG":2,"TYPE_STEEL":0.5},"TYPE_GHOST":{"TYPE_NORMAL":0,"TYPE_PSYCHIC":2,"TYPE_DARK":0.5,"TYPE_GHOST":2},"TYPE_DRAGON":{"TYPE_DRAGON":2,"TYPE_STEEL":0.5,"TYPE_FAIRY":0},"TYPE_DARK":{"TYPE_FIGHTING":0.5,"TYPE_PSYCHIC":2,"TYPE_GHOST":2,"TYPE_DARK":0.5,"TYPE_FAIRY":0.5},"TYPE_STEEL":{"TYPE_STEEL":0.5,"TYPE_FIRE":0.5,"TYPE_WATER":0.5,"TYPE_ELECTRIC":0.5,"TYPE_ICE":2,"TYPE_ROCK":2,"TYPE_FAIRY":2},"TYPE_FAIRY":{"TYPE_POISON":0.5,"TYPE_STEEL":0.5,"TYPE_FIRE":0.5,"TYPE_FIGHTING":2,"TYPE_DRAGON":2,"TYPE_DARK":2}};
+const ICON=(x,y)=>({x,y,w:32,h:12});
+const DEFAULT_TYPES=[
+ ['TYPE_NORMAL',0,'Normal','Normal','#a8a878',ICON(0,16)],['TYPE_FIGHTING',1,'Fighting','Fight','#c03028',ICON(32,48)],['TYPE_FLYING',2,'Flying','Flying','#a890f0',ICON(0,48)],
+ ['TYPE_POISON',3,'Poison','Poison','#a040a0',ICON(0,64)],['TYPE_GROUND',4,'Ground','Ground','#d8b858',ICON(64,32)],['TYPE_ROCK',5,'Rock','Rock','#b8a038',ICON(32,32)],
+ ['TYPE_BUG',6,'Bug','Bug','#a8b820',ICON(96,48)],['TYPE_GHOST',7,'Ghost','Ghost','#705898',ICON(64,48)],['TYPE_STEEL',8,'Steel','Steel','#a8a8c0',ICON(64,64)],
+ ['TYPE_MYSTERY',9,'???','???','#68a090',ICON(32,80)],['TYPE_FIRE',10,'Fire','Fire','#f08030',ICON(32,16)],['TYPE_WATER',11,'Water','Water','#6890f0',ICON(64,16)],
+ ['TYPE_GRASS',12,'Grass','Grass','#78c850',ICON(96,16)],['TYPE_ELECTRIC',13,'Electric','Electr','#f0c820',ICON(0,32)],['TYPE_PSYCHIC',14,'Psychic','Psychc','#f85888',ICON(32,64)],
+ ['TYPE_ICE',15,'Ice','Ice','#98d8d8',ICON(96,32)],['TYPE_DRAGON',16,'Dragon','Dragon','#7038f8',ICON(0,80)],['TYPE_DARK',17,'Dark','Dark','#705848',ICON(96,64)],
+ ['TYPE_FAIRY',23,'Fairy','Fairy','#ee99ac',ICON(0,128)],['TYPE_STELLAR',24,'Stellar','Stellr','#58b8c8',ICON(32,128)]];
+const DEFAULT_LABELS={TYPE:{x:64,y:82,w:38,h:9},POWER:{x:0,y:98,w:38,h:9},ACCURACY:{x:64,y:98,w:38,h:9},PP:{x:0,y:114,w:38,h:9},EFFECT:{x:64,y:114,w:38,h:9}};
+let types=[],labels={},sel=0,SHEET=null,PROC=null,DB=null;
+function loadDefaults(){types=DEFAULT_TYPES.map(a=>({key:a[0],id:a[1],name:a[2],short:a[3],color:a[4],icon:{...a[5]},eff:{...(DEF_EFF[a[0]]||{})}}));labels=JSON.parse(JSON.stringify(DEFAULT_LABELS))}
+loadDefaults();
+$('gorder').value='NORMAL FIRE WATER GRASS ELECTRIC ROCK GROUND ICE FLYING FIGHTING GHOST BUG POISON PSYCHIC STEEL DARK DRAGON MYSTERY';
+
+// ------------------------------------------------ sheet
+const sheetC=$('sheet'),over=$('over'),sx=sheetC.getContext('2d',{willReadFrequently:true}),ox=over.getContext('2d');
+function hex(r,g,b){return'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('')}
+function process(){ // PROC = the sheet with the top-left colour made transparent (what the game does with the same option)
+  if(!SHEET)return;const w=SHEET.w,h=SHEET.h;PROC=document.createElement('canvas');PROC.width=w;PROC.height=h;const x=PROC.getContext('2d',{willReadFrequently:true});x.drawImage(SHEET.img,0,0);
+  if($('keyBg').checked){const id=x.getImageData(0,0,w,h),d=id.data,r0=d[0],g0=d[1],b0=d[2],a0=d[3],tol=+$('tol').value||0;
+    if(a0===255){for(let i=0;i<d.length;i+=4)if(Math.abs(d[i]-r0)<=tol&&Math.abs(d[i+1]-g0)<=tol&&Math.abs(d[i+2]-b0)<=tol)d[i+3]=0;x.putImageData(id,0,0)}}
+  sheetC.width=w;sheetC.height=h;sx.clearRect(0,0,w,h);sx.drawImage(PROC,0,0);layout();drawOver();renderAll()}
+function layout(){const z=+$('zoom').value;if(!SHEET)return;sheetC.style.width=SHEET.w*z+'px';sheetC.style.height=SHEET.h*z+'px';over.width=SHEET.w*z;over.height=SHEET.h*z;over.style.width=SHEET.w*z+'px';over.style.height=SHEET.h*z+'px'}
+let drag=null;
+function drawOver(){if(!SHEET)return;const z=+$('zoom').value;ox.clearRect(0,0,over.width,over.height);ox.lineWidth=1;ox.font='10px system-ui';
+  types.forEach((t,i)=>{if(!t.icon)return;const r=t.icon;ox.strokeStyle=i===sel?'#ffffff':'rgba(120,170,255,.75)';ox.lineWidth=i===sel?2:1;ox.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1)});
+  Object.entries(labels).forEach(([k,r])=>{ox.strokeStyle='rgba(255,200,90,.55)';ox.lineWidth=1;ox.setLineDash([3,3]);ox.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);ox.setLineDash([])});
+  if(drag){const r=dragRect();ox.strokeStyle='#6fe3a0';ox.lineWidth=2;ox.strokeRect(r.x*z+1,r.y*z+1,r.w*z-2,r.h*z-2)}}
+const px=e=>{const z=+$('zoom').value,b=over.getBoundingClientRect();return{x:Math.max(0,Math.min(SHEET.w,Math.floor((e.clientX-b.left)/z))),y:Math.max(0,Math.min(SHEET.h,Math.floor((e.clientY-b.top)/z)))}};
+function dragRect(){const a=drag.a,b=drag.b;return{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(a.x-b.x)+1,h:Math.abs(a.y-b.y)+1}}
+over.addEventListener('mousedown',e=>{if(!SHEET)return;const p=px(e);drag={a:p,b:p,moved:false};drawOver()});
+window.addEventListener('mousemove',e=>{if(!drag)return;const p=px(e);if(p.x!==drag.b.x||p.y!==drag.b.y)drag.moved=true;drag.b=p;drawOver()});
+window.addEventListener('mouseup',e=>{if(!drag)return;const d=drag;drag=null;
+  if(d.moved){const r={x:Math.min(d.a.x,d.b.x),y:Math.min(d.a.y,d.b.y),w:Math.abs(d.a.x-d.b.x)+1,h:Math.abs(d.a.y-d.b.y)+1};if(types[sel])types[sel].icon=r;renderAll()}
+  else{const i=types.findIndex(t=>t.icon&&d.a.x>=t.icon.x&&d.a.x<t.icon.x+t.icon.w&&d.a.y>=t.icon.y&&d.a.y<t.icon.y+t.icon.h);if(i>=0)sel=i;renderAll()}});
+$('zoom').onchange=()=>{layout();drawOver()};
+$('keyBg').onchange=process;$('tol').onchange=process;
+function setSheet(img,name){SHEET={img,w:img.naturalWidth,h:img.naturalHeight,name};$('sheetInfo').textContent=`${img.naturalWidth}×${img.naturalHeight}${name?' · '+name:''}`;process()}
+$('bSheet').onclick=()=>$('fSheet').click();
+$('fSheet').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const im=new Image();im.onload=()=>{setSheet(im,f.name);$('sheetPath').value=$('sheetPath').value.replace(/[^/]*$/,f.name);renderAll()};im.src=URL.createObjectURL(f)};
+
+// ------------------------------------------------ type list + form
+const rectTxt=r=>r?`${r.x},${r.y}  ${r.w}×${r.h}`:'<span class="warn">none (text badge)</span>';
+function badgeCanvas(t,scale=1){const w=t.icon?t.icon.w:34,h=t.icon?t.icon.h:13,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+  if(t.icon&&PROC)x.drawImage(PROC,t.icon.x,t.icon.y,t.icon.w,t.icon.h,0,0,w,h);else{x.fillStyle=t.color;x.fillRect(0,0,w,h);x.fillStyle='#fff';x.font='bold 9px monospace';x.fillText(t.short.toUpperCase().slice(0,5),2,10)}
+  c.style.width=w*scale+'px';c.style.height=h*scale+'px';c.style.imageRendering='pixelated';return c}
+function renderList(){const tb=$('tbT');tb.innerHTML='';
+  types.forEach((t,i)=>{const tr=document.createElement('tr');if(i===sel)tr.className='sel';
+    const nb=Object.values(t.eff).filter(v=>v===2).length,nr=types.filter(o=>o.eff[t.key]===.5||o.eff[t.key]===0).length;
+    tr.innerHTML=`<td>${t.id}</td><td>${esc(t.key)}</td><td>${esc(t.name)}</td><td>${esc(t.short)}</td><td><span class="sw" style="background:${t.color}"></span>${t.color}</td><td>${rectTxt(t.icon)}</td><td>×2 on ${nb} · resisted by ${nr}</td>`;
+    tr.onclick=()=>{sel=i;renderAll()};tb.appendChild(tr)})}
+function renderForm(){const t=types[sel]||null;for(const id of['fKey','fId','fName','fShort','fColor','fx','fy','fw','fh'])$(id).disabled=!t;
+  if(!t){$('selBadge').innerHTML='';return}
+  $('fKey').value=t.key;$('fId').value=t.id;$('fName').value=t.name;$('fShort').value=t.short;$('fColor').value=t.color;
+  const r=t.icon||{x:0,y:0,w:32,h:12};$('fx').value=r.x;$('fy').value=r.y;$('fw').value=r.w;$('fh').value=r.h;
+  const sb=$('selBadge');sb.innerHTML='';sb.appendChild(badgeCanvas(t,3))}
+function applyForm(){const t=types[sel];if(!t)return;t.key=$('fKey').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g,'')||t.key;t.id=+$('fId').value||0;t.name=$('fName').value;t.short=$('fShort').value.slice(0,6);t.color=$('fColor').value;
+  const w=+$('fw').value,h=+$('fh').value;if(w>0&&h>0)t.icon={x:+$('fx').value||0,y:+$('fy').value||0,w,h};renderAll(true)}
+for(const id of['fKey','fId','fName','fShort','fColor','fx','fy','fw','fh'])$(id).onchange=applyForm;
+$('bClear').onclick=()=>{if(types[sel])types[sel].icon=null;renderAll()};
+$('bDel').onclick=()=>{if(types.length<2)return;const k=types[sel].key;types.splice(sel,1);types.forEach(t=>delete t.eff[k]);sel=Math.min(sel,types.length-1);renderAll()};
+$('bAdd').onclick=()=>{const id=Math.max(...types.map(t=>t.id))+1;types.push({key:'TYPE_NEW'+id,id,name:'New',short:'New',color:'#888888',icon:null,eff:{}});sel=types.length-1;renderAll()};
+$('bGrid').onclick=()=>{const gx=+$('gx').value,gy=+$('gy').value,gw=+$('gw').value,gp=+$('gp').value,gh=+$('gh').value,gc=Math.max(1,+$('gc').value),names=$('gorder').value.trim().split(/[\s,]+/);let n=0;
+  names.forEach((nm,i)=>{if(nm==='-')return;const key='TYPE_'+nm.toUpperCase().replace(/^TYPE_/,''),t=types.find(o=>o.key===key);if(t){t.icon={x:gx+(i%gc)*gw,y:gy+Math.floor(i/gc)*gp,w:gw,h:gh};n++}});
+  renderAll();msg(`${n} icon boxes set from the grid.`)};
+
+// ------------------------------------------------ effectiveness matrix
+function renderMatrix(){const m=$('mat');let h='<tr><th></th>'+types.map(t=>`<th class="h" title="${esc(t.name)}">${esc(t.name.slice(0,3))}</th>`).join('')+'</tr>';
+  types.forEach(a=>{h+=`<tr><th class="h" style="width:44px;text-align:right;padding-right:4px">${esc(a.name.slice(0,5))}</th>`;
+    types.forEach(d=>{const v=a.eff[d.key],c=v===2?'e2':v===.5?'e5':v===0?'e0':'';h+=`<td class="${c}" data-a="${esc(a.key)}" data-d="${esc(d.key)}">${v===2?'2':v===.5?'½':v===0?'0':''}</td>`});h+='</tr>'});m.innerHTML=h}
+$('mat').addEventListener('click',e=>{const td=e.target.closest('td');if(!td)return;const a=types.find(t=>t.key===td.dataset.a),d=td.dataset.d,v=a.eff[d],next=v===undefined?2:v===2?.5:v===.5?0:undefined;
+  if(next===undefined)delete a.eff[d];else a.eff[d]=next;renderMatrix();renderList();buildOut()});
+function parseH(text){const eff={},mul={TYPE_MUL_SUPER_EFFECTIVE:2,TYPE_MUL_NOT_EFFECTIVE:.5,TYPE_MUL_NO_EFFECT:0,TYPE_MUL_NORMAL:1};let atk=null;
+  for(const line of text.split(/\r?\n/)){let m=/^\s*\[(TYPE_\w+)\]\s*=\s*(TYPE_MUL_\w+)/.exec(line);
+    if(m){if(atk&&mul[m[2]]!==undefined)eff[atk][m[1]]=mul[m[2]];continue}
+    m=/^\s*\[(TYPE_\w+)\]\s*=\s*\{?\s*$/.exec(line);if(m){atk=m[1];eff[atk]=eff[atk]||{}}}
+  return eff}
+$('bH').onclick=()=>$('fH').click();
+$('fH').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const eff=parseH(await f.text());let n=0;
+  types.forEach(t=>{if(eff[t.key]){t.eff=eff[t.key];n++}});renderAll();msg(`type_tables.h: effectiveness read for ${n} types.`)};
+$('bNames').onclick=()=>$('fNames').click();
+$('fNames').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const lines=(await f.text()).split(/\r?\n/);let n=0;
+  const alias={TYPELESS:'MYSTERY',PSYCHC:'PSYCHIC'};
+  for(let i=0;i<lines.length;i++){const m=/^#org\s+@NAME_(\w+)/.exec(lines[i]);if(!m)continue;const nm=alias[m[1]]||m[1],t=types.find(o=>o.key==='TYPE_'+nm);let j=i+1;while(j<lines.length&&lines[j].trim()==='')j++;
+    if(t&&lines[j]!==undefined){t.short=lines[j].trim().slice(0,6);n++}}
+  renderAll();msg(`type_names.string: ${n} short names read.`)};
+
+// ------------------------------------------------ load an existing TypeTables.js
+$('bTT').onclick=()=>$('fTT').click();
+$('fTT').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)loadTT(await f.text(),f.name)};
+function loadTT(text,name){try{const o=new Function(text+'\n;return typeof TypeTable!=="undefined"?TypeTable:null')();if(!o||!o.types)throw new Error('no TypeTable found');
+  const ord=o.order||Object.keys(o.types);types=ord.filter(k=>o.types[k]).map(k=>{const t=o.types[k];return{key:k,id:t.id??0,name:t.name||pretty(k),short:t.short||t.name||'',color:t.color||'#888888',icon:t.icon?{...t.icon}:null,eff:{...(t.effectiveness||{})}}});
+  if(o.labels)labels=JSON.parse(JSON.stringify(o.labels));if(o.sheet)$('sheetPath').value=o.sheet;if(o.bgKey!==undefined)$('keyBg').checked=!!o.bgKey;sel=0;process();msg(`${name}: ${types.length} types loaded.`)}
+  catch(err){msg(`Could not read ${name}: ${err.message}`)}}
+
+// ------------------------------------------------ output
+function buildOut(){
+  const q=s=>`'${String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}'`,L=[];
+  L.push('// tables/TypeTables.js  (made with type_icon_tool.html - edit it there, or by hand)','//','// sheet        the icon sheet (path used by the game)','// bgKey        true = the colour of the top-left pixel of the sheet is transparent','// icon         { x, y, w, h } of the type icon on the sheet (null = no icon, a text badge is drawn)','// effectiveness  attacker -> { defender: 0 | 0.5 | 2 }  (missing = 1)','');
+  L.push('const TypeTable = {',`  sheet: ${q($('sheetPath').value.trim())},`,`  bgKey: ${$('keyBg').checked},`,`  bgTolerance: ${+$('tol').value||0},`,`  order: [${types.map(t=>q(t.key)).join(', ')}],`,'  types: {');
+  types.forEach(t=>{const ef=Object.entries(t.eff).map(([k,v])=>`${k}: ${v}`).join(', ');
+    L.push(`    ${t.key}: { id: ${t.id}, name: ${q(t.name)}, short: ${q(t.short)}, color: ${q(t.color)}, icon: ${t.icon?`{ x: ${t.icon.x}, y: ${t.icon.y}, w: ${t.icon.w}, h: ${t.icon.h} }`:'null'}, effectiveness: { ${ef} } },`)});
+  L.push('  },',`  labels: { ${Object.entries(labels).map(([k,r])=>`${k}: { x: ${r.x}, y: ${r.y}, w: ${r.w}, h: ${r.h} }`).join(', ')} },`,'',
+    '  get(key) { return this.types[key] || null; },','',
+    '  // damage multiplier of an attack of type `attackKey` against a Pokemon with the type keys in `defenderKeys` (TYPE_NONE is ignored)',
+    '  multiplier(attackKey, defenderKeys) {','    const a = this.types[attackKey]; if (!a) return 1;','    let m = 1;','    for (const d of [].concat(defenderKeys)) { if (!d || d === \'TYPE_NONE\') continue; const v = a.effectiveness[d]; if (v !== undefined) m *= v; }','    return m;','  },','',
+    '  // draws the icon of a type on a canvas 2D context. img = the loaded sheet (an Image or canvas).','  drawIcon(ctx, img, key, x, y, scale = 1) {','    const t = this.types[key]; if (!t || !t.icon) return false;','    ctx.drawImage(img, t.icon.x, t.icon.y, t.icon.w, t.icon.h, x, y, t.icon.w * scale, t.icon.h * scale);','    return true;','  },','};','window.TypeTable = TypeTable;','');
+  $('out').value=L.join('\n')}
+function download(name,text){const b=new Blob([text],{type:'text/javascript'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+$('bSave').onclick=()=>{buildOut();download('TypeTables.js',$('out').value);$('saveInfo').textContent='TypeTables.js downloaded.'};
+$('bCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('out').value);msg('Copied.')}catch(e){$('out').select();msg('Select all and copy (Ctrl+C).')}};
+$('sheetPath').onchange=buildOut;
+
+// ------------------------------------------------ PokemonDatabase.js, project folder, species preview
+const fileMap=new Map();let cryAudio=null;
+function parseDb(text,name){try{const o=new Function(text+'\n;return typeof PokemonDatabase!=="undefined"?PokemonDatabase:null')();if(!o||typeof o!=='object')throw new Error('no PokemonDatabase found');DB=o;renderDb();msg(`${name}: ${Object.keys(o).length} species.`)}catch(e){msg(`Could not read ${name}: ${e.message}`)}}
+$('bDb').onclick=()=>$('fDb').click();
+$('fDb').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)parseDb(await f.text(),f.name)};
+$('bFolder').onclick=()=>$('fFolder').click();
+$('fFolder').onchange=async e=>{const fs=[...e.target.files];e.target.value='';fileMap.clear();for(const f of fs)fileMap.set(f.name.toLowerCase(),f);
+  const db=fileMap.get('pokemondatabase.js'),tt=fileMap.get('typetables.js');let note=`${fs.length} files read.`;
+  if(tt&&confirm('TypeTables.js found in the folder. Load it for editing?'))loadTT(await tt.text(),'TypeTables.js');
+  const sheetName=$('sheetPath').value.split('/').pop().toLowerCase(),sf=fileMap.get(sheetName);
+  if(sf){const im=new Image();im.onload=()=>{setSheet(im,sf.name)};im.src=URL.createObjectURL(sf);note+=` Sheet ${sf.name} loaded.`}
+  if(db)parseDb(await db.text(),'PokemonDatabase.js');else msg(note+' (no PokemonDatabase.js in it)');renderPreview()};
+function renderDb(){
+  if(!DB){$('dbInfo').textContent='No database loaded.';$('dbTw').style.display='none';return}
+  const cnt={};let n=0;for(const e of Object.values(DB)){if(!e||typeof e!=='object')continue;n++;for(const k of[e.type1,e.type2])if(k&&k!=='TYPE_NONE')cnt[k]=(cnt[k]||0)+1}
+  const keys=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]),top=keys[0],ph=top&&cnt[top]>=n*.9;
+  $('dbInfo').innerHTML=`${n} species. `+(ph?`<span class="warn">${cnt[top]} of them use ${esc(top)}: the types in this file look like placeholders, the icons will all be the same until the real types are filled in.</span>`:'');
+  $('dbTw').style.display='block';$('tbDb').innerHTML=keys.map(k=>{const t=types.find(o=>o.key===k);return`<tr><td>${esc(k)}</td><td>${cnt[k]}</td><td class="${t?'good':'bad'}">${t?'yes':'missing: add it'}</td><td class="${t&&t.icon?'good':'warn'}">${t&&t.icon?'icon set':'text badge'}</td></tr>`}).join('');
+  const dl=$('spList');dl.innerHTML='';const seen=new Set();for(const e of Object.values(DB)){if(e&&e.name&&e.name!=='None'&&!seen.has(e.name)&&seen.size<3000){seen.add(e.name);const o=document.createElement('option');o.value=e.name;dl.appendChild(o)}}}
+function dbEntry(name){if(!DB)return null;const n=String(name).trim().toLowerCase();for(const[k,e]of Object.entries(DB))if(e&&e.name&&e.name.toLowerCase()===n)return{k,e};return null}
+function imgFrom(path,cb){const f=fileMap.get(String(path).split('/').pop().toLowerCase());if(!f){cb(null);return}const im=new Image();im.onload=()=>cb(im);im.onerror=()=>cb(null);im.src=URL.createObjectURL(f)}
+function renderPreview(){const pv=$('pv');pv.innerHTML='';const r=dbEntry($('spIn').value);$('bCry').disabled=true;if(!r)return;const{e}=r;
+  const tk=[e.type1,e.type2].filter(k=>k&&k!=='TYPE_NONE'),row=document.createElement('div');row.className='badges';
+  for(const k of tk){const t=types.find(o=>o.key===k);row.appendChild(t?badgeCanvas(t,3):Object.assign(document.createElement('span'),{className:'bad',textContent:k+' missing'}))}
+  const info=document.createElement('div');info.innerHTML=`<b>${esc(e.name)}</b><br><span class="hint">${esc(e.battleSprite||'')}<br>${esc(e.iconSprite||'')}<br>${esc(e.cry||'')}</span>`;info.appendChild(row);
+  imgFrom(e.battleSprite,im=>{if(!im)return;const n=im.naturalWidth/im.naturalHeight>=3.5?4:1,fw=Math.floor(im.naturalWidth/n),c=document.createElement('canvas');c.width=fw;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0,fw,im.naturalHeight,0,0,fw,im.naturalHeight);c.style.width=fw*2+'px';pv.prepend(c)});
+  imgFrom(e.iconSprite,im=>{if(!im)return;const n=im.naturalHeight>=im.naturalWidth*2?2:1,fh=Math.floor(im.naturalHeight/n),c=document.createElement('canvas');c.width=im.naturalWidth;c.height=fh;c.getContext('2d').drawImage(im,0,0,im.naturalWidth,fh,0,0,im.naturalWidth,fh);c.style.width=im.naturalWidth*3+'px';pv.prepend(c)});
+  pv.appendChild(info);
+  if(e.cry&&fileMap.get(String(e.cry).split('/').pop().toLowerCase()))$('bCry').disabled=false}
+$('spIn').oninput=renderPreview;
+$('bCry').onclick=()=>{const r=dbEntry($('spIn').value);if(!r)return;const f=fileMap.get(String(r.e.cry).split('/').pop().toLowerCase());if(!f)return;if(cryAudio)cryAudio.pause();cryAudio=new Audio(URL.createObjectURL(f));cryAudio.play().catch(()=>{})};
+
+// ------------------------------------------------ everything
+function renderAll(formOnly){if(!formOnly)renderForm();renderList();renderMatrix();drawOver();buildOut();if(DB)renderDb()}
+const im0=new Image();im0.onload=()=>setSheet(im0,'sample (your CFRU picture)');im0.src='data:image/jpeg;base64,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';
+renderAll();
+</script></body></html>
