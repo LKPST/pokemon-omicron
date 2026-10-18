@@ -110,7 +110,7 @@ window.OverworldTiles = {
     tileID: 10,
     tileName: "Flower",
     tileType: "Multi-tile",
-    isAnimated: false,
+    isAnimated: true,
     frames: 1,
     tileImage: "graphics/tiles/flower.png",
     tileDimension: "16x16"
