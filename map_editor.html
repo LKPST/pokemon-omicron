@@ -4,14 +4,18 @@
      (js/, tables/, same folder, ../js/, ../tables/, ../ ...) and remembers where it found them. The script engine and movement files are optional. -->
 <script>
 window.__ready=(async()=>{
-  const DIRS=['js/','tables/','','../js/','../tables/','../','data/','../data/','../../js/','../../'];
+  const DIRS=['js/','tables/','','../js/','../tables/','../','data/','../data/','../../js/','../../','src/','src/js/','src/tables/','public/','public/js/','public/tables/','scripts/','js/scripts/','tables/scripts/','game/','assets/','assets/js/','../src/','../public/','../scripts/'];
+  const foundDirs=[];
   const FILES=[['ow_table.js','OW_table.js','overworld_table.js','OverworldTable.js'],['Overworld_map.js','overworld_map.js'],['tiles.js','Tiles.js'],
-    ['PokemonDatabase.js','pokemondatabase.js'],['overworld_script_engine.js'],['overworld_movement.js']];
+    ['PokemonDatabase.js','pokemondatabase.js'],['overworld_script_commands.js','scriptsCommands.js','scriptCommands.js','script_commands.js','ScriptsCommands.js','scripts_commands.js'],['overworld_script_engine.js','script_engine.js','scriptEngine.js','ScriptEngine.js'],['overworld_scripts.js','overworldScripts.js','OverworldScripts.js','scripts.js'],['overworld_textbox.js','overworldTextbox.js','OverworldTextbox.js','textbox.js'],['overworld_movement.js','movement_type.js','movement_types.js','movement.js','overworldMovement.js']];
+  const CHECK=[()=>window.OverworldTable,()=>window.OverworldMaps,()=>window.OverworldTiles,null,()=>window.OverworldScriptCommands,()=>window.OverworldScriptEngine&&window.OverworldScriptEngine.parse,()=>window.OverworldScriptSource!==undefined,()=>window.OverworldText&&window.OverworldTextbox,()=>window.OverworldMovement];
+  window.__loadReport=[];
   let mem={};try{mem=JSON.parse(localStorage.edPaths||'{}')}catch(e){}
   const tryLoad=src=>new Promise(r=>{const s=document.createElement('script');s.src=src;s.onload=()=>r(true);s.onerror=()=>{s.remove();r(false)};document.head.appendChild(s)});
   window.__missing=[];
-  for(const names of FILES){let ok=false;const cand=[];if(mem[names[0]])cand.push(mem[names[0]]);for(const d of DIRS)for(const n of names)cand.push(d+n);
-    for(const c of [...new Set(cand)]){if(await tryLoad(c)){mem[names[0]]=c;ok=true;break}}
+  for(let fi=0;fi<FILES.length;fi++){const names=FILES[fi],chk=CHECK[fi];let ok=false;const cand=[];if(mem[names[0]])cand.push(mem[names[0]]);for(const d of [...foundDirs,...DIRS])for(const n of names)cand.push(d+n);
+    for(const c of [...new Set(cand)]){if(await tryLoad(c)&&(!chk||chk())){mem[names[0]]=c;ok=true;const d=c.slice(0,c.lastIndexOf('/')+1);if(!foundDirs.includes(d))foundDirs.unshift(d);break}}
+    window.__loadReport.push({name:names[0],path:ok?mem[names[0]]:null});
     if(!ok){window.__missing.push(names[0]);delete mem[names[0]]}}
   try{localStorage.edPaths=JSON.stringify(mem)}catch(e){}
 })();
@@ -31,6 +35,21 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 #side>*{flex:none}#palette{min-height:120px}.tabs{display:flex;gap:3px;flex-wrap:wrap}.tabs button{flex:1}.tabs button.on{background:#00838f}
 #bcv{border:1px solid #444;background:repeating-conic-gradient(#2a2a2a 0 25%,#222 0 50%) 0 0/16px 16px;cursor:crosshair;display:block;max-width:100%}
 .tab{display:none;flex-direction:column;gap:8px}.tab.on{display:flex}
+/* ---- scripts editor ---- */
+#sed{position:fixed;inset:0;background:#101010;z-index:50;display:none;flex-direction:column}#sed.on{display:flex}
+#seHead{display:flex;gap:8px;align-items:center;padding:6px 10px;background:#1b1b1b;border-bottom:1px solid #333}#seHead b{color:#00acc1}#seName{color:#ffd600;font-weight:bold}#seDirty{color:#ffb74d}
+#seBody{flex:1;display:grid;grid-template-columns:230px minmax(360px,1fr) 500px;min-height:0}
+#seLeft,#seMid,#seRight{overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px;border-right:1px solid #2a2a2a;min-height:0}
+#seList{display:flex;flex-direction:column;gap:2px;overflow:auto}.sl{display:flex;gap:6px;align-items:center;padding:4px 6px;border-radius:4px;cursor:pointer;background:#181818}.sl:hover{background:#242424}.sl.on{background:#00838f;color:#fff}
+.sl .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sl .bd{color:#ffb74d}.sl .us{color:#888;font-size:11px}
+#seSteps{display:flex;flex-direction:column;gap:6px}.card{background:#171717;border:1px solid #2d2d2d;border-radius:6px;padding:6px}.card.sel{border-color:#00acc1}.card.run{border-color:#76ff03;box-shadow:0 0 0 1px #76ff03}.card.warn{border-left:3px solid #ff8a80}.card.flash{background:#3b2a00}
+.chead{display:flex;gap:6px;align-items:center}.chead select{flex:1;min-width:0}.idx{color:#666;min-width:18px}.cm{color:#888;flex:1}.ctools{display:flex;gap:2px}button.mini{padding:2px 6px;font-size:11px}button.tk{padding:1px 4px}
+.cbody{display:flex;flex-direction:column;gap:5px;margin-top:5px}.help{color:#8a97a3;font-size:11px}.frow{display:flex;gap:6px;flex-wrap:wrap}.frow label{flex:1;min-width:110px}
+.cbody textarea,#seCode{width:100%;background:#0e0e0e;color:#e6e6e6;border:1px solid #3a3a3a;border-radius:4px;padding:6px;font:12px monospace;resize:vertical}#seCode{flex:1;min-height:360px}
+.mprev{display:flex;flex-direction:column;gap:4px}.mpage{width:448px;max-width:100%;image-rendering:pixelated;border-radius:4px}.pal{display:flex;gap:2px;flex-wrap:wrap}
+#seProblems{border-top:1px solid #2a2a2a;padding-top:6px;max-height:140px;overflow:auto}
+#pvCv{width:480px;max-width:100%;image-rendering:pixelated;background:#000;border:1px solid #444;cursor:crosshair}#pvLog{background:#0c0c0c;border:1px solid #2a2a2a;padding:4px;height:150px;overflow:auto;font-size:11px}.dim{color:#778}
+#seRight label{margin:1px 0}
 </style></head><body>
 <div id="side">
   <div class="row"><select id="mapSel" style="flex:1"></select><button id="newMap">+ Map</button></div>
@@ -42,6 +61,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
   <div class="tab" id="tab-conn"><div id="conns"></div></div>
   <div class="tab" id="tab-wild"><div id="wild"></div></div>
   <div class="tab" id="tab-props"><div id="props"></div></div>
+  <div class="tab" id="tab-scripts"><div id="seTabInfo"></div><button class="on openSed">✎ Open the Scripts editor</button><label>Script files not found? Load them here<input type="file" id="seLoadFiles" multiple accept=".js"></label><div class="help" id="seInfo">Scripts are written like xSE and saved in overworld_scripts.js. Put the script name in an NPC / Script event and use ✎ in the Events tab to edit it.</div></div>
   <details open><summary>Problems <span id="issueCount"></span></summary><div id="issues"></div></details>
 </div>
 <div id="main">
@@ -56,7 +76,31 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
   </div>
   <canvas id="cv" tabindex="0"></canvas><div id="status"></div>
 </div>
-<datalist id="musicList"></datalist>
+<datalist id="musicList"></datalist><datalist id="dlFlag"></datalist><datalist id="dlVar"></datalist><datalist id="dlLabel"></datalist><datalist id="dlTarget"></datalist>
+<div id="sed">
+  <div id="seHead"><b>Scripts</b><span id="seName"></span><span id="seUse" class="help"></span><span style="flex:1"></span><span id="seDirty"></span><button id="seSave" class="on">💾 Save overworld_scripts.js</button><button id="seClose">✕ Close</button></div>
+  <div id="seBody">
+    <div id="seLeft"><input id="seFind" placeholder="search scripts…"><div class="row"><button id="seNewB">+ New</button><button id="seDupB">Duplicate</button><button id="seRenB">Rename</button><button id="seDelB">Delete</button></div><div id="seList"></div><div class="help">number on the right = events that use the script</div></div>
+    <div id="seMid">
+      <div class="row"><button id="seTabSteps" class="on">Steps</button><button id="seTabText">Text (xSE)</button><select id="seAddSel" style="flex:1"></select></div>
+      <div id="seStepsWrap"><div id="seSteps"></div></div>
+      <div id="seCodeWrap" style="display:none"><textarea id="seCode" spellcheck="false"></textarea><div id="seCodeErr"></div></div>
+      <div id="seProblems"></div>
+    </div>
+    <div id="seRight">
+      <div class="help">Preview of the top screen. Click the screen to place the player. Space / click continues a message.</div>
+      <canvas id="pvCv" width="480" height="320"></canvas>
+      <div class="row"><button id="pvPlay" class="on">▶ Play</button><button id="pvStop">■ Stop</button><button id="pvReset">↺ Reset</button>
+        <select id="pvSpeed" style="width:70px"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+        <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="pvAuto"> auto text</label></div>
+      <label>Map<select id="pvMap"></select></label><label>Talking to (the "npc")<select id="pvEv"></select></label>
+      <div class="row"><label>Player X<input id="pvX" type="number" value="0" style="width:70px"></label><label>Y<input id="pvY" type="number" value="0" style="width:70px"></label>
+        <label>Screen<select id="pvScr"><option value="320">Top screen 480×320</option><option value="620">Whole 480×620</option></select></label></div>
+      <label>Flags that are already set (for goto_if_set)<input id="pvFlags" type="text" placeholder="FLAG_A, FLAG_B"></label>
+      <div id="pvLog"></div>
+    </div>
+  </div>
+</div>
 <script>
 window.__ready.then(()=>{
 const TS=32,$=id=>document.getElementById(id),clone=o=>JSON.parse(JSON.stringify(o)),uniq=a=>[...new Set(a)];
@@ -260,8 +304,8 @@ const SCHEMA={
   Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};
 const allEv=()=>Object.values(repo).flatMap(m=>Object.values(m.events));
 const OPTS={ow:()=>Object.keys(OT()),map:()=>Object.keys(repo),
-  script:()=>uniq([...Object.keys(window.OverworldScriptEngine?.scripts||{}),...allEv().map(e=>e.script).filter(Boolean)]),
-  move:()=>uniq([...Object.keys(window.OverworldMovement?.types||{}),'MOVEMENT_TYPE_LOOK_AROUND','MOVEMENT_TYPE_WANDER_LEFT_RIGHT','MOVEMENT_TYPE_WANDER_UP_AND_DOWN',...allEv().map(e=>e.movementType).filter(Boolean)]),
+  script:()=>uniq([...scriptNames(),...allEv().map(e=>e.script).filter(Boolean)]),
+  move:()=>uniq([...MOVE_TYPES,...Object.keys(window.OverworldMovement?.types||{}),...allEv().map(e=>e.movementType).filter(Boolean)]),
   facing:()=>['Down','Up','Left','Right'],warpType:()=>['Normal','Teleport','Hole'],
   warp:ev=>Object.entries(repo[findKey(ev.map)]?.events||{}).filter(([,v])=>v.eventType==='Warp').map(([k])=>k)};
 function newEv(t){const m=repo[active],e={eventType:t,xPos:hover?.map===active?hover.gx:0,yPos:hover?.map===active?hover.gy:0};
@@ -287,7 +331,11 @@ function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&re
   const xy=document.createElement('div');xy.className='row';I.appendChild(xy);
   rowTo(xy,'X',inp('num',ev.xPos,v=>ev.xPos=v??0));rowTo(xy,'Y',inp('num',ev.yPos,v=>ev.yPos=v??0));
   for(const[f,t,o]of SCHEMA[ev.eventType]||[]){
-    rowTo(I,f,inp(t==='select'?'text':t,ev[f],v=>{v===undefined||v===''?delete ev[f]:ev[f]=v},o?()=>OPTS[o](ev):null))}}
+    rowTo(I,f,inp(t==='select'?'text':t,ev[f],v=>{v===undefined||v===''?delete ev[f]:ev[f]=v},o?()=>OPTS[o](ev):null))}
+  if((SCHEMA[ev.eventType]||[]).some(x=>x[0]==='script')){const r=document.createElement('div');r.className='row';
+    const b1=document.createElement('button');b1.textContent='✎ Edit script';b1.onclick=()=>seOpenEditor(ev.script||undefined);
+    const b2=document.createElement('button');b2.textContent='+ New script for this event';b2.onclick=()=>{if(!EN()||!window.OverworldScriptCommands){seOpenEditor();return}const nm=seNew();if(nm){commit(()=>{ev.script=nm});seOpenEditor(nm)}};
+    r.appendChild(b1);r.appendChild(b2);I.appendChild(r)}}
 function renameMap(o,n){if(!n||repo[n])return;const r={};for(const[k,m]of Object.entries(repo))r[k===o?n:k]=m;repo=r;repo[n].map=n;
   for(const m of Object.values(repo)){for(const c of Object.values(m.connections))if(c&&findKey(c[0])===null&&norm(c[0])===norm(o))c[0]=n;
     for(const e of Object.values(m.events))if(e.map&&norm(e.map)===norm(o))e.map=n}active=n;if(sel?.map===o)sel.map=n}
@@ -318,10 +366,11 @@ function issues(){const out=[];
     for(const[ek,e]of Object.entries(m.events)){const at=`${k}/${ek}`;
       if(e.xPos<0||e.yPos<0||e.xPos>=m.dimensions.width||e.yPos>=m.dimensions.height)out.push(`${at}: outside the map`);
       if(e.eventType==='NPC'){if(!OT()[e.owID])out.push(`${at}: owID "${e.owID}" not in OverworldTable`);
-        const ge=window.OverworldScriptEngine?.scripts;if(ge&&e.script&&!ge[e.script])out.push(`${at}: script "${e.script}" not found`)}
+        const sn=scriptNames();if(sn.length&&e.script&&!sn.includes(e.script))out.push(`${at}: script "${e.script}" not found`)}
       if(e.eventType==='Warp'){const t=findKey(e.map);if(!t)out.push(`${at}: target map "${e.map}" does not exist`);
         else if(e.targetWarp&&!repo[t].events[e.targetWarp])out.push(`${at}: targetWarp "${e.targetWarp}" not in ${t}`)}}
     const seen={};for(const[ek,e]of Object.entries(m.events))if(e.eventType==='NPC'){const id=`${e.xPos},${e.yPos}`;if(seen[id])out.push(`${k}: ${ek} and ${seen[id]} share tile ${id}`);seen[id]=ek}}
+  if(SE)for(const n of SE.order){const l=sLint[n]||[];if(l.length)out.push(`Script "${n}": ${l.length} problem(s) - open the Scripts editor`)}
   return out}
 function buildIssues(){const l=issues();$('issueCount').textContent=l.length?`(${l.length})`:'✓';$('issues').innerHTML=l.length?l.map(x=>`<div class=bad>• ${x}</div>`).join(''):'<div class=ok>No problems found</div>'}
 
@@ -356,7 +405,7 @@ async function save(){const t=out();
 
 function setLayer(n){layer=n;drawBorderEd();document.querySelectorAll('button[data-l]').forEach(b=>b.classList.toggle('on',+b.dataset.l===n));status();redraw()}
 function setTab(t){tab=t;if(t==='env'||t==='border')$('tab-'+t).appendChild($('palWrap'));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.id==='tab-'+t));document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-  if(t==='env'){setTool(tool==='select'?'pencil':tool)}else setTool('select');redraw()}
+  if(t==='scripts')seScriptsTab();if(t==='env'){setTool(tool==='select'?'pencil':tool)}else setTool('select');redraw()}
 function buildWild(){const W=$('wild');W.innerHTML='';const m=repo[active];if(!m)return;
   const names=uniq([...(typeof PokemonDatabase!=='undefined'?Object.values(PokemonDatabase).map(x=>x.name):[]),...Object.values(repo).flatMap(x=>Object.values(x.wildData||{}).flat().map(w=>w.pokemonName))]).filter(n=>n&&n!=='None');
   for(const t of['morning','afternoon','night','dawn']){const arr=m.wildData[t]||=[],hd=document.createElement('div');hd.className='row';hd.innerHTML=`<b style="flex:1;color:#00acc1">${t.toUpperCase()}</b>`;
@@ -399,6 +448,308 @@ function buildBorder(){const U=$('borderUI');if(!U)return;U.innerHTML='';const m
   src.onchange=()=>{if(src.value){const f=src.value;commit(()=>{m.borderData=clone(repo[f].borderData)})}};U.appendChild(src);
   drawBorderEd();
   if(tab==='border'&&U.nextSibling!==$('palWrap'))U.after($('palWrap'))}
+
+// =====================================================================================================
+// SCRIPTS EDITOR  (steps list, text view, live preview, message overflow check)
+// =====================================================================================================
+const EN=()=>window.OverworldScriptEngine,CM=()=>window.OverworldScriptCommands||{};
+const MOVE_TYPES=['MOVEMENT_TYPE_LOOK_AROUND','MOVEMENT_TYPE_FACE_PLAYER','MOVEMENT_TYPE_FACE_UP','MOVEMENT_TYPE_FACE_DOWN','MOVEMENT_TYPE_FACE_LEFT','MOVEMENT_TYPE_FACE_RIGHT',
+  'MOVEMENT_TYPE_WANDER_LEFT_RIGHT','MOVEMENT_TYPE_WANDER_LEFT_AND_RIGHT','MOVEMENT_TYPE_WANDER_UP_AND_DOWN','MOVEMENT_TYPE_WANDER_AROUND','MOVEMENT_TYPE_RUN_AROUND','MOVEMENT_TYPE_HOP_AROUND',
+  'MOVEMENT_TYPE_JUMP_IN_PLACE','MOVEMENT_TYPE_WALK_IN_PLACE_UP','MOVEMENT_TYPE_WALK_IN_PLACE_DOWN','MOVEMENT_TYPE_WALK_IN_PLACE_LEFT','MOVEMENT_TYPE_WALK_IN_PLACE_RIGHT',
+  'MOVEMENT_TYPE_SPIN_CLOCKWISE','MOVEMENT_TYPE_SPIN_COUNTER_CLOCKWISE','MOVEMENT_TYPE_PATROL_LEFT_RIGHT','MOVEMENT_TYPE_PATROL_UP_DOWN','MOVEMENT_TYPE_INVISIBLE'];
+const MOVE_TOKENS=['walk_up','walk_down','walk_left','walk_right','run_up','run_down','run_left','run_right','jump_up','jump_down','jump_left','jump_right',
+  'look_up','look_down','look_left','look_right','look_player','look_random','walk_in_place_up','walk_in_place_down','walk_in_place_left','walk_in_place_right','spin_cw','spin_ccw','jump_in_place','delay_500'];
+const TOKEN_OK=t=>/^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.test(t)||/^(look_random|look_player|spin_cw|spin_ccw|jump_in_place|wait)$/.test(t)||/^delay_\d+$/.test(t);
+let SE=null,sDirty=false,sFile=null,sCur='',sView='steps',sSelStep=-1;
+const SHEAD=`// ===========================================================================
+// overworld_scripts.js  -  YOUR SCRIPTS  (xSE style)
+//
+// Write scripts here, or use the Scripts editor in the map editor (it saves this file).
+// Put the script name in an event's \`script\` field. Every command is explained in
+// overworld_script_commands.js and in the editor.
+//
+//   start: "name"         begins a script       end   stops it (a script can have several)
+//   msgbox.normal { ... } a message: \\n = new line, \\p = new paragraph, $player = player name
+//   applymovement npc { walk_down*2 look_left }     targets: player, npc, or an event name (NPC_Portia)
+//   # a comment
+//
+// Do not use the \` character or \${ inside a script (this file is a JavaScript template string).
+// ===========================================================================
+`;
+function seLoad(){const E=EN();SE={order:[],scripts:{},header:'',errors:[]};if(!E)return;
+  const src=[].concat(window.OverworldScriptSource||[]).join('\n\n');SE=E.parse(src);
+  if(!SE.order.includes(sCur))sCur=SE.order[0]||''}
+const seText=()=>EN()?EN().stringify(SE):'';
+function seTouch(){sDirty=true;$('seDirty').textContent='● unsaved';seLint();seFillText();buildIssues()}
+function seFillText(){if(sView!=='text'||document.activeElement===$('seCode'))return;const S=SE.scripts[sCur];$('seCode').value=S?EN().stringify({header:'',order:[sCur],scripts:SE.scripts}):''}
+
+// ---------- lint: problems of one script ----------
+function seLintScript(name){const S=SE.scripts[name],out=[];if(!S)return out;const C=CM(),labels=new Set(S.steps.filter(s=>s.cmd==='label').map(s=>String(s.args.name)));
+  S.steps.forEach((st,i)=>{if(st.cmd==='#')return;const at=`step ${i+1} (${st.cmd})`,sc=C[st.cmd];
+    if(!sc&&st.cmd!=='end'){out.push({i,msg:`${at}: unknown command`});return}
+    if(!sc)return;
+    for(const ag of sc.args){const v=st.args[ag.n];
+      if(!ag.opt&&ag.def===undefined&&(v===undefined||v==='')&&!(sc.block==='text'&&ag.n==='text'))out.push({i,msg:`${at}: "${ag.n}" is empty`});
+      if(ag.t==='label'&&st.cmd!=='label'&&v&&!labels.has(String(v)))out.push({i,msg:`${at}: label "${v}" does not exist in this script`});
+      if(ag.t==='script'&&v&&!SE.scripts[v])out.push({i,msg:`${at}: script "${v}" does not exist`})}
+    if(sc.block==='text'){const L=OverworldText.layout(st.args.text||'',{player:'Player',npc:'Npc'});L.warnings.forEach(w=>out.push({i,msg:`${at}: ${w.msg}`}))}
+    if(sc.block==='moves'){const bad=EN().expandMoves(st.args.moves).filter(t=>!TOKEN_OK(t));if(bad.length)out.push({i,msg:`${at}: unknown movement ${[...new Set(bad)].join(', ')}`})}});
+  if(!S.steps.some(s=>s.cmd==='end'))out.push({i:-1,msg:'the script has no "end" (one is added when saving)'});
+  return out}
+let sLint={};
+function seLint(){sLint={};for(const n of SE.order)sLint[n]=seLintScript(n);
+  const cur=sLint[sCur]||[];$('seProblems').innerHTML=cur.length?cur.map(p=>`<div class="bad" data-i="${p.i}" style="cursor:pointer">• ${p.msg}</div>`).join(''):'<div class="ok">No problems in this script</div>';
+  document.querySelectorAll('#seList .sl').forEach(d=>{const n=d.dataset.n,c=(sLint[n]||[]).length;d.querySelector('.bd').textContent=c?`⚠${c}`:''});
+  document.querySelectorAll('#seSteps .card').forEach(cd=>{const i=+cd.dataset.i;cd.classList.toggle('warn',cur.some(p=>p.i===i))})}
+
+// ---------- script list ----------
+function usedBy(name){const o=[];for(const[k,m]of Object.entries(repo))for(const[ek,e]of Object.entries(m.events))if(e.script===name)o.push(`${k}/${ek}`);return o}
+function seBuildList(){const L=$('seList'),f=($('seFind').value||'').toLowerCase();L.innerHTML='';
+  SE.order.filter(n=>n.toLowerCase().includes(f)).forEach(n=>{const d=document.createElement('div');d.className='sl'+(n===sCur?' on':'');d.dataset.n=n;
+    d.innerHTML=`<span class="nm"></span><span class="bd"></span><span class="us" title="${usedBy(n).join(', ')||'not used by any event'}">${usedBy(n).length||'–'}</span>`;d.querySelector('.nm').textContent=n;
+    d.onclick=()=>seOpen(n);L.appendChild(d)});
+  seLint()}
+function seOpen(n){sCur=n;sSelStep=-1;seBuildList();seRender();pvSetup(true)}
+
+// ---------- rendering the steps ----------
+function seDatalists(){const flags=new Set(),vars=new Set(),C=CM();
+  for(const S of Object.values(SE.scripts))for(const st of S.steps){const sc=C[st.cmd];if(!sc)continue;for(const ag of sc.args){const v=st.args[ag.n];if(!v)continue;if(ag.t==='flag')flags.add(v);if(ag.t==='var')vars.add(v)}}
+  for(const e of allEv()){if(e.flagID)flags.add(e.flagID);if(e.scriptVar)vars.add(e.scriptVar)}
+  const S=SE.scripts[sCur],labels=S?S.steps.filter(s=>s.cmd==='label').map(s=>s.args.name):[];
+  const m=repo[PV.map]||repo[active],tg=['player','npc',...Object.entries(m?.events||{}).filter(([,e])=>e.eventType==='NPC').map(([k])=>k)];
+  const fill=(id,a)=>{$(id).innerHTML=[...a].map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">`).join('')};
+  fill('dlFlag',flags);fill('dlVar',vars);fill('dlLabel',labels);fill('dlTarget',tg)}
+const DLIST={flag:'dlFlag',var:'dlVar',label:'dlLabel',target:'dlTarget'};
+function el(t,cls,txt){const e=document.createElement(t);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+function cmdSelect(cur,onch){const s=document.createElement('select');const groups={};
+  for(const[n,c]of Object.entries(CM())){if(n==='end'&&0)continue;(groups[c.group]||(groups[c.group]=[])).push(n)}
+  for(const[g,list]of Object.entries(groups)){const og=document.createElement('optgroup');og.label=g;list.forEach(n=>og.appendChild(new Option(n,n)));s.appendChild(og)}
+  if(cur&&!CM()[cur])s.insertBefore(new Option(cur+' (unknown)',cur),s.firstChild);s.value=cur;s.onchange=()=>onch(s.value);return s}
+function argInput(st,ag,onchange){const v=st.args[ag.n];let e;const set=x=>{if(x===undefined||x===''){delete st.args[ag.n]}else st.args[ag.n]=x;seTouch();if(onchange)onchange()};
+  if(ag.t==='bool'){e=document.createElement('input');e.type='checkbox';e.checked=!!v;e.onchange=()=>set(e.checked?true:undefined)}
+  else if(ag.opts||ag.t==='dir'||ag.t==='map'||ag.t==='script'){e=document.createElement('select');
+    let o=ag.opts||(ag.t==='dir'?['up','down','left','right']:ag.t==='map'?Object.keys(repo):Object.keys(SE.scripts));
+    if(ag.opt)e.add(new Option('(default)',''));if(v!=null&&v!==''&&!o.includes(v))o=[v,...o];o.forEach(x=>e.add(new Option(x,x)));e.value=v??'';e.onchange=()=>set(e.value)}
+  else{e=document.createElement('input');e.type=ag.t==='num'?'number':'text';if(ag.t==='num')e.step='any';e.value=v??'';if(ag.def!==undefined&&ag.opt)e.placeholder=String(ag.def);
+    if(DLIST[ag.t])e.setAttribute('list',DLIST[ag.t]);e.oninput=()=>set(ag.t==='num'?(e.value===''?undefined:Number(e.value)):e.value)}
+  return e}
+
+// message preview: shows exactly how each page will look, and marks what does not fit
+let fontCv=null,fontTry=0;
+function getFont(){if(fontCv)return fontCv;const i=img('graphics/fonts/latin_short.png')||(window._globalEmeraldFontImg&&window._globalEmeraldFontImg.complete&&window._globalEmeraldFontImg.naturalWidth?window._globalEmeraldFontImg:null);
+  if(!i||!i.naturalWidth)return null;const c=document.createElement('canvas');c.width=i.naturalWidth;c.height=i.naturalHeight;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(i,0,0);
+  const d=x.getImageData(0,0,c.width,c.height),p=d.data,bg=[p[0],p[1],p[2]],T=OW_TEXT.textColor,S=OW_TEXT.shadowColor;
+  for(let k=0;k<p.length;k+=4){const r=p[k],g=p[k+1],b=p[k+2];if((r===bg[0]&&g===bg[1]&&b===bg[2])||(r>=245&&g>=245&&b>=245)){p[k+3]=0;continue}
+    if((r+g+b)/3<110){p[k]=T[0];p[k+1]=T[1];p[k+2]=T[2];p[k+3]=255}else{p[k]=S[0];p[k+1]=S[1];p[k+2]=S[2];p[k+3]=S[3]}}
+  x.putImageData(d,0,0);return fontCv=c}
+// draws one line; chars starting beyond maxPx are tinted red. Returns nothing
+function drawLineTo(x,line,px,py,sc,maxPx){const f=getFont();let cx=px,w=0;
+  for(const ch of line){const g=OverworldText.glyphs[ch],adv=OverworldText.charWidth(ch);
+    if(g&&f)x.drawImage(f,g.c*8,g.r*16,8,16,cx,py,8*sc,16*sc);
+    else if(ch!==' '){x.fillStyle='#fff';x.font=`${12*sc}px monospace`;x.fillText(g?ch:'?',cx,py+12*sc)}
+    w+=adv;if(maxPx!=null&&w>maxPx){x.fillStyle='rgba(255,40,40,.6)';x.fillRect(cx,py,adv*sc,16*sc)}
+    cx+=adv*sc}}
+function drawMsgPage(c,pg,over){const T=OW_TEXT,sc=T.scale,extra=Math.max(0,pg.lines.length-T.maxLines),W=T.box.w*sc,H=T.box.h*sc;
+  c.width=W;c.height=H+extra*T.lineHeight*sc;const x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);
+  x.fillStyle='#456';x.fillRect(0,0,W,H);x.fillStyle='rgba(8,12,24,.72)';x.fillRect(0,0,W,H);x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;x.strokeRect(1,1,W-2,H-2);
+  const ox=T.textOffset.x*sc,oy=T.textOffset.y*sc;
+  pg.lines.forEach((ln,i)=>{const y=oy+i*T.lineHeight*sc;if(i>=T.maxLines){x.fillStyle='rgba(255,40,40,.25)';x.fillRect(0,y,W,T.lineHeight*sc)}drawLineTo(x,ln,ox,y,sc,T.innerWidth)});
+  x.setLineDash([4,3]);x.strokeStyle='rgba(255,60,60,.9)';x.beginPath();x.moveTo(ox+T.innerWidth*sc,4);x.lineTo(ox+T.innerWidth*sc,H-4);x.stroke();x.setLineDash([])}
+function msgPreview(host,st){host.innerHTML='';const L=OverworldText.layout(st.args.text||'',{player:'Player',npc:'Npc'});
+  const w=el('div','warns');host.appendChild(w);
+  if(!L.warnings.length)w.innerHTML='<span class="ok">✓ fits: '+L.pages.length+' page'+(L.pages.length>1?'s':'')+'</span>';else L.warnings.forEach(x=>{const d=el('div','bad','⚠ '+x.msg);w.appendChild(d)});
+  L.pages.forEach((pg,i)=>{const c=document.createElement('canvas');c.className='mpage';c.title='Page '+(i+1);drawMsgPage(c,pg);host.appendChild(c)});
+  if(!getFont()&&fontTry++<12)setTimeout(()=>{if(host.isConnected)msgPreview(host,st)},500)}
+
+function stepCard(S,st,i){const C=CM(),sc=C[st.cmd],card=el('div','card'+(i===sSelStep?' sel':''));card.dataset.i=i;
+  card.onclick=e=>{if(!/INPUT|SELECT|TEXTAREA|BUTTON/.test(e.target.tagName)){sSelStep=i;document.querySelectorAll('#seSteps .card').forEach(c=>c.classList.toggle('sel',+c.dataset.i===i))}};
+  const head=el('div','chead');head.appendChild(el('span','idx',String(i+1)));
+  if(st.cmd==='#'){head.appendChild(el('span','cm','comment'))}
+  else head.appendChild(cmdSelect(st.cmd,v=>{const nsc=C[v],old=st.args;st.cmd=v;st.args={};if(nsc){for(const ag of nsc.args){if(old[ag.n]!==undefined)st.args[ag.n]=old[ag.n];else if(!ag.opt&&ag.def!==undefined)st.args[ag.n]=ag.def}
+      if(nsc.block&&old.text!==undefined&&nsc.block==='text')st.args.text=old.text}seTouch();seRender()}));
+  const tb=el('span','ctools');const bt=(t,tip,fn)=>{const b=el('button','mini',t);b.title=tip;b.onclick=e=>{e.stopPropagation();fn()};tb.appendChild(b)};
+  bt('▶','Preview from the start up to this step',()=>pvPlay(i));bt('↑','Move up',()=>{if(i>0){[S.steps[i-1],S.steps[i]]=[S.steps[i],S.steps[i-1]];sSelStep=i-1;seTouch();seRender()}});
+  bt('↓','Move down',()=>{if(i<S.steps.length-1){[S.steps[i+1],S.steps[i]]=[S.steps[i],S.steps[i+1]];sSelStep=i+1;seTouch();seRender()}});
+  bt('⧉','Duplicate',()=>{S.steps.splice(i+1,0,clone({cmd:st.cmd,args:st.args}));sSelStep=i+1;seTouch();seRender()});
+  bt('✕','Delete',()=>{S.steps.splice(i,1);sSelStep=-1;seTouch();seRender()});head.appendChild(tb);card.appendChild(head);
+  const body=el('div','cbody');card.appendChild(body);
+  if(st.cmd==='#'){const t=document.createElement('input');t.type='text';t.value=st.args.text||'';t.oninput=()=>{st.args.text=t.value;seTouch()};body.appendChild(t);return card}
+  if(!sc){body.appendChild(el('div','bad','Unknown command. Its arguments: '+JSON.stringify(st.args)));return card}
+  if(sc.help)body.appendChild(el('div','help',sc.help));
+  const row=el('div','frow');body.appendChild(row);
+  for(const ag of sc.args){if(sc.block==='text'&&ag.n==='text')continue;const l=el('label');l.appendChild(el('span','',ag.n+(ag.h?'  ('+ag.h+')':'')));l.appendChild(argInput(st,ag));row.appendChild(l)}
+  if(sc.block==='text'){const ta=document.createElement('textarea');ta.rows=3;ta.value=st.args.text||'';ta.spellcheck=false;ta.placeholder='Type the message. \\n = new line, \\p = new paragraph, $player = name';
+    const pv=el('div','mprev');const upd=()=>msgPreview(pv,st);
+    ta.oninput=()=>{st.args.text=ta.value;seTouch();upd()};body.appendChild(ta);
+    const bar=el('div','row');[['\\n','\\n'],['\\p','\\p'],['$player','$player']].forEach(([l,v])=>{const b=el('button','mini',l);b.onclick=()=>{const a=ta.selectionStart;ta.setRangeText(v,a,ta.selectionEnd,'end');ta.focus();ta.oninput()};bar.appendChild(b)});
+    const aw=el('button','mini','Auto-wrap (fit the box)');aw.onclick=()=>{ta.value=OverworldText.autoWrap(ta.value);ta.oninput()};bar.appendChild(aw);body.appendChild(bar);body.appendChild(pv);upd()}
+  if(sc.block==='moves'){const ta=document.createElement('textarea');ta.rows=2;ta.value=st.args.moves||'';ta.spellcheck=false;ta.placeholder='walk_down*2 look_left  (click the buttons below)';
+    const warn=el('div','bad'),chk=()=>{const bad=EN().expandMoves(ta.value).filter(t=>!TOKEN_OK(t));warn.textContent=bad.length?'⚠ unknown movement: '+[...new Set(bad)].join(', '):''};
+    ta.oninput=()=>{st.args.moves=ta.value;seTouch();chk()};body.appendChild(ta);body.appendChild(warn);chk();
+    const pal=el('div','pal');MOVE_TOKENS.forEach(t=>{const b=el('button','mini tk',t.replace('walk_in_place','wip'));b.title=t;b.onclick=()=>{ta.value=(ta.value.trim()+' '+t).trim();ta.oninput()};pal.appendChild(b)});
+    const cl=el('button','mini','clear');cl.onclick=()=>{ta.value='';ta.oninput()};pal.appendChild(cl);body.appendChild(pal)}
+  return card}
+function seRender(){seDatalists();const box=$('seSteps');box.innerHTML='';const S=SE.scripts[sCur];
+  $('seName').textContent=S?sCur:'(no script)';$('seUse').textContent=S?'used by: '+(usedBy(sCur).join(', ')||'no event yet'):'';
+  if(!S){box.appendChild(el('div','help','Pick a script on the left, or press + New.'));seFillText();seLint();return}
+  S.steps.forEach((st,i)=>box.appendChild(stepCard(S,st,i)));
+  seFillText();seLint()}
+
+function seAddStep(cmd){const S=SE.scripts[sCur];if(!S)return;const sc=CM()[cmd],st={cmd,args:{}};
+  if(cmd==='#')st.args.text='';else if(sc)for(const ag of sc.args)if(!ag.opt&&ag.def!==undefined)st.args[ag.n]=ag.def;
+  let at=sSelStep>=0?sSelStep+1:S.steps.length;if(sSelStep<0&&S.steps.length&&S.steps[S.steps.length-1].cmd==='end')at=S.steps.length-1;S.steps.splice(at,0,st);sSelStep=at;seTouch();seRender();
+  const c=document.querySelector(`#seSteps .card[data-i="${at}"]`);if(c)c.scrollIntoView({block:'nearest'})}
+function seCodeApply(){const E=EN(),r=E.parse($('seCode').value.replace(/^\s*start\s*:/,'start:'));const names=r.order;
+  const msg=$('seCodeErr');msg.innerHTML=r.errors.length?r.errors.map(e=>`<div class="bad">line ${e.line}: ${e.msg}</div>`).join(''):'<span class="ok">✓ no errors</span>';
+  if(!names.length)msg.innerHTML+='<div class="bad">Keep the start: "name" line at the top.</div>';
+  if(names.length){const S=r.scripts[names[0]];SE.scripts[sCur]={name:sCur,steps:S.steps}; if(names[0]!==sCur){/* the name in the text is ignored; rename with the Rename button */}seTouch();seBuildList()}}
+
+// ---------- toolbar actions ----------
+function ensureSE(){if(!SE)seLoad()}
+function seNew(){ensureSE();let n=prompt('Name of the new script:','new_script');if(!n)return;n=n.trim().replace(/"/g,'');if(!n||SE.scripts[n]){alert('That name is empty or already used.');return}
+  SE.scripts[n]={name:n,steps:[{cmd:'lock',args:{}},{cmd:'faceplayer',args:{}},{cmd:'msgbox.normal',args:{text:'Hello, $player!'}},{cmd:'release',args:{}},{cmd:'end',args:{}}]};SE.order.push(n);seTouch();sCur=n;seBuildList();seRender();pvSetup(true);return n}
+function seDup(){const S=SE.scripts[sCur];if(!S)return;let n=sCur+'_copy',i=1;while(SE.scripts[n])n=sCur+'_copy'+(++i);SE.scripts[n]={name:n,steps:clone(S.steps)};SE.order.splice(SE.order.indexOf(sCur)+1,0,n);sCur=n;seTouch();seBuildList();seRender()}
+function seRename(){const S=SE.scripts[sCur];if(!S)return;let n=prompt('New name:',sCur);if(!n)return;n=n.trim().replace(/"/g,'');if(!n||n===sCur)return;if(SE.scripts[n]){alert('That name is already used.');return}
+  const old=sCur;S.name=n;SE.scripts={...Object.fromEntries(SE.order.map(k=>[k===old?n:k,SE.scripts[k]]))};SE.order=SE.order.map(k=>k===old?n:k);
+  for(const s of Object.values(SE.scripts))for(const st of s.steps){const sc=CM()[st.cmd];if(sc)for(const ag of sc.args)if(ag.t==='script'&&st.args[ag.n]===old)st.args[ag.n]=n}
+  const u=usedBy(old);if(u.length)commit(()=>{for(const m of Object.values(repo))for(const e of Object.values(m.events))if(e.script===old)e.script=n});
+  sCur=n;seTouch();seBuildList();seRender()}
+function seDel(){const S=SE.scripts[sCur];if(!S)return;const u=usedBy(sCur);if(!confirm(`Delete "${sCur}"?`+(u.length?`\n\nStill used by: ${u.join(', ')}`:'')))return;
+  delete SE.scripts[sCur];SE.order=SE.order.filter(k=>k!==sCur);sCur=SE.order[0]||'';seTouch();seBuildList();seRender();pvSetup(true)}
+async function seSave(){const E=EN();if(!E){alert('The script engine file was not found.');return}
+  const bad=seText().match(/`|\$\{/);let t=seText().replace(/`/g,"'").replace(/\$\{/g,'$ {');
+  const out=SHEAD+'\nwindow.OverworldScriptSource = String.raw`\n'+t+'`;\n';
+  if(bad)alert('A ` or ${ was found in your text. It was replaced (they would break the .js file).');
+  try{if(window.showSaveFilePicker){sFile||=await showSaveFilePicker({suggestedName:'overworld_scripts.js',types:[{description:'JavaScript',accept:{'text/javascript':['.js']}}]});
+      const w=await sFile.createWritable();await w.write(out);await w.close()}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out],{type:'text/javascript'}));a.download='overworld_scripts.js';a.click()}
+    sDirty=false;$('seDirty').textContent='✓ saved'}catch(e){if(e.name!=='AbortError'){sFile=null;alert('Could not save: '+e.message)}}}
+function seOpenEditor(name){const miss=[['overworld_script_engine.js (the NEW one, with parse)',EN()&&EN().parse],['overworld_script_commands.js',window.OverworldScriptCommands],['overworld_textbox.js',window.OverworldText],['overworld_scripts.js',window.OverworldScriptSource!==undefined]].filter(x=>!x[1]).map(x=>x[0]);
+  if(miss.length){alert('The editor could not find: '+miss.join(', ')+'\n\nThey must be uploaded to your project (same folder as overworld_map.js is best). If they are already there in another folder, use "Load script files" in the Scripts tab and pick them.');return}
+  if(!SE)seLoad();$('sed').classList.add('on');if(name&&SE.scripts[name])sCur=name;seBuildList();seRender();pvSetup(true);pvStart()}
+function seClose(){if(sDirty&&!confirm('There are unsaved script changes. Close anyway? (They stay in memory until you reload.)'))return;$('sed').classList.remove('on');pvStop(true);cancelAnimationFrame(PV.raf);PV.raf=0;buildInspector();buildIssues()}
+
+// =====================================================================================================
+// PREVIEW  - plays the script on the map, as the game would (top screen)
+// =====================================================================================================
+const PV={map:'',actor:'',px:0,py:0,pdir:'up',ents:{},player:null,cam:{x:0,y:0},vw:480,vh:320,speed:1,tl:[],msg:null,fade:0,fadeCol:'#000',shake:0,toasts:[],run:0,running:false,raf:0,last:0,flags:{},vars:{},camMoved:false,pend:0,waiters:[],auto:false,hidden:{}};
+function pvEvents(){const m=repo[PV.map];return Object.entries(m?.events||{})}
+function pvSetup(keepPos){const maps=Object.keys(repo);
+  if(!repo[PV.map])PV.map=maps.includes(active)?active:maps[0]||'';
+  // default: the map and event that use this script
+  const use=usedBy(sCur);if(keepPos&&use.length){const[k,ek]=use[0].split('/');if(!use.some(u=>u.startsWith(PV.map+'/'))){PV.map=k}if(!PV.actor||!repo[PV.map].events[PV.actor]||repo[PV.map].events[PV.actor].script!==sCur){const f=pvEvents().find(([,e])=>e.script===sCur);PV.actor=f?f[0]:(PV.map===k?ek:'')}}
+  const ms=$('pvMap');ms.innerHTML='';maps.forEach(k=>ms.add(new Option(k,k)));ms.value=PV.map;
+  const es=$('pvEv');es.innerHTML='';es.add(new Option('(no event)',''));pvEvents().forEach(([k,e])=>es.add(new Option(`${k} (${e.eventType})${e.script?' → '+e.script:''}`,k)));es.value=PV.actor||'';
+  if(keepPos){const e=repo[PV.map]?.events[PV.actor];if(e){const below=e.eventType==='NPC';PV.px=e.xPos;PV.py=e.yPos+(below?1:0);PV.pdir=below?'up':'down'}else{const m=repo[PV.map];PV.px=Math.floor((m?.dimensions.width||2)/2);PV.py=Math.floor((m?.dimensions.height||2)/2);PV.pdir='down'}}
+  $('pvX').value=PV.px;$('pvY').value=PV.py;pvReset();seDatalists()}
+function pvReset(){PV.run++;PV.tl=[];PV.msg=null;PV.fade=0;PV.shake=0;PV.toasts=[];PV.running=false;PV.camMoved=false;PV.pend=0;PV.waiters=[];PV.hidden={};
+  const L=layout(),off=L[PV.map]||{x:0,y:0},m=repo[PV.map];PV.ents={};
+  for(const[k,e]of Object.entries(m?.events||{})){if(e.eventType!=='NPC')continue;const b=isBuilding(e);PV.ents[k]={key:k,ev:e,x:(off.x+e.xPos)*TS+16,y:(off.y+e.yPos)*TS+(b?32:16),dir:'down',building:b,vis:true,id:e.owID}}
+  PV.player={key:'player',x:(off.x+PV.px)*TS+16,y:(off.y+PV.py)*TS+16,dir:PV.pdir,vis:true,id:'Brendan'};
+  PV.cam={x:PV.player.x,y:PV.player.y};PV.vw=480;PV.vh=+$('pvScr').value||320;const c=$('pvCv');if(c.width!==PV.vw||c.height!==PV.vh){c.width=PV.vw;c.height=PV.vh}
+  PV.flags={};($('pvFlags').value||'').split(/[\s,]+/).filter(Boolean).forEach(f=>PV.flags[f]=true);PV.vars={};$('pvLog').innerHTML=''}
+function pvLog(t,cls){const d=el('div',cls||'',t);$('pvLog').appendChild(d);$('pvLog').scrollTop=1e6}
+function pvTween(ms,fn,done){PV.tl.push({t:0,d:Math.max(1,ms),fn,done,run:PV.run})}
+function pvEnt(spec){const s=String(spec==null||spec===''?'npc':spec);if(/^player$/i.test(s))return PV.player;if(/^npc$/i.test(s))return PV.ents[PV.actor]||null;return PV.ents[s]||Object.values(PV.ents).find(e=>e.id===s)||null}
+const DV={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]},DORD=['down','left','up','right'];
+function pvStepTok(e,tok,done){let m=/^delay_(\d+)$/.exec(tok);if(m)return pvTween(+m[1],null,done);
+  m=/^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.exec(tok);
+  if(m){const[,k,d]=m;e.dir=d;if(k==='look')return done();
+    if(k==='walk_in_place')return pvTween(480,null,done);
+    const[dx,dy]=DV[d],x0=e.x,y0=e.y,ms=k==='run'?120:k==='jump'?300:240;
+    return pvTween(ms,t=>{e.x=x0+dx*TS*t;e.y=y0+dy*TS*t;e.hop=k==='jump'?Math.sin(t*Math.PI)*12:0},()=>{e.hop=0;done()})}
+  if(tok==='look_player'){const p=PV.player,dx=p.x-e.x,dy=p.y-e.y;e.dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');return done()}
+  if(tok==='look_random'){e.dir=DORD[Math.floor(Math.random()*4)];return done()}
+  if(tok==='spin_cw'||tok==='spin_ccw'){let i=DORD.indexOf(e.dir),n=0;const stp=()=>{i=(i+(tok==='spin_cw'?1:3))%4;e.dir=DORD[i];if(++n<4)pvTween(140,null,stp);else done()};return pvTween(140,null,stp)}
+  if(tok==='jump_in_place'){const y0=e.y;return pvTween(280,t=>{e.hop=Math.sin(t*Math.PI)*10},()=>{e.hop=0;done()})}
+  done()}
+function pvHost(){const run=PV.run,guard=f=>(...a)=>{if(run===PV.run)f(...a)};
+  return{lock(on){pvLog(on?'· lock':'· release','dim')},wait(ms,next){pvTween(ms,null,guard(next))},note(t){PV.toasts.push({t,life:2200});pvLog('· '+t,'dim')},
+    say(text,yesno,cb){const L=OverworldText.layout(text,{player:'Player',npc:PV.ents[PV.actor]?.id||'Npc'});pvLog((yesno?'? ':'💬 ')+text.replace(/\\[nlp]/g,' ').slice(0,70),'');
+      PV.msg={pages:L.pages,page:0,shown:0,t:0,yesno,cb:guard(cb),waiting:false,sel:0,L}},
+    facePlayer(next){const n=PV.ents[PV.actor];if(n)pvStepTok(n,'look_player',()=>{});next()},
+    move(spec,moves,async,next){const e=pvEnt(spec);if(!e){pvLog('applymovement: nobody called "'+spec+'"','bad');return next()}
+      const toks=EN().expandMoves(moves);pvLog('→ '+spec+': '+toks.join(' '),'');const go=done=>{let i=0;const st=()=>{if(run!==PV.run)return;if(i>=toks.length)return done();pvStepTok(e,toks[i++],st)};st()};
+      if(async){PV.pend++;go(()=>{PV.pend--;if(!PV.pend)PV.waiters.splice(0).forEach(f=>f())});next()}else go(guard(next))},
+    waitMove(next){if(!PV.pend)next();else PV.waiters.push(guard(next))},
+    moveCamera(dx,dy,ms,next){PV.camMoved=true;const x0=PV.cam.x,y0=PV.cam.y;pvLog(`📷 camera ${dx},${dy}`,'');if(ms<=0){PV.cam.x+=dx*TS;PV.cam.y+=dy*TS;return next()}
+      pvTween(ms,t=>{const k=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+dx*TS*k;PV.cam.y=y0+dy*TS*k},guard(next))},
+    resetCamera(ms,next){const x0=PV.cam.x,y0=PV.cam.y;PV.camMoved=false;pvTween(Math.max(1,ms),t=>{const k=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+(PV.player.x-x0)*k;PV.cam.y=y0+(PV.player.y-y0)*k},guard(next))},
+    fade(mode,ms,color,next){PV.fadeCol=color==='white'?'#fff':'#000';const a=PV.fade,b=mode==='out'?1:0;pvLog('🌓 fade '+mode,'dim');pvTween(Math.max(1,ms),t=>{PV.fade=a+(b-a)*t},guard(next))},
+    shake(ms,power,next){pvTween(Math.max(1,ms),t=>{PV.shake=(1-t)*power*TS*8*(Math.random()*2-1)},()=>{PV.shake=0;guard(next)()})},
+    weather(n){this.note('Weather becomes '+n)},warp(map,x,y,f,type,next){this.note(`Warp (${type}) to ${map} ${x},${y}`);pvTween(500,null,guard(next))},sound(k){this.note('Sound: '+k)},
+    setHidden(spec,h){const e=pvEnt(spec);if(e){e.vis=!h;pvLog((h?'hide ':'show ')+spec,'dim')}},end(){}}}
+function pvPlay(toStep){pvStop(true);if(!SE.scripts[sCur])return;pvReset();seDatalists();const S=SE.scripts[sCur];
+  const steps=toStep==null?S.steps:S.steps.slice(0,toStep+1).concat([{cmd:'end',args:{}}]);const prog={name:sCur,steps};
+  const ctx=EN().createRunner(n=>n===sCur?prog:SE.scripts[n],{host:pvHost(),preview:true,getFlag:n=>!!PV.flags[n],setFlag:(n,v)=>{PV.flags[n]=v;pvLog('· flag '+n+(v?' set':' cleared'),'dim')},getVar:n=>PV.vars[n]||0,setVar:(n,v)=>{PV.vars[n]=v;pvLog('· var '+n+' = '+v,'dim')}},sCur,()=>{PV.running=false;pvLog('— finished —','ok')});
+  ctx.onStep=(st,f)=>{if(f.name!==sCur)return;const i=S.steps.indexOf(st);document.querySelectorAll('#seSteps .card').forEach(c=>c.classList.toggle('run',+c.dataset.i===i));const c=document.querySelector(`#seSteps .card[data-i="${i}"]`);if(c)c.scrollIntoView({block:'nearest'})};
+  PV.running=true;ctx.start()}
+function pvStop(reset){PV.run++;PV.tl=[];PV.msg=null;PV.running=false;document.querySelectorAll('#seSteps .card.run').forEach(c=>c.classList.remove('run'));if(reset)pvReset()}
+function pvStart(){if(PV.raf)return;PV.last=performance.now();const fr=now=>{if(!$('sed').classList.contains('on')){PV.raf=0;return}const dt=Math.min(100,now-PV.last)*PV.speed;PV.last=now;pvUpdate(dt);pvDraw();PV.raf=requestAnimationFrame(fr)};PV.raf=requestAnimationFrame(fr)}
+function pvUpdate(dt){for(const t of PV.tl.slice()){if(t.run!==PV.run){PV.tl.splice(PV.tl.indexOf(t),1);continue}t.t+=dt;const k=Math.min(1,t.t/t.d);if(t.fn)t.fn(k);if(k>=1){PV.tl.splice(PV.tl.indexOf(t),1);if(t.done)t.done()}}
+  const m=PV.msg;if(m&&!m.waiting){m.t+=dt;const pg=m.pages[m.page],n=pg.lines.join('').length;m.shown=Math.min(n,Math.floor(m.t/OW_TEXT.speed));if(m.shown>=n){m.waiting=true;m.wt=0}}
+  else if(m&&m.waiting&&!m.yesno||m&&m.waiting&&m.yesno&&m.page<m.pages.length-1){m.wt+=dt;if(PV.auto&&m.wt>1300)pvAdvance()}
+  PV.toasts.forEach(t=>t.life-=dt);PV.toasts=PV.toasts.filter(t=>t.life>0)}
+function pvAdvance(choice){const m=PV.msg;if(!m)return;if(!m.waiting){m.shown=1e9;return}
+  if(m.page<m.pages.length-1){m.page++;m.shown=0;m.t=0;m.waiting=false;return}
+  if(m.yesno&&choice===undefined)return;PV.msg=null;m.cb(m.yesno?choice:undefined)}
+function pvDraw(){const c=$('pvCv'),x=c.getContext('2d'),W=PV.vw,H=PV.vh;x.setTransform(1,0,0,1,0,0);x.fillStyle='#000';x.fillRect(0,0,W,H);x.imageSmoothingEnabled=false;
+  const ox=Math.round(W/2-PV.cam.x+PV.shake),oy=Math.round(H/2-PV.cam.y);x.save();x.translate(ox,oy);const L=layout();
+  const vx0=PV.cam.x-W/2,vy0=PV.cam.y-H/2;
+  for(const[k,m]of Object.entries(repo)){const p=L[k],w=m.dimensions.width,h=m.dimensions.height;
+    const c0=Math.max(0,Math.floor(vx0/TS)-p.x),c1=Math.min(w-1,Math.ceil((vx0+W)/TS)-p.x),r0=Math.max(0,Math.floor(vy0/TS)-p.y),r1=Math.min(h-1,Math.ceil((vy0+H)/TS)-p.y);
+    for(let l=1;l<=5;l++){const g=m['tileData_'+l];for(let r=r0;r<=r1;r++)for(let cc=c0;cc<=c1;cc++)drawTile(x,g[r][cc],(p.x+cc)*TS,(p.y+r)*TS,TS)}}
+  const list=[...Object.values(PV.ents).filter(e=>e.vis),...(PV.player.vis?[PV.player]:[])].sort((a,b)=>a.y-b.y);
+  for(const e of list){const s=spr(e.id),hop=e.hop||0;
+    if(s){const w=s.width,h=s.height;if(e.building)x.drawImage(s,e.x-w/2,e.y-h,w,h);else x.drawImage(s,Math.round(e.x-w/2),Math.round(e.y-h*.85-hop),w,h)}
+    else{x.fillStyle=e===PV.player?'#2e7d32':'#c62828';x.fillRect(e.x-10,e.y-26-hop,20,28)}
+    if(!e.building){const d=e.dir,fx=e.x+(d==='left'?-14:d==='right'?14:0),fy=e.y+(d==='up'?-18:d==='down'?14:0)-hop;x.fillStyle=e===PV.player?'#69f0ae':'#ffd54f';x.beginPath();
+      if(d==='up'||d==='down'){const s2=d==='up'?-1:1;x.moveTo(fx-5,fy);x.lineTo(fx+5,fy);x.lineTo(fx,fy+5*s2)}else{const s2=d==='left'?-1:1;x.moveTo(fx,fy-5);x.lineTo(fx,fy+5);x.lineTo(fx+5*s2,fy)}x.fill()}}
+  x.restore();
+  if(PV.fade>0){x.fillStyle=PV.fadeCol;x.globalAlpha=Math.min(1,PV.fade);x.fillRect(0,0,W,H);x.globalAlpha=1}
+  // top-screen outline when the full screen is shown
+  if(H>320){x.strokeStyle='rgba(255,255,255,.35)';x.setLineDash([4,4]);x.strokeRect(.5,.5,W-1,319);x.setLineDash([])}
+  const m=PV.msg;if(m){const T=OW_TEXT,sc=T.scale,S=T.screen,bx=S.x+T.box.x*sc,by=S.y+T.box.y*sc,bw=T.box.w*sc,bh=T.box.h*sc;
+    x.fillStyle='rgba(8,12,24,.72)';x.fillRect(bx,by,bw,bh);x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;x.strokeRect(bx+1,by+1,bw-2,bh-2);
+    const pg=m.pages[m.page];let left=m.shown;pg.lines.forEach((ln,i)=>{const part=ln.slice(0,Math.max(0,left));left-=ln.length;drawLineTo(x,part,bx+T.textOffset.x*sc,by+(T.textOffset.y+i*T.lineHeight)*sc,sc,T.innerWidth)});
+    if(m.waiting&&!(m.yesno&&m.page===m.pages.length-1)){x.fillStyle='#fff';const ax=bx+bw-22,ay=by+bh-18+(Math.sin(performance.now()/160)*3);x.beginPath();x.moveTo(ax,ay);x.lineTo(ax+14,ay);x.lineTo(ax+7,ay+9);x.fill()}
+    if(m.waiting&&m.yesno&&m.page===m.pages.length-1){const cw=56*sc,ch=40*sc,cx=bx+bw-cw,cy=by-ch-4;x.fillStyle='rgba(8,12,24,.85)';x.fillRect(cx,cy,cw,ch);x.strokeStyle='rgba(255,255,255,.35)';x.strokeRect(cx+1,cy+1,cw-2,ch-2);
+      drawLineTo(x,'Yes',cx+20*sc,cy+6*sc,sc);drawLineTo(x,'No',cx+20*sc,cy+22*sc,sc);x.fillStyle='#fff';const ty=cy+(m.sel===0?14:30)*sc;x.beginPath();x.moveTo(cx+10*sc,ty-7);x.lineTo(cx+10*sc,ty+7);x.lineTo(cx+20*sc,ty);x.fill();
+      m.hit={cx,cy,cw,ch}}}
+  PV.toasts.forEach((t,i)=>{x.fillStyle='rgba(0,0,0,.7)';x.fillRect(8,8+i*24,W-16,20);x.fillStyle='#ffd54f';x.font='12px monospace';x.fillText(t.t,14,22+i*24)})}
+
+// ---------- wiring ----------
+function seInit(){
+  $('seNewB').onclick=seNew;$('seDupB').onclick=seDup;$('seRenB').onclick=seRename;$('seDelB').onclick=seDel;$('seFind').oninput=seBuildList;
+  $('seSave').onclick=seSave;$('seClose').onclick=seClose;
+  $('seTabSteps').onclick=()=>{sView='steps';$('seStepsWrap').style.display='';$('seCodeWrap').style.display='none';$('seTabSteps').classList.add('on');$('seTabText').classList.remove('on')};
+  $('seTabText').onclick=()=>{sView='text';$('seStepsWrap').style.display='none';$('seCodeWrap').style.display='';$('seTabText').classList.add('on');$('seTabSteps').classList.remove('on');const S=SE.scripts[sCur];$('seCode').value=S?EN().stringify({header:'',order:[sCur],scripts:SE.scripts}):'';$('seCodeErr').innerHTML=''};
+  $('seCode').oninput=seCodeApply;$('seCode').onblur=()=>{seRender()};
+  const add=$('seAddSel');const groups={};for(const[n,c]of Object.entries(CM()))(groups[c.group]||(groups[c.group]=[])).push(n);
+  add.innerHTML='<option value="">+ Add command…</option>'+Object.entries(groups).map(([g,l])=>`<optgroup label="${g}">${l.map(n=>`<option value="${n}">${n} – ${(CM()[n].help||'').replace(/</g,'&lt;').slice(0,50)}</option>`).join('')}</optgroup>`).join('')+'<optgroup label="Other"><option value="#"># comment</option></optgroup>';
+  add.onchange=()=>{if(add.value){seAddStep(add.value);add.value=''}};
+  $('seProblems').onclick=e=>{const i=e.target.dataset.i;if(i!==undefined&&+i>=0){const c=document.querySelector(`#seSteps .card[data-i="${i}"]`);if(c){c.scrollIntoView({block:'center'});c.classList.add('flash');setTimeout(()=>c.classList.remove('flash'),900)}}};
+  $('pvMap').onchange=()=>{PV.map=$('pvMap').value;PV.actor='';pvSetup(false);const m=repo[PV.map];PV.px=Math.floor(m.dimensions.width/2);PV.py=Math.floor(m.dimensions.height/2);$('pvX').value=PV.px;$('pvY').value=PV.py;pvReset()};
+  $('pvEv').onchange=()=>{PV.actor=$('pvEv').value;const e=repo[PV.map]?.events[PV.actor];if(e){const b=e.eventType==='NPC';PV.px=e.xPos;PV.py=e.yPos+(b?1:0);PV.pdir=b?'up':'down';$('pvX').value=PV.px;$('pvY').value=PV.py}pvReset();seDatalists()};
+  $('pvX').onchange=$('pvY').onchange=()=>{PV.px=+$('pvX').value||0;PV.py=+$('pvY').value||0;pvReset()};
+  $('pvScr').onchange=()=>pvReset();$('pvFlags').onchange=()=>pvReset();$('pvSpeed').onchange=()=>PV.speed=+$('pvSpeed').value;$('pvAuto').onchange=()=>PV.auto=$('pvAuto').checked;
+  $('pvPlay').onclick=()=>pvPlay();$('pvStop').onclick=()=>pvStop(true);$('pvReset').onclick=()=>pvStop(true);
+  const cvp=$('pvCv');cvp.onclick=e=>{const r=cvp.getBoundingClientRect(),mx=(e.clientX-r.left)*PV.vw/r.width,my=(e.clientY-r.top)*PV.vh/r.height;const m=PV.msg;
+    if(m){if(m.waiting&&m.yesno&&m.page===m.pages.length-1&&m.hit){const h=m.hit;if(mx>=h.cx&&mx<=h.cx+h.cw&&my>=h.cy&&my<=h.cy+h.ch){pvAdvance(my<h.cy+h.ch/2)}return}pvAdvance();return}
+    if(PV.running)return;const wx=mx-PV.vw/2+PV.cam.x,wy=my-PV.vh/2+PV.cam.y,L=layout(),p=L[PV.map]||{x:0,y:0};PV.px=Math.max(0,Math.floor(wx/TS)-p.x);PV.py=Math.max(0,Math.floor(wy/TS)-p.y);$('pvX').value=PV.px;$('pvY').value=PV.py;pvReset()};
+  $('sed').addEventListener('keydown',e=>{e.stopPropagation();if(PV.msg&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){
+      if(['Space','Enter','KeyZ'].includes(e.code)){e.preventDefault();const m=PV.msg;if(m.waiting&&m.yesno&&m.page===m.pages.length-1)pvAdvance(m.sel===0);else pvAdvance()}
+      else if(m.yesno&&(e.code==='ArrowUp'||e.code==='ArrowDown'))m.sel=1-m.sel;else if(e.code==='KeyX'&&m.yesno&&m.waiting)pvAdvance(false)}});
+  $('sed').addEventListener('keyup',e=>e.stopPropagation());
+  document.querySelectorAll('.openSed').forEach(b=>b.onclick=()=>seOpenEditor());
+  $('seLoadFiles').onchange=async e=>{for(const f of e.target.files){const t=await f.text(),s=document.createElement('script');s.textContent=t;document.head.appendChild(s)}e.target.value='';seLoad();$('seInfo').textContent='Script files loaded from your selection.'; changed()}}
+function seScriptsTab(){const T=$('seTabInfo');const E=EN(),ok=E&&window.OverworldScriptCommands&&window.OverworldText;
+  if(ok&&!SE)seLoad();const rep=(window.__loadReport||[]).filter(r=>/script|textbox|movement/i.test(r.name)).map(r=>`<div class="${r.path?'ok':'bad'}">${r.path?'✓':'✗'} ${r.name} ${r.path?'← '+r.path:'(not found / did not define what it should)'}</div>`).join('');
+  T.innerHTML=rep+(ok?`<div class="help">${SE.order.length} scripts. ${SE.errors.length?'<span class="bad">'+SE.errors.length+' problem(s) in the file.</span>':'No problems.'}</div>`
+    :'<div class="bad">Some script files are missing (see above). Use the button below to pick them, or tell me what the list says.</div>')}
+
+function scriptNames(){const E=EN();if(SE)return SE.order;if(E){E.load();return E.order}return[]}
+
 // ---------- boot ----------
 $('tools').innerHTML=[['pencil','P Pencil'],['fill','B Fill'],['rect','R Rect'],['erase','E Erase'],['pick','I Pick'],['behav','H Behavior'],['copy','C Copy'],['paste','Paste']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
 $('tools').onclick=e=>{if(e.target.dataset.t)setTool(e.target.dataset.t)};
@@ -412,13 +763,13 @@ $('newMap').onclick=()=>{let n=prompt('New map name:','Route_X');if(!n||repo[n])
   music:repo[active]?.music||'',connections:{up:null,down:null,left:null,right:null},events:{},wildData:{morning:[],afternoon:[],night:[],dawn:[]},tileData:[]};fit(repo[n]);active=n});focus(n)};
 $('assetBase').value=assetBase;$('assetBase').onchange=e=>{assetBase=e.target.value.trim();try{localStorage.edAssets=assetBase}catch(x){}for(const k in imgs)delete imgs[k];for(const k in sprs)delete sprs[k];buildPalette();redraw()};
 if(window.__missing&&window.__missing.length)setTimeout(()=>{$('status').textContent='Not found (optional unless it is a table): '+window.__missing.join(', ')},100);
-window.addEventListener('resize',redraw);window.addEventListener('beforeunload',e=>{if(unsaved){e.preventDefault();e.returnValue=''}});
-$('tabs').innerHTML=[['env','Environment'],['border','Border'],['events','Events'],['conn','Connections'],['wild','Wild'],['props','Properties']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
+window.addEventListener('resize',redraw);window.addEventListener('beforeunload',e=>{if(unsaved||sDirty){e.preventDefault();e.returnValue=''}});
+$('tabs').innerHTML=[['env','Environment'],['border','Border'],['events','Events'],['conn','Connections'],['wild','Wild'],['props','Properties'],['scripts','Scripts']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
 $('tabs').onclick=e=>{if(e.target.dataset.t)setTab(e.target.dataset.t)};
 $('layerBtns').innerHTML=[1,2,3,4,5].map(n=>`<button data-l="${n}">L${n}${n==1?' ▼ bottom':n==5?' ▲ top':''}</button>`).join('')+'<select id="viewMode"><option value="all">Show all layers</option><option value="below">Active + below</option><option value="active">Active only</option></select><select id="passSel"><option value="0">Behavior 0 · Passable</option><option value="1">1 · Blocked</option><option value="2">2 · Passable, NPC below</option><option value="3">3 · Surfable</option><option value="4">4 · Diveable</option></select><label style="flex-direction:row;gap:4px"><input type="checkbox" id="copyAll" checked> copy all layers</label><label style="flex-direction:row;gap:4px"><input type="checkbox" id="bhvT" checked> show behavior</label>';
 $('layerBtns').onclick=e=>{if(e.target.dataset.l)setLayer(+e.target.dataset.l)};
 $('layerBtns').onchange=e=>{const id=e.target.id;if(id==='viewMode'){viewMode=e.target.value;redraw()}
   else if(id==='passSel'){pass=+e.target.value;brush.cells=brush.cells.map(r=>r.map(v=>v?setPass(v,pass):v));info();redraw()}else if(id==='bhvT')redraw()};
-load();buildPalette();setLayer(1);changed();setTab('env');
+seInit();load();buildPalette();setLayer(1);changed();setTab('env');
 });
 </script></body></html>
