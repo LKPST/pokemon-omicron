@@ -106,14 +106,14 @@ function createSummary(env) {
   const opt = { cries: false, shinyFrame: false, frames: 'auto', nudge: 0 };
 
   // ------------------------------------------------ images
-  const imgs = new Map();
+  const imgs = new Map(), failed = new Set();
   function getImg(path) {
     if (!path) return null;
     let e = imgs.get(path);
     if (!e) {
       e = { img: new Image(), ok: false, fail: false };
       e.img.onload = () => { e.ok = true; };
-      e.img.onerror = () => { e.fail = true; };
+      e.img.onerror = () => { e.fail = true; if (!failed.has(path)) { failed.add(path); warnings.add('image not found: ' + path); try { console.warn('[PS] could not load image: ' + path + '  (looked for it relative to your index.html)'); } catch (er) { /* no console */ } } };
       const u = urlFor(path);
       if (u) e.img.src = u; else e.fail = true;
       imgs.set(path, e);
@@ -269,12 +269,15 @@ function createSummary(env) {
 
   // ------------------------------------------------ species / moves / mon
   const warnings = new Set();
+  let dbIndex = null, dbIndexFor = null;
   function speciesInfo(key) {
     const k = String(key || '').trim(), DB = env.db && env.db();
     if (DB) {
+      if (dbIndexFor !== DB) { dbIndexFor = DB; dbIndex = new Map(); for (const kk of Object.keys(DB)) { const nk = kk.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (!dbIndex.has(nk) || kk === 'SPECIES_NONE') dbIndex.set(nk, kk); } }
       const parts = k.split('_'), cand = [k, k.replace(/_/g, '')];
       for (let n = parts.length - 1; n >= 2; n--) cand.push(parts.slice(0, n).join('_'));
-      for (const cKey of cand) { const e = DB[cKey]; if (e && typeof e === 'object') {
+      const more = []; for (const c of cand) { const real = dbIndex.get(c.toUpperCase().replace(/[^A-Z0-9]/g, '')); if (real) more.push(real); }
+      for (const cKey of [...cand, ...more]) { const e = DB[cKey]; if (e && typeof e === 'object' && !(cKey === 'SPECIES_NONE' && k !== 'SPECIES_NONE')) {
         if (cKey !== k) warnings.add(`${k}: not in PokemonDatabase, showing ${cKey}`);
         const m = /gSprite(\d+)/.exec(e.battleSprite || '');
         const ty = [e.type1, e.type2].filter(t => t && t !== 'TYPE_NONE'), ab = [e.ability1, e.ability2, e.hiddenAbility].map(a => a && a !== 'ABILITY_NONE' ? pretty(a) : '');
@@ -306,7 +309,7 @@ function createSummary(env) {
     const exp = raw.exp ?? L ** 3, expN = raw.expmax ?? (L + 1) ** 3;
     const g = String(raw.gender || '').toUpperCase(), tera = raw.teraType && raw.teraType !== 'TYPE_NONE' ? raw.teraType : '';
     const item = raw.heldItem && raw.heldItem !== 'ITEM_NONE' ? pretty(raw.heldItem) : '';
-    return { sp, species: sp.name, nick: String(raw.nickname || sp.name).slice(0, 10), dex: raw.natdexID ?? parseInt(sp.id, 10), types: sp.t, lv: L, stats, max: stats[0], hp: clamp(raw.HP ?? stats[0], 0, stats[0]),
+    return { sp, rawSpecies: raw.species, species: sp.name, nick: String(raw.nickname || sp.name).slice(0, 10), dex: raw.natdexID ?? parseInt(sp.id, 10), types: sp.t, lv: L, stats, max: stats[0], hp: clamp(raw.HP ?? stats[0], 0, stats[0]),
       natUp: nat[0], natDown: nat[1], nature: pretty(raw.nature) || 'Hardy', ability: pretty(raw.ability) || sp.abs[0] || '-', gender: g === 'MALE' || g === 'M' ? 'M' : g === 'FEMALE' || g === 'F' ? 'F' : '',
       ball: (env.ballType ? env.ballType(raw.ballId) : BALL_BY_ID[raw.ballId]) || 'poke', item, tera, ot: raw.OTName || 'PLAYER', idno: String(raw.OTID ?? 0).padStart(5, '0'),
       exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown' };
@@ -320,6 +323,8 @@ function createSummary(env) {
     S.party = raws.map(buildMon);
     S.party.forEach(m => { getImg(m.sprite); getImg(m.icon); });
     const TT = env.types && env.types(); if (TT && TT.sheet) getImg(TT.sheet);
+    if (!TT) warnings.add('TypeTable not found: load tables/TypeTables.js before PokemonSummary.js (text badges are used)');
+    else { if (!TT.sheet) warnings.add('TypeTable has no sheet path'); for (const m of S.party) for (const ty of [...m.types, m.tera]) if (ty && !(TT.types && TT.types[ty] && TT.types[ty].icon)) warnings.add('no icon rect in TypeTable for ' + ty); }
     S.hpShown = S.party.map((m, i) => keepHp && old[i] !== undefined ? old[i] : 0);
     S.sel = Math.min(S.sel, Math.max(0, S.party.length - 1));
     if (!keepHp) { S.rowT = 0; S.statP = 0; S.view = 'party'; S.tr = null; S.pg = null; S.page = 0; S.mvMode = false; }
@@ -524,7 +529,7 @@ function createSummary(env) {
   function status() {
     let sp = 0, ic = 0; for (const m of S.party) { const a = imgs.get(m.sprite), b = imgs.get(m.icon); if (a && a.ok) sp++; if (b && b.ok) ic++; }
     const TT = env.types && env.types(), sh = TT && TT.sheet ? imgs.get(TT.sheet) : null, DB = env.db && env.db();
-    return { font: fontSrc, species: DB ? Object.keys(DB).length : 0, count: S.party.length, sprites: sp, icons: ic, typeTable: !!TT, typeSheet: !!(sh && sh.ok), moveTable: !!moveTable(), warnings: [...warnings] };
+    return { mons: S.party.map(m => ({ nickname: m.nick, saveSpecies: m.rawSpecies, showing: m.species, types: m.types, sprite: m.sprite, spriteLoaded: !!(imgs.get(m.sprite) && imgs.get(m.sprite).ok), icon: m.icon, iconLoaded: !!(imgs.get(m.icon) && imgs.get(m.icon).ok) })), typeSheetPath: TT && TT.sheet, font: fontSrc, species: DB ? Object.keys(DB).length : 0, count: S.party.length, sprites: sp, icons: ic, typeTable: !!TT, typeSheet: !!(sh && sh.ok), moveTable: !!moveTable(), warnings: [...warnings] };
   }
   return { S, opt, W, H, press, click, update, render, rebuild, reset, initFont, status, renderSettled, buildMon };
 }
@@ -567,6 +572,7 @@ const PokemonSummary = {
     core.initFont().then(() => {
       if (!this.active) return;
       core.rebuild(false);
+      setTimeout(() => { if (PokemonSummary.active && PokemonSummary.logging) PokemonSummary.debug(); }, 1500);
       const key = 'ps_screen_canvas';
       if (scene.textures.exists(key)) scene.textures.remove(key);
       this.tex = scene.textures.createCanvas(key, W, H);
@@ -636,7 +642,12 @@ function psState() {
     types: typeof TypeTable !== 'undefined', db: typeof PokemonDatabase !== 'undefined',
   };
 }
-PokemonSummary.debug = () => { const s = psState(); console.log('[PS] state', s); return s; };
+PokemonSummary.debug = () => {
+  const s = psState(); console.log('[PS] state', s);
+  const c = PokemonSummary.core; if (c) { const st = c.status(); console.table(st.mons); console.log('[PS] type icons: TypeTable ' + (st.typeTable ? 'found' : 'NOT found') + ', sheet ' + st.typeSheetPath + ' -> ' + (st.typeSheet ? 'loaded' : 'NOT loaded') + ' | font: ' + st.font); if (st.warnings.length) console.warn('[PS] warnings:\n' + st.warnings.join('\n')); }
+  else console.log('[PS] the screen is not open: open it with Enter, then call PokemonSummary.debug() again');
+  return s;
+};
 window.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.repeat) return;
   const st = psState(); psLog('Enter pressed', st);
