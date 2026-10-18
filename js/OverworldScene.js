@@ -537,9 +537,11 @@ class OverworldScene extends Phaser.Scene {
           this.load.spritesheet(`tile_sheet_${tID}`, tileDef.tileImage, {
             frameWidth: 16, frameHeight: 16, margin: 0, spacing: 0
           });
-        } else if (tileDef.isAnimated && tileDef.frames > 1) {
+        } else if (tileDef.isAnimated) {
+          // animated single tile: frame size comes from tileDimension (default 16x16); frames run along the row
+          const [fw, fh] = String(tileDef.tileDimension || '16x16').split('x').map(n => parseInt(n) || 16);
           this.load.spritesheet(`tile_anim_${tID}`, tileDef.tileImage, {
-            frameWidth: 32, frameHeight: 32
+            frameWidth: fw, frameHeight: fh
           });
         } else {
           this.load.image(`tile_img_${tID}`, tileDef.tileImage);
@@ -626,7 +628,7 @@ class OverworldScene extends Phaser.Scene {
     this.events.once('shutdown', () => { if (this.weather) this.weather.destroy(); });
 
     this.time.addEvent({
-      delay: 3000,
+      delay: 1200,
       loop: true,
       callback: () => this.updateNPCMovement(),
     });
@@ -866,6 +868,7 @@ class OverworldScene extends Phaser.Scene {
       this.mapGroup.destroy(true);
     }
     this.mapGroup = this.add.group();
+    this.animTiles = [];
 
     if (!window.OverworldMaps) return;
 
@@ -873,6 +876,94 @@ class OverworldScene extends Phaser.Scene {
       const offsetPos = this.getMapWorldOffset(mapKey);
       this.renderMapGrid(mapData, offsetPos.x, offsetPos.y, mapKey);
     }
+    this.renderBorders();
+  }
+
+  // Creates one tile image for (tileID, frameID) and registers it for tile animation. Returns null when it cannot be drawn.
+  addTileImage(tileID, frameID, x, y, depth) {
+    const tileDef = window.OverworldTiles && window.OverworldTiles[tileID];
+    if (!tileDef) return null;
+    let key, frame = 0, scale, multi = false;
+    if (tileDef.tileType === 'Multi-tile' || tileDef.tileType === 'Multi-tile Pixel Split') {
+      key = `tile_sheet_${tileID}`;
+      if (!this.textures.exists(key)) return null;
+      const total = Math.max(1, this.textures.get(key).frameTotal - 1);
+      frame = Math.min(frameID, total - 1); scale = 2; multi = true;
+    } else if (tileDef.isAnimated) {
+      key = `tile_anim_${tileID}`;
+      scale = 32 / (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
+    } else {
+      key = `tile_img_${tileID}`; scale = 2;
+    }
+    if (!this.textures.exists(key)) return null;
+    const img = this.add.image(x, y, key, frame).setScale(scale).setDepth(depth + (multi ? 2 : 0));
+    this.mapGroup.add(img);
+    if (tileDef.isAnimated) {
+      const tex = this.textures.get(key);
+      const total = Math.max(1, tex.frameTotal - 1);
+      const fw = multi ? 16 : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
+      const cols = Math.max(1, Math.floor(tex.getSourceImage().width / fw));
+      let base, count;
+      if (multi) { base = Math.floor(frame / cols) * cols; count = Math.min(cols, total - base); }
+      else { base = 0; count = cols > 1 ? cols : total; }
+      if (count > 1) this.animTiles.push({ img, base, count });
+    }
+    return img;
+  }
+
+  // BORDER: every map has an optional `borderData` block (width x height, default 2x2, with up to 5 tile layers).
+  // It repeats over the empty space around the maps (up to BORDER_RANGE tiles away). It is always impassable
+  // (the player cannot leave a map where there is no connection), so only the picture matters here.
+  renderBorders() {
+    const maps = window.OverworldMaps;
+    if (!maps) return;
+    const T = 32, BORDER_RANGE = 14;
+    const info = [];
+    for (const [k, m] of Object.entries(maps)) {
+      const off = this.getMapWorldOffset(k);
+      const b = m.borderData;
+      let layers = [];
+      if (b) {
+        for (let l = 1; l <= 5; l++) {
+          const g = b['tileData_' + l];
+          if (Array.isArray(g) && g.some(r => Array.isArray(r) && r.some(v => v && String(v).trim() !== ''))) layers.push({ l, g });
+        }
+      }
+      info.push({
+        k, b, layers,
+        bw: (b && (b.width || (b.tileData_1 && b.tileData_1[0] && b.tileData_1[0].length))) || 2,
+        bh: (b && (b.height || (b.tileData_1 && b.tileData_1.length))) || 2,
+        x0: Math.round(off.x / T), y0: Math.round(off.y / T), w: m.dimensions.width, h: m.dimensions.height
+      });
+    }
+    // the nearest map owns a cell; cells inside any map are never border
+    const ownerOf = (x, y) => {
+      let best = null, bd = Infinity;
+      for (const i of info) {
+        const d = Math.max(i.x0 - x, x - (i.x0 + i.w - 1), i.y0 - y, y - (i.y0 + i.h - 1));
+        if (d <= 0) return null;
+        if (d < bd) { bd = d; best = i; }
+      }
+      return bd <= BORDER_RANGE ? best : null;
+    };
+    let drawn = 0;
+    for (const me of info) {
+      if (!me.layers.length) continue;
+      for (let y = me.y0 - BORDER_RANGE; y < me.y0 + me.h + BORDER_RANGE; y++) {
+        for (let x = me.x0 - BORDER_RANGE; x < me.x0 + me.w + BORDER_RANGE; x++) {
+          if (ownerOf(x, y) !== me) continue;
+          const bx = (((x - me.x0) % me.bw) + me.bw) % me.bw;
+          const by = (((y - me.y0) % me.bh) + me.bh) % me.bh;
+          for (const { l, g } of me.layers) {
+            const cell = this.parseTileCell(g[by] && g[by][bx]);
+            if (!cell) continue;
+            // below every map tile (-300 and up)
+            if (this.addTileImage(cell.tileID, cell.frameID, x * T + T / 2, y * T + T / 2, -400 + (l - 1) * 10)) drawn++;
+          }
+        }
+      }
+    }
+    console.log(`[render] border: drew ${drawn} tiles`);
   }
 
   getTileGrid(mapData) {
@@ -915,10 +1006,11 @@ class OverworldScene extends Phaser.Scene {
   parseTileCell(v) {
     if (typeof v === 'number') v = `${v}|0`;
     if (typeof v !== 'string' || v.trim() === '') return null;
-    const [a, b] = v.split('|');
+    // cell format: "tileID|frameID|behavior"  behavior: 0 passable, 1 blocked, 2 passable (tile drawn above NPCs/player), 3 surfable, 4 diveable
+    const [a, b, c] = v.split('|');
     const id = parseInt(a);
     if (Number.isNaN(id) || id < 0) return null;
-    return { tileID: id, frameID: parseInt(b) || 0 };
+    return { tileID: id, frameID: parseInt(b) || 0, pass: parseInt(c) || 0 };
   }
 
   renderMapGrid(mapData, offsetX, offsetY, label = '?') {
@@ -938,7 +1030,7 @@ class OverworldScene extends Phaser.Scene {
         for (let col = 0; col < grid[row].length; col++) {
           const cell = this.parseTileCell(grid[row][col]);
           if (!cell) continue;
-          const { tileID, frameID } = cell;
+          const { tileID, frameID, pass } = cell;
 
           const tileDef = window.OverworldTiles && window.OverworldTiles[tileID];
           if (!tileDef) { skipped.noDef.add(tileID); continue; }
@@ -946,11 +1038,15 @@ class OverworldScene extends Phaser.Scene {
           let key, frame = 0, scale, multi = false;
           if (tileDef.tileType === 'Multi-tile' || tileDef.tileType === 'Multi-tile Pixel Split') {
             key = `tile_sheet_${tileID}`;
-            frame = Math.min(frameID, (tileDef.frames || 1) - 1);
+            const tex = this.textures.exists(key) ? this.textures.get(key) : null;
+            // trust the real sheet size, not the (possibly wrong) frames value in tiles.js
+            const total = tex ? Math.max(1, tex.frameTotal - 1) : (tileDef.frames || 1);
+            frame = Math.min(frameID, total - 1);
             scale = 2; multi = true;
-          } else if (tileDef.isAnimated && tileDef.frames > 1) {
+          } else if (tileDef.isAnimated) {
             key = `tile_anim_${tileID}`;
-            scale = 1;
+            const fw = parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16;
+            scale = 32 / fw;
           } else {
             key = `tile_img_${tileID}`;
             scale = 2;
@@ -959,11 +1055,23 @@ class OverworldScene extends Phaser.Scene {
           if (!this.textures.exists(key)) { skipped.noTexture.add(key); continue; }
 
           // layer 1 is the lowest (-300), layer 5 the highest (-100); all stay below NPCs and the player
-          const depth = -300 + (layer - 1) * 50 + (multi ? 10 : 0);
+          // behavior 2 tiles draw above NPCs and the player (below the weather, which is at 5000)
+          const depth = pass === 2 ? 4000 + layer : -300 + (layer - 1) * 50 + (multi ? 10 : 0);
           const x = Math.round(offsetX + col * tileSize + tileSize / 2);
           const y = Math.round(offsetY + row * tileSize + tileSize / 2);
           const img = this.add.image(x, y, key, frame).setScale(scale).setDepth(depth);
           this.mapGroup.add(img);
+          // isAnimated: cycle through the frames of the same row of the sheet
+          if (tileDef.isAnimated) {
+            const tex = this.textures.get(key);
+            const total = Math.max(1, tex.frameTotal - 1);
+            const fw = multi ? 16 : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
+            const cols = Math.max(1, Math.floor(tex.getSourceImage().width / fw));
+            let base, count;
+            if (multi) { base = Math.floor(frame / cols) * cols; count = Math.min(cols, total - base); }
+            else { base = 0; count = cols > 1 ? cols : total; }
+            if (count > 1) this.animTiles.push({ img, base, count });
+          }
           drawn++;
         }
       }
@@ -982,7 +1090,7 @@ class OverworldScene extends Phaser.Scene {
       const c = this.parseTileCell(grid[gridY] && grid[gridY][gridX]);
       if (!c) { console.log(`• Layer ${layer}: empty`); continue; }
       const def = (window.OverworldTiles && window.OverworldTiles[c.tileID]) || {};
-      console.log(`• Layer ${layer}: tile ${c.tileID} (${def.tileName || 'Unknown'}) frame ${c.frameID} · passable: ${def.isPassable !== false ? 'yes' : 'NO'}`);
+      console.log(`• Layer ${layer}: tile ${c.tileID} (${def.tileName || 'Unknown'}) frame ${c.frameID} · behavior: ${['passable', 'BLOCKED', 'passable (above NPC)', 'surf', 'dive'][c.pass] || c.pass}`);
     }
     console.groupEnd();
   }
@@ -1091,6 +1199,7 @@ class OverworldScene extends Phaser.Scene {
     if (this.isLocked || !this.npcs || this.npcs.length === 0) return;
 
     this.npcs.forEach(npc => {
+      if (window.OverworldMovement && window.OverworldMovement.tick) { window.OverworldMovement.tick(npc); return; }
       const config = npc.eventConfig;
       if (!config || config.movementType !== 'MOVEMENT_TYPE_WANDER_LEFT_RIGHT') return;
 
@@ -1164,8 +1273,9 @@ class OverworldScene extends Phaser.Scene {
     for (const { grid } of layers) {
       const c = this.parseTileCell(grid[localY] && grid[localY][localX]);
       if (!c) continue;
-      const def = window.OverworldTiles ? window.OverworldTiles[c.tileID] : null;
-      if (def && def.isPassable === false) return false;
+      if (c.pass === 1) return false;                     // blocked
+      if (c.pass === 3 && !this.isSurfing) return false;  // surfable water
+      if (c.pass === 4 && !this.isDiving) return false;   // diveable water
     }
 
     // Only NPCs/buildings block. Warp and Script triggers are not in this.npcs.
@@ -1450,8 +1560,18 @@ class OverworldScene extends Phaser.Scene {
   // ===========================================================================
   // UPDATE
   // ===========================================================================
+  tickTileAnim(delta) {
+    if (!this.animTiles || !this.animTiles.length) return;
+    this.tileAnimMs = (this.tileAnimMs || 0) + delta;
+    const step = Math.floor(this.tileAnimMs / 300);
+    if (step === this.tileAnimStep) return;
+    this.tileAnimStep = step;
+    for (const t of this.animTiles) t.img.setFrame(t.base + (step % t.count));
+  }
+
   update(time, delta) {
     if (this.weather) this.weather.update(delta);
+    this.tickTileAnim(delta);
 
     // [CHANGED] depth is updated every frame (also while walking), before the early return
     if (this.player && this.npcs) {
@@ -1462,6 +1582,7 @@ class OverworldScene extends Phaser.Scene {
     if (this.isLocked || this.isMoving) return;
 
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+      this.idleMs = 0;
       this.tryInteract();
       return;
     }
@@ -1487,6 +1608,7 @@ class OverworldScene extends Phaser.Scene {
     this.player.direction = newDir;
 
     if (dx !== 0 || dy !== 0) {
+      this.idleMs = 0;
       const targetGridX = this.playerGridX + dx;
       const targetGridY = this.playerGridY + dy;
 
@@ -1504,7 +1626,14 @@ class OverworldScene extends Phaser.Scene {
         this.player.setFrame(frameIndex);
       }
     } else {
-      this.player.setFrame(window.getOverworldFrame(newDir, 0));
+      // idle: after 4 s without input the player walks in place
+      this.idleMs = (this.idleMs || 0) + delta;
+      if (this.idleMs > 4000) {
+        const seq = [1, 0, 2, 0];
+        this.player.setFrame(window.getOverworldFrame(newDir, seq[Math.floor(time / 180) % 4]));
+      } else {
+        this.player.setFrame(window.getOverworldFrame(newDir, 0));
+      }
     }
   }
 

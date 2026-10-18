@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Pixel Editor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}
+body{margin:0;height:100vh;display:grid;grid-template-columns:48px 1fr 310px;grid-template-rows:auto 1fr 24px;background:#14161c;color:#dde;font:12px system-ui,sans-serif;overflow:hidden}
+button,select,input{font:inherit;background:#262a36;color:#eef;border:1px solid #3a4052;border-radius:5px;padding:5px 7px}
+button{cursor:pointer}button:hover{background:#343b50}button.on{background:#3a6df0;border-color:#5d8aff}
+#top{grid-column:1/4;display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding:6px;background:#1c1f28;border-bottom:1px solid #2c3140}
+#top .sep{width:1px;height:22px;background:#3a4052;margin:0 3px}
+#tools{display:flex;flex-direction:column;gap:4px;padding:6px;background:#1c1f28;border-right:1px solid #2c3140;overflow:auto}
+#tools button{width:36px;height:34px;padding:0;font-size:15px}
+#view{overflow:auto;position:relative;background:#0e1014}
+#stage{position:relative;display:inline-block;margin:40px;line-height:0;
+ background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/16px 16px;box-shadow:0 0 0 1px #556}
+#stage canvas{display:block;image-rendering:pixelated}
+#ov{position:absolute;left:0;top:0;pointer-events:none;width:100%;height:100%}
+#side{background:#1c1f28;border-left:1px solid #2c3140;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
+fieldset{border:1px solid #333a4b;border-radius:6px;padding:8px;margin:0;display:flex;flex-direction:column;gap:6px}
+legend{color:#7fa4ff;padding:0 4px}
+label{display:flex;flex-direction:column;gap:3px;color:#9aa}
+label.in{flex-direction:row;align-items:center;gap:6px}
+.row{display:flex;gap:6px;align-items:center}.row>*{flex:1;min-width:0}
+input[type=color]{padding:0;height:30px;width:44px;flex:none}
+#sw{display:flex;flex-wrap:wrap;gap:3px}#sw i{width:18px;height:18px;border:1px solid #556;cursor:pointer;display:block}
+#list{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:3px}
+.it{display:flex;gap:6px;align-items:center;padding:3px;border:1px solid #2c3140;border-radius:5px;cursor:pointer}
+.it.cur{border-color:#5d8aff;background:#222a40}
+.it canvas{width:36px;height:36px;object-fit:contain;image-rendering:pixelated;flex:none;
+ background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/8px 8px}
+.it span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it b{color:#ff8a80;cursor:pointer;padding:0 4px}
+#status{grid-column:1/4;background:#1c1f28;border-top:1px solid #2c3140;padding:4px 8px;color:#9ab;white-space:nowrap;overflow:hidden}
+.hint{color:#778;font-size:11px;line-height:1.4}
+#drop{position:fixed;inset:0;background:rgba(58,109,240,.25);border:3px dashed #5d8aff;display:none;align-items:center;justify-content:center;font-size:22px;z-index:9;pointer-events:none}
+</style></head><body>
+<div id="top">
+  <button id="bOpen">Open images</button><button id="bFolder">Open folder</button><button id="bNew">New</button>
+  <input type="file" id="fFiles" accept="image/*" multiple hidden><input type="file" id="fFolder" webkitdirectory multiple hidden>
+  <div class="sep"></div>
+  <button id="bUndo" title="Ctrl+Z">Undo</button><button id="bRedo" title="Ctrl+Y">Redo</button>
+  <div class="sep"></div>
+  <button id="bFlipH">Flip H</button><button id="bFlipV">Flip V</button><button id="bRotL">Rotate ⟲</button><button id="bRotR">Rotate ⟳</button>
+  <button id="bResize">Canvas size</button><button id="bScale">Scale</button><button id="bCrop">Crop to selection</button><button id="bTrim">Trim empty edges</button><button id="bInvert">Invert colours</button>
+  <div class="sep"></div>
+  <button id="bZm">−</button><span id="zl" style="min-width:42px;text-align:center">100%</span><button id="bZp">+</button><button id="bFit">Fit</button>
+  <label class="in" style="flex-direction:row"><input type="checkbox" id="tGrid" checked> Pixel grid</label>
+</div>
+<div id="tools"></div>
+<div id="view"><div id="stage"><canvas id="ov"></canvas></div></div>
+<div id="side">
+  <fieldset><legend>Colours</legend>
+    <div class="row"><label>Primary (left click)<input type="color" id="c1" value="#000000"></label><label>Secondary (right click)<input type="color" id="c2" value="#ffffff"></label></div>
+    <label>Opacity <span id="aV">100</span>%<input type="range" id="alpha" min="0" max="100" value="100"></label>
+    <div id="sw"></div>
+    <button id="bPal">Get palette from image</button>
+  </fieldset>
+  <fieldset><legend>Tool options</legend>
+    <label>Brush size <span id="bsV">1</span> px<input type="range" id="bs" min="1" max="32" value="1"></label>
+    <label class="in"><input type="checkbox" id="oFill"> Fill shapes (rectangle, ellipse)</label>
+    <label>Fill / wand tolerance <span id="tolFV">0</span><input type="range" id="tolF" min="0" max="128" value="0"></label>
+    <label class="in"><input type="checkbox" id="oContig" checked> Contiguous (uncheck = whole image)</label>
+    <div class="hint">Selection: drag to select, drag inside to move, Ctrl+C / X / V, Delete clears. Wand selects a colour region, then press Delete.</div>
+  </fieldset>
+  <fieldset><legend>Remove background</legend>
+    <div class="row"><label>Pixel X<input type="number" id="bgx" value="0" min="0"></label><label>Pixel Y<input type="number" id="bgy" value="0" min="0"></label></div>
+    <div class="row" style="align-items:center"><div id="bgsw" style="width:28px;height:28px;border:1px solid #556;flex:none"></div><div id="bgInfo" class="hint" style="flex:1">Pick the pixel with the 🎯 tool (K) or type X / Y.</div></div>
+    <label class="in"><input type="checkbox" id="bgFixed"> Use this picked colour for every image (instead of each image's own pixel X, Y)</label>
+    <label>Tolerance <span id="tolV">0</span><input type="range" id="tol" min="0" max="120" value="0"></label>
+    <label>Mode<select id="bgMode">
+      <option value="all">This colour everywhere</option>
+      <option value="edge">Only background connected to the edges</option>
+      <option value="touch">Only area connected to the pixel</option></select></label>
+    <div class="row"><button id="bgOne" style="background:#3a6df0">Remove (this image)</button><button id="bgAll" style="background:#3a6df0">Remove (ALL images)</button></div>
+    <div class="hint">If the pixel is already transparent the image is left alone.</div>
+  </fieldset>
+  <fieldset><legend>Images (<span id="cnt">0</span>)</legend>
+    <div id="list"></div>
+    <div class="row"><button id="bZip" style="background:#2e8b57">Download ZIP (all)</button><button id="bPng">Download PNG</button></div>
+    <label class="in"><input type="checkbox" id="zipFolders" checked> Keep folder structure in the ZIP</label>
+    <div class="hint">Open several images or a whole folder (or drop them on the window). Click one to edit it; every edit is kept per image. The ZIP contains all images as transparent PNGs.</div>
+  </fieldset>
+</div>
+<div id="status">Open an image, a folder, or press New.</div>
+<div id="drop">Drop images here</div>
+<script>
+const $=id=>document.getElementById(id);
+const stage=$('stage'),view=$('view'),ov=$('ov'),octx=ov.getContext('2d');
+let items=[],cur=-1,cv=null,ctx=null,z=4,tool='pencil',spaceDown=false,sel=null,flt=null,clipC=null,recent=[];
+let drag=null,hover={x:0,y:0};
+const TOOLS=[['pencil','✏️','Pencil (B)','b'],['eraser','🧽','Eraser (E)','e'],['fill','🪣','Fill (G)','g'],['pick','💧','Colour picker (I)','i'],
+ ['line','╱','Line (L)','l'],['rect','▭','Rectangle (R)','r'],['ellipse','◯','Ellipse (O)','o'],['select','⬚','Select (M)','m'],['wand','✨','Magic wand (W)','w'],
+ ['bgpick','🎯','Pick background pixel (K)','k'],['hand','✋','Hand (H)','h']];
+$('tools').innerHTML=TOOLS.map(([t,i,n])=>`<button data-t="${t}" title="${n}">${i}</button>`).join('');
+$('tools').onclick=e=>{const b=e.target.closest('button');if(b)setTool(b.dataset.t)};
+function setTool(t){if(flt&&t!=='select')commitFloat();tool=t;document.querySelectorAll('#tools button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  view.style.cursor=t==='hand'?'grab':t==='select'||t==='wand'?'default':'crosshair';overlay()}
+
+// ---------- colours ----------
+const hex2=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const toHex=(r,g,b)=>'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+const alphaV=()=>Math.round($('alpha').value*2.55);
+function col(which){const[r,g,b]=hex2($(which).value);return[r,g,b,alphaV()]}
+const css=c=>`rgba(${c[0]},${c[1]},${c[2]},${c[3]/255})`;
+function addRecent(h){recent=[h,...recent.filter(x=>x!==h)].slice(0,40);drawSw()}
+function drawSw(){$('sw').innerHTML=recent.map(h=>`<i style="background:${h}" data-h="${h}" title="${h}"></i>`).join('')}
+$('sw').onclick=e=>{if(e.target.dataset.h)$('c1').value=e.target.dataset.h};
+$('sw').oncontextmenu=e=>{e.preventDefault();if(e.target.dataset.h)$('c2').value=e.target.dataset.h};
+$('alpha').oninput=()=>$('aV').textContent=$('alpha').value;
+$('bs').oninput=()=>$('bsV').textContent=$('bs').value;
+$('tolF').oninput=()=>$('tolFV').textContent=$('tolF').value;
+$('tol').oninput=()=>$('tolV').textContent=$('tol').value;
+$('bPal').onclick=()=>{if(!ctx)return;const d=ctx.getImageData(0,0,cv.width,cv.height).data,m=new Map();
+  for(let i=0;i<d.length&&m.size<400;i+=4)if(d[i+3]>0){const h=toHex(d[i],d[i+1],d[i+2]);m.set(h,(m.get(h)||0)+1)}
+  recent=[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,40).map(x=>x[0]);drawSw()};
+
+// ---------- items ----------
+function mkItem(name,c,path){return{name,path:path||name,c,hist:[],redo:[]}}
+function prep(c){c.style.imageRendering='pixelated';c.getContext('2d',{willReadFrequently:true})}
+async function addFile(f){
+  try{const bm=await createImageBitmap(f),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;prep(c);
+    c.getContext('2d',{willReadFrequently:true}).drawImage(bm,0,0);
+    items.push(mkItem(f.name.replace(/\.[^.]+$/,''),c,(f.webkitRelativePath||f.name).replace(/\.[^.]+$/,'')));return true}catch(e){return false}}
+async function addFiles(list){const fs=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
+  if(!fs.length){status('No images found.');return}
+  const start=items.length;let n=0;for(const f of fs){status(`Loading ${++n}/${fs.length}…`);await addFile(f)}
+  if(items.length>start)select(start);buildList();status(`Loaded ${items.length-start} image(s).`)}
+function newImage(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;prep(c);items.push(mkItem('image_'+(items.length+1),c));select(items.length-1);buildList()}
+function select(i){if(flt)commitFloat();sel=null;if(i<0||i>=items.length){cur=-1;return}
+  const old=cv;cur=i;cv=items[i].c;ctx=cv.getContext('2d',{willReadFrequently:true});
+  if(old&&old.parentNode===stage)stage.replaceChild(cv,old);else stage.insertBefore(cv,ov);
+  fitZoom();buildList();overlay()}
+function buildList(){const L=$('list');L.innerHTML='';$('cnt').textContent=items.length;
+  items.forEach((it,i)=>{const d=document.createElement('div');d.className='it'+(i===cur?' cur':'');
+    const t=document.createElement('canvas');t.width=it.c.width;t.height=it.c.height;t.getContext('2d').drawImage(it.c,0,0);
+    const s=document.createElement('span');s.textContent=it.path;s.title=it.path+` (${it.c.width}×${it.c.height})`;
+    const x=document.createElement('b');x.textContent='×';x.title='Remove from list';
+    x.onclick=ev=>{ev.stopPropagation();items.splice(i,1);if(cur===i){cv=null;ctx=null;stage.querySelectorAll('canvas:not(#ov)').forEach(c=>c.remove());select(Math.min(i,items.length-1))}else if(cur>i)cur--;buildList()};
+    d.append(t,s,x);d.onclick=()=>{select(i)};L.appendChild(d)})}
+function refreshThumb(){const it=items[cur];if(!it)return;const t=$('list').children[cur]?.querySelector('canvas');if(t){t.width=it.c.width;t.height=it.c.height;t.getContext('2d').drawImage(it.c,0,0)}}
+
+// ---------- zoom ----------
+function applyZoom(){if(!cv)return;const m=Math.max(cv.width,cv.height);z=Math.max(.25,Math.min(z,Math.floor(8192/m)||1,64));
+  cv.style.width=cv.width*z+'px';cv.style.height=cv.height*z+'px';ov.width=Math.round(cv.width*z);ov.height=Math.round(cv.height*z);
+  $('zl').textContent=Math.round(z*100)+'%';overlay()}
+function fitZoom(){if(!cv)return;z=Math.max(1,Math.min(32,Math.floor(Math.min((view.clientWidth-100)/cv.width,(view.clientHeight-100)/cv.height))||1));applyZoom()}
+$('bZp').onclick=()=>{z=z<1?z*2:Math.round(z*1.5+.4);applyZoom()};$('bZm').onclick=()=>{z=z<=1?z/2:Math.max(1,Math.round(z/1.5));applyZoom()};$('bFit').onclick=fitZoom;
+view.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.altKey)return;e.preventDefault();e.deltaY<0?$('bZp').click():$('bZm').click()},{passive:false});
+
+// ---------- history ----------
+function snap(it=items[cur]){const g=it.c.getContext('2d');return g.getImageData(0,0,it.c.width,it.c.height)}
+function pushHist(it=items[cur]){if(!it)return;it.hist.push(snap(it));if(it.hist.length>60)it.hist.shift();it.redo=[]}
+function restore(it,d){it.c.width=d.width;it.c.height=d.height;it.c.getContext('2d').putImageData(d,0,0)}
+function undo(){const it=items[cur];if(!it||!it.hist.length)return;flt=null;sel=null;it.redo.push(snap());restore(it,it.hist.pop());applyZoom();refreshThumb()}
+function redo(){const it=items[cur];if(!it||!it.redo.length)return;flt=null;sel=null;it.hist.push(snap());restore(it,it.redo.pop());applyZoom();refreshThumb()}
+$('bUndo').onclick=undo;$('bRedo').onclick=redo;
+
+// ---------- drawing primitives ----------
+const bsz=()=>+$('bs').value;
+function plot(x,y,c,erase){const s=bsz(),o=Math.floor(s/2);if(erase)ctx.clearRect(x-o,y-o,s,s);else{ctx.fillStyle=css(c);ctx.fillRect(x-o,y-o,s,s)}}
+function plotLine(a,b,c,erase){let x=a.x,y=a.y;const dx=Math.abs(b.x-x),dy=Math.abs(b.y-y),sx=x<b.x?1:-1,sy=y<b.y?1:-1;let e=dx-dy;
+  for(;;){plot(x,y,c,erase);if(x===b.x&&y===b.y)break;const e2=2*e;if(e2>-dy){e-=dy;x+=sx}if(e2<dx){e+=dx;y+=sy}}}
+function drawRect(a,b,c){const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y);
+  if($('oFill').checked){ctx.fillStyle=css(c);ctx.fillRect(x0,y0,x1-x0+1,y1-y0+1);return}
+  plotLine({x:x0,y:y0},{x:x1,y:y0},c);plotLine({x:x1,y:y0},{x:x1,y:y1},c);plotLine({x:x1,y:y1},{x:x0,y:y1},c);plotLine({x:x0,y:y1},{x:x0,y:y0},c)}
+function drawEllipse(a,b,c){const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y),
+  cx=(x0+x1+1)/2,cy=(y0+y1+1)/2,rx=(x1-x0+1)/2,ry=(y1-y0+1)/2,fill=$('oFill').checked;
+  const inside=(x,y)=>((x+.5-cx)/rx)**2+((y+.5-cy)/ry)**2<=1;ctx.fillStyle=css(c);
+  for(let y=y0;y<=y1;y++){let xs=-1,xe=-1;for(let x=x0;x<=x1;x++)if(inside(x,y)){if(xs<0)xs=x;xe=x}
+    if(xs<0)continue;
+    if(fill)ctx.fillRect(xs,y,xe-xs+1,1);
+    else for(let x=xs;x<=xe;x++)if(!(inside(x-1,y)&&inside(x+1,y)&&inside(x,y-1)&&inside(x,y+1)))plot(x,y,c)}}
+function region(x,y,tol,contig){const w=cv.width,h=cv.height,d=ctx.getImageData(0,0,w,h).data,mask=new Uint8Array(w*h),i0=(y*w+x)*4,t=[d[i0],d[i0+1],d[i0+2],d[i0+3]];
+  const ok=i=>t[3]===0?d[i+3]===0:d[i+3]!==0&&Math.abs(d[i]-t[0])<=tol&&Math.abs(d[i+1]-t[1])<=tol&&Math.abs(d[i+2]-t[2])<=tol&&Math.abs(d[i+3]-t[3])<=tol;
+  if(!contig){for(let p=0;p<w*h;p++)if(ok(p*4))mask[p]=1;return mask}
+  const st=[y*w+x];mask[y*w+x]=1;
+  while(st.length){const p=st.pop(),px=p%w,py=(p-px)/w;
+    for(const[q,cond]of[[p+1,px<w-1],[p-1,px>0],[p+w,py<h-1],[p-w,py>0]])if(cond&&!mask[q]&&ok(q*4)){mask[q]=1;st.push(q)}}
+  return mask}
+function bucket(p,c){const m=region(p.x,p.y,+$('tolF').value,$('oContig').checked),w=cv.width,img=ctx.getImageData(0,0,w,cv.height),d=img.data;
+  for(let i=0;i<m.length;i++)if(m[i]){d[i*4]=c[0];d[i*4+1]=c[1];d[i*4+2]=c[2];d[i*4+3]=c[3]}ctx.putImageData(img,0,0)}
+
+// ---------- selection / clipboard ----------
+function maskBBox(m){const w=cv.width,h=cv.height;let x0=w,y0=h,x1=-1,y1=-1;for(let p=0;p<m.length;p++)if(m[p]){const x=p%w,y=(p-x)/w;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+  if(x1<0)return null;const bw=x1-x0+1,bh=y1-y0+1,mm=new Uint8Array(bw*bh);for(let y=0;y<bh;y++)for(let x=0;x<bw;x++)mm[y*bw+x]=m[(y+y0)*w+x+x0];return{x:x0,y:y0,w:bw,h:bh,mask:mm}}
+function liftSel(){if(!sel)return;pushHist();const id=ctx.getImageData(sel.x,sel.y,sel.w,sel.h),d=id.data,fd=new ImageData(sel.w,sel.h);
+  for(let i=0;i<sel.w*sel.h;i++)if(!sel.mask||sel.mask[i]){for(let k=0;k<4;k++){fd.data[i*4+k]=d[i*4+k];d[i*4+k]=0}}
+  ctx.putImageData(id,sel.x,sel.y);const fc=document.createElement('canvas');fc.width=sel.w;fc.height=sel.h;fc.getContext('2d').putImageData(fd,0,0);
+  flt={c:fc,x:sel.x,y:sel.y,mask:sel.mask};}
+function commitFloat(){if(!flt)return;ctx.drawImage(flt.c,flt.x,flt.y);sel={x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height,mask:flt.mask};flt=null;overlay();refreshThumb()}
+function copySel(){if(flt){clipC=flt.c;return}if(!sel)return;const id=ctx.getImageData(sel.x,sel.y,sel.w,sel.h),d=id.data;
+  for(let i=0;i<sel.w*sel.h;i++)if(sel.mask&&!sel.mask[i])for(let k=0;k<4;k++)d[i*4+k]=0;
+  const c=document.createElement('canvas');c.width=sel.w;c.height=sel.h;c.getContext('2d').putImageData(id,0,0);clipC=c}
+function delSel(){if(flt){flt=null;sel=null;overlay();refreshThumb();return}if(!sel)return;pushHist();const id=ctx.getImageData(sel.x,sel.y,sel.w,sel.h),d=id.data;
+  for(let i=0;i<sel.w*sel.h;i++)if(!sel.mask||sel.mask[i])for(let k=0;k<4;k++)d[i*4+k]=0;ctx.putImageData(id,sel.x,sel.y);overlay();refreshThumb()}
+function pasteClip(){if(!clipC||!ctx)return;if(flt)commitFloat();pushHist();setTool('select');
+  flt={c:clipC,x:Math.max(0,Math.floor(view.scrollLeft/z)),y:Math.max(0,Math.floor(view.scrollTop/z)),mask:null};sel={x:flt.x,y:flt.y,w:clipC.width,h:clipC.height,mask:null};overlay()}
+const inRect=(p,r)=>r&&p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h;
+
+// ---------- overlay ----------
+const maskCv=document.createElement('canvas');
+function overlay(){if(!cv)return;octx.clearRect(0,0,ov.width,ov.height);octx.imageSmoothingEnabled=false;
+  if($('tGrid').checked&&z>=6){octx.strokeStyle='rgba(255,255,255,.18)';octx.lineWidth=1;octx.beginPath();
+    for(let x=0;x<=cv.width;x++){octx.moveTo(x*z+.5,0);octx.lineTo(x*z+.5,ov.height)}for(let y=0;y<=cv.height;y++){octx.moveTo(0,y*z+.5);octx.lineTo(ov.width,y*z+.5)}octx.stroke()}
+  if(flt)octx.drawImage(flt.c,flt.x*z,flt.y*z,flt.c.width*z,flt.c.height*z);
+  const r=flt?{x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height,mask:flt.mask}:sel;
+  if(r){if(r.mask){maskCv.width=r.w;maskCv.height=r.h;const m=maskCv.getContext('2d'),id=m.createImageData(r.w,r.h);
+      for(let i=0;i<r.w*r.h;i++)if(r.mask[i]){id.data[i*4]=60;id.data[i*4+1]=130;id.data[i*4+2]=255;id.data[i*4+3]=110}m.putImageData(id,0,0);octx.drawImage(maskCv,r.x*z,r.y*z,r.w*z,r.h*z)}
+    octx.lineWidth=1;octx.setLineDash([5,4]);octx.strokeStyle='#fff';octx.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);octx.lineDashOffset=4;octx.strokeStyle='#000';octx.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);octx.setLineDash([]);octx.lineDashOffset=0}
+  if(drag&&drag.k==='newsel'){const a=drag.a,b=drag.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;octx.fillStyle='rgba(60,130,255,.25)';octx.fillRect(x*z,y*z,w*z,h*z);octx.strokeStyle='#fff';octx.strokeRect(x*z+.5,y*z+.5,w*z-1,h*z-1)}
+  if(['pencil','eraser'].includes(tool)&&hover){const s=bsz(),o=Math.floor(s/2);octx.strokeStyle='rgba(255,255,255,.8)';octx.strokeRect((hover.x-o)*z+.5,(hover.y-o)*z+.5,s*z-1,s*z-1)}}
+$('tGrid').onchange=overlay;
+
+// ---------- mouse ----------
+function pos(e){const r=cv.getBoundingClientRect();return{x:Math.floor((e.clientX-r.left)/r.width*cv.width),y:Math.floor((e.clientY-r.top)/r.height*cv.height)}}
+const inside=p=>p.x>=0&&p.y>=0&&p.x<cv.width&&p.y<cv.height;
+const clampP=p=>({x:Math.max(0,Math.min(cv.width-1,p.x)),y:Math.max(0,Math.min(cv.height-1,p.y))});
+view.addEventListener('contextmenu',e=>e.preventDefault());
+view.addEventListener('mousedown',e=>{if(!cv)return;
+  if(e.button===1||spaceDown||tool==='hand'){drag={k:'pan',x:e.clientX,y:e.clientY,sl:view.scrollLeft,st:view.scrollTop};return}
+  const p=pos(e),right=e.button===2,c=col(right?'c2':'c1');
+  if(tool==='select'){
+    if(flt&&inRect(p,{x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height})){drag={k:'movef',ox:p.x-flt.x,oy:p.y-flt.y};return}
+    if(flt)commitFloat();
+    if(sel&&inRect(p,sel)){liftSel();drag={k:'movef',ox:p.x-flt.x,oy:p.y-flt.y};overlay();return}
+    sel=null;const q=clampP(p);drag={k:'newsel',a:q,b:q};overlay();return}
+  if(!inside(p)&&tool!=='select')return;
+  if(tool==='pick'){const d=ctx.getImageData(p.x,p.y,1,1).data;$(right?'c2':'c1').value=toHex(d[0],d[1],d[2]);if(!right){$('alpha').value=Math.round(d[3]/2.55);$('aV').textContent=$('alpha').value}return}
+  if(tool==='bgpick'){$('bgx').value=p.x;$('bgy').value=p.y;bgInfo();return}
+  if(tool==='wand'){const m=region(p.x,p.y,+$('tolF').value,$('oContig').checked);sel=maskBBox(m);overlay();return}
+  pushHist();
+  if(tool==='pencil'||tool==='eraser'){drag={k:'paint',last:p,c,erase:tool==='eraser'};plot(p.x,p.y,c,drag.erase)}
+  else if(tool==='fill'){bucket(p,c);addRecent(toHex(c[0],c[1],c[2]));refreshThumb()}
+  else{drag={k:'shape',a:p,c,base:snap()}}
+  overlay()});
+window.addEventListener('mousemove',e=>{if(!cv)return;
+  if(drag&&drag.k==='pan'){view.scrollLeft=drag.sl-(e.clientX-drag.x);view.scrollTop=drag.st-(e.clientY-drag.y);return}
+  const p=pos(e);hover=inside(p)?p:null;
+  if(drag){
+    if(drag.k==='paint'){const q=p;plotLine(drag.last,q,drag.c,drag.erase);drag.last=q}
+    else if(drag.k==='shape'){ctx.putImageData(drag.base,0,0);if(tool==='line')plotLine(drag.a,p,drag.c);else if(tool==='rect')drawRect(drag.a,p,drag.c);else drawEllipse(drag.a,p,drag.c)}
+    else if(drag.k==='movef'){flt.x=p.x-drag.ox;flt.y=p.y-drag.oy}
+    else if(drag.k==='newsel')drag.b=clampP(p);
+    overlay()}else overlay();
+  if(hover){const d=ctx.getImageData(hover.x,hover.y,1,1).data;status(`(${hover.x}, ${hover.y})  rgba(${d[0]}, ${d[1]}, ${d[2]}, ${d[3]})  ·  ${cv.width}×${cv.height}  ·  ${Math.round(z*100)}%`)}});
+window.addEventListener('mouseup',()=>{if(!drag)return;const d=drag;drag=null;
+  if(d.k==='paint'||d.k==='shape'){addRecent(toHex(d.c[0],d.c[1],d.c[2]));refreshThumb()}
+  if(d.k==='newsel'){const a=d.a,b=d.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;sel=(w>1||h>1)?{x,y,w,h,mask:null}:null}
+  overlay()});
+
+// ---------- background removal ----------
+function bgInfo(){if(!ctx)return;const x=+$('bgx').value||0,y=+$('bgy').value||0;
+  if(x<0||y<0||x>=cv.width||y>=cv.height){$('bgInfo').textContent='Pixel is outside this image.';return}
+  const d=ctx.getImageData(x,y,1,1).data;$('bgsw').style.background=`rgba(${d[0]},${d[1]},${d[2]},${d[3]/255})`;
+  $('bgInfo').innerHTML=`(${x}, ${y})  rgba(${d[0]}, ${d[1]}, ${d[2]}, ${d[3]})<br>${toHex(d[0],d[1],d[2])}${d[3]===0?' — already transparent':''}`;bgColor=d[3]?[d[0],d[1],d[2]]:bgColor}
+let bgColor=null;
+$('bgx').oninput=$('bgy').oninput=bgInfo;
+function removeBg(c,o){const w=c.width,h=c.height,g=c.getContext('2d',{willReadFrequently:true}),img=g.getImageData(0,0,w,h),d=img.data;
+  let t;if(o.color)t=o.color;else{if(o.x<0||o.y<0||o.x>=w||o.y>=h)return-1;const i=(o.y*w+o.x)*4;if(d[i+3]===0)return-1;t=[d[i],d[i+1],d[i+2]]}
+  const tol=o.tol,mode=o.color&&o.mode==='touch'?'edge':o.mode;
+  const match=i=>d[i+3]!==0&&Math.abs(d[i]-t[0])<=tol&&Math.abs(d[i+1]-t[1])<=tol&&Math.abs(d[i+2]-t[2])<=tol;let n=0;
+  if(mode==='all'){for(let i=0;i<d.length;i+=4)if(match(i)){d[i+3]=0;n++}}
+  else{const seen=new Uint8Array(w*h),st=[];const push=(x,y)=>{if(x<0||y<0||x>=w||y>=h)return;const p=y*w+x;if(seen[p])return;seen[p]=1;st.push(p)};
+    if(mode==='touch')push(o.x,o.y);else{for(let x=0;x<w;x++){push(x,0);push(x,h-1)}for(let y=0;y<h;y++){push(0,y);push(w-1,y)}}
+    while(st.length){const p=st.pop(),i=p*4,x=p%w,y=(p-x)/w;
+      if(d[i+3]!==0){if(!match(i))continue;d[i+3]=0;n++}
+      push(x+1,y);push(x-1,y);push(x,y+1);push(x,y-1)}}
+  g.putImageData(img,0,0);return n}
+const bgOpts=()=>({x:+$('bgx').value||0,y:+$('bgy').value||0,tol:+$('tol').value,mode:$('bgMode').value,color:$('bgFixed').checked?bgColor:null});
+$('bgOne').onclick=()=>{if(!ctx)return;if(flt)commitFloat();const o=bgOpts();if($('bgFixed').checked&&!bgColor){status('Pick a colour with the 🎯 tool first.');return}
+  pushHist();const n=removeBg(cv,o);if(n<0){items[cur].hist.pop();status('Nothing to do: that pixel is already transparent (or outside the image).');return}
+  status(`Removed ${n} pixels.`);refreshThumb();bgInfo()};
+$('bgAll').onclick=()=>{if(!items.length)return;if(flt)commitFloat();const o=bgOpts();if($('bgFixed').checked&&!bgColor){status('Pick a colour with the 🎯 tool first.');return}
+  let done=0,skipped=0,px=0;for(const it of items){pushHist(it);const n=removeBg(it.c,o);if(n<0){it.hist.pop();skipped++}else{done++;px+=n}}
+  status(`Batch: ${done} image(s) processed, ${skipped} skipped (already transparent / pixel outside). ${px} pixels removed.`);buildList();bgInfo()};
+
+// ---------- transforms ----------
+function xform(fn){if(!ctx)return;if(flt)commitFloat();sel=null;pushHist();const src=document.createElement('canvas');src.width=cv.width;src.height=cv.height;src.getContext('2d').drawImage(cv,0,0);
+  const r=fn(src);cv.width=r.w;cv.height=r.h;ctx=cv.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,r.w,r.h);r.draw(ctx,src);applyZoom();refreshThumb()}
+$('bFlipH').onclick=()=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{g.translate(s.width,0);g.scale(-1,1);g.drawImage(s,0,0)}}));
+$('bFlipV').onclick=()=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{g.translate(0,s.height);g.scale(1,-1);g.drawImage(s,0,0)}}));
+$('bRotR').onclick=()=>xform(s=>({w:s.height,h:s.width,draw:(g,s)=>{g.translate(s.height,0);g.rotate(Math.PI/2);g.drawImage(s,0,0)}}));
+$('bRotL').onclick=()=>xform(s=>({w:s.height,h:s.width,draw:(g,s)=>{g.translate(0,s.width);g.rotate(-Math.PI/2);g.drawImage(s,0,0)}}));
+$('bResize').onclick=()=>{if(!cv)return;const v=prompt('New canvas size (width x height). Content stays at the top-left, new space is transparent:',`${cv.width}x${cv.height}`);const m=v&&v.match(/(\d+)\D+(\d+)/);if(!m)return;
+  const w=Math.max(1,Math.min(4096,+m[1])),h=Math.max(1,Math.min(4096,+m[2]));xform(s=>({w,h,draw:(g,s)=>g.drawImage(s,0,0)}))};
+$('bScale').onclick=()=>{if(!cv)return;const v=prompt('Scale: a factor (like 2 or 0.5) or a size like 64x64 (nearest-neighbour, pixels stay sharp):','2');if(!v)return;
+  let w,h;const m=v.match(/^\s*(\d+)\s*[x×]\s*(\d+)\s*$/i);if(m){w=+m[1];h=+m[2]}else{const f=parseFloat(v);if(!(f>0))return;w=Math.round(cv.width*f);h=Math.round(cv.height*f)}
+  w=Math.max(1,Math.min(4096,w));h=Math.max(1,Math.min(4096,h));xform(s=>({w,h,draw:(g,s)=>g.drawImage(s,0,0,w,h)}))};
+$('bCrop').onclick=()=>{if(!cv||!sel){status('Select an area first (Select tool or Wand).');return}const r={...sel};xform(s=>({w:r.w,h:r.h,draw:(g,s)=>g.drawImage(s,r.x,r.y,r.w,r.h,0,0,r.w,r.h)}))};
+$('bTrim').onclick=()=>{if(!cv)return;const w=cv.width,h=cv.height,d=ctx.getImageData(0,0,w,h).data;let x0=w,y0=h,x1=-1,y1=-1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[(y*w+x)*4+3]){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+  if(x1<0||(x0===0&&y0===0&&x1===w-1&&y1===h-1)){status('Nothing to trim.');return}
+  xform(s=>({w:x1-x0+1,h:y1-y0+1,draw:(g,s)=>g.drawImage(s,x0,y0,x1-x0+1,y1-y0+1,0,0,x1-x0+1,y1-y0+1)}))};
+$('bInvert').onclick=()=>{if(!ctx)return;if(flt)commitFloat();pushHist();const img=ctx.getImageData(0,0,cv.width,cv.height),d=img.data;
+  for(let i=0;i<d.length;i+=4)if(d[i+3]){d[i]=255-d[i];d[i+1]=255-d[i+1];d[i+2]=255-d[i+2]}ctx.putImageData(img,0,0);refreshThumb()};
+
+// ---------- export (own ZIP writer, no libraries) ----------
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=u=>{let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+function zip(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;const now=new Date(),dt=((now.getFullYear()-1980)<<9|(now.getMonth()+1)<<5|now.getDate()),tm=(now.getHours()<<11|now.getMinutes()<<5|now.getSeconds()>>1);
+  for(const f of files){const nm=enc.encode(f.name),crc=crc32(f.data),h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);
+    h.setUint32(14,crc,true);h.setUint32(18,f.data.length,true);h.setUint32(22,f.data.length,true);h.setUint16(26,nm.length,true);h.setUint16(28,0,true);
+    parts.push(h.buffer,nm,f.data);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);
+    c.setUint32(16,crc,true);c.setUint32(20,f.data.length,true);c.setUint32(24,f.data.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);cd.push(c.buffer,nm);
+    off+=30+nm.length+f.data.length}
+  let cs=0;for(const p of cd)cs+=p.byteLength;parts.push(...cd);
+  const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);parts.push(e.buffer);
+  return new Blob(parts,{type:'application/zip'})}
+const toPng=c=>new Promise(r=>c.toBlob(r,'image/png'));
+function save(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+$('bPng').onclick=async()=>{if(!cv)return;if(flt)commitFloat();save(await toPng(cv),items[cur].name+'.png')};
+$('bZip').onclick=async()=>{if(!items.length)return;if(flt)commitFloat();const files=[],used=new Set(),keep=$('zipFolders').checked;let n=0;
+  for(const it of items){status(`Packing ${++n}/${items.length}…`);let nm=(keep?it.path:it.name).replace(/^\/+/,'')+'.png',base=nm,k=2;while(used.has(nm.toLowerCase()))nm=base.replace(/\.png$/,`_${k++}.png`);used.add(nm.toLowerCase());
+    files.push({name:nm,data:new Uint8Array(await(await toPng(it.c)).arrayBuffer())})}
+  save(zip(files),'images_transparent.zip');status(`ZIP downloaded with ${files.length} image(s).`)};
+
+// ---------- files in ----------
+$('bOpen').onclick=()=>$('fFiles').click();$('bFolder').onclick=()=>$('fFolder').click();
+$('fFiles').onchange=e=>{addFiles(e.target.files);e.target.value=''};$('fFolder').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('bNew').onclick=()=>{const v=prompt('New image size (width x height):','32x32'),m=v&&v.match(/(\d+)\D+(\d+)/);if(m)newImage(Math.max(1,Math.min(4096,+m[1])),Math.max(1,Math.min(4096,+m[2])))};
+window.addEventListener('dragover',e=>{e.preventDefault();$('drop').style.display='flex'});
+window.addEventListener('dragleave',e=>{if(!e.relatedTarget)$('drop').style.display='none'});
+window.addEventListener('drop',async e=>{e.preventDefault();$('drop').style.display='none';
+  const fs=[],walk=async en=>{if(en.isFile)await new Promise(r=>en.file(f=>{Object.defineProperty(f,'webkitRelativePath',{value:en.fullPath.replace(/^\//,'')});fs.push(f);r()},r));
+    else if(en.isDirectory){const rd=en.createReader();let b;do{b=await new Promise(r=>rd.readEntries(r,()=>r([])));for(const x of b)await walk(x)}while(b.length)}};
+  const its=[...(e.dataTransfer.items||[])].map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
+  if(its.length){for(const en of its)await walk(en);addFiles(fs)}else addFiles(e.dataTransfer.files)});
+window.addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])];if(fs.length){e.preventDefault();addFiles(fs)}});
+
+// ---------- keyboard ----------
+function status(t){$('status').textContent=t}
+window.addEventListener('keyup',e=>{if(e.code==='Space')spaceDown=false});
+window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)&&e.target.type!=='range'&&e.target.type!=='checkbox')return;
+  const k=e.key.toLowerCase(),mod=e.ctrlKey||e.metaKey;
+  if(e.code==='Space'){spaceDown=true;e.preventDefault();return}
+  if(mod&&k==='z'){e.preventDefault();e.shiftKey?redo():undo()}else if(mod&&k==='y'){e.preventDefault();redo()}
+  else if(mod&&k==='c'){e.preventDefault();copySel()}else if(mod&&k==='x'){e.preventDefault();copySel();delSel()}else if(mod&&k==='v'){if(clipC){e.preventDefault();pasteClip()}}
+  else if(mod&&k==='a'&&cv){e.preventDefault();if(flt)commitFloat();sel={x:0,y:0,w:cv.width,h:cv.height,mask:null};setTool('select')}
+  else if(k==='delete'||k==='backspace'){e.preventDefault();delSel()}
+  else if(k==='enter'){commitFloat()}else if(k==='escape'){if(flt)commitFloat();sel=null;overlay()}
+  else if(!mod){const t=TOOLS.find(x=>x[3]===k);if(t)setTool(t[0]);else if(k==='['){$('bs').value=Math.max(1,bsz()-1);$('bs').oninput()}else if(k===']'){$('bs').value=Math.min(32,bsz()+1);$('bs').oninput()}
+    else if(k==='+'||k==='=')$('bZp').click();else if(k==='-')$('bZm').click()}});
+window.addEventListener('resize',()=>{});
+setTool('pencil');drawSw();
+</script></body></html>
