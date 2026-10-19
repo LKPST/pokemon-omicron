@@ -154,6 +154,7 @@ class Battle {
       src, side, idx, species: src.species, spData: sp, name: g('nickname', 'name') || sp.name || prettyKey(src.species), level, hp, maxhp, stats: st, base: { ...st }, types, baseTypes: types.slice(), ability: NORM(ability), baseAbility: NORM(ability),
       item: NORM(g('heldItem', 'item', 'helditem') || ''), origItem: NORM(g('heldItem', 'item', 'helditem') || ''), moves, status, sleep: status === 'slp' ? 2 : 0, toxic: 0, gender: g('gender'), shiny: !!g('isShiny'), friendship: g('friendship') != null ? g('friendship') | 0 : 70,
       exp: g('exp') | 0, growth: sp.growthRate, expYield: sp.expYield || 64, fought: new Set(), ball: g('ballId'), heldUsed: false };
+    { const fl = expForLevel(b.growth, b.level), nx = expForLevel(b.growth, Math.min(100, b.level + 1)); if (b.exp < fl) b.exp = fl; else if (b.level < 100 && b.exp >= nx) b.exp = nx - 1; }   // a save whose exp does not match its level would leave the EXP bar stuck at 0
     this.resetVolatile(b); return b; }
   resetVolatile(b) {
     b.stages = { atk: 0, def: 0, spa: 0, spd: 0, spe: 0, acc: 0, eva: 0 };
