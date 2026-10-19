@@ -418,7 +418,7 @@ function createStart(env) {
       iconSeen: { x: 49, y: 54 }, iconUnseen: { x: 3, y: 54 }, iconSize: { s: 32 }, ball: { x: 5, y: 4 }, list: { x: 92, y: 17, w: 123, rows: 9, h: 14 }, title: { x: 93, y: 19 }, cat: { x: 93, y: 31 },
       stats: { x: 93, y: 45 }, desc: { x: 93, y: 59, w: 120, lines: 7, pitch: 11 }, status: { x: 93, y: 128 },
     },
-    card: { party: { x: 152, y: 34, size: 22, cols: 3 } },
+    card: { sprite: { x: 150, y: 30, w: 78, h: 66 } },
   };
   const HUD = (() => { const mix = (a, b) => { const o = Array.isArray(a) ? [] : {}; for (const k of Object.keys(a)) o[k] = (a[k] && typeof a[k] === 'object') ? mix(a[k], (b && b[k]) || {}) : (b && b[k] != null ? b[k] : a[k]); return o; }; return () => mix(HUD_DEF, (typeof window !== 'undefined' && window.StartMenuHUD) || {}); })();
 
@@ -512,51 +512,66 @@ function createStart(env) {
 
   // ===================================================================== TRAINER CARD
   function badgeFlag(i) { const f = flagsOf(); return !!(f['FLAG_BADGE0' + i + '_GET'] || f['FLAG_BADGE' + i + '_GET'] || f['FLAG_BADGE' + two(i) + '_GET'] || f['BADGE_' + i]); }
-  const CD = { page: 0, sel: 0 };      // page 0 = badges, page 1 = ribbons
+  const CD = { page: 0, scroll: 0, lines: 0 };      // page 0 = badges, page 1 = ribbons
   const BADGECOL = ['#e8d048', '#e86838', '#58b8e8', '#98d048', '#d870d8', '#f0f0f0', '#e84848', '#8868e8'];
   const BADGES = () => (env.badges ? env.badges() : 8);
+  const prettyRib = r => String(r).replace(/^RIBBON_/, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
+  const trainerSpritePath = () => { const male = String((saveData().player || {}).gender || 'MALE').toUpperCase() !== 'FEMALE'; return (env.trainerSprite && env.trainerSprite(male)) || (male ? 'graphics/trainer_front_sprites/player_male.png' : 'graphics/trainer_front_sprites/player_female.png'); };
+  function ribbonLines() {      // [{h:'TITLE'} | {t:'text', icon:'path'}]
+    const sv = saveData(), L = [], tr = (sv.player && sv.player.ribbons) || sv.trainerRibbons || [];
+    L.push({ h: 'TRAINER RIBBONS' }); if (!tr.length) L.push({ t: 'None yet.', mute: true }); else tr.forEach(r => L.push({ t: prettyRib(r) }));
+    L.push({ h: 'POKéMON RIBBONS' }); let any = false;
+    party().forEach(m => { const rb = m.ribbons || []; if (!rb.length) return; any = true; L.push({ t: String(m.nickname || m.species.replace(/^SPECIES_/, '').replace(/_/g, ' ')).toUpperCase(), sub: true, icon: dbOf(m.species).iconSprite }); rb.forEach(r => L.push({ t: prettyRib(r), indent: true })); });
+    if (!any) L.push({ t: 'None yet.', mute: true });
+    return L;
+  }
+  function tabs(c, x, y, w, h, hit) {     // BADGES | RIBBONS switcher with a red marker on the active one
+    ['BADGES', 'RIBBONS'].forEach((lab, i) => { const tx = x + i * (w + 4), on = CD.page === i; if (hit) S.hit.push({ x: tx, y, w, h, f: () => { CD.page = i; CD.scroll = 0; } });
+      rect(c, tx - 1, y - 1, w + 2, h + 2, on ? '#ffffff' : '#0a0c12'); rect(c, tx, y, w, h, on ? '#d8283c' : '#2a3050'); if (on) rect(c, tx, y, w, 2, '#ff7a8a'); T(c, lab, Math.round(tx + (w - tw(lab)) / 2), Math.round(y + (h - FT.cap) / 2), 'white'); });
+  }
   SCREENS.card = {
-    enter() { CD.page = 0; CD.sel = 0; },
+    enter() { CD.page = 0; CD.scroll = 0; trainerPre(); },
     top(c) {
       const inf = SS() ? SS().info() : { name: 'Player', money: 0, badges: 0, playTime: 0, dexSeen: 0, dexCaught: 0 }, sv = saveData(), p = sv.player || {};
       grad(c, 0, 0, BW, TH, '#10204a', '#06101e');
       const off = (S.t * 14) % 24; c.fillStyle = 'rgba(120,160,255,.06)'; for (let k = -6; k < 16; k++) c.fillRect(k * 24 + off, 0, 10, TH);
       rr(c, 6, 6, 228, 148, 8, '#d8a020'); rr(c, 8, 8, 224, 144, 7, '#1c3a8a'); rr(c, 8, 8, 224, 20, 7, '#2a54c0'); rect(c, 8, 20, 224, 8, '#2a54c0');
-      T(c, 'TRAINER CARD', 16, 12, 'white'); TR(c, 'ID No.' + String(inf.id || 0).padStart(5, '0'), 224, 12, 'gold');
-      const row = (lab, val, y) => { T(c, lab, 16, y, 'gold'); TR(c, val, 138, y, 'white'); };
-      row('NAME', String(p.name || inf.name).toUpperCase(), 36); row('MONEY', String(+p.money || 0), 51); row('POKéDEX', inf.dexCaught + ' / ' + inf.dexSeen, 66); row('TIME', fmtTime(inf.playTime), 81);
-      // party, regular size icons
-      const H = HUD().card, pt = party(); rr(c, H.party.x - 4, H.party.y - 4, H.party.cols * (H.party.size + 2) + 6, 2 * (H.party.size + 2) + 6, 4, '#0c1a46');
-      for (let i = 0; i < 6; i++) { const m = pt[i]; if (!m || !m.species) continue; const ix = H.party.x + (i % H.party.cols) * (H.party.size + 2), iy = H.party.y + Math.floor(i / H.party.cols) * (H.party.size + 2); if (!drawIcon(c, dbOf(m.species).iconSprite, ix, iy, H.party.size, false)) ball(c, ix + 8, iy + 8, 'poke', 1); }
-      T(c, CD.page === 0 ? 'BADGES' : 'RIBBONS', 16, 98, 'gold'); T(c, CD.page === 0 ? '<  RIBBONS' : 'BADGES  >', 224 - tw(CD.page === 0 ? '<  RIBBONS' : 'BADGES  >'), 98, 'mute');
+      T(c, CD.page === 0 ? 'TRAINER CARD' : 'RIBBONS', 16, 12, 'white'); tabs(c, 138, 11, 42, 13, false);
       if (CD.page === 0) {
+        const row = (lab, val, y) => { T(c, lab, 16, y, 'gold'); TR(c, val, 138, y, 'white'); };
+        row('NAME', String(p.name || inf.name).toUpperCase(), 33); row('ID No.', String(inf.id || 0).padStart(5, '0'), 44); row('MONEY', String(+p.money || 0), 55); row('POKéDEX', inf.dexCaught + ' / ' + inf.dexSeen, 66); row('TIME', fmtTime(inf.playTime), 77);
+        const H = HUD().card.sprite; rr(c, H.x, H.y, H.w, H.h, 4, '#0c1a46'); const f = monFrame(trainerSpritePath());
+        if (f) drawMonSprite(c, f, H.x + 2, H.y + 2, H.w - 4, H.h - 4, false); else T(c, 'LOADING', H.x + 14, H.y + H.h / 2 - 4, 'grey');
+        T(c, 'BADGES', 16, 98, 'gold');
         const n = BADGES(), step = Math.min(27, Math.floor(208 / n));
         for (let i = 1; i <= n; i++) { const x = 16 + (i - 1) * step, y = 112, got = badgeFlag(i);
           rr(c, x, y, step - 3, 32, 4, '#0c1a46'); ell(c, x + Math.floor((step - 3) / 2), y + 15, 8, 8, got ? BADGECOL[(i - 1) % 8] : '#26346a');
           if (got) { rect(c, x + 6, y + 10, 3, 2, 'rgba(255,255,255,.8)'); const sh = ((S.t * 40 + i * 20) % 120) - 20; if (sh > 0 && sh < step - 3) rect(c, x + sh, y + 5, 2, 20, 'rgba(255,255,255,.25)'); } else T(c, String(i), x + Math.floor((step - 3) / 2) - 3, y + 11, 'grey'); }
       } else {
-        if (!pt.length) T(c, 'No Pokémon.', 18, 120, 'mute');
-        pt.slice(0, 6).forEach((m, i) => { const col = i % 2, r = Math.floor(i / 2), x = 16 + col * 108, y = 109 + r * 15, on = i === CD.sel, rb = m.ribbons || [];
-          if (on) rect(c, x - 2, y - 2, 104, 14, 'rgba(255,210,60,.18)'); drawIcon(c, dbOf(m.species).iconSprite, x, y - 3, 14, false); T(c, String(m.nickname || m.species.replace(/^SPECIES_/, '').replace(/_/g, ' ')).toUpperCase().slice(0, 7), x + 16, y, on ? 'white' : 'mute');
-          for (let k = 0; k < Math.min(4, rb.length); k++) ell(c, x + 76 + k * 6, y + 5, 2, 2, '#e8c838'); if (rb.length > 4) T(c, '+', x + 99, y, 'gold'); });
-        const m = pt[CD.sel]; if (m && (m.ribbons || []).length) T(c, m.ribbons.map(r => String(r).replace(/^RIBBON_/, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())).join(', ').slice(0, 34), 16, 140, 'gold');
-      }
+        const L = ribbonLines(), rows = 8, pitch = 14, y0 = 34; CD.lines = L.length; CD.scroll = clamp(CD.scroll, 0, Math.max(0, L.length - rows));
+        rr(c, 14, 31, 212, rows * pitch + 4, 4, '#0c1a46'); c.save(); c.beginPath(); c.rect(14, 31, 212, rows * pitch + 4); c.clip();
+        for (let r = 0; r < rows; r++) { const e = L[CD.scroll + r]; if (!e) break; const y = y0 + r * pitch;
+          if (e.h) { rect(c, 16, y - 1, 202, 12, '#2a54c0'); T(c, e.h, 20, y, 'white'); }
+          else { const x = 22 + (e.indent ? 12 : 0); if (e.icon) drawIcon(c, e.icon, 20, y - 5, 16, false); else if (!e.mute) ell(c, x + 3, y + 5, 3, 3, '#e8c838'); T(c, e.t, e.icon ? 38 : x + 10, y, e.mute ? 'grey' : (e.sub ? 'gold' : 'white')); } }
+        c.restore(); if (L.length > rows) { const sbH = rows * pitch; rect(c, 220, y0 - 2, 3, sbH, '#06101e'); rect(c, 220, y0 - 2 + Math.round((sbH - 14) * CD.scroll / (L.length - rows)), 3, 14, '#ffd23c'); }
+              }
     },
     bot(c) {
       S.hit = []; menuBg(c, BW, BH, S.t); statusBar(c, 1);
-      const male = String((saveData().player || {}).gender || 'MALE').toUpperCase() !== 'FEMALE', path = (env.trainerSprite && env.trainerSprite(male)) || (male ? 'graphics/trainer_front_sprites/player_male.png' : 'graphics/trainer_front_sprites/player_female.png'), f = monFrame(path);
-      const sx = 8, sy = 16, sw = 128, sh = 128; rr(c, sx, sy, sw, sh, 6, 'rgba(10,12,22,.75)');
-      if (f) { const s = Math.max(1, Math.floor(Math.min((sw - 8) / f.w, (sh - 8) / f.h))), w = f.w * s, h = f.h * s; c.imageSmoothingEnabled = false; c.drawImage(f.img, 0, 0, f.w, f.h, sx + Math.round((sw - w) / 2), sy + sh - 4 - h, w, h); } else T(c, 'NO SPRITE', sx + 34, sy + 58, 'grey');
-      wrapText('Your trainer card. Badges light up as you earn them.', 90).slice(0, 5).forEach((l, i) => T(c, l, 144, 20 + i * 12, i === 0 ? 'white' : 'mute'));
-      btn(c, 144, 82, 90, 20, 'BADGES', () => { CD.page = 0; }, '#2e3548', CD.page === 0); btn(c, 144, 106, 90, 20, 'RIBBONS', () => { CD.page = 1; }, '#2e3548', CD.page === 1);
+      T(c, 'YOUR PARTY', 12, 20, 'mute'); const pt = party();
+      rr(c, 8, 32, 224, 76, 6, 'rgba(10,12,22,.75)');
+      for (let i = 0; i < 6; i++) { const ix = 14 + (i % 3) * 72, iy = 36 + Math.floor(i / 3) * 36, m = pt[i]; rr(c, ix - 2, iy - 1, 68, 36, 4, 'rgba(255,255,255,.05)'); if (!m || !m.species) continue;
+        if (!drawIcon(c, dbOf(m.species).iconSprite, ix + 2, iy, 32, false)) ball(c, ix + 12, iy + 10, 'poke', 1);
+        T(c, String(m.nickname || m.species.replace(/^SPECIES_/, '').replace(/_/g, ' ')).toUpperCase().slice(0, 5), ix + 36, iy + 4, 'white'); T(c, 'Lv' + (m.level || 1), ix + 36, iy + 17, 'mute'); }
+      tabs(c, 12, 118, 70, 20, true);
       btn(c, BW - 74, BH - 24, 68, 18, 'B  BACK', () => back(), '#4a2030');
     },
     press(k) {
-      if (k === 'b') return back(); if (k === 'left' || k === 'right') { CD.page = k === 'left' ? 0 : 1; if (k === 'right') k = ''; }
-      if (CD.page === 1) { const n = Math.max(1, party().length); if (k === 'down') CD.sel = Math.min(n - 1, CD.sel + 2 > n - 1 ? CD.sel : CD.sel + 2); else if (k === 'up') CD.sel = Math.max(0, CD.sel - 2); }
-      if (k === 'a') CD.page = 1 - CD.page;
+      if (k === 'b') return back(); if (k === 'left') { CD.page = 0; CD.scroll = 0; } else if (k === 'right') { CD.page = 1; CD.scroll = 0; } else if (k === 'a') { CD.page = 1 - CD.page; CD.scroll = 0; }
+      else if (CD.page === 1) { if (k === 'down') CD.scroll++; else if (k === 'up') CD.scroll = Math.max(0, CD.scroll - 1); }
     }, click() {},
   };
+  function trainerPre() { getImg(trainerSpritePath()); for (const m of party()) getImg(dbOf(m.species).iconSprite); }
 
   // ===================================================================== SAVE
   const SV = { stage: 'ask', i: 0, t: 0, ok: true };
@@ -754,12 +769,16 @@ function createStart(env) {
     if (DX.seenOnly) ord = ord.filter(n => isSeen(n)); DX.list = ord; DX.idx = cur ? Math.max(0, ord.indexOf(cur)) : 0; DX.top = 0; DX.dirty = false;
   }
   const dxEntry = () => { const D = DEXAPI(); return D && DX.list[DX.idx] ? D.entry(DX.list[DX.idx]) : null; };
-  function dxPreload(e) { if (!e) return; const d = dbOf(e.species); getImg(d.battleSprite); getImg(d.iconSprite); }
-  function dxMove(d) { if (!DX.list.length) return; DX.idx = clamp(DX.idx + d, 0, DX.list.length - 1); lookTo(0, d > 0 ? .8 : -.8); dxPreload(dxEntry()); }
+  function dxPreload() {      // load the pictures around the cursor ahead of time so scrolling never waits
+    const D = DEXAPI(); if (!D) return; for (let i = DX.idx - 4; i <= DX.idx + 16; i++) { const n = DX.list[i]; if (n == null) continue; const e = D.entry(n); if (!e) continue; const d = dbOf(e.species); getImg(d.iconSprite); if (Math.abs(i - DX.idx) <= 3) getImg(d.battleSprite); }
+    const nn = noneSprite(); if (nn) getImg(nn);
+  }
+  function dxMove(d) { if (!DX.list.length) return; DX.idx = clamp(DX.idx + d, 0, DX.list.length - 1); lookTo(0, d > 0 ? .8 : -.8); dxPreload(); }
   const fmtH = d => (d / 10).toFixed(1) + 'm', fmtW = h => (h / 10).toFixed(1) + 'kg';
   const dexCounts = () => { const D = DEXAPI(); if (!D) return { seen: 0, caught: 0, total: 0 }; const cn = D.counts(); return DX.shiny ? { seen: cn.shiny || 0, caught: cn.shiny || 0, total: cn.total } : cn; };
+  function lockIcon(c, x, y) { c.fillStyle = '#8a93ab'; c.fillRect(x + 2, y, 6, 1); c.fillRect(x + 1, y + 1, 1, 4); c.fillRect(x + 8, y + 1, 1, 4); c.fillStyle = '#ffd23c'; c.fillRect(x, y + 5, 10, 8); c.fillStyle = '#7a5a0c'; c.fillRect(x + 4, y + 7, 2, 3); }
   SCREENS.dex = {
-    enter() { if (DX.dirty || !DX.list.length) dxBuild(false); DX.stage = 'list'; dxPreload(dxEntry()); },
+    enter() { if (DX.dirty || !DX.list.length) dxBuild(false); DX.stage = 'list'; dxPreload(); },
     top(c) {
       const D = DEXAPI(), sc = rotomFrame(c), H = HUD().dex, cn = dexCounts();
       grad(c, sc.x, sc.y, sc.w, sc.h, '#e8f4ff', '#b8d4f0'); c.save(); c.beginPath(); c.rect(sc.x, sc.y, sc.w, sc.h); c.clip();
@@ -774,7 +793,7 @@ function createStart(env) {
       if (e) {
         const path = seen ? d.battleSprite : noneSprite(), f = path ? battleFrame(path, DX.shiny && seen) : null;
         if (f) drawBattle(c, f, bx + 3, by + 3 + bob, B.w - 6, B.h - 6); else if (!seen) T(c, '?', bx + B.w / 2 - 3, by + B.h / 2 - 4, 'mute'); else T(c, 'NO IMAGE', bx + 20, by + B.h / 2 - 4, 'mute');
-        const ip = H[seen ? 'iconSeen' : 'iconUnseen']; drawIcon(c, d.iconSprite, bx + ip.x, by + ip.y, H.iconSize.s, !seen);
+        if (!seen) { const ip = H.iconUnseen; drawIcon(c, d.iconSprite, bx + ip.x, by + ip.y, H.iconSize.s, true); }
         if (got && !DX.shiny) ball(c, bx + H.ball.x, by + H.ball.y, 'poke', 1); if (got && DX.shiny) T(c, '*', bx + H.ball.x, by + H.ball.y - 1, 'gold');
       }
       const N = H.nameBox, nx = sc.x + N.x, ny = sc.y + N.y; rr(c, nx, ny, N.w, N.h, 3, '#143058');
@@ -806,20 +825,20 @@ function createStart(env) {
         if (DX.stage === 'list') {
           btn(cc, 10, 22, 108, 22, DXM[DX.mode][1], () => SCREENS.dex.order(), '#7a1c28'); btn(cc, 122, 22, 108, 22, DX.seenOnly ? 'SEEN ONLY' : 'SHOW ALL', () => SCREENS.dex.filter(), '#7a1c28');
           btn(cc, 10, 50, 50, 22, '-10', () => dxMove(-10), '#2e3548'); btn(cc, 64, 50, 50, 22, '-1', () => dxMove(-1), '#2e3548'); btn(cc, 118, 50, 50, 22, '+1', () => dxMove(1), '#2e3548'); btn(cc, 172, 50, 58, 22, '+10', () => dxMove(10), '#2e3548');
-          btn(cc, 10, 78, 108, 22, 'ENTRY  (A)', () => SCREENS.dex.open(), '#2c5a3a'); btn(cc, 122, 78, 108, 22, shinyUnlocked() ? (DX.shiny ? 'NORMAL DEX' : 'SHINY DEX') : 'SHINY DEX [LOCKED]', () => SCREENS.dex.toggleShiny(), shinyUnlocked() ? '#7a5a0c' : '#2a2e3e');
+          btn(cc, 10, 78, 108, 22, 'ENTRY', () => SCREENS.dex.open(), '#2c5a3a'); { const un = shinyUnlocked(); btn(cc, 122, 78, 108, 22, un ? (DX.shiny ? 'NORMAL DEX' : 'SHINY DEX') : 'SHINY DEX', () => SCREENS.dex.toggleShiny(), un ? '#7a5a0c' : '#2a2e3e'); if (!un) lockIcon(cc, 213, 83); }
         } else { btn(cc, 10, 28, 70, 24, 'PREV', () => dxMove(-1), '#2e3548'); btn(cc, 90, 28, 70, 24, 'NEXT', () => dxMove(1), '#2e3548'); T(cc, (DX.idx + 1) + ' / ' + DX.list.length, 12, 62, 'mute'); }
         if (D) { const cn = dexCounts(); const w = 100, p = cn.total ? cn.caught / cn.total : 0; T(cc, (DX.shiny ? 'SHINIES ' : 'COMPLETION ') + cn.caught + '/' + cn.total, 12, BH - 38, 'mute'); rect(cc, 12, BH - 25, w, 7, '#0a0c12'); rect(cc, 13, BH - 24, Math.max(p > 0 ? 1 : 0, Math.round((w - 2) * p)), 5, DX.shiny ? '#f0c040' : '#ffd23c'); }
       });
     },
-    order() { DX.mode = (DX.mode + 1) % DXM.length; if (!(DEXAPI() && window.DexOrders && (DXM[DX.mode][0] === 'national' || window.DexOrders[DXM[DX.mode][0]]))) DX.mode = 0; dxBuild(true); dxPreload(dxEntry()); },
-    filter() { DX.seenOnly = !DX.seenOnly; dxBuild(true); dxPreload(dxEntry()); },
-    toggleShiny() { if (!shinyUnlocked()) return; DX.shiny = !DX.shiny; dxBuild(true); dxPreload(dxEntry()); },
+    order() { DX.mode = (DX.mode + 1) % DXM.length; if (!(DEXAPI() && window.DexOrders && (DXM[DX.mode][0] === 'national' || window.DexOrders[DXM[DX.mode][0]]))) DX.mode = 0; dxBuild(true); dxPreload(); },
+    filter() { DX.seenOnly = !DX.seenOnly; dxBuild(true); dxPreload(); },
+    toggleShiny() { if (!shinyUnlocked()) return; DX.shiny = !DX.shiny; dxBuild(true); dxPreload(); },
     open() { if (!dxEntry()) return; DX.stage = 'entry'; lookTo(0, 0); const e = dxEntry(); if (e && isGot(e.num)) S.happy = S.t + .7; },
     press(k) {
       if (DX.stage === 'entry') { if (k === 'b' || k === 'a') { DX.stage = 'list'; return; } if (k === 'up' || k === 'left') dxMove(-1); else if (k === 'down' || k === 'right') dxMove(1); return; }
       if (k === 'b') return back(); if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1); else if (k === 'left') dxMove(-7); else if (k === 'right') dxMove(7); else if (k === 'a') this.open(); else if (k === 'sel') this.order(); else if (k === 'filter') this.filter(); else if (k === 'shiny') this.toggleShiny();
     },
-    click(x, y, area) { if (area !== 'top' || DX.stage !== 'list') return; const sc = HUD().screen, L = HUD().dex.list, rx = sc.x + L.x, ry = sc.y + L.y; if (x >= rx && x < rx + L.w && y >= ry && y < ry + L.rows * L.h) { const i = DX.top + Math.floor((y - ry) / L.h); if (i < DX.list.length) { if (i === DX.idx) this.open(); else { DX.idx = i; lookTo(0, 0); dxPreload(dxEntry()); } } } },
+    click(x, y, area) { if (area !== 'top' || DX.stage !== 'list') return; const sc = HUD().screen, L = HUD().dex.list, rx = sc.x + L.x, ry = sc.y + L.y; if (x >= rx && x < rx + L.w && y >= ry && y < ry + L.rows * L.h) { const i = DX.top + Math.floor((y - ry) / L.h); if (i < DX.list.length) { if (i === DX.idx) this.open(); else { DX.idx = i; lookTo(0, 0); dxPreload(); } } } },
   };
 
   // ===================================================================== the core api
@@ -847,13 +866,14 @@ function createStart(env) {
   }
   function renderTop(c) { c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, TH); if (S.scr !== 'menu' && S.sub) S.sub.top(c); }
   function start(o) {
-    o = o || {}; S.exited = false; enterMenu(o); SCREENS_RESET();
+    o = o || {}; S.exited = false; enterMenu(o); SCREENS_RESET(); trainerPre();
     const keys = []; for (const pg of PAGES) pg.forEach(d => keys.push(d[0]));
     if (o.screen && SCREENS[o.screen]) openScreen(o.screen); else if (o.activate) activate(PAGES[0][S.sel] || PAGES[0][0]);
   }
   function SCREENS_RESET() { DX.dirty = true; }
+  function preload() { trainerPre(); }
   function status() { return { scr: S.scr, page: S.page, sel: S.sel, closing: S.closing, child: S.child, dexList: DX.list.length, warnings: [...warnings] }; }
-  return { icon, renderIdle, HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
+  return { icon, preload, renderIdle, HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
 }
 root.StartMenuCore = createStart;
 })(window);
@@ -962,7 +982,7 @@ const StartMenu = {
     slog('attach() called, IDLE=' + this.IDLE); if (!scene || !scene.add) return; const self = this; this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
     const g = this._geom(scene); this._cam(scene, g); let img = null, tex = null, ctx = null, acc = 0, ready = false, idle = null;
     const sv = () => (root.GameStateManager && root.GameStateManager.saveData) || {};
-    idle = root.StartMenuCore(this._env(scene, g)); idle.initFont().then(() => { ready = true; slog('idle screen ready'); }).catch(e => console.error('[SM] idle screen font:', e));
+    idle = root.StartMenuCore(this._env(scene, g)); idle.initFont().then(() => { idle.preload(); ready = true; slog('idle screen ready'); }).catch(e => console.error('[SM] idle screen font:', e));
     const draw = (time, delta) => {
       const vis = this.IDLE && !this.active && ready;
       if (!img && vis) { if (scene.textures.exists(KD)) scene.textures.remove(KD); tex = scene.textures.createCanvas(KD, idle.W, idle.H); try { tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } ctx = tex.getContext ? tex.getContext() : tex.context; img = self._lower(scene, g, 0, 0, KD).setDepth(80); slog('idle screen created'); }
