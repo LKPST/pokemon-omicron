@@ -1240,7 +1240,7 @@ function decItem(sv, item, ref) {
 }
 function addCaught(sv, mon) {
   mon.OTName = mon.OTName || (sv.player && sv.player.name) || ''; sv.party = sv.party || [];
-  if (window.Dex) window.Dex.catch(mon.species);   // Pokedex: caught
+  if (window.Dex) window.Dex.catch(mon.species, !!mon.isShiny);   // Pokedex: caught
   const free = sv.party.findIndex((m, i) => i < 6 && !m);
   if (free >= 0) { sv.party[free] = mon; return; }
   if (sv.party.filter(m => m).length < 6) { sv.party.push(mon); return; }
