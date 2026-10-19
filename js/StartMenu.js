@@ -777,6 +777,16 @@ const StartMenu = {
   active: false, DOCK: true, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
   isOpen() { return this.active; },
   toggle(scene) { if (this.active) { if (this.core) this.core.press('b'); return; } this.open(scene); },
+  // the overworld camera only covers the top screen, so the lower screen needs a camera of its own (looking at a spot far below the map)
+  _cam(scene, geo) {
+    const cams = scene.cameras; if (!cams || !cams.add) return null;
+    if (scene._menuCam && cams.cameras && cams.cameras.indexOf(scene._menuCam) >= 0) return scene._menuCam;
+    const c = cams.add(geo.scr.x, geo.y0, geo.scr.w, Math.round(geo.bh * geo.s)); c.setScroll(0, 100000); c.setRoundPixels && c.setRoundPixels(true); scene._menuCam = c; return c;
+  },
+  _lower(scene, geo, x, y, key) {   // an image that only the lower camera shows
+    const im = scene.add.image(x, 100000 + y, key).setOrigin(0, 0).setScale(geo.s).setScrollFactor(0).setDepth(8990);
+    try { scene.cameras.main.ignore(im); } catch (e) { /* old Phaser */ } return im;
+  },
   _geom(scene) { const scr = (root.OW_TEXT && root.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 }, s = scr.w / 240, y0 = scr.y + scr.h + 4, avail = (scene.scale ? scene.scale.height : 620) - y0; return { scr, s, y0, bh: Math.max(100, Math.min(200, Math.floor(avail / s))) }; },
   open(scene, opts) {
     if (this.active || !scene) return false; opts = opts || {};
@@ -804,11 +814,12 @@ const StartMenu = {
       this.tb = scene.textures.createCanvas(KB, core.W, core.H); this.tt = scene.textures.createCanvas(KT, core.W, core.TH);
       try { this.tb.setFilter(Phaser.Textures.FilterMode.NEAREST); this.tt.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ }
       this.cb = this.tb.getContext ? this.tb.getContext() : this.tb.context; this.ct = this.tt.getContext ? this.tt.getContext() : this.tt.context;
-      const g = this.geo; this.ib = scene.add.image(g.scr.x, g.y0, KB).setOrigin(0, 0).setScale(g.s).setScrollFactor(0).setDepth(8990);
+      const g = this.geo; this._cam(scene, g); this.ib = this._lower(scene, g, 0, 0, KB);
       this.it = scene.add.image(g.scr.x, g.scr.y, KT).setOrigin(0, 0).setScale(g.s).setScrollFactor(0).setDepth(8990).setVisible(false);
+      try { if (scene._menuCam) scene._menuCam.ignore(this.it); } catch (e) { /* old Phaser */ }
       this.upd = (time, delta) => { const dt = Math.min(.05, delta / 1000); core.update(dt); if (!this.active) return; core.render(this.cb); this.tb.refresh(); const ta = core.topActive(); this.it.setVisible(ta); if (ta) { core.renderTop(this.ct); this.tt.refresh(); } };
       scene.events.on('update', this.upd);
-    });
+    }).catch(e => { console.error('[StartMenu] could not start:', e); this.close(); });
     this.kd = e => {
       if (core.S.child) return;     // the bag / party screen has its own key handling
       const k = KEYS[e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key]; if (!k) return;
@@ -844,7 +855,7 @@ const StartMenu = {
     const slot = i => ({ x: 6 + i * 38, y: 2, w: 34, h: 22 });
     const draw = (time, delta) => {
       const vis = this.DOCK && !this.active && !scene.scriptRunning && !scene.isLocked && !(root.PokemonSummary && root.PokemonSummary.isOpen()) && !(root.BagMenu && root.BagMenu.isOpen());
-      if (!img && vis) { const t = tex(); cache = t; ctx = t.getContext ? t.getContext() : t.context; img = scene.add.image(g.scr.x, g.y0 + (g.bh - 26) * g.s, KD).setOrigin(0, 0).setScale(g.s).setScrollFactor(0).setDepth(80); }
+      if (!img && vis) { const t = tex(); cache = t; ctx = t.getContext ? t.getContext() : t.context; self._cam(scene, g); img = self._lower(scene, g, 0, (g.bh - 26) * g.s, KD).setDepth(80); }
       if (img) img.setVisible(!!vis); if (!vis || !ctx) return; acc += delta; if (acc < 50) return; acc = 0;
       const c = ctx, t = time / 1000; c.clearRect(0, 0, 240, 26);
       DOCKICONS.forEach((id, i) => { const r = slot(i), on = i === hot; c.fillStyle = on ? '#ffffff' : '#0a0c12'; c.fillRect(r.x - 1, r.y - 1 + (on ? -1 : 0), r.w + 2, r.h + 2); c.fillStyle = on ? '#3a4260' : '#1a1e2c'; c.fillRect(r.x, r.y + (on ? -1 : 0), r.w, r.h); c.fillStyle = 'rgba(255,255,255,.08)'; c.fillRect(r.x, r.y + (on ? -1 : 0), r.w, 9); if (StartMenu.drawIcon) StartMenu.drawIcon(c, id, r.x + r.w / 2, r.y + r.h / 2 + (on ? -1 : 0), t, on); });
