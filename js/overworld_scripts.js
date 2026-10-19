@@ -119,7 +119,7 @@ msgbox.normal
 Hello, $player!
 Take this Sprigatito with you.
 }
-givepokemon SPECIES_SPRIGATITO 20 Flora moves=MOVE_TACKLE
+givepokemon SPECIES_SPRIGATITO 20 Flora moves=MOVE_LEAFAGE
 release
 end
 `;
