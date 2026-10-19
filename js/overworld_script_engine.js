@@ -253,7 +253,7 @@ window.OverworldScriptEngine = (() => {
   const SD = () => (window.GameStateManager && window.GameStateManager.saveData) || null;
   E.getFlag = n => { const s = SD(); return !!(s && s.flags && s.flags[n]); };
   E.getVar = n => { const s = SD(); return (s && s.vars && Number(s.vars[n])) || 0; };
-  E.save = () => { const s = SD(); if (!s) return; try { localStorage.setItem('pokemon_micron_save', JSON.stringify(s)); } catch (e) { console.warn('[ScriptEngine] could not save', e); } };
+  E.save = () => { if (window.SaveSystem) window.SaveSystem.touch(); };   // no autosave: the player saves from the start menu (SaveSystem.save)
   E.setFlag = (n, on) => { const s = SD(); if (!s) return; s.flags = s.flags || {}; if (on) s.flags[n] = true; else delete s.flags[n]; E.save(); };
   E.setVar = (n, v) => { const s = SD(); if (!s) return; s.vars = s.vars || {}; s.vars[n] = v; E.save(); };
   E.isHidden = (mapKey, eventKey) => E.getFlag(`HIDDEN:${mapKey}:${eventKey}`);
