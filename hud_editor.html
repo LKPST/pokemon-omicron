@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>HUD Editor</title>
+<style>
+:root{--bg:#12151f;--panel:#1b2030;--line:#2c3348;--fg:#e6e9f4;--mute:#8a93ab;--acc:#ffd23c;--red:#d8483a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,Segoe UI,Arial,sans-serif;display:flex;height:100vh}
+#left{flex:0 0 auto;padding:14px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+#right{flex:1;min-width:300px;overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:14px}
+canvas{image-rendering:pixelated;background:#000;border:1px solid var(--line);cursor:move;display:block}
+h1{font-size:15px;margin:0 0 4px}h2{font-size:12px;margin:14px 0 6px;color:var(--acc);text-transform:uppercase;letter-spacing:.06em}
+button,select,input{font:inherit;color:var(--fg);background:#262d44;border:1px solid var(--line);border-radius:5px;padding:5px 8px}
+button{cursor:pointer}button:hover{background:#323b5a}button.p{background:#2c5a3a}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.f{display:grid;grid-template-columns:90px 1fr;gap:4px 8px;align-items:center}
+.f label{color:var(--mute)}.f input[type=number]{width:70px}
+.g{border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:8px}.g.sel{border-color:var(--acc)}
+.g .t{cursor:pointer;font-weight:600;margin-bottom:6px}.nums{display:flex;gap:6px;flex-wrap:wrap}.nums label{display:flex;flex-direction:column;font-size:11px;color:var(--mute)}
+.nums input{width:62px}
+#msg{color:var(--mute);min-height:18px}small{color:var(--mute)}
+@media(max-width:800px){body{flex-direction:column;height:auto}}
+</style></head><body>
+<div id="left">
+  <h1>HUD Editor <small>RotomDex / Town Map / Trainer card</small></h1>
+  <div class="row">
+    <select id="view"><option value="list">RotomDex: list</option><option value="entry">RotomDex: entry page</option><option value="map">Town Map</option><option value="card">Trainer card</option></select>
+    <label>Pokédex No. <input id="idx" type="number" value="1" min="1" style="width:70px"></label>
+    <select id="state"><option value="caught">caught</option><option value="seen">seen only</option><option value="unseen">never seen</option></select>
+    <label><input id="shiny" type="checkbox"> shiny dex</label>
+  </div>
+  <canvas id="cv" width="240" height="160" style="width:720px"></canvas>
+  <div id="msg">Drag on the picture to move the selected group. Arrow keys nudge it by 1 px.</div>
+  <div class="row"><button class="p" id="save">Download StartMenuHUD.js</button><button id="copy">Copy</button><label class="row">Load a file: <input id="load" type="file" accept=".js"></label><button id="reset">Reset everything</button></div>
+  <small>Put the downloaded file in <b>tables/</b> and add <code>&lt;script src="tables/StartMenuHUD.js"&gt;&lt;/script&gt;</code> anywhere before the game starts. Only the values you changed are saved.</small>
+  <div class="row"><small>Project paths (the editor must sit next to index.html):</small>
+    <input id="pdb" value="js/PokemonDatabase.js" size="26"><input id="pdex" value="tables/PokedexTables.js" size="22"><input id="psm" value="js/StartMenu.js" size="16"><button id="reload">Reload</button></div>
+</div>
+<div id="right"><div id="groups"></div></div>
+<script>
+const $ = id => document.getElementById(id);
+const LABELS = { rotom: 'Rotom face', 'rotom.eyeL': 'Left eye', 'rotom.eyeR': 'Right eye', 'rotom.head': 'Dark head', 'rotom.iris': 'Iris size', 'rotom.look': 'How far the eyes look', screen: 'Screen (the white box)',
+  'dex.header': 'Red header bar', 'dex.box': 'Picture box', 'dex.nameBox': 'Name box', 'dex.name': 'Name text (in name box)', 'dex.num': 'Number text (in name box)', 'dex.iconSeen': 'Icon when seen (in picture box)', 'dex.iconUnseen': 'Silhouette icon when not seen',
+  'dex.ball': 'Caught ball (in picture box)', 'dex.list': 'List', 'dex.title': 'Entry: name', 'dex.cat': 'Entry: category', 'dex.stats': 'Entry: height / weight', 'dex.desc': 'Entry: description', 'dex.status': 'Entry: REGISTERED text', 'card.sprite': 'Trainer sprite box', 'card.party': 'Party icons' };
+let core = null, def = null, over = {}, selKey = 'rotom.eyeL', raf = 0;
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src + '?' + Date.now(); s.onload = res; s.onerror = () => rej(new Error('could not load ' + src)); document.head.appendChild(s); }); }
+async function boot() {
+  $('msg').textContent = 'Loading project files ...';
+  const errs = [];
+  for (const id of ['pdb', 'pdex', 'psm']) { try { await loadScript($(id).value); } catch (e) { errs.push(e.message); } }
+  window.GameStateManager = { saveData: { player: { name: 'Clay', gender: 'MALE', money: 1500 }, flags: { FLAG_SHINY_DEX: 1 }, party: [{ species: 'SPECIES_BULBASAUR', level: 12 }, { species: 'SPECIES_CHARMANDER', level: 8 }], dex: { seen: {}, caught: {}, shiny: {} } } };
+  window.OverworldMaps = window.OverworldMaps || {};
+  if (!window.StartMenuCore) { $('msg').textContent = errs.join(' | ') || 'StartMenu.js did not load'; return; }
+  const sv = () => GameStateManager.saveData;
+  core = StartMenuCore({ urlFor: p => p, bottomH: () => 148, scene: () => ({ currentMapKey: '' }), logName: () => "AIDE'S LOG", save: () => window.SaveSystem, saveData: sv, flags: () => sv().flags, quests: () => ({}), party: () => sv().party,
+    db: () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null), glyphs: () => null, maps: () => window.OverworldMaps, offsets: () => ({}), townMap: () => ({}), playerPos: () => ({ key: '' }), mapName: () => 'Criscanto Town', weather: () => 'rain', applyOptions() {}, openChild() {}, onExit() {}, shinyFlag: () => 'FLAG_SHINY_DEX' });
+  def = core.HUD_DEF; await core.initFont(); core.start({}); build(); apply(); if (!raf) loop();
+  $('msg').textContent = errs.length ? 'Some files were not found: ' + errs.join(' | ') + ' (change the paths below and press Reload)' : 'Drag on the picture to move the selected group. Arrow keys nudge it by 1 px.';
+}
+function leaves(o, pre, out) { for (const k of Object.keys(o)) { const v = o[k], p = pre ? pre + '.' + k : k; if (v && typeof v === 'object') leaves(v, p, out); else out.push(p); } return out; }
+function groupsOf() { const gs = []; for (const k of Object.keys(def)) { const v = def[k]; if (v.x == null && typeof v === 'object' && Object.values(v).every(o => o && typeof o === 'object')) for (const k2 of Object.keys(v)) gs.push(k + '.' + k2); else gs.push(k); } return gs; }
+const get = (o, p) => p.split('.').reduce((a, k) => a && a[k], o);
+function setv(p, v) { const ks = p.split('.'); let o = over; for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]] = o[ks[i]] || {}; o[ks[ks.length - 1]] = v; window.StartMenuHUD = JSON.parse(JSON.stringify(over)); }
+function cur(p) { return core.HUD_DEF && get(core.HUD(), p); }
+function build() {
+  const box = $('groups'); box.innerHTML = '';
+  for (const g of groupsOf()) {
+    const d = document.createElement('div'); d.className = 'g' + (g === selKey ? ' sel' : ''); d.dataset.g = g;
+    const t = document.createElement('div'); t.className = 't'; t.textContent = LABELS[g] || g; t.onclick = () => { selKey = g; build(); }; d.appendChild(t);
+    const n = document.createElement('div'); n.className = 'nums'; const obj = get(def, g);
+    for (const k of Object.keys(obj)) { const l = document.createElement('label'); l.textContent = k; const i = document.createElement('input'); i.type = 'number'; i.dataset.p = g + '.' + k; i.value = cur(g + '.' + k); i.oninput = () => { setv(g + '.' + k, +i.value); selKey = g; }; i.onfocus = () => { selKey = g; document.querySelectorAll('.g').forEach(x => x.classList.toggle('sel', x.dataset.g === g)); }; l.appendChild(i); n.appendChild(l); }
+    d.appendChild(n); box.appendChild(d);
+  }
+}
+function refreshInputs() { document.querySelectorAll('input[data-p]').forEach(i => { if (document.activeElement !== i) i.value = cur(i.dataset.p); }); }
+function apply() {
+  const sv = GameStateManager.saveData, n = +$('idx').value || 1, st = $('state').value, D = window.Dex;
+  sv.dex = { seen: {}, caught: {}, shiny: {} };
+  for (let i = 1; i <= 40; i++) { if (i === n) continue; if (i % 3) sv.dex.seen[i] = 1; if (i % 4 === 1) sv.dex.caught[i] = 1; }
+  if (st !== 'unseen') sv.dex.seen[n] = 1; if (st === 'caught') { sv.dex.caught[n] = 1; sv.dex.shiny[n] = 1; }
+  const view = $('view').value; core.S.scr = 'menu'; core.S.sub = null; core.SCREENS.dex.enter && 0;
+  const scr = view === 'list' || view === 'entry' ? 'dex' : view; core.openScreen(scr);
+  if (scr === 'dex') { core.DX.shiny = $('shiny').checked; core.DX.seenOnly = false; core.DX.mode = 0; core.DX.dirty = true; core.SCREENS.dex.enter(); const i = core.DX.list.indexOf(n); core.DX.idx = Math.max(0, i); core.DX.stage = view === 'entry' ? 'entry' : 'list'; }
+}
+function loop() { raf = requestAnimationFrame(loop); if (!core) return; core.update(.016); const c = $('cv').getContext('2d'); core.renderTop(c); overlay(c); refreshInputs(); }
+function overlay(c) {
+  const o = cur(selKey); if (!o) return; let r = null; const H = core.HUD(), sc = H.screen, grp = selKey.split('.')[0];
+  const base = grp === 'dex' ? sc : { x: 0, y: 0 };
+  if (selKey === 'rotom.eyeL' || selKey === 'rotom.eyeR' || selKey === 'rotom.head') r = { x: o.x - o.rx, y: o.y - o.ry, w: o.rx * 2, h: o.ry * 2 };
+  else if (o.w != null) r = { x: base.x + o.x, y: base.y + o.y, w: o.w, h: o.h || (o.rows ? o.rows * o.h : 10) };
+  else if (o.x != null && grp !== 'rotom') r = { x: (grp === 'dex' ? sc.x : 0) + o.x, y: (grp === 'dex' ? sc.y : 0) + o.y, w: 12, h: 10 };
+  if (selKey === 'dex.list') r.h = o.rows * o.h; if (selKey === 'dex.header') r = { x: sc.x, y: sc.y, w: sc.w, h: o.h };
+  if (r) { c.strokeStyle = Math.floor(performance.now() / 300) % 2 ? '#ffd23c' : '#ffffff'; c.lineWidth = 1; c.strokeRect(r.x + .5, r.y + .5, r.w, r.h); }
+}
+let drag = null;
+$('cv').addEventListener('pointerdown', e => { const o = cur(selKey); if (!o || o.x == null) return; drag = { x: e.clientX, y: e.clientY, ox: o.x, oy: o.y }; $('cv').setPointerCapture(e.pointerId); });
+$('cv').addEventListener('pointermove', e => { if (!drag) return; const s = 720 / 240; setv(selKey + '.x', Math.round(drag.ox + (e.clientX - drag.x) / s)); setv(selKey + '.y', Math.round(drag.oy + (e.clientY - drag.y) / s)); });
+$('cv').addEventListener('pointerup', () => { drag = null; });
+addEventListener('keydown', e => { if (/INPUT|SELECT/.test(document.activeElement.tagName)) return; const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; const o = cur(selKey); if (!d || !o || o.x == null) return; e.preventDefault(); setv(selKey + '.x', o.x + d[0]); setv(selKey + '.y', o.y + d[1]); });
+for (const id of ['view', 'idx', 'state', 'shiny']) $(id).addEventListener('input', () => core && apply());
+function text() { return '// written by hud_editor.html: only the values that differ from the defaults\nwindow.StartMenuHUD = ' + JSON.stringify(over, null, 2) + ';\n'; }
+$('save').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text()], { type: 'text/javascript' })); a.download = 'StartMenuHUD.js'; a.click(); };
+$('copy').onclick = () => { navigator.clipboard.writeText(text()).then(() => { $('msg').textContent = 'Copied.'; }, () => { $('msg').textContent = 'Could not copy: use Download.'; }); };
+$('reset').onclick = () => { over = {}; window.StartMenuHUD = {}; build(); };
+$('load').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(t => { try { window.StartMenuHUD = undefined; new Function(t)(); over = JSON.parse(JSON.stringify(window.StartMenuHUD || {})); build(); $('msg').textContent = 'Loaded ' + f.name; } catch (er) { $('msg').textContent = 'Could not read that file: ' + er.message; } }); };
+$('reload').onclick = () => location.reload();
+boot();
+</script></body></html>
