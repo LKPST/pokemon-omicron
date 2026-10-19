@@ -110,4 +110,16 @@ I knew you'd say that!
 }
 release
 end
+
+start: "new_script"
+lock
+faceplayer
+msgbox.normal
+{
+Hello, $player!
+Take this Sprigatito with you.
+}
+givepokemon SPECIES_SPRIGATITO 20 Flora moves=MOVE_TACKLE
+release
+end
 `;
