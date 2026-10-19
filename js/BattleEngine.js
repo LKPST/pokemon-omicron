@@ -99,7 +99,7 @@ class Battle {
     this.kind = o.kind || 'wild'; this.trainerName = o.trainerName || 'the trainer'; this.introText = o.introText || ''; this.defeatText = o.defeatText || ''; this.ai = o.ai || 'basic'; this.trainerItems = (o.items || []).slice(); this.frostbite = o.frostbite !== false;
     this.rand = o.rng || mulberry(o.seed != null ? o.seed : (Date.now() ^ 0x9e3779b9));
     this.opts = o; this.dbIndex = null; this._moves = new Map();
-    this.weather = { type: null, turns: 0 }; this.terrain = { type: null, turns: 0 }; this.room = { trick: 0 };
+    this.weather = ['rain', 'sun', 'sand', 'hail'].indexOf(o.weather) >= 0 ? { type: o.weather, turns: 99999 } : { type: null, turns: 0 }; this.terrain = { type: null, turns: 0 }; this.room = { trick: 0 };   // o.weather: the map's weather lasts the whole battle
     this.turnNo = 0; this.events = []; this.pending = null; this.over = false; this.result = null; this.caught = []; this.ranAttempts = 0; this.trainerMoney = o.money || 0;
     this.sides = [0, 1].map(i => ({ idx: i, party: [], active: -1, spikes: 0, rocks: false, tspikes: 0, web: false, reflect: 0, lscreen: 0, veil: 0, tailwind: 0, safeguard: 0, mist: 0, wish: null }));
     this.expLog = []; this.levelUps = []; this.learnQueue = []; this.futureHits = [];
@@ -1040,6 +1040,7 @@ class Battle {
   // =================================================================================================== the turn
   start() {
     this.events = []; this.phase = 'idle';
+    if (this.weather.type) this.ev({ t: 'weather', type: this.weather.type });
     if (this.kind === 'trainer') this.msg(this.introText || (this.trainerName + ' would like to battle!'));
     const F = this.sides[1].party[this.sides[1].active], P = this.sides[0].party[this.sides[0].active];
     this.sendOut(1, F.idx); this.sendOut(0, P.idx); this.learnQueue = []; return this.events; }
