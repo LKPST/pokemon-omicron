@@ -236,6 +236,7 @@ class OverworldWeatherSystem {
     }
 
     this.currentType = type;
+    window.OverworldWeather = type;   // read by BattleScene so a battle starts in the map's weather
     for (const layer of this.layers.slice()) {
       if (!layer.leaving) this.fadeOut(layer, instant);
     }
