@@ -692,6 +692,7 @@ PokemonSummary.debug = () => {
 };
 window.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.repeat) return;
+  if (window.StartMenu) return;   // the start menu owns Enter now (Pokémon is a tile in it)
   const st = psState(); psLog('Enter pressed', st);
   if (PokemonSummary.active) return;
   // the scene's own [SUMMARY] code opens it on its next update; if it has not, we do it here after a short wait
