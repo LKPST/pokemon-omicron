@@ -54,6 +54,9 @@ textarea{font:inherit;background:#262a36;color:#eef;border:1px solid #3a4052;bor
 #edProblems{max-height:260px;overflow:auto;font-size:12px;line-height:1.6;white-space:pre-wrap}
 button.dirty{outline:2px solid #ffd166}
 
+.ck{background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/12px 12px;border-radius:4px;image-rendering:pixelated;max-width:100%}
+.frs{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:6px 0}.fr{display:flex;flex-direction:column;gap:4px;align-items:flex-start}.fr small{color:#8a93a6}
+
 </style></head><body>
 <h1>Pokémon Editor</h1>
 <div class="tabs"><button data-tab="sprites" class="on">Sprites</button><button data-tab="pokemon">Pokémon</button><button data-tab="moves">Moves</button></div>
@@ -69,7 +72,7 @@ button.dirty{outline:2px solid #ffd166}
   <div class="stats" id="edStats"></div>
   <div class="row"><span style="color:#8a93a6">Download:</span>
     <button class="ok" data-dl="db">PokemonDatabase.js</button><button class="ok" data-dl="learn">LearnsetTables.js</button><button class="ok" data-dl="evo">EvolutionTables.js</button><button class="ok" data-dl="moves">MoveTables.js</button>
-    <button id="edCheck">Check for problems</button></div>
+    <button class="ok" id="edZipImg">Download edited images (ZIP)</button><button id="edCheck">Check for problems</button></div>
   <div id="edProblems" class="hint" hidden></div>
 </section>
 </div>
@@ -461,7 +464,7 @@ function refreshLists(){
   renderLists();renderForms()}
 function renderStats(){
   const n=o=>o?Object.keys(o).length:0,d=ED.dirty,mark=k=>d[k]?' <b class="warn">(edited)</b>':'';
-  $('edStats').innerHTML=`<span>Species: <b>${n(ED.db)}</b>${mark('db')}</span><span>Learnsets: <b>${n(ED.learn)}</b>${mark('learn')}</span><span>Evolutions: <b>${n(ED.evo)}</b>${mark('evo')}</span><span>Moves: <b>${n(ED.moves)}</b>${mark('moves')}</span><span>Types: <b>${ED.types?n(ED.types.types):'built-in list'}</b></span>`;
+  $('edStats').innerHTML=`<span>Species: <b>${n(ED.db)}</b>${mark('db')}</span><span>Learnsets: <b>${n(ED.learn)}</b>${mark('learn')}</span><span>Evolutions: <b>${n(ED.evo)}</b>${mark('evo')}</span><span>Moves: <b>${n(ED.moves)}</b>${mark('moves')}</span><span>Images edited: <b>${IMGS.size}</b></span><span>Types: <b>${ED.types?n(ED.types.types):'built-in list'}</b></span>`;
   document.querySelectorAll('[data-dl]').forEach(b=>b.classList.toggle('dirty',!!d[b.dataset.dl]))}
 
 // ------------------------------------------------ cascading renames
@@ -523,13 +526,64 @@ $('spAdd').onclick=()=>{if(!ED.db)return msg('Load PokemonDatabase.js first.');c
   if(!/^SPECIES_[A-Z0-9_]+$/.test(k))return msg('Type a key like SPECIES_NEWMON first.');if(ED.db[k])return msg(k+' already exists.');
   ED.db[k]={...TEMPLATE,name:prettyKey(k)};ED.spSel=k;dirty('db');$('spNew').value='';refreshLists();msg('Created '+k+'.')};
 
+// ---- sprite sheets: battle = 4 frames in a row, icon = 2 frames stacked; replacements are kept per species until downloaded
+const IMGS=new Map();   // `${speciesKey}|battle|icon` -> {canvas, file, name}
+const BFR=['Front','Front shiny','Back','Back shiny'],NBF=4,NIF=2;
+const baseName=p=>String(p||'').split('/').pop();
+const loadImg=url=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('image not found: '+url));i.src=url});
+function toCanvas(im){const c=document.createElement('canvas');c.width=im.naturalWidth||im.width;c.height=im.naturalHeight||im.height;c.getContext('2d').drawImage(im,0,0);return c}
+async function currentSheet(e,key,kind){
+  const o=IMGS.get(key+'|'+kind);if(o)return o.canvas;
+  const u=fileUrl(kind==='battle'?e.battleSprite:e.iconSprite);if(!u)return null;
+  try{return toCanvas(await loadImg(u))}catch(x){return null}}
+function keyIcon(c){ // icon sheets use a solid border colour as background; show it transparent
+  const x=c.getContext('2d',{willReadFrequently:true}),id=x.getImageData(0,0,c.width,c.height),d=id.data;
+  if(d[3]!==255)return c;const r=d[0],g=d[1],b=d[2];for(let i=0;i<d.length;i+=4)if(Math.abs(d[i]-r)<=12&&Math.abs(d[i+1]-g)<=12&&Math.abs(d[i+2]-b)<=12)d[i+3]=0;x.putImageData(id,0,0);return c}
+function frameCanvas(sheet,kind,i){
+  const n=kind==='battle'?NBF:NIF,fw=kind==='battle'?Math.floor(sheet.width/n):sheet.width,fh=kind==='battle'?sheet.height:Math.floor(sheet.height/n);
+  const c=document.createElement('canvas');c.width=fw;c.height=fh;
+  c.getContext('2d').drawImage(sheet,kind==='battle'?i*fw:0,kind==='battle'?0:i*fh,fw,fh,0,0,fw,fh);return c}
+function pickImage(cb){const i=h('input',{type:'file',accept:'image/png,image/*'});i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const im=await loadImg(URL.createObjectURL(f));cb(toCanvas(im),f)}catch(x){msg('Could not read that image.')}};i.click()}
+function setSheet(key,kind,canvas,file){IMGS.set(key+"|"+kind,{canvas,file,name:null});renderStats();renderSpForm()}
 function spritePreview(e,host){
-  host.innerHTML='';
-  const bs=fileUrl(e.battleSprite),ic=fileUrl(e.iconSprite);
-  const mk=(url,draw)=>{if(!url)return h('div',{class:'hint',style:'width:96px'},'(no image: choose the project folder)');const c=h('canvas',{});const im=new Image();im.onload=()=>draw(c,im);im.src=url;return c};
-  host.append(mk(bs,(c,im)=>{const n=im.naturalWidth/im.naturalHeight>=3.5?4:1,fw=Math.floor(im.naturalWidth/n);c.width=fw;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0,fw,im.naturalHeight,0,0,fw,im.naturalHeight);c.style.width=Math.min(fw*2,256)+'px'}));
-  host.append(mk(ic,(c,im)=>{const n=im.naturalHeight>=im.naturalWidth*2?2:1,fh=Math.floor(im.naturalHeight/n);c.width=im.naturalWidth;c.height=fh;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,im.naturalWidth,fh,0,0,im.naturalWidth,fh);
-    const id=x.getImageData(0,0,c.width,c.height),d=id.data;if(d[3]===255){const r=d[0],g=d[1],b=d[2];for(let i=0;i<d.length;i+=4)if(Math.abs(d[i]-r)<=12&&Math.abs(d[i+1]-g)<=12&&Math.abs(d[i+2]-b)<=12)d[i+3]=0;x.putImageData(id,0,0)}c.style.width=c.width*3+'px'}))}
+  host.innerHTML='';const key=ED.spSel;
+  (async()=>{
+    const b=await currentSheet(e,key,'battle'),i=await currentSheet(e,key,'icon');
+    if(!b&&!i){host.append(h('div',{class:'hint',style:'width:110px;margin:0'},'(no image: choose the project folder or upload one below)'));return}
+    if(b){const c=frameCanvas(b,'battle',0);c.style.width=Math.min(c.width*2,200)+'px';c.className='ck';host.append(c)}
+    if(i){const c=keyIcon(frameCanvas(i,'icon',0));c.style.width=c.width*3+'px';c.className='ck';host.append(c)}})()}
+function sheetBlock(e,key,kind){
+  const isB=kind==='battle',path=isB?e.battleSprite:e.iconSprite,over=IMGS.get(key+'|'+kind),n=isB?NBF:NIF,labels=isB?BFR:['Frame 1','Frame 2'];
+  const box=h('div',{style:'margin-bottom:12px'}),row=h('div',{class:'frs'});
+  (async()=>{
+    const sh=await currentSheet(e,key,kind);
+    if(!sh){row.append(h('div',{class:'hint',style:'margin:0'},path?`Not found: ${path} (choose the project folder, or upload a sheet).`:'No path set yet. Upload a sheet and set the path below.'))}
+    else{
+      const ok=isB?sh.width%n===0:sh.height%n===0;
+      for(let i=0;i<n;i++){let fc=frameCanvas(sh,kind,i);if(!isB)fc=keyIcon(fc);
+        fc.className='ck';fc.style.width=(isB?Math.min(fc.width*1.2,170):fc.width*3)+'px';
+        row.append(h('div',{class:'fr'},fc,h('small',{},labels[i]+` · ${fc.width}×${fc.height}`),
+          h('button',{on:{click:()=>pickImage((c,f)=>{
+            const fw=isB?Math.floor(sh.width/n):sh.width,fh=isB?sh.height:Math.floor(sh.height/n);
+            if(c.width!==fw||c.height!==fh)return msg(`That image is ${c.width}×${c.height}, the frame is ${fw}×${fh}. Resize it, or upload a whole new sheet instead.`);
+            const out=document.createElement('canvas');out.width=sh.width;out.height=sh.height;const x=out.getContext('2d');x.drawImage(sh,0,0);
+            x.clearRect(isB?i*fw:0,isB?0:i*fh,fw,fh);x.drawImage(c,isB?i*fw:0,isB?0:i*fh);setSheet(key,kind,out,null);msg(`${labels[i]} replaced. Download the sheet to save it.`)})}},'Replace')))}
+      if(!ok)box.append(h('div',{class:'warn'},`This sheet is ${sh.width}×${sh.height}, which does not divide into ${n} frames.`))}
+  })();
+  box.append(h('div',{class:'row',style:'margin:0 0 4px'},h('b',{},isB?'Battle sheet':'Icon sheet'),h('span',{style:'color:#8a93a6'},`${n} frames ${isB?'side by side':'stacked'} · ${baseName(path)||'(no path)'}`),over?h('b',{class:'warn'},'(edited)'):null));
+  box.append(row,h('div',{class:'row'},
+    h('button',{on:{click:()=>pickImage((c,f)=>{const fm=isB?c.width%n===0:c.height%n===0;setSheet(key,kind,c,f);msg(`New ${kind} sheet loaded (${c.width}×${c.height}).${fm?'':' Warning: this does not divide into '+n+' frames.'} Download it to save it.`)})}},'Upload new '+(isB?'battle':'icon')+' sheet'),
+    h('button',{class:'ok',on:{click:async()=>{const blob=await sheetBlob(e,key,kind);if(!blob)return msg('Nothing to download yet.');dl(blob,baseName(path)||`${key.replace('SPECIES_','')}_${kind}.png`);msg(`${baseName(path)} downloaded. Put it at ${path}.`)}}},'Download sheet'),
+    over?h('button',{on:{click:()=>{IMGS.delete(key+'|'+kind);renderStats();renderSpForm()}}},'Undo changes'):null));
+  return box}
+async function sheetBlob(e,key,kind){
+  const o=IMGS.get(key+'|'+kind);if(o&&o.file&&!o.canvas._edited)return o.file;
+  const c=await currentSheet(e,key,kind);if(!c)return null;return new Promise(r=>c.toBlob(r,'image/png'))}
+function spriteSection(e,key){return h('section',{},h('h3',{},'Battle and icon sheets'),sheetBlock(e,key,'battle'),sheetBlock(e,key,'icon'),
+  h('div',{class:'hint',style:'margin:0'},'Frames: battle = front, front shiny, back, back shiny. Replaced frames are re-saved as normal (non-indexed) PNGs; an uploaded whole sheet is downloaded unchanged.'))}
+$('edZipImg').onclick=async()=>{
+  const list=[];for(const[k,o]of IMGS){const[sp,kind]=k.split('|'),e=ED.db&&ED.db[sp];if(!e)continue;const p=kind==='battle'?e.battleSprite:e.iconSprite;const b=await sheetBlob(e,sp,kind);if(b&&p)list.push({name:p.replace(/^\.?\//,''),blob:b})}
+  if(!list.length)return msg('No edited images yet.');dl(await buildZip(list),'edited_sprites.zip');msg(`ZIP with ${list.length} image(s), stored under their project paths.`)};
 let cryAudio=null;
 function evolvesFrom(key){const out=[];if(ED.evo)for(const[s,rows]of Object.entries(ED.evo))for(const r of rows)if(r.to===key)out.push(`${(ED.db[s]&&ED.db[s].name)||prettyKey(s)} (${r.method.toLowerCase().replace(/_/g,' ')}${r.param?' '+r.param:''})`);return out}
 function renderSpForm(){
@@ -550,7 +604,7 @@ function renderSpForm(){
         ED.spSel=null;['db','learn','evo'].forEach(x=>ED.dirty[x]=true);refreshLists()}),
       e.cry&&fileUrl(e.cry)?h('button',{on:{click:()=>{if(cryAudio)cryAudio.pause();cryAudio=new Audio(fileUrl(e.cry));cryAudio.play().catch(()=>{})}}},'▶ Cry'):null),
     evolvesFrom(k).length?h('div',{class:'hint',style:'margin:2px 0'},'Evolves from: '+evolvesFrom(k).join(', ')):null)));
-  F.append(hdr);
+  F.append(hdr);F.append(spriteSection(e,k));
   // base stats
   const statDefs=[['baseHP','HP','#4cc860'],['baseAttack','Attack','#e85a4c'],['baseDefense','Defense','#e8a43c'],['baseSpAttack','Sp. Atk','#4c8ce8'],['baseSpDefense','Sp. Def','#58c8b8'],['baseSpeed','Speed','#d868c8']];
   const totalEl=h('b',{}),bars=[];
@@ -571,7 +625,7 @@ function renderSpForm(){
   F.append(h('section',{},h('h3',{},'Contest values and sprites'),h('div',{class:'fg'},
     ...['cool','cute','smart','tough','beauty'].map(s=>fld(e,s+'Value',s[0].toUpperCase()+s.slice(1),'num',{step:1})),
     fld(e,'xPosFront','Front x','num',{step:1}),fld(e,'yPosFront','Front y','num',{step:1}),fld(e,'xPosBack','Back x','num',{step:1}),fld(e,'yPosBack','Back y','num',{step:1})),
-    h('div',{class:'fg',style:'margin-top:8px;grid-template-columns:1fr'},fld(e,'battleSprite','Battle sprite path','text',{after:()=>spritePreview(e,prev)}),fld(e,'iconSprite','Icon path','text',{after:()=>spritePreview(e,prev)}),fld(e,'cry','Cry path','text'))));
+    h('div',{class:'fg',style:'margin-top:8px;grid-template-columns:1fr'},fld(e,'battleSprite','Battle sprite path','text',{after:()=>renderSpForm()}),fld(e,'iconSprite','Icon path','text',{after:()=>renderSpForm()}),fld(e,'cry','Cry path','text'))));
   // learnset
   if(!ED.learn)F.append(h('section',{},h('h3',{},'Learnset'),h('div',{class:'hint',style:'margin:0'},'Load LearnsetTables.js to edit level-up, egg, TM and tutor moves.')));
   else{
