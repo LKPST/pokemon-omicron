@@ -772,11 +772,13 @@ root.Quests = Quests;
 'use strict';
 const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', q: 'left', ArrowRight: 'right', d: 'right', e: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b', Tab: 'sel', o: 'sel', f: 'filter' };
 const KB = 'startmenu_bottom', KT = 'startmenu_top', KD = 'startmenu_dock';
+const slog = (...a) => { if (root.StartMenu && root.StartMenu.LOG) console.log('[SM]', ...a); };
 const DOCKICONS = ['pokemon', 'dex', 'bag', 'card', 'save', 'options'];
 const StartMenu = {
-  active: false, DOCK: true, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
+  active: false, DOCK: true, LOG: true, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
   isOpen() { return this.active; },
-  toggle(scene) { if (this.active) { if (this.core) this.core.press('b'); return; } this.open(scene); },
+  debug() { const sc = this.scene; const o = { active: this.active, hasCore: !!this.core, core: this.core && this.core.status(), lowerCamera: !!(sc && sc._menuCam), scene: sc && { scriptRunning: sc.scriptRunning, isLocked: sc.isLocked, isMoving: sc.isMoving } }; console.log('[SM] state', o); return o; },
+  toggle(scene) { slog('toggle(), active=' + this.active); if (this.active) { if (this.core) this.core.press('b'); return; } this.open(scene); },
   // the overworld camera only covers the top screen, so the lower screen needs a camera of its own (looking at a spot far below the map)
   _cam(scene, geo) {
     const cams = scene.cameras; if (!cams || !cams.add) return null;
@@ -784,12 +786,12 @@ const StartMenu = {
     const c = cams.add(geo.scr.x, geo.y0, geo.scr.w, Math.round(geo.bh * geo.s)); c.setScroll(0, 100000); c.setRoundPixels && c.setRoundPixels(true); scene._menuCam = c; return c;
   },
   _lower(scene, geo, x, y, key) {   // an image that only the lower camera shows
-    const im = scene.add.image(x, 100000 + y, key).setOrigin(0, 0).setScale(geo.s).setScrollFactor(0).setDepth(8990);
+    const im = scene.add.image(x, 100000 + y, key).setOrigin(0, 0).setScale(geo.s).setScrollFactor(1).setDepth(8990);   // scroll factor 1: the lower camera is scrolled to y=100000
     try { scene.cameras.main.ignore(im); } catch (e) { /* old Phaser */ } return im;
   },
   _geom(scene) { const scr = (root.OW_TEXT && root.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 }, s = scr.w / 240, y0 = scr.y + scr.h + 4, avail = (scene.scale ? scene.scale.height : 620) - y0; return { scr, s, y0, bh: Math.max(100, Math.min(200, Math.floor(avail / s))) }; },
   open(scene, opts) {
-    if (this.active || !scene) return false; opts = opts || {};
+    slog('open() called. active=' + this.active + ' scene=' + !!scene); if (this.active || !scene) return false; opts = opts || {};
     const gs = root.GameStateManager, sv = () => (gs && gs.saveData) || {}, geo = this._geom(scene);
     const core = root.StartMenuCore({
       urlFor: p => p, bottomH: () => geo.bh, scene: () => scene, logName: () => StartMenu.LOGNAME,
@@ -808,8 +810,9 @@ const StartMenu = {
       onExit: () => this.close(),
     });
     this.core = core; this.scene = scene; this.opts = opts; this.openedAt = performance.now(); this.active = true; this.geo = geo;
+    slog('geometry', JSON.stringify(geo), 'scene.scale.height=' + (scene.scale && scene.scale.height), 'main camera viewport', scene.cameras && scene.cameras.main ? [scene.cameras.main.x, scene.cameras.main.y, scene.cameras.main.width, scene.cameras.main.height].join(',') : 'n/a');
     core.initFont().then(() => {
-      if (!this.active) return; core.start({ select: opts.select, screen: opts.screen, activate: opts.activate });
+      slog('font ready, active=' + this.active); if (!this.active) return; core.start({ select: opts.select, screen: opts.screen, activate: opts.activate });
       for (const k of [KB, KT]) if (scene.textures.exists(k)) scene.textures.remove(k);
       this.tb = scene.textures.createCanvas(KB, core.W, core.H); this.tt = scene.textures.createCanvas(KT, core.W, core.TH);
       try { this.tb.setFilter(Phaser.Textures.FilterMode.NEAREST); this.tt.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ }
@@ -817,25 +820,28 @@ const StartMenu = {
       const g = this.geo; this._cam(scene, g); this.ib = this._lower(scene, g, 0, 0, KB);
       this.it = scene.add.image(g.scr.x, g.scr.y, KT).setOrigin(0, 0).setScale(g.s).setScrollFactor(0).setDepth(8990).setVisible(false);
       try { if (scene._menuCam) scene._menuCam.ignore(this.it); } catch (e) { /* old Phaser */ }
-      this.upd = (time, delta) => { const dt = Math.min(.05, delta / 1000); core.update(dt); if (!this.active) return; core.render(this.cb); this.tb.refresh(); const ta = core.topActive(); this.it.setVisible(ta); if (ta) { core.renderTop(this.ct); this.tt.refresh(); } };
+      slog('images made: bottom at y=' + this.ib.y + ' top visible=' + this.it.visible + ' lower camera=' + !!scene._menuCam + (scene._menuCam ? ' viewport ' + [scene._menuCam.x, scene._menuCam.y, scene._menuCam.width, scene._menuCam.height].join(',') + ' scrollY ' + scene._menuCam.scrollY : ''));
+      let frames = 0, bad = false;
+      this.upd = (time, delta) => { if (bad) return; try { frames++; if (frames === 1 || frames === 60) slog('frame ' + frames + ' ok, screen=' + core.S.scr + ' open=' + core.S.open + ' child=' + core.S.child); this._frame(time, delta, core); } catch (err) { bad = true; console.error('[SM] ERROR while drawing the menu (the menu is closed):', err); this.close(); } };
+      this._frame = (time, delta, core) => { const dt = Math.min(.05, delta / 1000); core.update(dt); if (!this.active) return; core.render(this.cb); this.tb.refresh(); const ta = core.topActive(); this.it.setVisible(ta); if (ta) { core.renderTop(this.ct); this.tt.refresh(); } };
       scene.events.on('update', this.upd);
     }).catch(e => { console.error('[StartMenu] could not start:', e); this.close(); });
     this.kd = e => {
-      if (core.S.child) return;     // the bag / party screen has its own key handling
+      if (core.S.child) { slog('key ' + e.key + ' ignored: a child screen (bag / party) is open'); return; }     // the bag / party screen has its own key handling
       const k = KEYS[e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key]; if (!k) return;
-      e.preventDefault(); e.stopImmediatePropagation();
+      e.preventDefault(); e.stopImmediatePropagation(); slog('key ' + e.key + ' -> ' + k + ' (screen ' + core.S.scr + ', since open ' + Math.round(performance.now() - this.openedAt) + ' ms)');
       if (e.repeat && (k === 'a' || k === 'b')) return; if (performance.now() - this.openedAt < 250) return;
       core.press(e.key === 'Enter' && core.S.scr === 'menu' ? 'b' : k);
     };
     window.addEventListener('keydown', this.kd, true);
-    this.pd = p => { if (!this.active || !core.S) return; const g = this.geo; if (performance.now() - this.openedAt < 200) return; const x = (p.x - g.scr.x) / g.s;
+    this.pd = p => { if (!this.active || !core.S) return; const g = this.geo; slog('click at ' + Math.round(p.x) + ',' + Math.round(p.y)); if (performance.now() - this.openedAt < 200) return; const x = (p.x - g.scr.x) / g.s;
       if (p.y >= g.y0) core.click(x, (p.y - g.y0) / g.s, 'bot'); else if (p.y >= g.scr.y && p.y < g.scr.y + g.scr.h) core.click(x, (p.y - g.scr.y) / g.s, 'top'); };
     scene.input.on('pointerdown', this.pd);
     this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
     return true;
   },
   close() {
-    if (!this.active) return; this.active = false; window.removeEventListener('keydown', this.kd, true);
+    if (!this.active) return; slog('close()'); this.active = false; window.removeEventListener('keydown', this.kd, true);
     const scene = this.scene;
     try { if (this.upd) scene.events.off('update', this.upd); scene.input.off('pointerdown', this.pd); for (const i of [this.ib, this.it]) if (i) i.destroy(); for (const k of [KB, KT]) if (scene.textures.exists(k)) scene.textures.remove(k); } catch (e) { /* scene already gone */ }
     this.ib = this.it = this.tb = this.tt = this.cb = this.ct = this.upd = null;
@@ -849,13 +855,13 @@ const StartMenu = {
   },
   // ----- the dock: small clickable buttons on the lower screen while the menu is closed
   attach(scene) {
-    if (!scene || !scene.add) return; const self = this; this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
+    slog('attach() called, DOCK=' + this.DOCK); if (!scene || !scene.add) return; const self = this; this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
     const tex = () => { if (!scene.textures.exists(KD)) { const t = scene.textures.createCanvas(KD, 240, 26); try { t.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } } return scene.textures.get(KD); };
     const g = this._geom(scene); let img = null, ctx = null, cache = null, hot = -1, acc = 0;
     const slot = i => ({ x: 6 + i * 38, y: 2, w: 34, h: 22 });
     const draw = (time, delta) => {
       const vis = this.DOCK && !this.active && !scene.scriptRunning && !scene.isLocked && !(root.PokemonSummary && root.PokemonSummary.isOpen()) && !(root.BagMenu && root.BagMenu.isOpen());
-      if (!img && vis) { const t = tex(); cache = t; ctx = t.getContext ? t.getContext() : t.context; self._cam(scene, g); img = self._lower(scene, g, 0, (g.bh - 26) * g.s, KD).setDepth(80); }
+      if (!img && vis) { const t = tex(); cache = t; ctx = t.getContext ? t.getContext() : t.context; slog('dock created at screen y=' + (g.y0 + (g.bh - 26) * g.s)); self._cam(scene, g); img = self._lower(scene, g, 0, (g.bh - 26) * g.s, KD).setDepth(80); }
       if (img) img.setVisible(!!vis); if (!vis || !ctx) return; acc += delta; if (acc < 50) return; acc = 0;
       const c = ctx, t = time / 1000; c.clearRect(0, 0, 240, 26);
       DOCKICONS.forEach((id, i) => { const r = slot(i), on = i === hot; c.fillStyle = on ? '#ffffff' : '#0a0c12'; c.fillRect(r.x - 1, r.y - 1 + (on ? -1 : 0), r.w + 2, r.h + 2); c.fillStyle = on ? '#3a4260' : '#1a1e2c'; c.fillRect(r.x, r.y + (on ? -1 : 0), r.w, r.h); c.fillStyle = 'rgba(255,255,255,.08)'; c.fillRect(r.x, r.y + (on ? -1 : 0), r.w, 9); if (StartMenu.drawIcon) StartMenu.drawIcon(c, id, r.x + r.w / 2, r.y + r.h / 2 + (on ? -1 : 0), t, on); });
@@ -863,7 +869,7 @@ const StartMenu = {
     };
     if (!StartMenu.drawIcon) { try { StartMenu.drawIcon = root.StartMenuCore({ urlFor: p => p, bottomH: () => 148, party: () => [], db: () => null }).icon; } catch (e) { console.warn('[StartMenu] dock icons:', e); } }
     const move = p => { const x = (p.x - g.scr.x) / g.s, y = (p.y - (g.y0 + (g.bh - 26) * g.s)) / g.s; hot = -1; if (y >= 0 && y <= 26) DOCKICONS.forEach((id, i) => { const r = slot(i); if (x >= r.x && x <= r.x + r.w) hot = i; }); };
-    const down = p => { if (self.active || !img || !img.visible) return; move(p); if (hot >= 0) { const i = hot; self.open(scene, { select: i, activate: true }); } };
+    const down = p => { if (self.active || !img || !img.visible) return; move(p); slog('dock click, hot=' + hot); if (hot >= 0) { const i = hot; self.open(scene, { select: i, activate: true }); } };
     scene.events.on('update', draw); scene.input.on('pointermove', move); scene.input.on('pointerdown', down);
     scene.events.once('shutdown', () => { scene.events.off('update', draw); try { scene.input.off('pointermove', move); scene.input.off('pointerdown', down); } catch (e) { /* ignore */ } if (img) img.destroy(); img = null; if (scene.textures.exists(KD)) scene.textures.remove(KD); });
   },
