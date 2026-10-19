@@ -255,9 +255,9 @@ function createBattle(env) {
   const FLASH = 1.2, SLIDE = .9;
   // layout of the TOP surface (GBA pixels)
   // Live values: copied every frame from BattleScene.CONFIG (see the top of BattleScene.js), so editing the config in the console moves things at once.
-  const FOE = { cx: 170, bottom: 72, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 6, boxW: 104, ballX: 2, ballY: 23, balls: true, fit: 64, scale: 0, trBottom: 94, trScale: 1 };
-  const ALLY = { cx: 60, bottom: 112, platY: 110, platX: 60, trX: 60, boxX: 126, boxY: 74, boxW: 108, ballX: 2, ballY: 28, balls: true, fit: 64, scale: 1, trBottom: 112, trScale: 1 };
-  const CF = { levelBox: { x: 148, y: 26 }, ball: 1.5, msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } };
+  const FOE = { cx: 170, bottom: 72, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 6, boxW: 104, fit: 64, scale: 0, trBottom: 94, trScale: 1 };
+  const ALLY = { cx: 60, bottom: 112, platY: 110, platX: 60, trX: 60, boxX: 126, boxY: 84, boxW: 108, fit: 64, scale: 1, trBottom: 112, trScale: 1 };
+  const CF = { levelBox: { x: 148, y: 26 }, ball: 1.5, msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, party: { x: 4, y: 12, gap: 38, show: true }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } };
   function applyConfig() {
     const g = root.BattleScene && root.BattleScene.CONFIG; if (!g) return; const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
     for (const [o, k] of [[FOE, 'foe'], [ALLY, 'ally']]) {
@@ -265,10 +265,9 @@ function createBattle(env) {
       o.cx = num(c.x, o.cx); o.bottom = num(c.bottom, o.bottom); o.platY = num(c.platform, o.bottom - 2 * (k === 'ally')); o.fit = num(c.fit, o.fit); o.scale = num(c.scale, o.scale);
       o.platX = num(c.platformX, o.cx); o.trX = num(c.trainerX, o.cx); o.trBottom = num(c.trainerBottom, o.trBottom); o.trScale = num(c.trainerScale, o.trScale);
       if (c.box) { o.boxX = num(c.box.x, o.boxX); o.boxY = num(c.box.y, o.boxY); o.boxW = num(c.box.w, o.boxW); }
-      if (c.balls) { o.ballX = num(c.balls.x, o.ballX); o.ballY = num(c.balls.y, o.ballY); o.balls = c.balls.show !== false; }
     }
     CF.ball = num(g.ballScale, CF.ball); if (g.levelBox) { CF.levelBox.x = num(g.levelBox.x, CF.levelBox.x); CF.levelBox.y = num(g.levelBox.y, CF.levelBox.y); }
-    const bt = g.bottom; if (bt) for (const k of ['msg', 'btn', 'info']) if (bt[k]) for (const f of Object.keys(CF[k])) CF[k][f] = num(bt[k][f], CF[k][f]);
+    const bt = g.bottom; if (bt) for (const k of ['msg', 'btn', 'info', 'party']) if (bt[k]) for (const f of Object.keys(CF[k])) CF[k][f] = k === 'party' && f === 'show' ? bt[k][f] !== false : num(bt[k][f], CF[k][f]);
   }
 
   // ------------------------------------------------ colour helpers
@@ -769,19 +768,6 @@ function createBattle(env) {
   }
   // ---- HP boxes: a slanted bar (name + level above, HP numbers inside, EXP strip under it, party balls below)
   function slantRect(c, x, y, w, h, slant, col) { c.fillStyle = col; for (let r = 0; r < h; r++) c.fillRect(x, y + r, w - slant + Math.round(slant * (r + 1) / h), 1); }
-  function partyBall(c, cx, cy, state, status) {
-    // state: 'ok' | 'faint' | 'empty'
-    ell(c, cx, cy, 4, 4, '#14141e');
-    if (state === 'empty') { ell(c, cx, cy, 3, 3, '#3c4056'); return; }
-    if (state === 'faint') { ell(c, cx, cy, 3, 3, '#7a7e92'); rect(c, cx - 3, cy, 7, 1, '#4c5066'); return; }
-    ell(c, cx, cy, 3, 3, status ? '#f0b838' : '#e8363c');
-    c.save(); c.beginPath(); c.rect(cx - 4, cy + 1, 9, 5); c.clip(); ell(c, cx, cy, 3, 3, '#f4f4f8'); c.restore();
-    rect(c, cx - 3, cy, 7, 1, '#14141e'); rect(c, cx, cy - 1, 1, 3, '#14141e');
-  }
-  function partyBalls(c, sideIdx, x, y) {
-    const sd = S.b.sides[sideIdx], P = (sd && sd.party) || [];
-    for (let i = 0; i < 6; i++) { const M = P[i]; partyBall(c, x + 4 + i * 9, y + 4, !M ? 'empty' : M.hp <= 0 ? 'faint' : 'ok', M && M.hp > 0 && M.status); }
-  }
   function infoBox(c, sd, isPlayer) {
     if (!sd.vis || !sd.species || sd.alpha <= 0) return;
     const H = isPlayer ? ALLY : FOE, x = H.boxX, y = H.boxY, w = H.boxW, bh = isPlayer ? 10 : 8, by = y + 11, slant = 6;
@@ -802,7 +788,6 @@ function createBattle(env) {
       rect(c, ex - 1, ey - 1, eW + 2, 5, '#12121c'); rect(c, ex, ey, eW, 3, '#262a3a');
       const ef = Math.round(eW * clamp(sd.exp)); if (ef > 0) { rect(c, ex, ey, ef, 3, '#34d4f4'); rect(c, ex, ey, ef, 1, 'rgba(255,255,255,0.4)'); }
     }
-    if (H.balls && (isPlayer || S.b.kind === 'trainer')) { const bx = x + H.ballX, byy = y + H.ballY; S.hit[isPlayer ? 'allyBalls' : 'foeBalls'] = { x: bx, y: byy, w: 54, h: 9 }; partyBalls(c, isPlayer ? 0 : 1, bx, byy); }
   }
   function drawParticles(c) {
     for (const pa of S.particles) {
@@ -948,9 +933,26 @@ function createBattle(env) {
       moveButtons(c, M.side != null ? M : S.b.sides[0].party[M.idx] || M, null, L.slot);
     }
   }
+  // the player's party as icons, just above the menu buttons
+  function partyStrip(c) {
+    const P = CF.party; if (!P.show || !S.b) return;
+    const party = S.b.sides[0].party || [], gap = P.gap;
+    S.hit.party = { x: P.x, y: P.y, w: gap * 5 + 32, h: 38 };
+    for (let i = 0; i < 6; i++) {
+      const M = party[i], x = P.x + i * gap, y = P.y;
+      if (!M) { pill(c, x + 8, y + 14, 16, 16, '#1e2232', 8); continue; }
+      const faint = M.hp <= 0, active = i === S.b.sides[0].active;
+      if (active) pill(c, x, y + 2, 32, 32, 'rgba(88,168,232,0.35)', 8);
+      c.save(); if (faint) c.globalAlpha = .4; drawIconAt(c, M.species, x, y, false, i); c.restore();
+      const bw = 24, fr = clamp(M.hp / Math.max(1, M.maxhp));
+      rect(c, x + 4, y + 34, bw, 3, '#12121c'); if (!faint) rect(c, x + 5, y + 35, Math.max(0, Math.round((bw - 2) * fr)), 1, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838');
+      const st = M.status && STATUS_LAB[M.status]; if (st && !faint) rect(c, x + 24, y + 4, 6, 6, st[1]);
+    }
+  }
   function drawBottom(c) {
     drawBottomBg(c);
     if (S.mode === 'intro') return;
+    if (!['move', 'party', 'bag', 'learnPick'].includes(S.mode)) partyStrip(c);
     if (S.mode === 'cmd') cmdButtons(c);
     else if (S.mode === 'move') { const P = S.b.active(0); moveInfoBox(c, P); moveButtons(c, P, null, S.mv); }
     else if (S.mode === 'party') partyBottom(c);
@@ -974,7 +976,7 @@ function createBattle(env) {
   function layoutPreview(o) {
     const a = o.ally || {}, f = o.foe || {};
     start({ kind: o.foeTrainerSprite ? 'trainer' : 'wild', trainerName: o.trainerName || 'Trainer', bg: o.bg || 'grass', skipIntro: true, noExp: true,
-      player: [{ species: a.species, level: a.level || 20, shiny: a.shiny ? 1 : 0 }], foe: [{ species: f.species, level: f.level || 15, shiny: f.shiny ? 1 : 0 }],
+      player: [{ species: a.species, level: a.level || 20, shiny: a.shiny ? 1 : 0 }].concat((o.party || []).map(m => ({ species: m.species, level: m.level || 15 }))), foe: [{ species: f.species, level: f.level || 15, shiny: f.shiny ? 1 : 0 }],
       foeTrainerSprite: o.foeTrainerSprite || '', playerTrainerSprite: o.playerTrainerSprite || '' });
     for (const ev of S.q) if (ev.t === 'switchin') {
       const sd = side(ev.side); sd.vis = true; sd.name = ev.name; sd.species = ev.species; sd.level = ev.level; sd.hp = ev.hp; sd.maxhp = ev.maxhp; sd.dhp = ev.hp; sd.status = ev.status || null; sd.shiny = !!ev.shiny; sd.gender = ev.gender || ''; sd.idx = ev.idx;
@@ -1161,11 +1163,11 @@ class BattleScene extends Phaser.Scene {
 // ---------------------------------------------------------------------------
 /*LAYOUT-BEGIN*/
 BattleScene.CONFIG = {
-  foe:  { x: 170, bottom: 72,  platform: 72,  platformX: 170, scale: 0, fit: 64, trainerX: 170, trainerBottom: 94,  trainerScale: 1, box: { x: 6,   y: 6,   w: 104 }, balls: { x: 2, y: 23, show: true } },
-  ally: { x: 60,  bottom: 112, platform: 110, platformX: 60,  scale: 1, fit: 64, trainerX: 60,  trainerBottom: 112, trainerScale: 1, box: { x: 126, y: 74, w: 108 }, balls: { x: 2, y: 28, show: true } },
+  foe:  { x: 170, bottom: 72,  platform: 72,  platformX: 170, scale: 0, fit: 64, trainerX: 170, trainerBottom: 94,  trainerScale: 1, box: { x: 6,   y: 6,   w: 104 } },
+  ally: { x: 60,  bottom: 112, platform: 110, platformX: 60,  scale: 1, fit: 64, trainerX: 60,  trainerBottom: 112, trainerScale: 1, box: { x: 126, y: 84, w: 108 } },
   ballScale: 1.5,
   levelBox: { x: 148, y: 26 },
-  bottom: { msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } },
+  bottom: { msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, party: { x: 4, y: 12, gap: 38, show: true }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } },
 };
 /*LAYOUT-END*/
 BattleScene.MUSIC = 'audio/music/victory_march.mp3';     // set to null for no music
