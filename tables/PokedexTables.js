@@ -15,12 +15,12 @@ const DexText = {};   // { DEX_ENTRY_PIKACHU: "When several of\nthese POKéMON .
 const Dex = {
   num(species) { if (species == null) return 0; if (typeof species === 'number') return species; return SpeciesToDex[String(species).replace(/^SPECIES_/, '').replace(/_/g, '')] || 0; },
   entry(n) { const r = DexEntries[n - 1]; return r ? { num: r[0], name: r[1], category: r[2], height: r[3], weight: r[4], species: r[5], textKey: r[6] } : null; },
-  text(n) { const e = this.entry(n); if (!e) return ''; return (DexText[e.textKey] || '').trim(); },
-  data() { const s = window.GameStateManager && window.GameStateManager.saveData; if (!s) return { seen: {}, caught: {} }; const d = s.dex || (s.dex = { seen: {}, caught: {} }); d.seen = d.seen || {}; d.caught = d.caught || {}; return d; },
+  text(n) { const e = this.entry(n); if (!e) return ''; return String(DexText[n] || DexText[e.name] || DexText[e.textKey] || '').trim(); },   // DexText can be keyed by national number, by name or by the DEX_ENTRY_ symbol
+  data() { const s = window.GameStateManager && window.GameStateManager.saveData; if (!s) return { seen: {}, caught: {}, shiny: {} }; const d = s.dex || (s.dex = { seen: {}, caught: {}, shiny: {} }); d.seen = d.seen || {}; d.caught = d.caught || {}; d.shiny = d.shiny || {}; return d; },
   see(species) { const n = this.num(species); if (!n) return false; const d = this.data(); if (d.seen[n]) return false; d.seen[n] = 1; if (window.SaveSystem) window.SaveSystem.touch(); return true; },
-  catch(species) { const n = this.num(species); if (!n) return false; const d = this.data(), fresh = !d.caught[n]; d.seen[n] = 1; d.caught[n] = 1; if (fresh && window.SaveSystem) window.SaveSystem.touch(); return fresh; },
-  seen(n) { return !!this.data().seen[n]; }, caught(n) { return !!this.data().caught[n]; },
-  counts() { const d = this.data(); return { seen: Object.keys(d.seen).length, caught: Object.keys(d.caught).length, total: DexEntries.length }; },
+  catch(species, shiny) { const n = this.num(species); if (!n) return false; const d = this.data(), fresh = !d.caught[n] || (shiny && !d.shiny[n]); d.seen[n] = 1; d.caught[n] = 1; if (shiny) d.shiny[n] = 1; if (fresh && window.SaveSystem) window.SaveSystem.touch(); return fresh; },
+  seen(n) { return !!this.data().seen[n]; }, caught(n) { return !!this.data().caught[n]; }, shiny(n) { return !!this.data().shiny[n]; },
+  counts() { const d = this.data(); return { seen: Object.keys(d.seen).length, caught: Object.keys(d.caught).length, shiny: Object.keys(d.shiny).length, total: DexEntries.length }; },
   order(mode) { return mode === 'national' || !DexOrders[mode] ? DexEntries.map(r => r[0]) : DexOrders[mode]; },
 };
 window.DexEntries = DexEntries; window.SpeciesToDex = SpeciesToDex; window.DexOrders = DexOrders; window.DexText = DexText; window.Dex = Dex;
