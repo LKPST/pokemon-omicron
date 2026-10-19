@@ -487,6 +487,7 @@ function createBattle(env) {
       case 'weather': if (S.mapFx && ev.type !== S.mapWeather) S.mapFx = false; S.weather = ev.type && !/^(none|clear)$/i.test(ev.type) ? ev.type : null; S.cur.dur = .2; break;
       case 'terrain': S.terrain = ev.type || null; S.cur.dur = .1; break;
       case 'switchin': {
+        if (ev.side === 1 && env.onSeen) { try { env.onSeen(ev.species); } catch (e) { /* ignore */ } }   // Pokedex: seen
         sd.vis = true; sd.name = ev.name; sd.species = ev.species; sd.level = ev.level; sd.hp = ev.hp; sd.maxhp = ev.maxhp; sd.dhp = ev.hp; sd.status = ev.status || null; sd.shiny = !!ev.shiny; sd.gender = ev.gender || ''; sd.idx = ev.idx;
         sd.ox = 0; sd.oy = 0; sd.alpha = 1; sd.scale = 1; sd.blink = 0; placeOffsets(sd, ev.side);
         if (ev.side === 0) { const M = S.b.sides[0].party[ev.idx]; sd.exp = M ? expFrac(M.exp, M.growth, M.level) : 0; }
@@ -1085,6 +1086,7 @@ class BattleScene extends Phaser.Scene {
       urlFor: p => p, engine: engineEnv, types: () => engineEnv().types, cry,
       bag: () => sv.bag || sv.items || sv.inventory || [],
       onItemUsed: (item, ref) => decItem(sv, item, ref),
+      onSeen: sp => { if (window.Dex) window.Dex.see(sp); },
       onEnd: res => this.finishBattle(res),
       glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
     });
@@ -1238,6 +1240,7 @@ function decItem(sv, item, ref) {
 }
 function addCaught(sv, mon) {
   mon.OTName = mon.OTName || (sv.player && sv.player.name) || ''; sv.party = sv.party || [];
+  if (window.Dex) window.Dex.catch(mon.species);   // Pokedex: caught
   const free = sv.party.findIndex((m, i) => i < 6 && !m);
   if (free >= 0) { sv.party[free] = mon; return; }
   if (sv.party.filter(m => m).length < 6) { sv.party.push(mon); return; }
