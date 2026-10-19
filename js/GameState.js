@@ -256,8 +256,8 @@ function createBattle(env) {
   // layout of the TOP surface (GBA pixels)
   // Live values: copied every frame from BattleScene.CONFIG (see the top of BattleScene.js), so editing the config in the console moves things at once.
   const FOE = { cx: 170, bottom: 72, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 6, boxW: 104, ballX: 2, ballY: 23, balls: true, fit: 64, scale: 0, trBottom: 94, trScale: 1 };
-  const ALLY = { cx: 60, bottom: 142, platY: 140, platX: 60, trX: 60, boxX: 126, boxY: 108, boxW: 108, ballX: 2, ballY: 33, balls: true, fit: 64, scale: 1, trBottom: 142, trScale: 1 };
-  const CF = { levelBox: { x: 148, y: 26 }, ball: 1.5, msg: { x: 4, y: 4, w: 232, h: 44 }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } };
+  const ALLY = { cx: 60, bottom: 112, platY: 110, platX: 60, trX: 60, boxX: 126, boxY: 74, boxW: 108, ballX: 2, ballY: 28, balls: true, fit: 64, scale: 1, trBottom: 112, trScale: 1 };
+  const CF = { levelBox: { x: 148, y: 26 }, ball: 1.5, msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } };
   function applyConfig() {
     const g = root.BattleScene && root.BattleScene.CONFIG; if (!g) return; const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
     for (const [o, k] of [[FOE, 'foe'], [ALLY, 'ally']]) {
@@ -268,7 +268,7 @@ function createBattle(env) {
       if (c.balls) { o.ballX = num(c.balls.x, o.ballX); o.ballY = num(c.balls.y, o.ballY); o.balls = c.balls.show !== false; }
     }
     CF.ball = num(g.ballScale, CF.ball); if (g.levelBox) { CF.levelBox.x = num(g.levelBox.x, CF.levelBox.x); CF.levelBox.y = num(g.levelBox.y, CF.levelBox.y); }
-    const bt = g.bottom; if (bt) for (const k of ['msg', 'btn']) if (bt[k]) for (const f of Object.keys(CF[k])) CF[k][f] = num(bt[k][f], CF[k][f]);
+    const bt = g.bottom; if (bt) for (const k of ['msg', 'btn', 'info']) if (bt[k]) for (const f of Object.keys(CF[k])) CF[k][f] = num(bt[k][f], CF[k][f]);
   }
 
   // ------------------------------------------------ colour helpers
@@ -546,7 +546,7 @@ function createBattle(env) {
       else { tr.ox = 130 * ease(clamp(t / .5)); if (t >= .5) tr.vis = false; }
     }
     c.ballPos = null;
-    if (t >= t0 && t < popT) { const q = (t - t0) / fl, a = ally ? arc(hasTr ? 44 : 20, hasTr ? 104 : 96, tx, ty, q, 34) : arc(hasTr ? 200 : 232, hasTr ? 30 : 20, tx, ty, q, 22); c.ballPos = { x: a.x, y: a.y, rot: (ally ? 1 : -1) * q * 12 }; }
+    if (t >= t0 && t < popT) { const q = (t - t0) / fl, a = ally ? arc(hasTr ? 44 : 20, ALLY.bottom - (hasTr ? 38 : 46), tx, ty, q, 34) : arc(hasTr ? 200 : 232, hasTr ? 30 : 20, tx, ty, q, 22); c.ballPos = { x: a.x, y: a.y, rot: (ally ? 1 : -1) * q * 12 }; }
     if (t >= popT) { sd.alpha = 1; sd.scale = Math.max(.1, backOut(clamp((t - popT) / .35))); c.spT = t - popT; if (!c.cried) { c.cried = true; cry(ev.species); } } else sd.alpha = 0;
     sd.ox = 0;
     if (p >= 1) { sd.alpha = 1; sd.scale = 1; if (tr.vis && hasTr) tr.vis = false; }
@@ -568,7 +568,7 @@ function createBattle(env) {
   }
   function drawBallFx(c) {
     const f = S.ballFx; if (!f || !S.cur || S.cur.ev.t !== 'ball') return;
-    const sx = 50, sy = 104, tx = FOE.cx, ty = 48, gy = FOE.platY - 4, t = f.t;
+    const sx = 50, sy = ALLY.bottom - 38, tx = FOE.cx, ty = FOE.bottom - 24, gy = FOE.platY - 4, t = f.t;
     let x, y, rot = 0;
     if (f.blocked) { const p = clamp(t / .6); x = sx + (tx - sx) * p; y = sy + (ty - sy) * p - Math.sin(p * Math.PI) * 28; }
     else if (t < f.tThrow) { const p = t / f.tThrow; x = sx + (tx - sx) * p; y = sy + (ty - sy) * p - Math.sin(p * Math.PI) * 38; }
@@ -807,7 +807,7 @@ function createBattle(env) {
   function drawParticles(c) {
     for (const pa of S.particles) {
       const p = clamp(pa.t / pa.dur); if (pa.side == null) continue;
-      const cx = pa.side === 1 ? FOE.cx + side(1).dx : ALLY.cx + side(0).dx, cy = pa.side === 1 ? 44 + side(1).dy : 108 + side(0).dy;
+      const cx = pa.side === 1 ? FOE.cx + side(1).dx : ALLY.cx + side(0).dx, cy = pa.side === 1 ? FOE.bottom - 28 + side(1).dy : ALLY.bottom - 34 + side(0).dy;
       if (pa.kind === 'burst') {
         c.globalAlpha = 1 - p; c.fillStyle = pa.col || '#fff';
         for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2 + .3, r = 4 + p * 24; c.fillRect(Math.round(cx + Math.cos(a) * r) - 2, Math.round(cy + Math.sin(a) * r) - 2, 4, 4); }
@@ -848,12 +848,13 @@ function createBattle(env) {
     drawTrainer(c, S.tr.me, ALLY.trX, ALLY.trBottom, ALLY.trScale, true);
     drawWeather(c); drawParticles(c); drawBallFx(c);
     if (S.cur && S.cur.ev.t === 'switchin') {
-      const cu = S.cur, sd = side(cu.ev.side), cx = (cu.ev.side === 0 ? ALLY.cx : FOE.cx) + sd.dx, cy = (cu.ev.side === 0 ? 112 : 46) + sd.dy;
+      const cu = S.cur, sd = side(cu.ev.side), cx = (cu.ev.side === 0 ? ALLY.cx : FOE.cx) + sd.dx, cy = (cu.ev.side === 0 ? ALLY.bottom - 30 : FOE.bottom - 26) + sd.dy;
       if (cu.ballPos) drawBallSprite(c, cu.ballPos.x, cu.ballPos.y, cu.ballPos.rot, CF.ball);
       if (cu.spT != null) drawSparkle(c, cx, cy, cu.spT);
     }
     infoBox(c, side(1), false); infoBox(c, side(0), true);
     levelBoxView(c);
+    if (S.lines && S.lines.length && !['move', 'party', 'bag', 'learnPick', 'intro'].includes(S.mode)) msgBox(c);
   }
 
   // ================================================== drawing: BOTTOM surface (messages + menus)
@@ -893,7 +894,7 @@ function createBattle(env) {
       badge(c, m.type, x + 74, y + 24 + off);
     }
   }
-  function moveInfoBox(c, P) { c.save(); c.translate(CF.msg.x - 4, CF.msg.y - 4); S.hit.msg = { x: CF.msg.x, y: CF.msg.y, w: 232, h: 44 }; try { moveInfoBox0(c, P); } finally { c.restore(); } }
+  function moveInfoBox(c, P) { c.save(); c.translate(CF.info.x - 4, CF.info.y - 4); S.hit.info = { x: CF.info.x, y: CF.info.y, w: 232, h: 44 }; try { moveInfoBox0(c, P); } finally { c.restore(); } }
   function moveInfoBox0(c, P) {
     const s = P.moves[S.mv]; panel(c, 4, 4, 232, 44, true); if (!s) return;
     if (S.mvMsg) { T(c, S.mvMsg.slice(0, 34), 12, 20, 'red'); return; }
@@ -941,22 +942,21 @@ function createBattle(env) {
   function learnBottom(c) {
     const L = S.learn, M = L.mon;
     if (S.mode === 'learnAsk') {
-      msgBox(c);
       [['YES', '#2e9e57'], ['NO', '#d9381e']].forEach(([s, col], i) => { const [x, y] = [[4, 70], [124, 70]][i], off = btn(c, x, y, 112, 50, col, S.yn === i); Tc(c, s, x, 112, y + 16 + off, 'white', true); });
     } else {
-      c.save(); c.translate(CF.msg.x - 4, CF.msg.y - 4); panel(c, 4, 4, 232, 44, true); wrapPx('Learn ' + L.name + ' in place of which move? (B: give up)', 214).slice(0, 2).forEach((l, i) => T(c, l, 12, 12 + i * 16, 'dark')); c.restore();
+      c.save(); c.translate(CF.info.x - 4, CF.info.y - 4); S.hit.info = { x: CF.info.x, y: CF.info.y, w: 232, h: 44 }; panel(c, 4, 4, 232, 44, true); wrapPx('Learn ' + L.name + ' in place of which move? (B: give up)', 214).slice(0, 2).forEach((l, i) => T(c, l, 12, 12 + i * 16, 'dark')); c.restore();
       moveButtons(c, M.side != null ? M : S.b.sides[0].party[M.idx] || M, null, L.slot);
     }
   }
   function drawBottom(c) {
     drawBottomBg(c);
     if (S.mode === 'intro') return;
-    if (S.mode === 'cmd') { msgBox(c); cmdButtons(c); }
+    if (S.mode === 'cmd') cmdButtons(c);
     else if (S.mode === 'move') { const P = S.b.active(0); moveInfoBox(c, P); moveButtons(c, P, null, S.mv); }
     else if (S.mode === 'party') partyBottom(c);
     else if (S.mode === 'bag') bagBottom(c);
     else if (S.mode === 'learnAsk' || S.mode === 'learnPick') learnBottom(c);
-    else msgBox(c);
+    // (play / end / others: the bottom screen stays empty, the text box is on the top screen)
   }
   function fadeOverlay(c) { if (S.fade > 0) { c.fillStyle = `rgba(0,0,0,${clamp(S.fade)})`; c.fillRect(0, 0, W, H); } }
 
@@ -1155,16 +1155,17 @@ class BattleScene extends Phaser.Scene {
 // Units are GBA pixels (the game draws them 2x).  TOP screen is 240 x 155:  x = centre of the sprite, bottom = where its feet are.
 // scale: 1 = the sprite's own pixels.  foe.scale 0 = auto (shrinks big sprites to fit `fit` px).
 // platform / platformX: the shadow ellipse.  trainerX / trainerBottom / trainerScale: the trainer sprites.  box: the HP box (top-left corner).
-// BOTTOM screen: bottom.msg = the text box, bottom.btn = the FIGHT / BAG / POKeMON / RUN grid (x, y = top-left of the first button).
+// bottom.msg = the TEXT BOX (drawn on the TOP screen, over the field).  bottom.btn = the FIGHT / BAG / POKeMON / RUN grid on the BOTTOM screen (x, y = top-left
+// of the first button).  bottom.info = the move-info / learn-a-move box on the bottom screen.
 // Per-species nudges (T/F/G/H keys, Y switches target) are stored in the Pokemon database as xPosFront/yPosFront (foe) and xPosBack/yPosBack (yours).
 // ---------------------------------------------------------------------------
 /*LAYOUT-BEGIN*/
 BattleScene.CONFIG = {
   foe:  { x: 170, bottom: 72,  platform: 72,  platformX: 170, scale: 0, fit: 64, trainerX: 170, trainerBottom: 94,  trainerScale: 1, box: { x: 6,   y: 6,   w: 104 }, balls: { x: 2, y: 23, show: true } },
-  ally: { x: 60,  bottom: 142, platform: 140, platformX: 60,  scale: 1, fit: 64, trainerX: 60,  trainerBottom: 142, trainerScale: 1, box: { x: 126, y: 108, w: 108 }, balls: { x: 2, y: 33, show: true } },
+  ally: { x: 60,  bottom: 112, platform: 110, platformX: 60,  scale: 1, fit: 64, trainerX: 60,  trainerBottom: 112, trainerScale: 1, box: { x: 126, y: 74, w: 108 }, balls: { x: 2, y: 28, show: true } },
   ballScale: 1.5,
   levelBox: { x: 148, y: 26 },
-  bottom: { msg: { x: 4, y: 4, w: 232, h: 44 }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } },
+  bottom: { msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } },
 };
 /*LAYOUT-END*/
 BattleScene.MUSIC = 'audio/music/victory_march.mp3';     // set to null for no music
