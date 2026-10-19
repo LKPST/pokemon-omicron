@@ -560,7 +560,7 @@ function createSummary(env) {
     S.t += dt; S.rowT += dt; S.selT += dt; S.statP = Math.min(1, S.statP + dt / .6);
     if (S.tr) { S.tr.p += dt / .3; if (S.tr.p >= 1) { S.view = S.tr.to; S.tr = null; } }
     if (S.pg) { S.pg.p += dt / .22; if (S.pg.p >= 1) S.pg = null; }
-    S.party.forEach((m, i) => { const cur = S.hpShown[i] || 0, d = m.hp - cur, st = Math.max(.5, m.max * .6) * dt; S.hpShown[i] = Math.abs(d) <= st ? m.hp : cur + Math.sign(d) * st; });
+    S.party.forEach((m, i) => { const cur = S.hpShown[i] || 0, d = m.hp - cur, st = Math.max(1, m.max * 7) * dt; S.hpShown[i] = Math.abs(d) <= st ? m.hp : cur + Math.sign(d) * st; });
   }
   function status() {
     let sp = 0, ic = 0; for (const m of S.party) { const a = imgs.get(m.sprite), b = imgs.get(m.icon); if (a && a.ok) sp++; if (b && b.ok) ic++; }
