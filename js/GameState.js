@@ -252,7 +252,7 @@ function createBattle(env) {
   };
   function mkSide() { return { vis: false, name: '', species: '', level: 1, hp: 1, maxhp: 1, dhp: 1, status: null, shiny: false, gender: '', idx: 0, ox: 0, oy: 0, dx: 0, dy: 0, alpha: 1, scale: 1, blink: 0, exp: 0, hpFrom: 0, hpTo: 0 }; }
   const side = i => S.sides[i];
-  const FLASH = 1.2, SLIDE = .9;
+  let FLASH = .6, SLIDE = .7;   // intro lengths (seconds); BattleScene.CONFIG.intro overrides
   // layout of the TOP surface (GBA pixels)
   // Live values: copied every frame from BattleScene.CONFIG (see the top of BattleScene.js), so editing the config in the console moves things at once.
   const FOE = { cx: 170, bottom: 74, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 6, boxW: 104, fit: 64, scale: 0, trBottom: 74, trScale: 1 };
@@ -266,6 +266,7 @@ function createBattle(env) {
       o.platX = num(c.platformX, o.cx); o.trX = num(c.trainerX, o.cx); o.trBottom = num(c.trainerBottom, o.trBottom); o.trScale = num(c.trainerScale, o.trScale);
       if (c.box) { o.boxX = num(c.box.x, o.boxX); o.boxY = num(c.box.y, o.boxY); o.boxW = num(c.box.w, o.boxW); }
     }
+    if (g.intro) { FLASH = Math.max(0, num(g.intro.flash, FLASH)); SLIDE = Math.max(.05, num(g.intro.slide, SLIDE)); }
     CF.ball = num(g.ballScale, CF.ball); if (g.levelBox) { CF.levelBox.x = num(g.levelBox.x, CF.levelBox.x); CF.levelBox.y = num(g.levelBox.y, CF.levelBox.y); }
     const bt = g.bottom; if (bt) for (const k of ['msg', 'btn', 'info', 'party']) if (bt[k]) for (const f of Object.keys(CF[k])) CF[k][f] = k === 'party' && f === 'show' ? bt[k][f] !== false : num(bt[k][f], CF[k][f]);
   }
@@ -439,7 +440,7 @@ function createBattle(env) {
     if (o.ballSheet) S.ball = Object.assign({}, S.ball, o.ballSheet); if (o.sparkleSheet) S.sparkle = Object.assign({}, S.sparkle, o.sparkleSheet); if (o.introIcon) S.introIcon = o.introIcon;
     for (const m of [...S.b.sides[0].party, ...S.b.sides[1].party]) { getImg(spritePath(m.species)); getImg(iconPath(m.species)); }
     for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.introIcon]) if (p) getImg(p);
-    S.introT = 0; S.mode = skip ? 'play' : 'intro'; if (skip) { S.fadeDir = -1; S.q = S.b.start().slice(); }
+    S.introT = 0; S.introTextSet = false; S.preShown = null; S.mode = skip ? 'play' : 'intro'; S.q = S.b.start().slice(); if (skip) S.fadeDir = -1;
     return S.b;
   }
   // xPosFront / yPosFront / xPosBack / yPosBack in the Pokemon database are the OLD scene's absolute positions (640x480 space); every species
@@ -472,7 +473,7 @@ function createBattle(env) {
     const t = ev.t, sd = ev.side != null ? side(ev.side) : null;
     S.cur = { ev, t: 0, dur: 0 };
     switch (t) {
-      case 'msg': setText(ev.text); S.cur.dur = -1; break;
+      case 'msg': { const pre = S.preShown === ev.text; S.preShown = null; setText(ev.text, pre); S.cur.dur = -1; break; }
       case 'usemove': S.cur.dur = 0; break;
       case 'anim': {
         const k = ev.kind; S.cur.dur = k === 'attack' ? .55 : k === 'status' ? .45 : k === 'miss' || k === 'immune' ? .25 : k === 'protect' || k === 'sub' || k === 'subhit' || k === 'subbreak' || k === 'bounce' || k === 'charge' ? .4 : .2;
@@ -638,7 +639,8 @@ function createBattle(env) {
       S.introT += dt; const t = S.introT; if (S.fade > 0) S.fade = 0, S.fadeDir = 0;
       const q = clamp((t - FLASH) / SLIDE), e = ease(q);
       if (S.tr.me.path) S.tr.me.ox = 130 * (1 - e); if (S.tr.foe.path) S.tr.foe.ox = -130 * (1 - e);
-      if (t >= FLASH + SLIDE + .35) { S.mode = 'play'; S.tr.me.ox = 0; S.tr.foe.ox = 0; S.q = S.b.start().slice(); S.cur = null; }
+      if (t >= FLASH && !S.introTextSet) { S.introTextSet = true; const m = S.q.find(e => e.t === 'msg'); if (m) { setText(m.text, true); S.preShown = m.text; } }
+      if (t >= FLASH + SLIDE + .2) { S.mode = 'play'; S.tr.me.ox = 0; S.tr.foe.ox = 0; S.cur = null; }
       return;
     }
     if (S.mode === 'play') {
@@ -657,6 +659,7 @@ function createBattle(env) {
     if (ev.t === 'anim' && ev.side != null) { side(ev.side).ox = 0; side(ev.side).oy = 0; }
     if (ev.t === 'ball') { S.ballFx = null; const F = side(1); if (!ev.caught) F.scale = 1; }
     if (ev.t === 'hp' && ev.side != null && !ev.bench) { const sd = side(ev.side); if (ev.idx == null || ev.idx === sd.idx) { sd.dhp = ev.to; sd.hp = ev.to; } }
+    if (ev.t === 'levelup' && ev.active) { const M = S.b.sides[0].party[ev.idx]; if (M) side(0).exp = expFrac(M.exp, M.growth, ev.level); }   // leftover exp after the level-up
     if (ev.t === 'switchin') { const sd = side(ev.side); sd.ox = 0; sd.alpha = 1; sd.scale = 1; if (ev.side === 0 && S.tr.me.vis && S.cur.style === 'throw' && S.cur.hasTr) S.tr.me.vis = false; if (ev.side === 1 && S.cur.style === 'throwFoe') S.tr.foe.vis = false; }
     S.cur = null;
   }
@@ -801,7 +804,7 @@ function createBattle(env) {
       TR(c, Math.max(0, Math.round(sd.dhp)) + '/' + sd.maxhp, tx + tW - 1, by + (bh - 8) / 2 - 1, 'white');
       const ey = by + bh + 2, ex = x + 10, eW = w - 10 - slant - 4;
       rect(c, ex - 1, ey - 1, eW + 2, 5, '#12121c'); rect(c, ex, ey, eW, 3, '#262a3a');
-      const ef = Math.round(eW * clamp(sd.exp)); if (ef > 0) { rect(c, ex, ey, ef, 3, '#34d4f4'); rect(c, ex, ey, ef, 1, 'rgba(255,255,255,0.4)'); }
+      const ef = Math.ceil(eW * clamp(sd.exp));   // ceil: even a tiny gain shows as at least 1 px if (ef > 0) { rect(c, ex, ey, ef, 3, '#34d4f4'); rect(c, ex, ey, ef, 1, 'rgba(255,255,255,0.4)'); }
     }
   }
   function drawParticles(c) {
@@ -854,7 +857,7 @@ function createBattle(env) {
     }
     infoBox(c, side(1), false); infoBox(c, side(0), true);
     levelBoxView(c);
-    if (S.lines && S.lines.length && !['move', 'party', 'bag', 'learnPick', 'intro'].includes(S.mode)) msgBox(c);
+    msgBox(c);   // always visible, whatever menu is open
   }
 
   // ================================================== drawing: BOTTOM surface (messages + menus)
@@ -911,17 +914,23 @@ function createBattle(env) {
     const P = S.b.sides[0];
     for (let i = 0; i < 6; i++) {
       const x = 4 + (i & 1) * 118, y = 4 + (i >> 1) * 45, sel = S.pty === i, M = P.party[i];
-      if (!M) { pill(c, x, y, 114, 42, '#1e2232', 7); continue; }
-      const faint = M.hp <= 0, active = i === P.active, base = faint ? '#a85868' : active ? '#58a8e8' : '#e8ecf8', tc = faint ? 'white' : 'dark';
-      pill(c, x, y, 114, 42, sel ? '#f8d848' : '#10162a', 7); pill(c, x + 2, y + 2, 110, 38, base, 6);
+      if (!M) { pill(c, x, y, 114, 42, '#1a1e2e', 7); pill(c, x + 2, y + 2, 110, 38, '#222740', 6); ballSil(c, x + 57, y + 21, 15, '#2d3350', '#3a4166'); continue; }
+      const faint = M.hp <= 0, active = i === P.active, tc = faint ? 'white' : active ? 'white' : 'dark';
+      const base = faint ? '#b0566a' : active ? '#4c9ee8' : '#eef1fb', top = faint ? '#cc7488' : active ? '#7cbcf4' : '#ffffff', ballBody = faint ? '#963e52' : active ? '#3a80c8' : '#c4cce6', ballLine = faint ? '#cc7488' : active ? '#8cc4f4' : '#f6f8ff';
+      const glow = sel ? (Math.floor(S.t * 4) % 2 ? '#ffe98a' : '#f8c828') : null;
+      pill(c, x, y, 114, 42, glow || '#10162a', 7); pill(c, x + 2, y + 2, 110, 38, base, 6);
+      pill(c, x + 4, y + 3, 106, 14, top, 5); pill(c, x + 4, y + 17, 106, 21, base, 4);
+      ballSil(c, x + 19, y + 21, 17, ballBody, ballLine);
       drawIconAt(c, M.species, x + 2, y + 5, sel, i);
-      T(c, M.name.slice(0, 8), x + 36, y + 4, tc); TR(c, '{Lv}' + M.level, x + 108, y + 4, tc);
-      const bx = x + 50, by = y + 17, bw = 56, fr = clamp(M.hp / Math.max(1, M.maxhp));
-      T(c, 'HP', x + 36, y + 13, tc);
-      pill(c, bx - 1, by - 1, bw + 2, 6, '#2c3450', 2); rect(c, bx, by, bw, 4, '#586080'); const f = Math.ceil(bw * fr); if (f > 0) rect(c, bx, by, f, 4, fr > .5 ? '#38c850' : fr > .2 ? '#f0c820' : '#f03838');
-      TR(c, M.hp + '/' + M.maxhp, x + 108, y + 26, tc);
-      const st = M.status && STATUS_LAB[M.status]; if (st) { pill(c, x + 36, y + 27, 21, 9, st[1], 3); T(c, st[0], x + 37, y + 27, st[2] === 'dark' ? 'dark' : 'badge'); }
-      if (M.item) T(c, '■', x + 99, y + 4 + 11, tc);
+      const nm = M.name.slice(0, 8), hi = faint || active ? '#ffffff' : '#2a2a3a';
+      T(c, nm, x + 37, y + 4, tc); TR(c, '{Lv}' + M.level, x + 108, y + 4, tc);
+      const bx = x + 52, by = y + 18, bw = 54, fr = clamp(M.hp / Math.max(1, M.maxhp));
+      T(c, 'HP', x + 37, y + 14, tc);
+      pill(c, bx - 2, by - 2, bw + 4, 8, '#1c2038', 3); rect(c, bx, by, bw, 4, '#4a5070'); const f = Math.ceil(bw * fr);
+      if (f > 0) { rect(c, bx, by, f, 4, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838'); rect(c, bx, by, f, 1, 'rgba(255,255,255,0.45)'); }
+      TR(c, M.hp + '/' + M.maxhp, x + 108, y + 27, tc);
+      const st = M.status && STATUS_LAB[M.status]; if (st) { pill(c, x + 37, y + 28, 21, 9, st[1], 3); T(c, st[0], x + 38, y + 28, st[2] === 'dark' ? 'dark' : 'badge'); } else if (faint) T(c, 'FNT', x + 37, y + 28, 'white');
+      if (M.item) { rect(c, x + 99, y + 28, 7, 7, '#f0c838'); rect(c, x + 100, y + 29, 5, 5, '#e89828'); }
     }
     rect(c, 0, 140, W, 15, '#161a28'); T(c, S.partyMsg || '', 6, 143, 'white');
   }
@@ -948,6 +957,13 @@ function createBattle(env) {
       moveButtons(c, M.side != null ? M : S.b.sides[0].party[M.idx] || M, null, L.slot);
     }
   }
+  // pokeball silhouette (dark body, light band and centre ring) used behind icons
+  function ballSil(c, cx, cy, r, body, line, a) {
+    c.save(); c.globalAlpha = (c.globalAlpha == null ? 1 : c.globalAlpha) * (a == null ? 1 : a);
+    ell(c, cx, cy, r, r, body); rect(c, cx - r + 2, cy - 1, r * 2 - 3, 2, line);
+    const q = Math.max(3, Math.round(r * .42)); ell(c, cx, cy, q + 1, q + 1, body); ell(c, cx, cy, q, q, line); ell(c, cx, cy, q - 2, q - 2, body); ell(c, cx, cy, Math.max(1, Math.round(q / 2.4)), Math.max(1, Math.round(q / 2.4)), line);
+    c.restore();
+  }
   // the player's party as icons, just above the menu buttons
   function partyStrip(c) {
     const P = CF.party; if (!P.show || !S.b) return;
@@ -955,10 +971,10 @@ function createBattle(env) {
     S.hit.party = { x: P.x, y: P.y, w: gap * 5 + 32, h: 38 };
     for (let i = 0; i < 6; i++) {
       const M = party[i], x = P.x + i * gap, y = P.y;
-      if (!M) { pill(c, x + 8, y + 14, 16, 16, '#1e2232', 8); continue; }
+      if (!M) { ballSil(c, x + 16, y + 18, 15, '#2a2e3e', '#3c4156'); continue; }
       const faint = M.hp <= 0, active = i === S.b.sides[0].active;
-      if (active) pill(c, x, y + 2, 32, 32, 'rgba(88,168,232,0.35)', 8);
-      c.save(); if (faint) c.globalAlpha = .4; drawIconAt(c, M.species, x, y, false, i); c.restore();
+      ballSil(c, x + 16, y + 18, 15, faint ? '#5a3a46' : active ? '#3f86c8' : '#454957', faint ? '#8a6470' : active ? '#d8ecff' : '#eef0f8');
+      c.save(); if (faint) c.globalAlpha = .45; drawIconAt(c, M.species, x, y, false, i); c.restore();
       const bw = 24, fr = clamp(M.hp / Math.max(1, M.maxhp));
       rect(c, x + 4, y + 34, bw, 3, '#12121c'); if (!faint) rect(c, x + 5, y + 35, Math.max(0, Math.round((bw - 2) * fr)), 1, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838');
       const st = M.status && STATUS_LAB[M.status]; if (st && !faint) rect(c, x + 24, y + 4, 6, 6, st[1]);
@@ -1041,9 +1057,7 @@ class BattleScene extends Phaser.Scene {
   constructor() { super('BattleScene'); }
   init(data) { this.battleData = data || {}; this.finishedOnce = false; }
 
-  preload() {
-    if (BattleScene.MUSIC && !this.cache.audio.exists('battle_music')) this.load.audio('battle_music', BattleScene.MUSIC);
-  }
+  // (nothing to preload: the music is fetched in the background after the scene is on screen, so the battle opens at once)
 
   create() {
     const gsm = window.GameStateManager, d = this.battleData, sv = (gsm && gsm.saveData) || {};
@@ -1100,7 +1114,11 @@ class BattleScene extends Phaser.Scene {
     });
 
     // ---- music
-    if (this.cache.audio.exists('battle_music')) { this.battleMusic = this.sound.add('battle_music', { loop: true, volume: 0.5 }); this.battleMusic.play(); }
+    const playMusic = () => { try { if (!this.sys || !this.sys.isActive() || this.tornDown || this.battleMusic || !this.cache.audio.exists('battle_music')) return; this.battleMusic = this.sound.add('battle_music', { loop: true, volume: 0.5 }); this.battleMusic.play(); } catch (e) { /* no audio */ } };
+    if (BattleScene.MUSIC) {
+      if (this.cache.audio.exists('battle_music')) playMusic();
+      else { try { this.load.audio('battle_music', BattleScene.MUSIC); this.load.once('complete', playMusic); this.load.start(); } catch (e) { /* no audio */ } }
+    }
 
     // ---- input
     const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b' };
@@ -1181,7 +1199,8 @@ class BattleScene extends Phaser.Scene {
 BattleScene.CONFIG = {
   foe:  { x: 170, bottom: 74,  platform: 72,  platformX: 170, scale: 0, fit: 64, trainerX: 170, trainerBottom: 74,   trainerScale: 1, box: { x: 6,   y: 6,   w: 104 } },
   ally: { x: 60,  bottom: 112, platform: 110, platformX: 60,  scale: 1, fit: 64, trainerX: 60,  trainerBottom: 112, trainerScale: 1, box: { x: 126, y: 84, w: 108 } },
-  ballScale: 1.5,
+  ballScale: 1,
+  intro: { flash: 0.6, slide: 0.7 },   // seconds: the ball flash, then the trainers sliding in
   levelBox: { x: 148, y: 26 },
   bottom: { msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, party: { x: 4, y: 12, gap: 38, show: true }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } },
 };
