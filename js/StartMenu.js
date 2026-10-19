@@ -7,7 +7,12 @@
 //           Keys in the menu: arrows / WASD = move, Z / Space = A, X / Esc / Backspace = B, Enter = close, Tab = ORDER (RotomDex).
 //           Mouse / touch: click the tiles, the buttons, the red X.
 //           Left / Right at the edge of the page flips to page 2 (PokeNav, Town Map, Aide's Log).
-// SETTINGS  StartMenu.DOCK = true|false          the row of small buttons shown on the lower screen while the menu is closed
+// IDLE      while the menu is closed the lower screen shows an animated background, the map, weather, time, battery and your first Pokémon
+//           with its mood, and "PRESS START". Tap it (or press Start) to open the menu.   StartMenu.IDLE = false hides it.
+// SETTINGS  StartMenu.SHINYFLAG = 'FLAG_SHINY_DEX'   when this flag is set, the RotomDex gets a SHINY DEX button
+//           StartMenu.TRAINER = { male: 'graphics/trainer_front_sprites/player_male.png', female: '...player_female.png' }
+//           StartMenu.UNKNOWN_SPRITE = 'path.png'  picture used for Pokémon that were never seen (SPECIES_NONE's battleSprite is used when it has one)
+//           window.StartMenuHUD = { ... }          layout of the RotomDex (written by hud_editor.html, file tables/StartMenuHUD.js)
 //           StartMenu.TOWNMAP = { image: 'assets/ui/town_map.png', pos: { 'Criscanto Town': [x, y], ... } }   your map picture + where each map is on it
 //                                (without a picture the Town Map draws a schematic of all your maps)
 //           StartMenu.LOGNAME = "AIDE'S LOG"       the name of the quest journal
@@ -260,7 +265,17 @@ function createStart(env) {
     look: { x: 0, y: 0, tx: 0, ty: 0 }, blink: 0, nextBlink: 2.5, bgSeed: 0 };
   const sys = () => env.sys && env.sys();
   const party = () => (env.party && env.party()) || [];
-  const dbOf = sp => { const d = env.db && env.db(); return (d && (d[sp] || d[String(sp).replace(/_[MF]$/, '')])) || {}; };
+  // species lookup that forgives name differences (SPECIES_ROARING_MOON / SPECIES_ROARINGMOON, _M / _F ...)
+  let dbIdx = null, dbIdxFor = null;
+  const dbOf = sp => {
+    const d = env.db && env.db(); if (!d || sp == null) return {}; const k = String(sp);
+    if (d[k] && typeof d[k] === 'object') return d[k];
+    if (dbIdxFor !== d) { dbIdxFor = d; dbIdx = new Map(); for (const kk of Object.keys(d)) dbIdx.set(kk.toUpperCase().replace(/[^A-Z0-9]/g, ''), kk); }
+    const parts = k.split('_'), cand = [k, k.replace(/_[MF]$/, '')]; for (let n = parts.length - 1; n >= 2; n--) cand.push(parts.slice(0, n).join('_'));
+    for (const c of cand) { const r = dbIdx.get(c.toUpperCase().replace(/[^A-Z0-9]/g, '')); if (r && r !== 'SPECIES_NONE') return d[r]; }
+    return {};
+  };
+  const noneSprite = () => { const d = env.db && env.db(), n = d && d.SPECIES_NONE; return (n && (n.battleSprite || '')) || (env.unknownSprite && env.unknownSprite()) || ''; };
   const saveData = () => (env.saveData && env.saveData()) || {};
   const SS = () => env.save && env.save();
   const now = () => new Date();
@@ -326,7 +341,7 @@ function createStart(env) {
     const y0 = -Math.round((1 - p) * 14); rect(c, 0, y0, BW, 12, '#0a0c12'); rect(c, 0, y0 + 12, BW, 1, '#2c3242');
     const d = now(), ck = two(d.getHours()) + ':' + two(d.getMinutes()); T(c, ck, 6, y0 + 1, 'white');
     let x = 52; for (const l of ['IR', 'ONLINE', 'WIRELESS']) { rect(c, x, y0 + 5, 2, 2, '#6a7396'); T(c, l, x + 5, y0 + 1, 'mute'); x += tw(l) + 13; }
-    rr(c, BW - 18, y0 + 2, 11, 8, 2, '#cfd6ea'); rect(c, BW - 7, y0 + 4, 2, 4, '#cfd6ea'); rect(c, BW - 16, y0 + 4, 7, 4, '#2a2e3e'); rect(c, BW - 16, y0 + 4, 5, 4, '#58c868');
+    rr(c, BW - 18, y0 + 2, 11, 8, 2, '#cfd6ea'); rect(c, BW - 7, y0 + 4, 2, 4, '#cfd6ea'); rect(c, BW - 16, y0 + 4, 7, 4, '#2a2e3e'); { const b = battery(); const f = Math.max(1, Math.round(7 * b.level)); rect(c, BW - 16, y0 + 4, f, 4, b.charging ? '#58c8f0' : (b.level < .2 ? '#e84848' : '#58c868')); }
   }
 
   // ------------------------------------------------------------ the menu
@@ -394,6 +409,75 @@ function createStart(env) {
     const pg = PAGES[S.page]; for (let i = 0; i < pg.length; i++) { const r = tileRect(i); if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { if (S.sel === i) activate(pg[i]); else { S.sel = i; activate(pg[i]); } return; } }
   }
 
+  // ------------------------------------------------------------ HUD layout (everything the RotomDex draws is placed from here; hud_editor.html edits it)
+  const HUD_DEF = {
+    rotom: { eyeL: { x: 99, y: 17, rx: 11, ry: 13 }, eyeR: { x: 141, y: 17, rx: 11, ry: 13 }, head: { x: 120, y: 16, rx: 40, ry: 15 }, iris: { rx: 6, ry: 10 }, look: { x: 3, y: 3 } },
+    screen: { x: 11, y: 35, w: 218, h: 118 },
+    dex: {
+      header: { h: 14 }, box: { x: 3, y: 18, w: 82, h: 68 }, nameBox: { x: 3, y: 88, w: 82, h: 29 }, name: { x: 5, y: 3 }, num: { x: 5, y: 15 },
+      iconSeen: { x: 66, y: 50 }, iconUnseen: { x: 2, y: 50 }, ball: { x: 5, y: 4 }, list: { x: 89, y: 17, w: 126, rows: 7, h: 14 }, title: { x: 91, y: 19 }, cat: { x: 91, y: 31 },
+      stats: { x: 91, y: 45 }, desc: { x: 91, y: 59, w: 124, lines: 5, pitch: 11 }, status: { x: 91, y: 105 },
+    },
+    card: { sprite: { x: 156, y: 33, w: 70, h: 56 }, party: { x: 158, y: 92, size: 11 } },
+  };
+  const HUD = (() => { const mix = (a, b) => { const o = Array.isArray(a) ? [] : {}; for (const k of Object.keys(a)) o[k] = (a[k] && typeof a[k] === 'object') ? mix(a[k], (b && b[k]) || {}) : (b && b[k] != null ? b[k] : a[k]); return o; }; return () => mix(HUD_DEF, (typeof window !== 'undefined' && window.StartMenuHUD) || {}); })();
+
+  // ------------------------------------------------------------ battle sprite sheets (a strip of frames: 0 = normal, 1 = shiny) and the little icon sheets
+  function battleFrame(path, shiny) {
+    const e = path && getImg(path); if (!e || !e.ok) return null; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = iw / ih >= 3.5 ? 4 : 1, fw = Math.floor(iw / n);
+    return { img: e.img, sx: (shiny && n > 1 ? 1 : 0) * fw, w: fw, h: ih, key: path + (shiny ? '#s' : '') };
+  }
+  function drawBattle(c, f, x, y, bw, bh) {
+    if (!f) return false; let s = Math.min(bw / f.w, bh / f.h); s = s >= 2 ? Math.floor(s) : s > 1 ? Math.floor(s * 2) / 2 : s; const w = Math.max(1, Math.round(f.w * s)), h = Math.max(1, Math.round(f.h * s));
+    c.imageSmoothingEnabled = false; c.drawImage(f.img, f.sx, 0, f.w, f.h, Math.round(x + (bw - w) / 2), Math.round(y + bh - h), w, h); return true;
+  }
+  const silCache2 = new Map();
+  // an icon sheet (2 frames stacked) frame, optionally as a dark silhouette. drawn at size px high, animated
+  function drawIcon(c, path, x, y, size, sil) {
+    const e = path && getImg(path); if (!e || !e.ok) return false; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = ih >= iw * 2 ? Math.round(ih / iw) : 1, fh = Math.floor(ih / n), fr = n > 1 ? Math.floor(S.t / .3) % n : 0;
+    let src = keyedIcon(e.img, path);
+    if (sil) { let sc = silCache2.get(path); if (!sc) { sc = mk(iw, ih); const x2 = sc.getContext('2d'); x2.drawImage(src, 0, 0); x2.globalCompositeOperation = 'source-in'; x2.fillStyle = '#10182c'; x2.fillRect(0, 0, iw, ih); silCache2.set(path, sc); } src = sc; }
+    const s = size / Math.max(iw, fh), w = Math.round(iw * s), h = Math.round(fh * s); c.imageSmoothingEnabled = false; c.drawImage(src, 0, fr * fh, iw, fh, Math.round(x + (size - w) / 2), Math.round(y + size - h), w, h); return true;
+  }
+
+  // ------------------------------------------------------------ the idle lower screen (shown while the menu is closed)
+  const BATT = { level: .8, charging: false, tried: false };
+  function battery() { if (!BATT.tried) { BATT.tried = true; try { if (navigator.getBattery) navigator.getBattery().then(b => { const u = () => { BATT.level = b.level; BATT.charging = b.charging; }; u(); b.addEventListener('levelchange', u); b.addEventListener('chargingchange', u); }); } catch (e) { /* no battery api */ } } return BATT; }
+  function heart(c, x, y, col, big) { const m = big ? ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000'] : ['011011', '111111', '011110', '001100']; c.fillStyle = col; m.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] === '1') c.fillRect(x + i, y + j, 1, 1); }); }
+  function moodOf(m) {
+    if (!m) return { label: 'NO PARTNER', f: 0, col: '#6a7396' }; const v = m.mood != null ? +m.mood : (+m.friendship || 0) / 255 * 100;
+    if (m.HP === 0) return { label: 'FAINTED', f: 0, col: '#8a93ab' }; if (v >= 85) return { label: 'ECSTATIC', f: v / 100, col: '#ff5a82' }; if (v >= 60) return { label: 'HAPPY', f: v / 100, col: '#ff8aa8' }; if (v >= 35) return { label: 'CONTENT', f: v / 100, col: '#f0c040' }; if (v >= 15) return { label: 'BORED', f: v / 100, col: '#90a0c8' }; return { label: 'GLOOMY', f: v / 100, col: '#7080a8' };
+  }
+  function weatherIcon(c, w, cx, cy, t) {
+    w = String(w || '').toLowerCase(); const R = (a, b, ww, hh, col) => { c.fillStyle = col; c.fillRect(cx + a, cy + b, ww, hh); };
+    const cloud = col => { ell(c, cx - 4, cy + 1, 5, 4, col); ell(c, cx + 3, cy, 6, 5, col); R(-9, 1, 18, 4, col); };
+    if (/rain|storm|thunder|drizzle/.test(w)) { cloud('#aab4d0'); for (let i = 0; i < 4; i++) R(-7 + i * 5 + ((t * 20 + i * 3) % 3 | 0), 6 + ((t * 14 + i * 5) % 6 | 0), 1, 3, '#58a8f0'); if (/thunder|storm/.test(w) && Math.floor(t * 3) % 2) R(-1, 5, 3, 6, '#ffd23c'); }
+    else if (/snow|hail/.test(w)) { cloud('#d8e0f0'); for (let i = 0; i < 4; i++) R(-7 + i * 5, 6 + ((t * 8 + i * 4) % 6 | 0), 2, 2, '#ffffff'); }
+    else if (/sand|ash/.test(w)) { for (let i = 0; i < 4; i++) R(-9, -5 + i * 4, 10 + ((t * 10 + i * 5) % 8 | 0), 2, '#d8b858'); }
+    else if (/fog|mist/.test(w)) { for (let i = 0; i < 4; i++) R(-9 + (i % 2) * 3, -5 + i * 4, 14, 2, 'rgba(210,220,235,.8)'); }
+    else if (/sun|clear|harsh|drought/.test(w)) { ell(c, cx, cy, 5, 5, '#ffd23c'); for (let i = 0; i < 8; i++) { const a = t * 1.5 + i * .785; R(Math.round(Math.cos(a) * 9) - 1, Math.round(Math.sin(a) * 9) - 1, 2, 2, '#ffe888'); } }
+    else { cloud('#cfd6ea'); }
+  }
+  function renderIdle(c) {
+    c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, BH); menuBg(c, BW, BH, S.t); statusBar(c, 1);
+    const sv = saveData(), pt = party(), lead = pt[0], inf = SS() ? SS().info() : {}, mp = (env.mapName && env.mapName()) || sv.mapID || '', wth = (env.weather && env.weather()) || '';
+    // left card: place and weather
+    const card = (x, y, w, h, hot) => { slant(c, x - 1, y - 1, w + 2, h + 2, 7, '#0a0c12'); slant(c, x, y, w, h, 7, '#171a24'); slant(c, x + 1, y + 1, w - 2, Math.floor(h / 2) - 1, 7, 'rgba(255,255,255,.05)'); };
+    card(6, 20, 114, 58); T(c, 'LOCATION', 18, 25, 'mute'); wrapText(String(mp).toUpperCase(), 100).slice(0, 2).forEach((l, i) => T(c, l, 16, 37 + i * 12, 'white'));
+    weatherIcon(c, wth, 24, 66, S.t); T(c, String(wth || 'clear').replace(/^WEATHER_/, '').replace(/_/g, ' ').toUpperCase().slice(0, 12), 40, 62, 'grey');
+    // right card: partner
+    card(124, 20, 110, 58); const nick = lead ? String(lead.nickname || lead.species.replace(/^SPECIES_/, '').replace(/_/g, ' ')).toUpperCase().slice(0, 9) : '-----';
+    rr(c, 130, 28, 30, 30, 5, '#0e1018'); if (lead) { const ip = dbOf(lead.species).iconSprite; if (!drawIcon(c, ip, 133, 31 + Math.round(Math.abs(Math.sin(S.t * 4)) * -2), 24, false)) ball(c, 141, 39, 'poke', 1); }
+    T(c, nick, 164, 25, 'white'); if (lead) { T(c, 'Lv' + (lead.level || 1), 164, 37, 'mute'); const hp = clamp((lead.HP != null ? lead.HP : 1) / Math.max(1, lead.maxHP || 1)); rect(c, 164, 50, 62, 4, '#0a0c12'); rect(c, 165, 51, Math.round(60 * hp), 2, hp > .5 ? '#58c868' : hp > .2 ? '#f0c040' : '#e84848'); }
+    const md = moodOf(lead); const hb = Math.abs(Math.sin(S.t * (2 + md.f * 3))); heart(c, 164, 62 - Math.round(hb), md.col, true); T(c, md.label, 174, 60, 'grey');
+    for (let i = 0; i < 5; i++) rect(c, 134 + i * 6, 66, 5, 3, i < Math.round(md.f * 5) ? md.col : '#2a2e3e');
+    // press start
+    const pulse = .5 + .5 * Math.sin(S.t * 4); slant(c, 30, 86, 180, 34, 8, '#0a0c12'); slant(c, 31, 87, 178, 32, 8, 'rgba(' + Math.round(40 + pulse * 40) + ',' + Math.round(50 + pulse * 40) + ',' + Math.round(90 + pulse * 60) + ',1)');
+    const lab = 'PRESS START'; T(c, lab, Math.round(120 - tw(lab) / 2), 93, 'white'); const sub = 'or tap here'; T(c, sub, Math.round(120 - tw(sub) / 2), 106, 'mute');
+    const dd = now(); const dn = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][dd.getDay()]; T(c, dn + ' ' + dd.getDate() + '/' + (dd.getMonth() + 1), 8, BH - 22, 'grey'); TR(c, 'PLAYED ' + fmtTime(inf.playTime || 0), BW - 8, BH - 22, 'grey');
+    if (inf.dirty) { rect(c, BW / 2 - 2, BH - 20, 4, 4, '#ffd23c'); }
+  }
+
   // ===================================================================== shared helpers for the sub screens
   const SCREENS = {};
   const flagsOf = () => (env.flags && env.flags()) || {};
@@ -410,26 +494,32 @@ function createStart(env) {
   }
   function back() { S.scr = 'menu'; S.sub = null; }
   function wobbly(t, a, s) { return Math.sin(t * s) * a; }
-  // ---- the RotomDex body (red body + big eyes). Returns the screen rectangle.
+  // ---- the RotomDex body (red body, dark head with the two tall blue eyes, like the Rotom Dex artwork). Returns the screen rectangle.
   function rotomFrame(c, mood) {
-    grad(c, 0, 0, BW, TH, '#5c0c14', '#3a0810');
+    const H = HUD(), R = H.rotom;
+    grad(c, 0, 0, BW, TH, '#4a0c10', '#2a0608');
     const off = (S.t * 8) % 16; c.fillStyle = 'rgba(255,255,255,.035)'; for (let k = -10; k < 20; k++) { const x0 = k * 16 + off; c.beginPath(); c.moveTo(x0, 0); c.lineTo(x0 + 6, 0); c.lineTo(x0 + 6 - TH / 2, TH); c.lineTo(x0 - TH / 2, TH); c.closePath(); c.fill(); }
-    rr(c, 1, 1, 238, 158, 11, '#2c0509'); rr(c, 2, 2, 236, 156, 10, '#d02c3a'); rr(c, 2, 2, 236, 60, 10, '#e4465a'); rect(c, 4, 40, 232, 20, '#d02c3a'); rect(c, 5, 5, 230, 1, '#f48a98');
-    // lightning bolts on the sides
-    for (const sx of [0, 1]) { const bx = sx ? 224 : 8; c.fillStyle = '#ffd23c'; for (let r = 0; r < 12; r++) { const o = Math.round(Math.sin(r * 1.1) * 2); c.fillRect(bx + o + (sx ? -r % 3 : r % 3), 8 + r, 4, 1); } }
-    // eyes
+    // body: dark outline, red fill, pointed "ears", lighter top
+    rr(c, 1, 1, 238, 158, 11, '#2a0608'); rr(c, 2, 2, 236, 156, 10, '#d8483a'); rr(c, 2, 2, 236, 62, 10, '#e8604c'); rect(c, 4, 40, 232, 24, '#d8483a'); rect(c, 5, 5, 230, 1, '#f49a86');
+    for (const sx of [0, 1]) { const bx = sx ? 218 : 12; for (let r = 0; r < 14; r++) { const w = 14 - r; c.fillStyle = '#2a0608'; c.fillRect(sx ? bx + 14 - w - 1 : bx - 1 + 0, 4 + r, w + 2 - 0, 1); c.fillStyle = '#e8604c'; c.fillRect(sx ? bx + 14 - w : bx, 4 + r, w, 1); } }
+    c.fillStyle = '#2a0608'; for (const [dx, dy] of [[24, 26], [208, 26], [18, 140], [214, 140]]) c.fillRect(dx, dy, 3, 3);
+    // dark head and eyes
+    const hd = R.head; ell(c, hd.x, hd.y, hd.rx + 1, hd.ry + 1, '#1a0406'); ell(c, hd.x, hd.y, hd.rx, hd.ry, '#10080c');
     const L = S.look; L.x += (L.tx - L.x) * .12; L.y += (L.ty - L.y) * .12; S.blink = Math.max(0, S.blink - 1 / 60);
-    if (S.t > S.nextBlink) { S.blink = .16; S.nextBlink = S.t + 2 + (Math.sin(S.t * 3.7) + 1) * 1.8; }
+    if (S.t > S.nextBlink) { S.blink = .14; S.nextBlink = S.t + 2 + (Math.sin(S.t * 3.7) + 1) * 1.8; }
     const closed = S.blink > 0, happy = mood === 'happy' || S.happy > S.t;
-    for (const ex of [74, 166]) {
-      ell(c, ex, 20, 25, 15, '#2c0509'); ell(c, ex, 20, 24, 14, '#fff6f0');
-      if (closed || happy) { ell(c, ex, 20, 24, 14, '#d02c3a'); ell(c, ex, 20, 25, 15, '#2c0509'); ell(c, ex, 20, 24, 14, '#e4465a'); c.fillStyle = '#2c0509'; if (happy) { for (let k = -13; k <= 13; k++) c.fillRect(ex + k, 22 - Math.round(Math.sqrt(Math.max(0, 169 - k * k)) * .55), 1, 3); } else c.fillRect(ex - 14, 21, 29, 2); }
-      else { const px = Math.round(ex + L.x * 9), py = Math.round(20 + L.y * 5); ell(c, px, py, 9, 9, '#14182c'); ell(c, px, py, 7, 7, '#2a3a78'); ell(c, px, py, 4, 4, '#0a0c18'); rect(c, px - 3, py - 4, 3, 3, '#ffffff'); rect(c, px + 2, py + 2, 2, 2, 'rgba(255,255,255,.7)'); }
+    for (const E of [R.eyeL, R.eyeR]) {
+      ell(c, E.x, E.y, E.rx + 1, E.ry + 1, '#1a0406'); ell(c, E.x, E.y, E.rx, E.ry, '#f4f4fc');
+      if (happy) { ell(c, E.x, E.y + 7, E.rx + 2, E.ry, '#10080c'); }
+      else if (closed) { ell(c, E.x, E.y, E.rx, E.ry, '#10080c'); rect(c, E.x - E.rx + 1, E.y, E.rx * 2 - 1, 2, '#f4f4fc'); }
+      else {
+        const ix = Math.round(E.x + L.x * R.look.x * .6), iy = Math.round(E.y + L.y * R.look.y * .6), ir = R.iris;
+        ell(c, ix, iy, ir.rx + 1, ir.ry + 1, '#1a1e34'); ell(c, ix, iy, ir.rx, ir.ry, '#2a58d8'); ell(c, ix, iy + 2, ir.rx - 2, ir.ry - 3, '#58a0f8');
+        ell(c, ix, iy - 1, 2, 3, '#10142a'); rect(c, ix - 3, iy - ir.ry + 2, 2, 3, '#ffffff'); rect(c, ix + 2, iy + 3, 2, 2, 'rgba(255,255,255,.8)');
+      }
     }
-    // nose-mouth between the eyes
-    rect(c, 118, 14, 4, 3, '#ffd23c'); rect(c, 117, 17, 6, 2, '#ffd23c'); rect(c, 119, 19, 4, 2, '#ffd23c'); rect(c, 116, 21, 5, 2, '#ffd23c');
-    rr(c, 8, 32, 224, 124, 7, '#2c0509'); rr(c, 9, 33, 222, 122, 6, '#0c1018');
-    return { x: 11, y: 35, w: 218, h: 118 };
+    const sc = H.screen; rr(c, sc.x - 3, sc.y - 3, sc.w + 6, sc.h + 6, 7, '#2a0608'); rr(c, sc.x - 2, sc.y - 2, sc.w + 4, sc.h + 4, 6, '#0c1018');
+    return { x: sc.x, y: sc.y, w: sc.w, h: sc.h };
   }
   function lookTo(dx, dy) { S.lookHold = S.t + 1.2; S.look.tx = clamp(dx, -1, 1); S.look.ty = clamp(dy, -1, 1); }
   function lookIdle() { if (Math.abs(S.look.tx) < .01 && Math.abs(S.look.ty) < .01) { /* wander */ } else { S.look.tx *= .96; S.look.ty *= .96; } }
@@ -445,8 +535,10 @@ function createStart(env) {
       T(c, 'TRAINER CARD', 16, 12, 'white'); TR(c, 'ID No.' + String(inf.id || 0).padStart(5, '0'), 224, 12, 'gold');
       const row = (lab, val, y) => { T(c, lab, 16, y, 'gold'); TR(c, val, 150, y, 'white'); };
       row('NAME', String(p.name || inf.name).toUpperCase(), 36); row('MONEY', String(+p.money || 0), 51); row('POKéDEX', inf.dexCaught + ' / ' + inf.dexSeen, 66); row('TIME', fmtTime(inf.playTime), 81);
-      rr(c, 156, 33, 70, 66, 4, '#0c1a46'); const pt = party(); let n = 0;
-      for (let i = 0; i < 6; i++) { const m = pt[i], gx = 160 + (i % 3) * 22, gy = 36 + Math.floor(i / 3) * 30; if (m && m.species) { const pp = dbOf(m.species).iconSprite, f = monFrame(pp); if (f) { c.imageSmoothingEnabled = false; const s = 20 / Math.max(f.w, f.h); c.drawImage(f.img, 0, 0, f.w, f.h, gx, gy + (i % 2 ? Math.round(Math.sin(S.t * 6 + i) + 1) : 0), Math.round(f.w * s), Math.round(f.h * s)); } else ball(c, gx + 5, gy + 5, 'poke', 1); n++; } }
+      { const H = HUD().card, sp = H.sprite; rr(c, sp.x, sp.y, sp.w, sp.h, 4, '#0c1a46'); const male = String(p.gender || 'MALE').toUpperCase() !== 'FEMALE';
+        const path = (env.trainerSprite && env.trainerSprite(male)) || (male ? 'graphics/trainer_front_sprites/player_male.png' : 'graphics/trainer_front_sprites/player_female.png'), f = monFrame(path);
+        if (f) drawMonSprite(c, f, sp.x + 2, sp.y + 2, sp.w - 4, sp.h - 4, false); else T(c, 'NO SPRITE', sp.x + 8, sp.y + 24, 'grey');
+        const pt = party(); for (let i = 0; i < 6; i++) { const m = pt[i]; if (!m || !m.species) continue; const ip = dbOf(m.species).iconSprite; if (!drawIcon(c, ip, H.party.x + i * (H.party.size + 1), H.party.y, H.party.size, false)) ball(c, H.party.x + i * (H.party.size + 1) + 1, H.party.y + 1, 'poke', 1); } }
       T(c, 'BADGES', 16, 100, 'gold');
       for (let i = 1; i <= 8; i++) { const x = 16 + (i - 1) * 27, y = 114, got = badgeFlag(i) || (inf.badges >= i && !Object.keys(flagsOf()).some(k => /BADGE/.test(k) && false));
         rr(c, x, y, 24, 30, 4, '#0c1a46'); ell(c, x + 12, y + 14, 8, 8, got ? ['#e8d048', '#e86838', '#58b8e8', '#98d048', '#d870d8', '#f0f0f0', '#e84848', '#8868e8'][i - 1] : '#26346a');
@@ -580,7 +672,7 @@ function createStart(env) {
   }
   function tmKeys() { const g = TMCFG(); return g.image && getSprite(g.image) ? Object.keys(g.pos || {}) : TM.keys; }
   function tmMove(dx, dy) {
-    const sc = { x: 11, y: 35, w: 218, h: 118 }, g = tmGeom(sc), cur = tmCenter(TM.sel, g); if (!cur) return; let best = null, bd = 1e9;
+    const sc = HUD().screen, g = tmGeom(sc), cur = tmCenter(TM.sel, g); if (!cur) return; let best = null, bd = 1e9;
     for (const k of tmKeys()) { if (k === TM.sel) continue; const p = tmCenter(k, g); if (!p) continue; const vx = p.x - cur.x, vy = p.y - cur.y, along = vx * dx + vy * dy; if (along <= 1) continue; const perp = Math.abs(vx * dy - vy * dx), d = along + perp * 1.5; if (d < bd) { bd = d; best = k; } }
     if (best) TM.sel = best; lookTo(dx, dy);
   }
@@ -604,7 +696,7 @@ function createStart(env) {
     },
     bot(c) { botGeneric(c, 'Move the cursor to look at the map.', cc => { const d = [['<', -1, 0, 20], ['^', 0, -1, 80], ['v', 0, 1, 120], ['>', 1, 0, 180]]; btn(cc, 90, 62, 60, 18, 'UP', () => tmMove(0, -1), '#2e3548'); btn(cc, 28, 84, 60, 18, 'LEFT', () => tmMove(-1, 0), '#2e3548'); btn(cc, 152, 84, 60, 18, 'RIGHT', () => tmMove(1, 0), '#2e3548'); btn(cc, 90, 106, 60, 18, 'DOWN', () => tmMove(0, 1), '#2e3548'); }); },
     press(k) { if (k === 'b') return back(); const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[k]; if (d) tmMove(d[0], d[1]); },
-    click(x, y, area) { if (area !== 'top') return; const sc = { x: 11, y: 35, w: 218, h: 118 }, g = tmGeom(sc); let best = null, bd = 400; for (const k of tmKeys()) { const r = TM.info[k]; let hit = false, dd = 1e9; if (!g.im && r) { const rx = g.ox + r.x * g.s, ry = g.oy + r.y * g.s; hit = x >= rx && x <= rx + r.w * g.s && y >= ry && y <= ry + r.h * g.s; dd = hit ? 0 : 1e9; } else { const p = tmCenter(k, g); if (p) dd = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y); } if (dd < bd) { bd = dd; best = k; } } if (best) TM.sel = best; },
+    click(x, y, area) { if (area !== 'top') return; const sc = HUD().screen, g = tmGeom(sc); let best = null, bd = 400; for (const k of tmKeys()) { const r = TM.info[k]; let hit = false, dd = 1e9; if (!g.im && r) { const rx = g.ox + r.x * g.s, ry = g.oy + r.y * g.s; hit = x >= rx && x <= rx + r.w * g.s && y >= ry && y <= ry + r.h * g.s; dd = hit ? 0 : 1e9; } else { const p = tmCenter(k, g); if (p) dd = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y); } if (dd < bd) { bd = dd; best = k; } } if (best) TM.sel = best; },
   };
 
   // ===================================================================== POKENAV  (hub: map / condition / ribbons / calls)
@@ -641,54 +733,60 @@ function createStart(env) {
 
   // ===================================================================== ROTOMDEX (Pokedex)
   const DXM = [['national', 'NATIONAL'], ['regional', 'REGIONAL'], ['alpha', 'A TO Z'], ['weight', 'WEIGHT'], ['height', 'HEIGHT'], ['type', 'TYPE']];
-  const DX = { mode: 0, seenOnly: false, list: [], idx: 0, top: 0, stage: 'list', dirty: true, flip: 0 };
+  const DX = { mode: 0, seenOnly: false, shiny: false, list: [], idx: 0, top: 0, stage: 'list', dirty: true };
   const DEXAPI = () => (typeof window !== 'undefined' && window.Dex) || null;
+  const shinyUnlocked = () => { const f = (env.shinyFlag && env.shinyFlag()) || 'FLAG_SHINY_DEX'; return !!flagsOf()[f]; };
+  const isSeen = n => { const D = DEXAPI(); return !!D && (DX.shiny ? !!(D.shiny && D.shiny(n)) : D.seen(n)); };
+  const isGot = n => { const D = DEXAPI(); return !!D && (DX.shiny ? !!(D.shiny && D.shiny(n)) : D.caught(n)); };
   function dxBuild(keep) {
     const D = DEXAPI(); if (!D) { DX.list = []; return; }
     const cur = keep && DX.list[DX.idx]; let ord = D.order(DXM[DX.mode][0]);
-    if (DX.seenOnly) ord = ord.filter(n => D.seen(n)); DX.list = ord; DX.idx = cur ? Math.max(0, ord.indexOf(cur)) : 0; DX.top = 0; DX.dirty = false;
+    if (DX.seenOnly) ord = ord.filter(n => isSeen(n)); DX.list = ord; DX.idx = cur ? Math.max(0, ord.indexOf(cur)) : 0; DX.top = 0; DX.dirty = false;
   }
   const dxEntry = () => { const D = DEXAPI(); return D && DX.list[DX.idx] ? D.entry(DX.list[DX.idx]) : null; };
-  function dxSprite(e) { if (!e) return null; const p = dbOf(e.species).frontSprite; return p ? monFrame(p) : null; }
-  function dxMove(d) { if (!DX.list.length) return; DX.idx = clamp(DX.idx + d, 0, DX.list.length - 1); lookTo(0, d > 0 ? .8 : -.8); const e = dxEntry(); dxSprite(e); }
+  function dxPreload(e) { if (!e) return; const d = dbOf(e.species); getImg(d.battleSprite); getImg(d.iconSprite); }
+  function dxMove(d) { if (!DX.list.length) return; DX.idx = clamp(DX.idx + d, 0, DX.list.length - 1); lookTo(0, d > 0 ? .8 : -.8); dxPreload(dxEntry()); }
   const fmtH = d => (d / 10).toFixed(1) + 'm', fmtW = h => (h / 10).toFixed(1) + 'kg';
+  const dexCounts = () => { const D = DEXAPI(); if (!D) return { seen: 0, caught: 0, total: 0 }; const cn = D.counts(); return DX.shiny ? { seen: cn.shiny || 0, caught: cn.shiny || 0, total: cn.total } : cn; };
   SCREENS.dex = {
-    enter() { if (DX.dirty || !DX.list.length) dxBuild(false); DX.stage = 'list'; },
+    enter() { if (DX.dirty || !DX.list.length) dxBuild(false); DX.stage = 'list'; dxPreload(dxEntry()); },
     top(c) {
-      const D = DEXAPI(), sc = rotomFrame(c), cn = D ? D.counts() : { seen: 0, caught: 0, total: 0 };
+      const D = DEXAPI(), sc = rotomFrame(c), H = HUD().dex, cn = dexCounts();
       grad(c, sc.x, sc.y, sc.w, sc.h, '#e8f4ff', '#b8d4f0'); c.save(); c.beginPath(); c.rect(sc.x, sc.y, sc.w, sc.h); c.clip();
       const off = (S.t * 6) % 12; c.fillStyle = 'rgba(80,140,220,.10)'; for (let k = -6; k < 24; k++) c.fillRect(sc.x + k * 12 + off, sc.y, 5, sc.h);
-      rect(c, sc.x, sc.y, sc.w, 14, '#d02c3a'); rect(c, sc.x, sc.y + 14, sc.w, 1, '#7a1018'); T(c, DX.stage === 'entry' ? 'ROTOMDEX  DATA' : 'ROTOMDEX  ' + DXM[DX.mode][1], sc.x + 5, sc.y + 3, 'white');
-      TR(c, 'SEEN ' + cn.seen + '  OWN ' + cn.caught, sc.x + sc.w - 5, sc.y + 3, 'gold');
+      rect(c, sc.x, sc.y, sc.w, H.header.h, DX.shiny ? '#a8780c' : '#d8483a'); rect(c, sc.x, sc.y + H.header.h, sc.w, 1, '#4a0c10');
+      T(c, (DX.shiny ? 'SHINY DEX  ' : 'ROTOMDEX  ') + (DX.stage === 'entry' ? 'DATA' : DXM[DX.mode][1]), sc.x + 5, sc.y + 3, 'white'); TR(c, (DX.shiny ? 'OWN ' + cn.caught : 'SEEN ' + cn.seen + '  OWN ' + cn.caught), sc.x + sc.w - 5, sc.y + 3, 'gold');
       if (!D) { T(c, 'PokedexTables.js is not loaded.', sc.x + 8, sc.y + 40, 'dark'); c.restore(); return; }
-      const e = dxEntry(); const num = e && e.num, seen = num && D.seen(num), got = num && D.caught(num);
-      // left: picture
-      rr(c, sc.x + 3, sc.y + 18, 82, 74, 4, '#143058'); rr(c, sc.x + 4, sc.y + 19, 80, 72, 3, '#1f4a82'); const fl = (S.t * 30) % 160; rect(c, sc.x + 4 + fl - 20, sc.y + 19, 8, 72, 'rgba(255,255,255,.07)');
-      const f = e && seen ? dxSprite(e) : null; const bob = Math.round(Math.sin(S.t * 3) * 1);
-      if (f) drawMonSprite(c, f, sc.x + 7, sc.y + 22 + bob, 74, 66, !got); else if (e && seen) T(c, 'NO IMAGE', sc.x + 22, sc.y + 52, 'mute'); else { T(c, '?', sc.x + 40, sc.y + 48, 'mute'); }
-      if (got) ball(c, sc.x + 8, sc.y + 23, 'poke', 1);
-      rr(c, sc.x + 3, sc.y + 95, 82, 20, 3, '#143058');
-      if (e) { rect(c, sc.x + 3, sc.y + 95, 82, 20, '#143058'); T(c, seen ? e.name.toUpperCase().slice(0, 12) : '??????????', sc.x + 8, sc.y + 97, 'white'); T(c, 'No.' + String(e.num).padStart(4, '0'), sc.x + 8, sc.y + 106, 'gold'); }
+      const e = dxEntry(), num = e && e.num, seen = !!num && isSeen(num), got = !!num && isGot(num), d = e ? dbOf(e.species) : {};
+      // picture box
+      const B = H.box, bx = sc.x + B.x, by = sc.y + B.y; rr(c, bx, by, B.w, B.h, 4, '#143058'); rr(c, bx + 1, by + 1, B.w - 2, B.h - 2, 3, DX.shiny ? '#4a3a78' : '#1f4a82'); const fl = (S.t * 30) % 160; rect(c, bx + 1 + fl - 20, by + 1, 8, B.h - 2, 'rgba(255,255,255,.07)');
+      const bob = Math.round(Math.sin(S.t * 3) * 1);
+      if (e) {
+        const path = seen ? d.battleSprite : noneSprite(), f = path ? battleFrame(path, DX.shiny && seen) : null;
+        if (f) drawBattle(c, f, bx + 3, by + 3 + bob, B.w - 6, B.h - 6); else if (!seen) T(c, '?', bx + B.w / 2 - 3, by + B.h / 2 - 4, 'mute'); else T(c, 'NO IMAGE', bx + 20, by + B.h / 2 - 4, 'mute');
+        const ip = H[seen ? 'iconSeen' : 'iconUnseen']; drawIcon(c, d.iconSprite, bx + ip.x, by + ip.y, 14, !seen);
+        if (got && !DX.shiny) ball(c, bx + H.ball.x, by + H.ball.y, 'poke', 1); if (got && DX.shiny) T(c, '*', bx + H.ball.x, by + H.ball.y - 1, 'gold');
+      }
+      const N = H.nameBox, nx = sc.x + N.x, ny = sc.y + N.y; rr(c, nx, ny, N.w, N.h, 3, '#143058');
+      if (e) { T(c, seen ? e.name.toUpperCase().slice(0, 12) : '?????', nx + H.name.x, ny + H.name.y, 'white'); T(c, 'No.' + String(e.num).padStart(4, '0'), nx + H.num.x, ny + H.num.y, 'gold'); }
       if (DX.stage === 'list') {
-        // right: list
-        const R = { x: sc.x + 89, y: sc.y + 17, w: sc.w - 92, rows: 7, h: 14 }; if (DX.idx < DX.top) DX.top = DX.idx; if (DX.idx >= DX.top + R.rows) DX.top = DX.idx - R.rows + 1; DX.top = clamp(DX.top, 0, Math.max(0, DX.list.length - R.rows));
+        const R = { x: sc.x + H.list.x, y: sc.y + H.list.y, w: H.list.w, rows: H.list.rows, h: H.list.h }; if (DX.idx < DX.top) DX.top = DX.idx; if (DX.idx >= DX.top + R.rows) DX.top = DX.idx - R.rows + 1; DX.top = clamp(DX.top, 0, Math.max(0, DX.list.length - R.rows));
         rr(c, R.x - 1, R.y - 1, R.w + 2, R.rows * R.h + 2, 3, '#143058');
         for (let r = 0; r < R.rows; r++) {
-          const i = DX.top + r, n = DX.list[i]; if (n == null) break; const y = R.y + r * R.h, sel = i === DX.idx; const en = D.entry(n), sn = D.seen(n), cg = D.caught(n);
+          const i = DX.top + r, n = DX.list[i]; if (n == null) break; const y = R.y + r * R.h, sel = i === DX.idx; const en = D.entry(n), sn = isSeen(n), cg = isGot(n);
           rect(c, R.x, y, R.w - 6, R.h - 1, sel ? '#ffd23c' : (r % 2 ? '#fdfeff' : '#e6f0fa'));
-          if (sel) { tri(c, R.x - 1 + Math.round(Math.abs(Math.sin(S.t * 6)) * 2), y + 6, 3, '#d02c3a'); }
+          if (sel) tri(c, R.x - 1 + Math.round(Math.abs(Math.sin(S.t * 6)) * 2), y + 6, 3, '#d8483a');
           T(c, String(n).padStart(4, '0'), R.x + 6, y + 2, sel ? 'dark' : 'mute'); T(c, sn ? en.name.toUpperCase().slice(0, 11) : '-----------', R.x + 34, y + 2, sel ? 'dark' : (sn ? 'dark' : 'mute'));
-          if (cg) ball(c, R.x + R.w - 18, y + 2, 'poke', 1);
+          if (cg) { if (DX.shiny) T(c, '*', R.x + R.w - 17, y + 2, sel ? 'dark' : 'gold'); else ball(c, R.x + R.w - 18, y + 2, 'poke', 1); }
         }
         const tot = Math.max(1, DX.list.length - R.rows), sbH = R.rows * R.h; rect(c, R.x + R.w - 4, R.y, 3, sbH, '#0c2040'); rect(c, R.x + R.w - 4, R.y + Math.round((sbH - 14) * DX.top / tot), 3, 14, '#ffd23c');
         if (!DX.list.length) T(c, 'Nothing to show.', R.x + 8, R.y + 20, 'white');
       } else if (e) {
-        const X = sc.x + 91; T(c, seen ? e.name.toUpperCase() : '??????????', X, sc.y + 19, 'dark'); T(c, got ? String(e.category).toUpperCase() + ' POKéMON' : '', X, sc.y + 31, 'red');
-        T(c, 'HT', X, sc.y + 45, 'mute'); T(c, got ? fmtH(e.height) : '???', X + 20, sc.y + 45, 'dark'); T(c, 'WT', X + 62, sc.y + 45, 'mute'); T(c, got ? fmtW(e.weight) : '???', X + 82, sc.y + 45, 'dark');
-        rr(c, sc.x + 3, sc.y + 117 - 0, 1, 1, 'rgba(0,0,0,0)');
+        const X = sc.x + H.title.x; T(c, seen ? e.name.toUpperCase() : '??????????', X, sc.y + H.title.y, 'dark'); T(c, got ? String(e.category).toUpperCase() + ' POKéMON' : '', sc.x + H.cat.x, sc.y + H.cat.y, 'red');
+        T(c, 'HT', sc.x + H.stats.x, sc.y + H.stats.y, 'mute'); T(c, got ? fmtH(e.height) : '???', sc.x + H.stats.x + 20, sc.y + H.stats.y, 'dark'); T(c, 'WT', sc.x + H.stats.x + 62, sc.y + H.stats.y, 'mute'); T(c, got ? fmtW(e.weight) : '???', sc.x + H.stats.x + 82, sc.y + H.stats.y, 'dark');
         const txt = got ? (D.text(e.num) || 'No Pokédex text installed yet.') : (seen ? 'Catch this Pokémon to learn more about it.' : 'Nothing is known about this Pokémon.');
-        wrapText(txt, 128).slice(0, 5).forEach((l, i) => T(c, l, X, sc.y + 59 + i * 11, got ? 'dark' : 'mute'));
-        T(c, got ? 'REGISTERED' : (seen ? 'SEEN' : 'UNKNOWN'), X, sc.y + 105, got ? 'red' : 'mute');
+        wrapText(txt, H.desc.w).slice(0, H.desc.lines).forEach((l, i) => T(c, l, sc.x + H.desc.x, sc.y + H.desc.y + i * H.desc.pitch, got ? 'dark' : 'mute'));
+        T(c, got ? (DX.shiny ? 'SHINY OWNED' : 'REGISTERED') : (seen ? 'SEEN' : 'UNKNOWN'), sc.x + H.status.x, sc.y + H.status.y, got ? 'red' : 'mute');
       }
       c.restore();
     },
@@ -698,19 +796,20 @@ function createStart(env) {
         if (DX.stage === 'list') {
           btn(cc, 10, 22, 108, 22, DXM[DX.mode][1], () => SCREENS.dex.order(), '#7a1c28'); btn(cc, 122, 22, 108, 22, DX.seenOnly ? 'SEEN ONLY' : 'SHOW ALL', () => SCREENS.dex.filter(), '#7a1c28');
           btn(cc, 10, 50, 50, 22, '-10', () => dxMove(-10), '#2e3548'); btn(cc, 64, 50, 50, 22, '-1', () => dxMove(-1), '#2e3548'); btn(cc, 118, 50, 50, 22, '+1', () => dxMove(1), '#2e3548'); btn(cc, 172, 50, 58, 22, '+10', () => dxMove(10), '#2e3548');
-          btn(cc, 10, 78, 108, 22, 'ENTRY  (A)', () => SCREENS.dex.open(), '#2c5a3a');
+          btn(cc, 10, 78, 108, 22, 'ENTRY  (A)', () => SCREENS.dex.open(), '#2c5a3a'); if (shinyUnlocked()) btn(cc, 122, 78, 108, 22, DX.shiny ? 'NORMAL DEX' : 'SHINY DEX', () => SCREENS.dex.toggleShiny(), '#7a5a0c');
         } else { btn(cc, 10, 28, 70, 24, 'PREV', () => dxMove(-1), '#2e3548'); btn(cc, 90, 28, 70, 24, 'NEXT', () => dxMove(1), '#2e3548'); T(cc, (DX.idx + 1) + ' / ' + DX.list.length, 12, 62, 'mute'); }
-        if (D) { const cn = D.counts(); const w = 100, p = cn.total ? cn.caught / cn.total : 0; T(cc, 'COMPLETION', 12, BH - 38, 'mute'); rect(cc, 12, BH - 25, w, 7, '#0a0c12'); rect(cc, 13, BH - 24, Math.round((w - 2) * p), 5, '#ffd23c'); }
+        if (D) { const cn = dexCounts(); const w = 100, p = cn.total ? cn.caught / cn.total : 0; T(cc, (DX.shiny ? 'SHINIES ' : 'COMPLETION ') + cn.caught + '/' + cn.total, 12, BH - 38, 'mute'); rect(cc, 12, BH - 25, w, 7, '#0a0c12'); rect(cc, 13, BH - 24, Math.max(p > 0 ? 1 : 0, Math.round((w - 2) * p)), 5, DX.shiny ? '#f0c040' : '#ffd23c'); }
       });
     },
-    order() { DX.mode = (DX.mode + 1) % DXM.length; if (!(DEXAPI() && window.DexOrders && (DXM[DX.mode][0] === 'national' || window.DexOrders[DXM[DX.mode][0]]))) DX.mode = 0; dxBuild(true); },
-    filter() { DX.seenOnly = !DX.seenOnly; dxBuild(true); },
-    open() { if (!dxEntry()) return; DX.stage = 'entry'; S.happy = S.t + .5; lookTo(0, 0); const e = dxEntry(); if (e && DEXAPI().caught(e.num)) S.happy = S.t + .7; },
+    order() { DX.mode = (DX.mode + 1) % DXM.length; if (!(DEXAPI() && window.DexOrders && (DXM[DX.mode][0] === 'national' || window.DexOrders[DXM[DX.mode][0]]))) DX.mode = 0; dxBuild(true); dxPreload(dxEntry()); },
+    filter() { DX.seenOnly = !DX.seenOnly; dxBuild(true); dxPreload(dxEntry()); },
+    toggleShiny() { if (!shinyUnlocked()) return; DX.shiny = !DX.shiny; dxBuild(true); dxPreload(dxEntry()); },
+    open() { if (!dxEntry()) return; DX.stage = 'entry'; lookTo(0, 0); const e = dxEntry(); if (e && isGot(e.num)) S.happy = S.t + .7; },
     press(k) {
       if (DX.stage === 'entry') { if (k === 'b' || k === 'a') { DX.stage = 'list'; return; } if (k === 'up' || k === 'left') dxMove(-1); else if (k === 'down' || k === 'right') dxMove(1); return; }
-      if (k === 'b') return back(); if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1); else if (k === 'left') dxMove(-7); else if (k === 'right') dxMove(7); else if (k === 'a') this.open(); else if (k === 'sel') this.order(); else if (k === 'filter') this.filter();
+      if (k === 'b') return back(); if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1); else if (k === 'left') dxMove(-7); else if (k === 'right') dxMove(7); else if (k === 'a') this.open(); else if (k === 'sel') this.order(); else if (k === 'filter') this.filter(); else if (k === 'shiny') this.toggleShiny();
     },
-    click(x, y, area) { if (area !== 'top' || DX.stage !== 'list') return; const sc = { x: 11, y: 35 }, rx = sc.x + 89, ry = sc.y + 17; if (x >= rx && x < rx + 120 && y >= ry && y < ry + 98) { const i = DX.top + Math.floor((y - ry) / 14); if (i < DX.list.length) { if (i === DX.idx) this.open(); else { DX.idx = i; lookTo(0, 0); } } } },
+    click(x, y, area) { if (area !== 'top' || DX.stage !== 'list') return; const sc = HUD().screen, L = HUD().dex.list, rx = sc.x + L.x, ry = sc.y + L.y; if (x >= rx && x < rx + L.w && y >= ry && y < ry + L.rows * L.h) { const i = DX.top + Math.floor((y - ry) / L.h); if (i < DX.list.length) { if (i === DX.idx) this.open(); else { DX.idx = i; lookTo(0, 0); dxPreload(dxEntry()); } } } },
   };
 
   // ===================================================================== the core api
@@ -734,7 +833,7 @@ function createStart(env) {
   }
   function renderBottom(c) {
     c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, BH);
-    if (S.scr === 'menu' || !S.sub) renderMenu(c); else S.sub.bot(c);
+    if (S.scr === 'menu' || !S.sub) { renderMenu(c); if (S.child) { c.fillStyle = 'rgba(6,8,14,.66)'; c.fillRect(0, 13, BW, BH - 13); const pg = PAGES[S.page], def = pg[S.sel]; if (def) { drawTile(c, S.sel, def, true, 0, 1); c.fillStyle = 'rgba(255,255,255,.0)'; } const msg = 'OPEN ON THE UPPER SCREEN'; T(c, msg, Math.round(120 - tw(msg) / 2), BH - 13, 'white'); } } else S.sub.bot(c);
   }
   function renderTop(c) { c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, TH); if (S.scr !== 'menu' && S.sub) S.sub.top(c); }
   function start(o) {
@@ -744,7 +843,7 @@ function createStart(env) {
   }
   function SCREENS_RESET() { DX.dirty = true; }
   function status() { return { scr: S.scr, page: S.page, sel: S.sel, closing: S.closing, child: S.child, dexList: DX.list.length, warnings: [...warnings] }; }
-  return { icon, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
+  return { icon, renderIdle, HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
 }
 root.StartMenuCore = createStart;
 })(window);
@@ -773,9 +872,8 @@ root.Quests = Quests;
 const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', q: 'left', ArrowRight: 'right', d: 'right', e: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b', Tab: 'sel', o: 'sel', f: 'filter' };
 const KB = 'startmenu_bottom', KT = 'startmenu_top', KD = 'startmenu_dock';
 const slog = (...a) => { if (root.StartMenu && root.StartMenu.LOG) console.log('[SM]', ...a); };
-const DOCKICONS = ['pokemon', 'dex', 'bag', 'card', 'save', 'options'];
 const StartMenu = {
-  active: false, DOCK: true, LOG: true, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
+  active: false, IDLE: true, LOG: true, SHINYFLAG: 'FLAG_SHINY_DEX', UNKNOWN_SPRITE: '', TRAINER: { male: 'graphics/trainer_front_sprites/player_male.png', female: 'graphics/trainer_front_sprites/player_female.png' }, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
   isOpen() { return this.active; },
   debug() { const sc = this.scene; const o = { active: this.active, hasCore: !!this.core, core: this.core && this.core.status(), lowerCamera: !!(sc && sc._menuCam), scene: sc && { scriptRunning: sc.scriptRunning, isLocked: sc.isLocked, isMoving: sc.isMoving } }; console.log('[SM] state', o); return o; },
   toggle(scene) { slog('toggle(), active=' + this.active); if (this.active) { if (this.core) this.core.press('b'); return; } this.open(scene); },
@@ -783,32 +881,27 @@ const StartMenu = {
   _cam(scene, geo) {
     const cams = scene.cameras; if (!cams || !cams.add) return null;
     if (scene._menuCam && cams.cameras && cams.cameras.indexOf(scene._menuCam) >= 0) return scene._menuCam;
-    const c = cams.add(geo.scr.x, geo.y0, geo.scr.w, Math.round(geo.bh * geo.s)); c.setScroll(0, 100000); c.setRoundPixels && c.setRoundPixels(true); scene._menuCam = c; return c;
+    const c = cams.add(geo.scr.x, geo.y0, geo.scr.w, Math.round(geo.bh * geo.s)); c.setScroll(0, 100000); c.setRoundPixels && c.setRoundPixels(true); scene._menuCam = c; let last = -1;
+    const guard = () => { const L = scene.children && scene.children.list; if (!L) return; if (L.length === last && ((scene.game && scene.game.getFrame ? scene.game.getFrame() : 1) % 30)) return; last = L.length; for (let i = 0; i < L.length; i++) { const o = L[i]; if (!o._smLower) { try { c.ignore(o); } catch (e) { /* ignore */ } } } };
+    scene.events.on('update', guard); scene.events.once('shutdown', () => { scene.events.off('update', guard); scene._menuCam = null; });
+    return c;
   },
   _lower(scene, geo, x, y, key) {   // an image that only the lower camera shows
     const im = scene.add.image(x, 100000 + y, key).setOrigin(0, 0).setScale(geo.s).setScrollFactor(1).setDepth(8990);   // scroll factor 1: the lower camera is scrolled to y=100000
-    try { scene.cameras.main.ignore(im); } catch (e) { /* old Phaser */ } return im;
+    im._smLower = true; try { scene.cameras.main.ignore(im); } catch (e) { /* old Phaser */ } return im;
   },
   _geom(scene) { const scr = (root.OW_TEXT && root.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 }, s = scr.w / 240, y0 = scr.y + scr.h + 4, avail = (scene.scale ? scene.scale.height : 620) - y0; return { scr, s, y0, bh: Math.max(100, Math.min(200, Math.floor(avail / s))) }; },
   open(scene, opts) {
     slog('open() called. active=' + this.active + ' scene=' + !!scene); if (this.active || !scene) return false; opts = opts || {};
-    const gs = root.GameStateManager, sv = () => (gs && gs.saveData) || {}, geo = this._geom(scene);
-    const core = root.StartMenuCore({
-      urlFor: p => p, bottomH: () => geo.bh, scene: () => scene, logName: () => StartMenu.LOGNAME,
-      save: () => root.SaveSystem, saveData: sv, flags: () => sv().flags || {}, quests: () => sv().quests || {},
-      party: () => (Array.isArray(sv().party) ? sv().party.filter(m => m && m.species) : []),
-      db: () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null),
-      glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
-      maps: () => root.OverworldMaps, offsets: () => scene.worldOffsets || {}, townMap: () => StartMenu.TOWNMAP,
-      playerPos: () => ({ key: scene.currentMapKey, wx: scene.player ? scene.player.x : 0, wy: scene.player ? scene.player.y : 0 }),
-      applyOptions: o => StartMenu.applyOptions(scene, o),
+    const geo = this._geom(scene);
+    const core = root.StartMenuCore(Object.assign(this._env(scene, geo), {
       openChild: (kind, done) => {
         const M = kind === 'bag' ? root.BagMenu : root.PokemonSummary;
         if (!M) { console.warn('[StartMenu] ' + (kind === 'bag' ? 'BagMenu.js' : 'PokemonSummary.js') + ' is not loaded'); done(); return; }
         const ok = M.open(scene, { onClose: () => { StartMenu.openedAt = performance.now(); done(); } }); if (ok === false) done();
       },
       onExit: () => this.close(),
-    });
+    }));
     this.core = core; this.scene = scene; this.opts = opts; this.openedAt = performance.now(); this.active = true; this.geo = geo;
     slog('geometry', JSON.stringify(geo), 'scene.scale.height=' + (scene.scale && scene.scale.height), 'main camera viewport', scene.cameras && scene.cameras.main ? [scene.cameras.main.x, scene.cameras.main.y, scene.cameras.main.width, scene.cameras.main.height].join(',') : 'n/a');
     core.initFont().then(() => {
@@ -853,25 +946,35 @@ const StartMenu = {
     try { if (scene && scene.sound && o.volume != null) scene.sound.volume = o.volume; } catch (e) { /* no sound */ }
     try { if (o.volume != null) root.dispatchEvent(new CustomEvent('gameoptions', { detail: o })); } catch (e) { /* ignore */ }
   },
-  // ----- the dock: small clickable buttons on the lower screen while the menu is closed
+  // ----- the idle lower screen: animated background, place, weather, time, battery, your first Pokémon and its mood, "PRESS START"
   attach(scene) {
-    slog('attach() called, DOCK=' + this.DOCK); if (!scene || !scene.add) return; const self = this; this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
-    const tex = () => { if (!scene.textures.exists(KD)) { const t = scene.textures.createCanvas(KD, 240, 26); try { t.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } } return scene.textures.get(KD); };
-    const g = this._geom(scene); let img = null, ctx = null, cache = null, hot = -1, acc = 0;
-    const slot = i => ({ x: 6 + i * 38, y: 2, w: 34, h: 22 });
+    slog('attach() called, IDLE=' + this.IDLE); if (!scene || !scene.add) return; const self = this; this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
+    const g = this._geom(scene); this._cam(scene, g); let img = null, tex = null, ctx = null, acc = 0, ready = false, idle = null;
+    const sv = () => (root.GameStateManager && root.GameStateManager.saveData) || {};
+    idle = root.StartMenuCore(this._env(scene, g)); idle.initFont().then(() => { ready = true; slog('idle screen ready'); }).catch(e => console.error('[SM] idle screen font:', e));
     const draw = (time, delta) => {
-      const vis = this.DOCK && !this.active && !scene.scriptRunning && !scene.isLocked && !(root.PokemonSummary && root.PokemonSummary.isOpen()) && !(root.BagMenu && root.BagMenu.isOpen());
-      if (!img && vis) { const t = tex(); cache = t; ctx = t.getContext ? t.getContext() : t.context; slog('dock created at screen y=' + (g.y0 + (g.bh - 26) * g.s)); self._cam(scene, g); img = self._lower(scene, g, 0, (g.bh - 26) * g.s, KD).setDepth(80); }
-      if (img) img.setVisible(!!vis); if (!vis || !ctx) return; acc += delta; if (acc < 50) return; acc = 0;
-      const c = ctx, t = time / 1000; c.clearRect(0, 0, 240, 26);
-      DOCKICONS.forEach((id, i) => { const r = slot(i), on = i === hot; c.fillStyle = on ? '#ffffff' : '#0a0c12'; c.fillRect(r.x - 1, r.y - 1 + (on ? -1 : 0), r.w + 2, r.h + 2); c.fillStyle = on ? '#3a4260' : '#1a1e2c'; c.fillRect(r.x, r.y + (on ? -1 : 0), r.w, r.h); c.fillStyle = 'rgba(255,255,255,.08)'; c.fillRect(r.x, r.y + (on ? -1 : 0), r.w, 9); if (StartMenu.drawIcon) StartMenu.drawIcon(c, id, r.x + r.w / 2, r.y + r.h / 2 + (on ? -1 : 0), t, on); });
-      if (cache.refresh) cache.refresh();
+      const vis = this.IDLE && !this.active && ready;
+      if (!img && vis) { if (scene.textures.exists(KD)) scene.textures.remove(KD); tex = scene.textures.createCanvas(KD, idle.W, idle.H); try { tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } ctx = tex.getContext ? tex.getContext() : tex.context; img = self._lower(scene, g, 0, 0, KD).setDepth(80); slog('idle screen created'); }
+      if (img) img.setVisible(!!vis); if (!vis || !ctx) return; acc += delta; if (acc < 33) return; const dt = Math.min(.1, acc / 1000); acc = 0;
+      try { idle.update(dt); idle.renderIdle(ctx); tex.refresh(); } catch (e) { console.error('[SM] idle screen:', e); self.IDLE = false; }
     };
-    if (!StartMenu.drawIcon) { try { StartMenu.drawIcon = root.StartMenuCore({ urlFor: p => p, bottomH: () => 148, party: () => [], db: () => null }).icon; } catch (e) { console.warn('[StartMenu] dock icons:', e); } }
-    const move = p => { const x = (p.x - g.scr.x) / g.s, y = (p.y - (g.y0 + (g.bh - 26) * g.s)) / g.s; hot = -1; if (y >= 0 && y <= 26) DOCKICONS.forEach((id, i) => { const r = slot(i); if (x >= r.x && x <= r.x + r.w) hot = i; }); };
-    const down = p => { if (self.active || !img || !img.visible) return; move(p); slog('dock click, hot=' + hot); if (hot >= 0) { const i = hot; self.open(scene, { select: i, activate: true }); } };
-    scene.events.on('update', draw); scene.input.on('pointermove', move); scene.input.on('pointerdown', down);
-    scene.events.once('shutdown', () => { scene.events.off('update', draw); try { scene.input.off('pointermove', move); scene.input.off('pointerdown', down); } catch (e) { /* ignore */ } if (img) img.destroy(); img = null; if (scene.textures.exists(KD)) scene.textures.remove(KD); });
+    const down = p => { if (self.active || !img || !img.visible) return; if (p.y >= g.y0 && p.y < g.y0 + g.bh * g.s) { slog('idle screen click -> open'); self.open(scene, {}); } };
+    scene.events.on('update', draw); scene.input.on('pointerdown', down);
+    scene.events.once('shutdown', () => { scene.events.off('update', draw); try { scene.input.off('pointerdown', down); } catch (e) { /* ignore */ } if (img) img.destroy(); img = null; if (scene.textures.exists(KD)) scene.textures.remove(KD); });
+  },
+  _env(scene, geo) {
+    const gs = root.GameStateManager, sv = () => (gs && gs.saveData) || {};
+    return {
+      urlFor: p => p, bottomH: () => geo.bh, scene: () => scene, logName: () => StartMenu.LOGNAME, shinyFlag: () => StartMenu.SHINYFLAG, trainerSprite: male => StartMenu.TRAINER[male ? 'male' : 'female'], unknownSprite: () => StartMenu.UNKNOWN_SPRITE,
+      save: () => root.SaveSystem, saveData: sv, flags: () => sv().flags || {}, quests: () => sv().quests || {},
+      party: () => (Array.isArray(sv().party) ? sv().party.filter(m => m && m.species) : []),
+      db: () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null),
+      glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
+      maps: () => root.OverworldMaps, offsets: () => scene.worldOffsets || {}, townMap: () => StartMenu.TOWNMAP,
+      mapName: () => scene.currentMapKey, weather: () => (scene.currentMap && scene.currentMap.weather) || '',
+      playerPos: () => ({ key: scene.currentMapKey, wx: scene.player ? scene.player.x : 0, wy: scene.player ? scene.player.y : 0 }),
+      applyOptions: o => StartMenu.applyOptions(scene, o),
+    };
   },
 };
 root.StartMenu = StartMenu;
