@@ -658,6 +658,7 @@ class OverworldScene extends Phaser.Scene {
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     // [SUMMARY] Enter opens the party / summary screen (js/PokemonSummary.js)
     this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    this.bagKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);   // [BAG] B opens the bag (js/BagMenu.js)
 
     // [DUAL SCREEN] the overworld only uses the TOP screen (480x320 = the GBA screen at 2x). The bottom screen is left free.
     // Change the size in OW_TEXT.screen (overworld_textbox.js).
@@ -1634,9 +1635,10 @@ class OverworldScene extends Phaser.Scene {
     }
 
     // [SUMMARY] while the summary screen is open the overworld does nothing (the screen reads the keys itself)
-    if (window.PokemonSummary && window.PokemonSummary.isOpen()) {
+    if ((window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen())) {
       Phaser.Input.Keyboard.JustDown(this.enterKey);
       Phaser.Input.Keyboard.JustDown(this.spaceKey);
+      if (this.bagKey) Phaser.Input.Keyboard.JustDown(this.bagKey);
       return;
     }
 
@@ -1646,7 +1648,15 @@ class OverworldScene extends Phaser.Scene {
       return;
     }
 
-    if (this.isLocked || this.isMoving) { Phaser.Input.Keyboard.JustDown(this.enterKey); return; }
+    if (this.isLocked || this.isMoving) { Phaser.Input.Keyboard.JustDown(this.enterKey); if (this.bagKey) Phaser.Input.Keyboard.JustDown(this.bagKey); return; }
+
+    // [BAG] B -> the bag (GameStateManager.saveData.bag)
+    if (this.bagKey && Phaser.Input.Keyboard.JustDown(this.bagKey)) {
+      this.idleMs = 0;
+      if (window.BagMenu) window.BagMenu.open(this);
+      else console.error('[BAG] B pressed, but js/BagMenu.js is not loaded (window.BagMenu is missing).');
+      return;
+    }
 
     // [SUMMARY] Enter -> summary screen of the party in the save (GameStateManager.saveData.party)
     if (Phaser.Input.Keyboard.JustDown(this.enterKey)) {
