@@ -31,7 +31,7 @@ const TrainerClassTable = {
 
 const TrainerTable = {
   TRAINER_ROXANNE: {
-    name: 'Roxanne', class: 'Gym Leader', frontSprite: 'graphics/trainer_front_sprites/roxanne.png', bg: 'indoor', ai: 'smart',
+    name: 'Roxanne', class: 'Gym Leader', frontSprite: 'graphics/trainer_front_sprites/portia.png', bg: 'indoor', ai: 'smart',
     items: ['ITEM_SUPER_POTION', 'ITEM_SUPER_POTION'],
     party: [
       { species: 'SPECIES_GEODUDE', level: 12, moves: ['MOVE_TACKLE', 'MOVE_DEFENSE_CURL', 'MOVE_ROCK_THROW'] },
