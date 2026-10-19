@@ -22,7 +22,7 @@
 const SAVE_KEY = 'pokemon_micron_save', MAX = 999;
 const sv = () => (root.GameStateManager && root.GameStateManager.saveData) || null;
 const table = () => (typeof ItemTable !== 'undefined' ? ItemTable : root.ItemTable) || null;
-function save() { try { const s = sv(); if (s) localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) { /* storage blocked */ } }
+function save() { if (root.SaveSystem) root.SaveSystem.touch(); }   // no autosave: SAVE in the start menu writes the file
 
 function key(id) {
   const t = table(); if (id == null || id === '') return null;
