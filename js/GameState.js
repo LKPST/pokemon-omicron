@@ -254,8 +254,20 @@ function createBattle(env) {
   const side = i => S.sides[i];
   const FLASH = 1.2, SLIDE = .9;
   // layout of the TOP surface (GBA pixels)
-  const FOE = { cx: 170, bottom: 72, platY: 72, boxX: 6, boxY: 6 };
-  const ALLY = { cx: 60, bottom: 142, platY: 140, boxX: 126, boxY: 106 };
+  // Live values: copied every frame from BattleScene.CONFIG (see the top of BattleScene.js), so editing the config in the console moves things at once.
+  const FOE = { cx: 170, bottom: 72, platY: 72, boxX: 6, boxY: 6, fit: 64, scale: 0, trBottom: 94, trScale: 1 };
+  const ALLY = { cx: 60, bottom: 142, platY: 140, boxX: 126, boxY: 106, fit: 64, scale: 1, trBottom: 142, trScale: 1 };
+  const CF = { ball: 1.5 };
+  function applyConfig() {
+    const g = root.BattleScene && root.BattleScene.CONFIG; if (!g) return; const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
+    for (const [o, k] of [[FOE, 'foe'], [ALLY, 'ally']]) {
+      const c = g[k]; if (!c) continue;
+      o.cx = num(c.x, o.cx); o.bottom = num(c.bottom, o.bottom); o.platY = num(c.platform, o.bottom - 2 * (k === 'ally')); o.fit = num(c.fit, o.fit); o.scale = num(c.scale, o.scale);
+      o.trBottom = num(c.trainerBottom, o.trBottom); o.trScale = num(c.trainerScale, o.trScale);
+      if (c.box) { o.boxX = num(c.box.x, o.boxX); o.boxY = num(c.box.y, o.boxY); }
+    }
+    CF.ball = num(g.ballScale, CF.ball);
+  }
 
   // ------------------------------------------------ colour helpers
   const rgbOf = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -807,14 +819,14 @@ function createBattle(env) {
   function drawTop(c) {
     if (S.mode === 'intro' && drawIntroTop(c)) return;
     drawBg(c);
-    drawTrainer(c, S.tr.foe, FOE.cx, 94, 1.5, false);
-    drawMon(c, side(1), true, FOE.cx, FOE.bottom, 64);
-    drawMon(c, side(0), false, ALLY.cx, ALLY.bottom, 64, 1.5);
-    drawTrainer(c, S.tr.me, ALLY.cx, ALLY.bottom, 1.5, true);
+    drawTrainer(c, S.tr.foe, FOE.cx, FOE.trBottom, FOE.trScale, false);
+    drawMon(c, side(1), true, FOE.cx, FOE.bottom, FOE.fit, FOE.scale || undefined);
+    drawMon(c, side(0), false, ALLY.cx, ALLY.bottom, ALLY.fit, ALLY.scale || undefined);
+    drawTrainer(c, S.tr.me, ALLY.cx, ALLY.trBottom, ALLY.trScale, true);
     drawWeather(c); drawParticles(c); drawBallFx(c);
     if (S.cur && S.cur.ev.t === 'switchin') {
       const cu = S.cur, sd = side(cu.ev.side), cx = (cu.ev.side === 0 ? ALLY.cx : FOE.cx) + sd.dx, cy = (cu.ev.side === 0 ? 112 : 46) + sd.dy;
-      if (cu.ballPos) drawBallSprite(c, cu.ballPos.x, cu.ballPos.y, cu.ballPos.rot, 1.5);
+      if (cu.ballPos) drawBallSprite(c, cu.ballPos.x, cu.ballPos.y, cu.ballPos.rot, CF.ball);
       if (cu.spT != null) drawSparkle(c, cx, cy, cu.spT);
     }
     infoBox(c, side(1), false); infoBox(c, side(0), true);
@@ -924,7 +936,7 @@ function createBattle(env) {
 
   // render(top, bottom): both 240x155 canvases (bottom may be omitted)
   function render(top, bot) {
-    top.imageSmoothingEnabled = false; top.clearRect(0, 0, W, H);
+    applyConfig(); top.imageSmoothingEnabled = false; top.clearRect(0, 0, W, H);
     if (!S.b) { rect(top, 0, 0, W, H, '#101018'); if (bot) rect(bot, 0, 0, W, H, '#101018'); return; }
     drawTop(top); fadeOverlay(top);
     if (bot) { bot.imageSmoothingEnabled = false; bot.clearRect(0, 0, W, H); drawBottom(bot); fadeOverlay(bot); }
@@ -1087,10 +1099,23 @@ class BattleScene extends Phaser.Scene {
     if (this.tornDown) return; this.tornDown = true;
     try { window.removeEventListener('keydown', this.kd, true); } catch (e) { /* ignore */ }
     try { if (this.battleMusic) { this.battleMusic.stop(); this.battleMusic.destroy(); } } catch (e) { /* ignore */ }
-    try { for (const k of ['bs_top', 'bs_bot']) if (this.textures.exists(k)) this.textures.remove(k); } catch (e) { /* ignore */ }
+    // The two canvas textures are NOT removed here: the scene's images still use them for the frame being drawn, and removing a texture
+    // in use makes WebGL throw "Cannot read properties of null (reading 'isGLTexture')". create() replaces them on the next battle.
     this.ctxTop = this.ctxBot = null;
   }
 }
+// ---------------------------------------------------------------------------
+// LAYOUT / SCALE  -  edit these numbers, or change them live in the browser console while a battle is open, e.g.
+//     BattleScene.CONFIG.ally.scale = 1.25
+// Units are GBA pixels on the top screen (240 wide, ~155 tall; the game draws it 2x).  x = centre of the sprite, bottom = where its feet are.
+// scale: 1 = the sprite's own pixels.  foe.scale 0 = auto (shrinks big sprites to fit `fit` px).
+// Species-by-species nudges still use the T/F/G/H keys (Y switches target) and the xPos/yPos database fields.
+// ---------------------------------------------------------------------------
+BattleScene.CONFIG = {
+  foe:  { x: 170, bottom: 72,  platform: 72,  scale: 0, fit: 64, trainerBottom: 94,  trainerScale: 1, box: { x: 6,   y: 6 } },
+  ally: { x: 60,  bottom: 142, platform: 140, scale: 1, fit: 64, trainerBottom: 142, trainerScale: 1, box: { x: 126, y: 106 } },
+  ballScale: 1.5,
+};
 BattleScene.MUSIC = 'audio/music/victory_march.mp3';     // set to null for no music
 BattleScene.RETURN_SCENE = 'OverworldScene';
 BattleScene.LAYOUT = null;                               // {topH, gap}; default: split the canvas height in two
