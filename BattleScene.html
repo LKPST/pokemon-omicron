@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Battle Screen Preview</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#14161c;color:#dde;font:13px system-ui,sans-serif;padding:16px;max-width:1000px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}.sub{color:#8a93a6;line-height:1.5;margin-bottom:12px}
+#stage{background:#0a0b10;border:1px solid #2c3140;border-radius:10px;display:flex;justify-content:center;padding:10px;line-height:0}
+#scr{image-rendering:pixelated;width:720px;max-width:100%;height:auto;aspect-ratio:3/2;outline:none;cursor:pointer;background:#000}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+button,select,input{font:inherit;background:#262a36;color:#eef;border:1px solid #3a4052;border-radius:6px;padding:7px 11px}
+button{cursor:pointer}button:hover{background:#343b50}button.pri{background:#3a6df0;border-color:#5d8aff}
+label.in{display:flex;gap:6px;align-items:center;color:#9ab}
+input[type=number]{width:64px}input[type=text]{width:210px}
+code{background:#262a36;padding:1px 5px;border-radius:4px;color:#cfe}
+section{background:#1c1f28;border:1px solid #2c3140;border-radius:10px;padding:14px;margin-top:14px}
+.keys{color:#8a93a6;margin-top:8px;line-height:1.7}.keys b{color:#cfe;font-weight:600}
+#status{color:#9ab;line-height:1.6;margin-top:6px;white-space:pre-wrap;font:12px/1.5 ui-monospace,Consolas,monospace}
+#result{background:#222a40;border:1px solid #3a6df0;border-radius:8px;padding:8px 12px;margin-top:10px;display:none;white-space:pre-wrap;font:12px/1.5 ui-monospace,Consolas,monospace}
+</style></head><body>
+<h1>Battle Screen Preview</h1>
+<div class="sub">The GBA-size battle screen (240×160) running on your own tables and sprites. Put this page in your project root and open it through the preview URL (it loads <code>tables/*.js</code>, <code>BattleEngine.js</code>, <code>BattleScene.js</code> and the sprites from there).</div>
+<div id="stage"><canvas id="scr" width="240" height="160" tabindex="0"></canvas></div>
+<div class="keys"><b>Arrows / WASD</b> move · <b>Z / Enter / Space</b> = A · <b>X / Esc</b> = B. Click the screen first so it gets the keys.</div>
+<section>
+<div class="row">
+  <label class="in">Foe <input type="text" id="foe" value="SPECIES_PIDGEY" list="spl"></label><datalist id="spl"></datalist>
+  <label class="in">Lv <input type="number" id="foeLv" value="8" min="1" max="100"></label>
+  <label class="in">Kind <select id="kind"><option value="wild">wild</option><option value="trainer">trainer (3 mons)</option></select></label>
+  <label class="in">Background <select id="bg"><option>grass</option><option>cave</option><option>water</option><option>indoor</option><option>sand</option></select></label>
+</div>
+<div class="row">
+  <label class="in">My team (species:level, comma separated) <input type="text" id="team" value="SPECIES_CHARMANDER:12,SPECIES_PIKACHU:10,SPECIES_SQUIRTLE:9" style="width:420px"></label>
+  <button class="pri" id="go">Start battle</button>
+</div>
+<div id="status">loading…</div>
+<div id="result"></div>
+</section>
+<script>
+const LOAD=(names,dirs)=>names.reduce((p,n)=>p.then(()=>new Promise((res,rej)=>{let i=0;const t=()=>{if(i>=dirs.length)return rej(new Error('could not load '+n+' (looked in '+dirs.join(', ')+')'));const s=document.createElement('script');s.src=dirs[i++]+n+'?'+Date.now();s.onload=res;s.onerror=()=>{s.remove();t()};document.head.appendChild(s)};t()})),Promise.resolve());
+const $=id=>document.getElementById(id);
+let core=null,env=null;
+function tbl(n){try{return(0,eval)('typeof '+n+'!=="undefined"?'+n+':null')}catch(e){return null}}
+LOAD(['PokemonDatabase.js','MoveTables.js','LearnsetTables.js','EvolutionTables.js','TypeTables.js'],['tables/','./','js/']).then(()=>LOAD(['BattleEngine.js','BattleScene.js'],['js/','./','scripts/'])).then(init).catch(e=>{$('status').textContent='ERROR: '+e.message});
+async function init(){
+  const db=tbl('PokemonDatabase');
+  $('spl').innerHTML=Object.keys(db).slice(0,4000).map(k=>'<option value="'+k+'">').join('');
+  env={db,moves:tbl('MoveTable'),learn:tbl('LearnsetTable'),evo:tbl('EvolutionTable'),types:tbl('TypeTable')};
+  core=BattleSceneCore({urlFor:p=>p,engine:()=>env,types:()=>env.types,onEnd:res=>{showResult(res)},glyphs:()=>null,onItemUsed:it=>{}});
+  window.core=core;
+  await core.initFont();
+  $('status').textContent='ready. Press Start battle.';
+  let last=performance.now();const ctx=$('scr').getContext('2d');
+  (function loop(t){const dt=Math.min(.05,(t-last)/1000);last=t;core.update(dt);core.render(ctx);requestAnimationFrame(loop)})(last);
+  $('go').onclick=startBattle;
+  const KEYS={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',z:'a',Enter:'a',' ':'a',x:'b',Escape:'b'};
+  $('scr').addEventListener('keydown',e=>{const k=KEYS[e.key.length===1?e.key.toLowerCase():e.key];if(!k)return;e.preventDefault();core.press(k)});
+  $('scr').addEventListener('click',()=>$('scr').focus());
+  setInterval(()=>{if(core.S.b)$('status').textContent=JSON.stringify(core.status(),null,1).slice(0,900)},500);
+}
+function startBattle(){
+  const BE=window.BattleEngine,rng=Math.random;
+  const team=$('team').value.split(',').map(s=>s.trim()).filter(Boolean).map(s=>{const[a,b]=s.split(':');return BE.makeMon(env,a,+b||5,{rng})});
+  const lv=+$('foeLv').value||5,sp=$('foe').value.trim(),kind=$('kind').value;
+  const foe=kind==='wild'?[{species:sp,level:lv}]:[{species:sp,level:lv},{species:sp,level:lv+1},{species:sp,level:lv+2}];
+  $('result').style.display='none';$('scr').focus();
+  core.start({kind,trainerName:'Youngster Joey',player:team,foe,bg:$('bg').value,bag:[{item:'ITEM_POTION',count:5},{item:'ITEM_SUPER_POTION',count:2},{item:'ITEM_ANTIDOTE',count:2},{item:'ITEM_POKE_BALL',count:10},{item:'ITEM_GREAT_BALL',count:3},{item:'ITEM_REVIVE',count:1}]});
+}
+function showResult(res){const r=$('result');r.style.display='block';r.textContent='Battle over: '+res.result+'\ncaught: '+res.caught.map(m=>m.species+' Lv'+m.level).join(', ')+'\nevolutions: '+JSON.stringify(res.evolutions)+'\nitems used: '+res.usedItems.join(', ')}
+</script></body></html>
