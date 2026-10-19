@@ -39,6 +39,28 @@ window.OverworldMaps = {
         "warpType": "Normal",
         "xPos": 4,
         "yPos": 8
+      },
+      "NPC_1": {
+        "eventType": "NPC",
+        "xPos": 11,
+        "yPos": 13,
+        "owID": "Portia",
+        "script": "roxanne_gym_leader",
+        "movementType": "MOVEMENT_TYPE_SPIN_COUNTER_CLOCKWISE",
+        "isTrainer": true,
+        "viewRadius": 3,
+        "flagID": ""
+      },
+      "NPC_2": {
+        "eventType": "NPC",
+        "xPos": 4,
+        "yPos": 12,
+        "owID": "Lily",
+        "script": "new_script",
+        "movementType": "MOVEMENT_TYPE_WALK_IN_PLACE_DOWN",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": ""
       }
     },
     "wildData": {
