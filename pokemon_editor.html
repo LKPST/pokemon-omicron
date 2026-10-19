@@ -59,7 +59,7 @@ button.dirty{outline:2px solid #ffd166}
 <div class="tabs"><button data-tab="sprites" class="on">Sprites</button><button data-tab="pokemon">Pokémon</button><button data-tab="moves">Moves</button></div>
 <div id="edcommon" hidden>
 <section id="edload">
-  <div class="hint" style="margin-top:0">Load your tables, edit them in the <b>Pokémon</b> and <b>Moves</b> tabs, then download the changed files and put them back in <code>tables/</code>. Everything runs in your browser; nothing is uploaded.
+  <div class="hint" style="margin-top:0">If this page sits in your project and is opened from the dev server, the tables load by themselves. Otherwise load your tables, edit them in the <b>Pokémon</b> and <b>Moves</b> tabs, then download the changed files and put them back in <code>tables/</code>. Everything runs in your browser; nothing is uploaded.
     <b>Choose project folder</b> picks up all of them at once (and the sprites, icons and cries by file name).</div>
   <div class="row">
     <button class="pri" id="edFolder">Choose project folder</button>
@@ -444,7 +444,8 @@ async function addFolder(fs){
   for(const[name,kind]of Object.entries(KIND)){const f=files.get(name+'.js');if(f){loadText(kind==='db'?'db':kind,await f.text(),f.name);got.push(f.name)}}
   msg(`${fs.length} files read. Tables found: ${got.join(', ')||'none (is this the project folder?)'}.`);renderForms()}
 window.addEventListener('drop',async e=>{if(!$('tab-pokemon').hidden||!$('tab-moves').hidden){const its=[...e.dataTransfer.items||[]];addFolder(its.length&&its[0].webkitGetAsEntry?await readEntries(its):[...e.dataTransfer.files])}});
-function fileUrl(path){const f=files.get(String(path||'').split('/').pop().toLowerCase());if(!f)return null;const k=f.name;if(!urls.has(k))urls.set(k,URL.createObjectURL(f));return urls.get(k)}
+let BASE=null;
+function fileUrl(path){const f=files.get(String(path||'').split('/').pop().toLowerCase());if(!f)return BASE!==null&&path?BASE+String(path).replace(/^\.?\//,''):null;const k=f.name;if(!urls.has(k))urls.set(k,URL.createObjectURL(f));return urls.get(k)}
 
 // ------------------------------------------------ shared lists
 function refreshLists(){
@@ -684,6 +685,16 @@ function showTab(t){
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 window.edFromSprite=()=>{if(oldDb){ED.db=oldDb;ED.dirty.db=false;refreshLists();renderStats()}};
 window.ED=ED;
+// when this page is served from the project (StackBlitz / dev server), read the tables straight from the project
+(async()=>{
+  if(location.protocol==='file:')return;
+  for(const b of['','public/','../','../public/']){
+    try{const r=await fetch(b+'tables/PokemonDatabase.js',{cache:'no-store'});if(!r.ok)continue;const t=await r.text();if(/^\s*<(!doctype|html)/i.test(t))continue;
+      BASE=b;loadText('db',t,'tables/PokemonDatabase.js');
+      for(const[kind,n]of[['learn','LearnsetTables'],['evo','EvolutionTables'],['moves','MoveTables'],['types','TypeTables']]){
+        try{const rr=await fetch(b+'tables/'+n+'.js',{cache:'no-store'});if(rr.ok)loadText(kind,await rr.text(),'tables/'+n+'.js')}catch(e){}}
+      msg('Read the tables from the project ('+(b||'./')+'tables/). Download an edited table and replace the file in tables/.');renderForms();return}catch(e){}}
+})();
 {const t=(location.hash||'').replace('#','');showTab(['pokemon','moves'].includes(t)?t:'sprites')}
 refreshLists();renderStats();
 })();
