@@ -643,9 +643,10 @@ class OverworldScene extends Phaser.Scene {
 
     if (window.GameStateManager && window.GameStateManager.saveData) {
       window.GameStateManager.saveData.mapID = this.currentMapKey;
-      localStorage.setItem('pokemon_micron_save', JSON.stringify(window.GameStateManager.saveData));
+      window.SaveSystem && window.SaveSystem.touch('map');   // [SAVE] no autosave: SaveSystem.save() runs from the start menu
     }
 
+    if (window.StartMenu) window.StartMenu.attach(this);   // [MENU] the clickable MENU button on the lower screen
     this.buildWorldOffsets();
     this.processSpriteBackgrounds();   // [NEW] remove sprite backgrounds before sprites are created
     this.updateMapMusic(this.currentMapKey);
@@ -1481,7 +1482,7 @@ class OverworldScene extends Phaser.Scene {
 
     if (window.GameStateManager && window.GameStateManager.saveData) {
       window.GameStateManager.saveData.mapID = mapKey;
-      localStorage.setItem('pokemon_micron_save', JSON.stringify(window.GameStateManager.saveData));
+      window.SaveSystem && window.SaveSystem.touch('map');   // [SAVE] no autosave: SaveSystem.save() runs from the start menu
     }
 
     this.updateMapMusic(mapKey);
@@ -1635,7 +1636,7 @@ class OverworldScene extends Phaser.Scene {
     }
 
     // [SUMMARY] while the summary screen is open the overworld does nothing (the screen reads the keys itself)
-    if ((window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen())) {
+    if ((window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen())) {
       Phaser.Input.Keyboard.JustDown(this.enterKey);
       Phaser.Input.Keyboard.JustDown(this.spaceKey);
       if (this.bagKey) Phaser.Input.Keyboard.JustDown(this.bagKey);
@@ -1661,8 +1662,9 @@ class OverworldScene extends Phaser.Scene {
     // [SUMMARY] Enter -> summary screen of the party in the save (GameStateManager.saveData.party)
     if (Phaser.Input.Keyboard.JustDown(this.enterKey)) {
       this.idleMs = 0;
-      if (window.PokemonSummary) window.PokemonSummary.open(this);
-      else console.error('[SUMMARY] Enter pressed, but js/PokemonSummary.js is not loaded (window.PokemonSummary is missing). Check the script tag and the console for errors in that file.');
+      if (window.StartMenu) window.StartMenu.toggle(this);   // [MENU] Start / Enter -> the start menu (Pokémon, Pokédex, Bag ...)
+      else if (window.PokemonSummary) window.PokemonSummary.open(this);
+      else console.error('[MENU] Enter pressed, but js/StartMenu.js is not loaded (window.StartMenu is missing).');
       return;
     }
 
@@ -1768,7 +1770,7 @@ class OverworldScene extends Phaser.Scene {
 
     if (window.GameStateManager && window.GameStateManager.saveData) {
       window.GameStateManager.saveData.mapID = this.currentMapKey;
-      localStorage.setItem('pokemon_micron_save', JSON.stringify(window.GameStateManager.saveData));
+      window.SaveSystem && window.SaveSystem.touch('map');   // [SAVE] no autosave: SaveSystem.save() runs from the start menu
     }
 
     this.updateMapMusic(this.currentMapKey);
