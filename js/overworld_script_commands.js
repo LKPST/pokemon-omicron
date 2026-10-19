@@ -121,7 +121,7 @@ window.OverworldScriptCommands = (() => {
         ribbons: [],
         superTrainingFlags: { hpMedal: false, atkMedal: false, defMedal: false, spatkMedal: false, spdefMedal: false, speedMedal: false },
       };
-      if (window.Dex) window.Dex.catch(speciesKey);   // Pokedex: caught
+      if (window.Dex) window.Dex.catch(speciesKey, a.shiny === true || a.shiny === 'true');   // Pokedex: caught
       if (window.GivePokemonSystem && typeof window.GivePokemonSystem.give === 'function') window.GivePokemonSystem.give(mon);
       else console.warn('[ScriptEngine] GivePokemonSystem not found!');
       next();
