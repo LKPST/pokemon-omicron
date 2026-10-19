@@ -53,6 +53,26 @@ $player?
 release
 end
 
+start: "roxanne_gym_leader"
+lock
+faceplayer
+goto_if_set FLAG_DEFEATED_ROXANNE roxanne_after
+msgbox.normal
+{
+Roxanne: ...before-battle speech...
+}
+setflag FLAG_DEFEATED_ROXANNE
+release
+trainerbattle TRAINER_ROXANNE single
+end
+label roxanne_after
+msgbox.normal
+{
+Roxanne: ...after-battle speech...
+}
+release
+end
+
 start: "example_cutscene"
 # A small cutscene example: the NPC walks up to the player, the camera pans, the player answers yes/no.
 lock
