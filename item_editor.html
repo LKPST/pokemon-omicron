@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Item Editor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#14161c;color:#dde;font:13px system-ui,sans-serif;padding:16px;max-width:1300px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}.sub{color:#8a93a6;margin-bottom:12px;line-height:1.5}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#1c1f28;border:1px solid #2c3140;border-radius:10px;padding:10px 12px;margin-bottom:12px}
+button,select,input,textarea{font:inherit;color:#dde;background:#262b38;border:1px solid #3a4154;border-radius:6px;padding:5px 9px}
+button{cursor:pointer}button:hover{background:#2f3647}button.pri{background:#3d5bd9;border-color:#5573f0}button.pri:hover{background:#4a69ee}
+button:disabled{opacity:.4;cursor:default}
+input[type=text],input[type=number],textarea,select{width:100%}
+label{display:block;color:#8a93a6;font-size:11px;margin:8px 0 3px;text-transform:uppercase;letter-spacing:.05em}
+.grid{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:12px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:#1c1f28;border:1px solid #2c3140;border-radius:10px;padding:12px;min-width:0}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}.tabs button{padding:3px 9px;font-size:12px}.tabs button.on{background:#3d5bd9;border-color:#5573f0}
+#list{height:620px;overflow:auto;border:1px solid #2c3140;border-radius:6px;margin-top:8px}
+.row{display:flex;gap:8px;align-items:center;padding:3px 8px;border-bottom:1px solid #232838;cursor:pointer}
+.row:hover{background:#232838}.row.sel{background:#2b3a73}
+.row .ic{width:32px;height:32px;flex:none;background:#0e1016;border-radius:4px;display:grid;place-items:center}
+.row .ic img{max-width:32px;max-height:32px;image-rendering:pixelated}
+.row .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row .i{color:#6c7590;font-size:11px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:#c0493f}.dot.ok{background:#3fb56a}.dot.man{background:#d8a63a}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.big{width:96px;height:96px;background:#0e1016;border-radius:8px;display:grid;place-items:center;flex:none}
+.big img{max-width:88px;max-height:88px;image-rendering:pixelated}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:#2a3042;color:#9fb0e0}
+.mini{color:#8a93a6;font-size:12px;line-height:1.5}
+#log{max-height:200px;overflow:auto;font:12px ui-monospace,monospace;background:#0e1016;border-radius:6px;padding:8px;white-space:pre-wrap;color:#9aa3b8}
+canvas{width:100%;max-width:720px;image-rendering:pixelated;border-radius:6px;border:1px solid #2c3140;display:block;background:#000}
+.drop{outline:2px dashed #5573f0;outline-offset:-6px}
+details{margin-top:10px}summary{cursor:pointer;color:#9fb0e0}
+</style></head><body>
+<h1>Item Editor</h1>
+<div class="sub">Loads <b>tables/ItemTables.js</b>, lets you edit every item, and matches a folder of item pictures to the items. The picture path of each item is built from the item's name. Export the edited table and a zip of the renamed pictures.</div>
+
+<div class="bar" id="topbar">
+  <button class="pri" id="bTable">Open ItemTables.js…</button>
+  <button class="pri" id="bDir">Add sprite folder…</button>
+  <button id="bFiles">Add sprite files…</button>
+  <span class="mini" id="stat">No table loaded.</span>
+  <span style="flex:1"></span>
+  <button id="bExpT" disabled>Download ItemTables.js</button>
+  <button id="bExpZ" disabled>Download sprites (.zip)</button>
+</div>
+<input type="file" id="fTable" accept=".js,.json,.txt" hidden>
+<input type="file" id="fDir" webkitdirectory directory multiple hidden>
+<input type="file" id="fFiles" accept="image/*" multiple hidden>
+
+<div class="bar">
+  <span>Sprite folder in the project</span><input type="text" id="sprDir" value="assets/items/" style="width:200px">
+  <span>File name</span>
+  <select id="sprStyle" style="width:auto">
+    <option value="id">from the item id: old_gateau.png</option>
+    <option value="Id">from the item id: Old_Gateau.png</option>
+    <option value="name">from the in-game name: Old_Gateau.png</option>
+  </select>
+  <button id="bMatch" disabled>Match sprites to items</button>
+  <label style="margin:0;display:flex;gap:5px;align-items:center;text-transform:none;font-size:12px"><input type="checkbox" id="keepMan" checked style="width:auto"> keep my manual picks</label>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="tabs" id="tabs"></div>
+    <input type="text" id="q" placeholder="Search name or id…">
+    <label style="display:flex;gap:5px;align-items:center;text-transform:none;font-size:12px"><input type="checkbox" id="onlyMiss" style="width:auto"> only items without a picture</label>
+    <div id="list"></div>
+  </div>
+  <div>
+    <div class="card" id="detail"><span class="mini">Pick an item on the left.</span></div>
+    <div class="card" style="margin-top:12px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <b>Bag preview</b>
+        <select id="pvBg" style="width:auto"><option value="bag">Bag</option><option value="storage">Item storage</option></select>
+        <button id="bBag">Bag background…</button><button id="bSto">Storage background…</button>
+        <span class="mini">shows the selected item and its neighbours on your backgrounds</span>
+      </div>
+      <input type="file" id="fBag" accept="image/*" hidden><input type="file" id="fSto" accept="image/*" hidden>
+      <canvas id="pv" width="240" height="160" style="margin-top:8px"></canvas>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <b>Matching report</b> <span class="mini" id="repStat"></span>
+      <div class="two" style="margin-top:6px">
+        <div><label>Sprite files that match no item</label><div id="unFiles" class="mini" style="max-height:140px;overflow:auto"></div></div>
+        <div><label>Items still without a picture</label><div id="unItems" class="mini" style="max-height:140px;overflow:auto"></div></div>
+      </div>
+      <details><summary>Log</summary><div id="log"></div></details>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const POCKETS=[['all','All'],['items','Items'],['balls','Poké Balls'],['tms','TMs'],['berries','Berries'],['key','Key items']];
+const S={table:null,keys:[],head:'',tail:'',srcName:'ItemTables.js',files:[],byKey:{},sel:null,pocket:'all',bgImgs:{},url:{}};
+// S.files: [{name,stem,file,url}]   S.byKey[itemKey] = {fileIdx, how:'name'|'icon'|'manual'}
+const logEl=$('log');function log(m){logEl.textContent+=m+'\n';logEl.scrollTop=logEl.scrollHeight}
+const n=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const fileStem=f=>f.replace(/\.[^.]+$/,'');
+const stripSym=s=>s.replace(/^(gitemsprite_|gbagitem_|gbag_|bag_)/i,'').replace(/(tiles|pal)$/i,'').replace(/_?sprite$/i,'');
+const idWord=k=>k.replace(/^ITEM_/,'');
+const titleId=k=>idWord(k).split('_').map(w=>w.charAt(0)+w.slice(1).toLowerCase()).join('_');
+function baseName(k,it){const st=$('sprStyle').value;if(st==='id')return idWord(k).toLowerCase();if(st==='Id')return titleId(k);return String(it.name||idWord(k)).replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'')||titleId(k)}
+function pathOf(k){const it=S.table[k],m=S.byKey[k];if(!m){return it.sprite||''}
+  const f=S.files[m.fileIdx];const ext=(f.name.match(/\.[^.]+$/)||['.png'])[0].toLowerCase();let d=$('sprDir').value.trim();if(d&&!/\/$/.test(d))d+='/';return d+baseName(k,it)+ext}
+// ---------------------------------------------------------------- loading the table
+function parseTable(text,name){
+  const i=text.indexOf('const ItemTable');if(i<0)throw new Error('no "const ItemTable" in '+name);
+  const t=new Function('window',text+'\nreturn ItemTable;')({});
+  const ks=Object.keys(t);if(!ks.length)throw new Error('the table is empty');
+  const start=text.indexOf('{',i);let e=text.indexOf('\n};',start);
+  S.head=text.slice(0,i);S.tail=text.slice(e+3);S.table=t;S.keys=ks;S.srcName=name||'ItemTables.js';
+  S.byKey={};S.sel=null;
+  // keep the pictures that are already in the table
+  log('Loaded '+ks.length+' items from '+S.srcName+'.');
+  afterLoad();
+}
+function afterLoad(){$('stat').textContent=S.keys.length+' items loaded from '+S.srcName+(S.files.length?' · '+S.files.length+' sprite files':'');
+  ['bMatch','bExpT','bExpZ'].forEach(b=>$(b).disabled=!S.table);renderTabs();renderList();if(S.table&&S.files.length)runMatch(true)}
+$('bTable').onclick=()=>$('fTable').click();
+$('fTable').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{parseTable(await f.text(),f.name)}catch(er){alert('Could not read the table: '+er.message);log('ERROR '+er.message)}e.target.value=''};
+(async()=>{if(location.protocol==='file:'){log('Opened from a file: use "Open ItemTables.js…".');return}
+  for(const b of['','public/','../','../public/']){try{const r=await fetch(b+'tables/ItemTables.js',{cache:'no-store'});if(!r.ok)continue;const t=await r.text();if(/^\s*<(!doctype|html)/i.test(t))continue;
+    parseTable(t,b+'tables/ItemTables.js');log('Read the table from the project ('+b+'tables/).');return}catch(e){}}
+  log('tables/ItemTables.js not found next to this page: use "Open ItemTables.js…".')})();
+// ---------------------------------------------------------------- sprites
+function addFiles(list){let add=0;for(const f of list){if(!/^image\//.test(f.type)&&!/\.(png|gif|bmp|webp|jpg|jpeg)$/i.test(f.name))continue;
+  const rel=f.webkitRelativePath||f.name;const nm=f.name;
+  const ex=S.files.findIndex(x=>x.name===nm);const rec={name:nm,rel,stem:fileStem(nm),file:f,url:URL.createObjectURL(f)};
+  if(ex>=0){S.files[ex]=rec}else{S.files.push(rec);add++}}
+  log('Added '+add+' sprite file(s), '+S.files.length+' in total.');afterLoad();if(!S.table)$('stat').textContent=S.files.length+' sprite files ready - now open ItemTables.js.'}
+$('bDir').onclick=()=>$('fDir').click();$('bFiles').onclick=()=>$('fFiles').click();
+$('fDir').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};$('fFiles').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
+document.addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('drop')});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('drop')});
+document.addEventListener('drop',async e=>{e.preventDefault();document.body.classList.remove('drop');const fs=[...(e.dataTransfer.files||[])];
+  const t=fs.find(f=>/\.js$/i.test(f.name));if(t){try{parseTable(await t.text(),t.name)}catch(er){alert(er.message)}}
+  const im=fs.filter(f=>!/\.js$/i.test(f.name));if(im.length)addFiles(im)});
+// ---------------------------------------------------------------- matching
+function runMatch(quiet){
+  if(!S.table)return;const keepMan=$('keepMan').checked;const old=S.byKey;S.byKey={};
+  if(keepMan)for(const k in old)if(old[k].how==='manual'&&old[k].fileIdx<S.files.length&&S.table[k])S.byKey[k]=old[k];
+  const nameIdx=new Map(),iconIdx=new Map();
+  S.files.forEach((f,i)=>{const s=n(stripSym(f.stem));if(!nameIdx.has(s))nameIdx.set(s,i);const raw=n(f.stem);if(!nameIdx.has(raw))nameIdx.set(raw,i)});
+  // 1: the item id or the item name equals the file name
+  for(const k of S.keys){if(S.byKey[k])continue;const it=S.table[k];
+    for(const c of [n(idWord(k)),n(it.name)]){if(c&&nameIdx.has(c)){S.byKey[k]={fileIdx:nameIdx.get(c),how:'name'};break}}}
+  // 2: the icon CFRU used for the item (gBag_RedMintTiles ...) equals the file name - only for items without a picture yet
+  for(const k of S.keys){if(S.byKey[k])continue;const g=S.table[k].gfx;if(!g||/interrogation/i.test(g))continue;const c=n(stripSym(g));
+    if(c&&nameIdx.has(c))S.byKey[k]={fileIdx:nameIdx.get(c),how:'icon'}}
+  for(const k of S.keys){const p=pathOf(k);if(S.byKey[k])S.table[k].sprite=p}
+  renderList();renderDetail();report();draw();
+  if(!quiet)log('Matched '+Object.keys(S.byKey).length+' of '+S.keys.length+' items.')}
+$('bMatch').onclick=()=>runMatch(false);
+['sprDir','sprStyle'].forEach(i=>$(i).onchange=()=>{if(!S.table)return;for(const k of S.keys)if(S.byKey[k])S.table[k].sprite=pathOf(k);renderDetail();renderList()});
+function spriteUrl(k){const m=S.byKey[k];return m?S.files[m.fileIdx].url:null}
+function report(){
+  const used=new Set(Object.values(S.byKey).map(m=>m.fileIdx));
+  const un=S.files.map((f,i)=>[f,i]).filter(([f,i])=>!used.has(i));
+  const miss=S.keys.filter(k=>!S.byKey[k]);
+  $('repStat').textContent=S.keys.length?(' - '+(S.keys.length-miss.length)+' of '+S.keys.length+' items have a picture, '+un.length+' of '+S.files.length+' files unused'):'';
+  $('unFiles').innerHTML=un.length?un.slice(0,300).map(([f])=>esc(f.name)).join('<br>'):'<i>none</i>';
+  $('unItems').innerHTML=miss.length?miss.slice(0,400).map(k=>esc(S.table[k].name)+' <span style="color:#6c7590">'+esc(idWord(k))+'</span>').join('<br>')+(miss.length>400?'<br>…':''):'<i>none</i>'}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// ---------------------------------------------------------------- list
+function renderTabs(){$('tabs').innerHTML='';for(const[p,l]of POCKETS){const b=document.createElement('button');b.textContent=l;if(S.pocket===p)b.className='on';b.onclick=()=>{S.pocket=p;renderTabs();renderList()};$('tabs').appendChild(b)}}
+function filtered(){if(!S.table)return[];const q=$('q').value.trim().toLowerCase(),om=$('onlyMiss').checked;
+  return S.keys.filter(k=>{const it=S.table[k];if(S.pocket!=='all'&&it.pocket!==S.pocket)return false;if(om&&S.byKey[k])return false;
+    return !q||k.toLowerCase().includes(q)||String(it.name).toLowerCase().includes(q)})}
+function renderList(){const el=$('list');el.innerHTML='';const ks=filtered();const frag=document.createDocumentFragment();
+  for(const k of ks.slice(0,900)){const it=S.table[k],u=spriteUrl(k),m=S.byKey[k];
+    const r=document.createElement('div');r.className='row'+(S.sel===k?' sel':'');
+    r.innerHTML='<div class="ic">'+(u?'<img src="'+u+'">':'')+'</div><div class="n">'+esc(it.name)+'</div><span class="i">'+esc(idWord(k))+'</span><span class="dot'+(m?(m.how==='manual'?' man':' ok'):'')+'"></span>';
+    r.onclick=()=>{S.sel=k;renderList();renderDetail();draw()};frag.appendChild(r)}
+  el.appendChild(frag);if(ks.length>900){const d=document.createElement('div');d.className='mini';d.style.padding='8px';d.textContent='… '+(ks.length-900)+' more: use the search';el.appendChild(d)}}
+$('q').oninput=renderList;$('onlyMiss').onchange=renderList;
+// ---------------------------------------------------------------- detail
+function renderDetail(){const el=$('detail');const k=S.sel;if(!k||!S.table){el.innerHTML='<span class="mini">Pick an item on the left.</span>';return}
+  const it=S.table[k],u=spriteUrl(k),m=S.byKey[k];
+  const opts='<option value="">(none)</option>'+S.files.map((f,i)=>'<option value="'+i+'"'+(m&&m.fileIdx===i?' selected':'')+'>'+esc(f.name)+'</option>').join('');
+  const how=m?({name:'matched by name',icon:'matched by the CFRU icon',manual:'picked by hand'}[m.how]):'no picture';
+  el.innerHTML=
+   '<div style="display:flex;gap:12px"><div class="big">'+(u?'<img src="'+u+'">':'<span class="mini">no picture</span>')+'</div><div style="flex:1;min-width:0">'+
+   '<div style="font-size:16px;font-weight:600">'+esc(it.name)+' <span class="tag">'+esc(k)+'</span></div>'+
+   '<div class="mini">item #'+it.id+' · icon in CFRU: '+esc(it.gfx||'-')+' · <span class="tag">'+how+'</span></div>'+
+   '<label>Picture path (written into the table)</label><input type="text" id="d_sprite" value="'+esc(it.sprite||'')+'">'+
+   '<label>Choose a file for this item</label><div style="display:flex;gap:6px"><select id="d_file">'+opts+'</select><button id="d_up">Upload…</button></div><input type="file" id="d_upf" accept="image/*" hidden>'+
+   '</div></div>'+
+   '<div class="two"><div><label>Name (12 characters in the game)</label><input type="text" id="d_name" value="'+esc(it.name)+'"></div>'+
+   '<div><label>Pocket</label><select id="d_pocket">'+POCKETS.slice(1).map(([p,l])=>'<option value="'+p+'"'+(it.pocket===p?' selected':'')+'>'+l+'</option>').join('')+'</select></div></div>'+
+   '<div class="three"><div><label>Price</label><input type="number" id="d_price" value="'+(+it.price||0)+'"></div>'+
+   '<div><label>Hold effect param</label><input type="text" id="d_hep" value="'+esc(it.holdEffectParam)+'"></div>'+
+   '<div><label>Fling power</label><input type="number" id="d_fl" value="'+(it.fling?it.fling[0]:30)+'"></div></div>'+
+   '<label>Description (new line = \\n)</label><textarea id="d_desc" rows="4">'+esc(it.description||'')+'</textarea>'+
+   '<details><summary>Original CFRU fields (read-only)</summary><div class="mini">hold effect: '+esc(it.holdEffect)+'<br>use type: '+esc(it.useType||'-')+'<br>field use: '+esc(it.fieldUse||'-')+'<br>battle use: '+esc(it.battleUse||'-')+' ('+it.battleUsage+')<br>fling: '+esc(JSON.stringify(it.fling))+'</div></details>';
+  const bind=(id,fn)=>{$(id).oninput=()=>{fn($(id).value);S.dirty=1;renderRow(k);draw()}};
+  bind('d_name',v=>{it.name=v});bind('d_price',v=>{it.price=+v||0});bind('d_desc',v=>{it.description=v});bind('d_sprite',v=>{it.sprite=v});
+  bind('d_hep',v=>{it.holdEffectParam=/^-?\d+$/.test(v)?+v:v});
+  bind('d_fl',v=>{const p=+v||0;it.fling=[p,it.fling?it.fling[1]:'0']});
+  $('d_pocket').onchange=()=>{it.pocket=$('d_pocket').value;renderList()};
+  $('d_file').onchange=()=>{const v=$('d_file').value;if(v===''){delete S.byKey[k];it.sprite=''}else{S.byKey[k]={fileIdx:+v,how:'manual'};it.sprite=pathOf(k)}renderList();renderDetail();report();draw()};
+  $('d_up').onclick=()=>$('d_upf').click();
+  $('d_upf').onchange=e=>{const f=e.target.files[0];if(!f)return;const rec={name:f.name,rel:f.name,stem:fileStem(f.name),file:f,url:URL.createObjectURL(f)};S.files.push(rec);
+    S.byKey[k]={fileIdx:S.files.length-1,how:'manual'};it.sprite=pathOf(k);renderList();renderDetail();report();draw();$('stat').textContent=S.keys.length+' items · '+S.files.length+' sprite files'}}
+function renderRow(k){/* name edits: refresh the list text lightly */const rows=$('list').children;const ks=filtered();const i=ks.indexOf(k);if(i>=0&&rows[i]){const nn=rows[i].querySelector('.n');if(nn)nn.textContent=S.table[k].name}}
+// ---------------------------------------------------------------- bag preview
+const BG={bag:{src:'bag_bg.png',rows:{x:75,y:33,w:157,h:17,gap:4.5,n:5,icon:14,tx:96,qx:226},tabs:{x:3,y:3,w:37,h:17,gap:1.5,n:6},desc:{x:46,y:121,w:188,icx:8,icy:122,icsz:32},panel:{x:6,y:36,w:64,h:70}},
+          storage:{src:'item_storage_bg.png',rows:{x:52,y:12,w:152,h:11,gap:5,n:6,icon:12,tx:68,qx:200},desc:{x:6,y:124,w:228,icx:0,icy:0,icsz:0}}};
+function loadBg(kind,url){const im=new Image();im.onload=()=>{S.bgImgs[kind]=im;draw()};im.src=url}
+async function autoBg(){for(const kind of ['bag','storage'])for(const b of['','public/','../','../public/','assets/','public/assets/']){try{const r=await fetch(b+BG[kind].src,{cache:'no-store'});if(!r.ok)continue;const bl=await r.blob();if(!/^image\//.test(bl.type))continue;loadBg(kind,URL.createObjectURL(bl));break}catch(e){}}}
+autoBg();
+$('bBag').onclick=()=>$('fBag').click();$('bSto').onclick=()=>$('fSto').click();
+$('fBag').onchange=e=>{const f=e.target.files[0];if(f){loadBg('bag',URL.createObjectURL(f));$('pvBg').value='bag'}};
+$('fSto').onchange=e=>{const f=e.target.files[0];if(f){loadBg('storage',URL.createObjectURL(f));$('pvBg').value='storage'}};
+$('pvBg').onchange=draw;
+const imgCache={};function getImg(url){if(!url)return null;let o=imgCache[url];if(!o){o=imgCache[url]=new Image();o.onload=()=>draw();o.src=url}return o.complete&&o.naturalWidth?o:null}
+function draw(){const cv=$('pv'),c=cv.getContext('2d');c.imageSmoothingEnabled=false;const kind=$('pvBg').value,cfg=BG[kind];
+  c.clearRect(0,0,240,160);c.fillStyle='#10131c';c.fillRect(0,0,240,160);const bg=S.bgImgs[kind];if(bg)c.drawImage(bg,0,0,240,160);
+  if(!S.table)return;let ks=filtered();if(!ks.length)ks=S.keys;let idx=Math.max(0,ks.indexOf(S.sel));
+  const R=cfg.rows;const top=Math.max(0,Math.min(idx-1,ks.length-R.n));
+  c.font='8px monospace';c.textBaseline='middle';
+  for(let r=0;r<R.n&&top+r<ks.length;r++){const k=ks[top+r],it=S.table[k],y=Math.round(R.y+r*(R.h+R.gap));const sel=k===S.sel;
+    if(sel){c.fillStyle='rgba(255,215,60,.28)';c.fillRect(R.x,y,R.w,R.h)}
+    const im=getImg(spriteUrl(k));if(im){const s=Math.min(R.icon/im.naturalWidth,R.icon/im.naturalHeight);const w=im.naturalWidth*s,h=im.naturalHeight*s;c.drawImage(im,Math.round(R.x+3+(R.icon-w)/2),Math.round(y+(R.h-h)/2),Math.round(w),Math.round(h))}
+    c.fillStyle='#fff';c.strokeStyle='#222';c.lineWidth=2;const tx=R.tx;c.strokeText(String(it.name).slice(0,14),tx,y+R.h/2+.5);c.fillText(String(it.name).slice(0,14),tx,y+R.h/2+.5);
+    c.textAlign='right';c.strokeText('x'+(1+(it.id%9)),R.qx,y+R.h/2+.5);c.fillText('x'+(1+(it.id%9)),R.qx,y+R.h/2+.5);c.textAlign='left'}
+  const sel=S.table[S.sel||ks[idx]],D=cfg.desc;
+  if(sel&&D){const im=getImg(spriteUrl(S.sel||ks[idx]));if(im&&D.icsz){const s=Math.min(D.icsz/im.naturalWidth,D.icsz/im.naturalHeight);const w=im.naturalWidth*s,h=im.naturalHeight*s;c.drawImage(im,Math.round(D.icx+(D.icsz-w)/2),Math.round(D.icy+(D.icsz-h)/2),Math.round(w),Math.round(h))}
+    const lines=String(sel.description||'').split('\n').filter((l,i,a)=>!(l===''&&a[i-1]==='')).slice(0,3);c.fillStyle='#fff';c.strokeStyle='#1a1a2a';c.lineWidth=2;
+    lines.forEach((l,i)=>{const yy=D.y+4+i*11;c.strokeText(l,D.x,yy);c.fillText(l,D.x,yy)})}}
+// ---------------------------------------------------------------- export
+function esc2(v){return JSON.stringify(v)}
+function exportTable(){for(const k of S.keys){const it=S.table[k];if(S.byKey[k])it.sprite=pathOf(k)}
+  const lines=S.keys.map(k=>'  '+k+': '+JSON.stringify(S.table[k])+',');lines[lines.length-1]=lines[lines.length-1].replace(/,$/,'');
+  return S.head+'const ItemTable = {\n'+lines.join('\n')+'\n};'+S.tail}
+function dl(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+$('bExpT').onclick=()=>{dl('ItemTables.js',new Blob([exportTable()],{type:'text/javascript'}));log('Downloaded ItemTables.js - replace tables/ItemTables.js with it.')};
+// minimal zip (stored, no compression)
+const CRC=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[i]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function makeZip(entries){const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+  for(const e of entries){const nm=enc.encode(e.name),crc=crc32(e.data),sz=e.data.length;
+    const lh=new DataView(new ArrayBuffer(30));lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);lh.setUint16(8,0,true);lh.setUint16(10,0,true);lh.setUint16(12,0x21,true);lh.setUint32(14,crc,true);lh.setUint32(18,sz,true);lh.setUint32(22,sz,true);lh.setUint16(26,nm.length,true);lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer),nm,e.data);
+    const ch=new DataView(new ArrayBuffer(46));ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);ch.setUint16(12,0,true);ch.setUint16(14,0x21,true);ch.setUint32(16,crc,true);ch.setUint32(20,sz,true);ch.setUint32(24,sz,true);ch.setUint16(28,nm.length,true);ch.setUint32(42,off,true);
+    cen.push(new Uint8Array(ch.buffer),nm);off+=30+nm.length+sz}
+  let cs=0;for(const p of cen)cs+=p.length;const ed=new DataView(new ArrayBuffer(22));ed.setUint32(0,0x06054b50,true);ed.setUint16(8,entries.length,true);ed.setUint16(10,entries.length,true);ed.setUint32(12,cs,true);ed.setUint32(16,off,true);
+  return new Blob([...parts,...cen,new Uint8Array(ed.buffer)],{type:'application/zip'})}
+$('bExpZ').onclick=async()=>{const ks=S.keys.filter(k=>S.byKey[k]);if(!ks.length){alert('No item has a picture yet.');return}
+  const done=new Set(),ents=[];for(const k of ks){const p=pathOf(k);if(done.has(p))continue;done.add(p);const f=S.files[S.byKey[k].fileIdx];ents.push({name:p,data:new Uint8Array(await f.file.arrayBuffer())})}
+  dl('item_sprites.zip',makeZip(ents));log('Downloaded item_sprites.zip with '+ents.length+' pictures (paths as in the table). Unzip it into the project root.')};
+window.IE=S;afterLoad();
+})();
+</script></body></html>
