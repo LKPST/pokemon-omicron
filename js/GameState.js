@@ -255,7 +255,7 @@ function createBattle(env) {
   const FLASH = 1.2, SLIDE = .9;
   // layout of the TOP surface (GBA pixels)
   // Live values: copied every frame from BattleScene.CONFIG (see the top of BattleScene.js), so editing the config in the console moves things at once.
-  const FOE = { cx: 170, bottom: 72, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 6, boxW: 104, fit: 64, scale: 0, trBottom: 94, trScale: 1 };
+  const FOE = { cx: 170, bottom: 74, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 6, boxW: 104, fit: 64, scale: 0, trBottom: 74, trScale: 1 };
   const ALLY = { cx: 60, bottom: 112, platY: 110, platX: 60, trX: 60, boxX: 126, boxY: 84, boxW: 108, fit: 64, scale: 1, trBottom: 112, trScale: 1 };
   const CF = { levelBox: { x: 148, y: 26 }, ball: 1.5, msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, party: { x: 4, y: 12, gap: 38, show: true }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } };
   function applyConfig() {
@@ -298,6 +298,21 @@ function createBattle(env) {
   function spritePath(sp) { const d = spData(sp); return d.battleSprite || d.frontSprite || ''; }
   function iconPath(sp) { return spData(sp).iconSprite || ''; }
   function frameCount(e) { const iw = e.img.naturalWidth, ih = e.img.naturalHeight; if (!iw || !ih) return 1; return iw / ih >= 3.5 ? 4 : 1; }
+  // Sprites have transparent padding under the feet. feetPad = number of empty rows at the bottom of a frame (scan from the bottom row up until a
+  // pixel is found), so the lowest opaque pixel can be put exactly on the grass / platform line.
+  const padCache = new WeakMap();
+  function feetPad(src, sx, sy, fw, fh) {
+    let m = padCache.get(src); if (!m) padCache.set(src, m = new Map());
+    const k = sx + ',' + sy + ',' + fw + ',' + fh; if (m.has(k)) return m.get(k);
+    let pad = 0;
+    try {
+      const cv = mk(fw, fh), x = cv.getContext('2d', { willReadFrequently: true }); x.drawImage(src, sx, sy, fw, fh, 0, 0, fw, fh);
+      const d = x.getImageData(0, 0, fw, fh).data; let last = -1;
+      for (let y = fh - 1; y >= 0 && last < 0; y--) for (let xx = 0; xx < fw; xx++) if (d[(y * fw + xx) * 4 + 3] > 8) { last = y; break; }
+      pad = last < 0 ? 0 : fh - 1 - last;
+    } catch (e) { pad = 0; }
+    m.set(k, pad); return pad;
+  }
   function drawMon(c, sd, front, cx, bottom, maxPx, wantScale) {
     if (!sd.vis || !sd.species || sd.alpha <= 0) return;
     const path = spritePath(sd.species), e = getImg(path), pop = sd.scale;
@@ -307,7 +322,7 @@ function createBattle(env) {
     let fr = 0;
     if (n >= 4) fr = front ? (sd.shiny ? 1 : 0) : (sd.shiny ? 3 : 2); else if (n > 1) fr = front && sd.shiny ? 1 : 0;
     let s = wantScale || Math.min(maxPx / fw, maxPx / fh); s = s >= 2 ? Math.floor(s) : s > 1 ? Math.floor(s * 2) / 2 : s; s *= pop;
-    const dw = Math.max(1, Math.round(fw * s)), dh = Math.max(1, Math.round(fh * s)), dx = Math.round(cx + sd.dx + sd.ox - dw / 2), dy = Math.round(bottom + sd.dy + sd.oy - dh);
+    const dw = Math.max(1, Math.round(fw * s)), dh = Math.max(1, Math.round(fh * s)), dx = Math.round(cx + sd.dx + sd.ox - dw / 2), dy = Math.round(bottom + sd.dy + sd.oy - dh + feetPad(keyBg(e.img), fr * fw, 0, fw, fh) * s);
     if (dw <= 1 || dh <= 1) return;
     S.hit[front ? 'foeMon' : 'allyMon'] = { x: dx, y: dy, w: dw, h: dh };
     c.save(); c.imageSmoothingEnabled = false; c.globalAlpha = clamp(sd.alpha);
@@ -319,7 +334,7 @@ function createBattle(env) {
     const img = keyBg(e.img), iw = e.img.naturalWidth, ih = e.img.naturalHeight; let fw = iw, fh = ih, sx = 0, sy = 0;
     if (back) { fw = fh = 64; const cols = Math.max(1, Math.floor(iw / 64)), rows = Math.max(1, Math.floor(ih / 64)); let fr = tr.frame | 0; if (fr >= cols * rows) fr = 0; sx = (fr % cols) * 64; sy = Math.floor(fr / cols) * 64; }
     const dw = Math.round(fw * scale), dh = Math.round(fh * scale);
-    const tx = Math.round(cx + tr.ox - dw / 2), ty = Math.round(bottom - dh); S.hit[back ? 'allyTrainer' : 'foeTrainer'] = { x: tx, y: ty, w: dw, h: dh };
+    const tx = Math.round(cx + tr.ox - dw / 2), ty = Math.round(bottom - dh + feetPad(img, sx, sy, fw, fh) * scale); S.hit[back ? 'allyTrainer' : 'foeTrainer'] = { x: tx, y: ty, w: dw, h: dh };
     c.imageSmoothingEnabled = false; c.drawImage(img, sx, sy, fw, fh, tx, ty, dw, dh);
   }
   function drawBallSprite(c, x, y, rot, scale) {
@@ -1154,7 +1169,8 @@ class BattleScene extends Phaser.Scene {
 // LAYOUT / SCALE  -  edit these numbers, change them live in the browser console while a battle is open, or (easiest) use
 // battle_layout_editor.html, which drags everything around and writes this block back into this file for you.
 //   BattleScene.CONFIG.ally.scale = 1.25
-// Units are GBA pixels (the game draws them 2x).  TOP screen is 240 x 155:  x = centre of the sprite, bottom = where its feet are.
+// Units are GBA pixels (the game draws them 2x).  TOP screen is 240 x 155:  x = centre of the sprite, bottom = the line its LOWEST VISIBLE PIXEL stands on
+// (transparent padding under the feet is ignored, so every sprite sits on the grass, front and back).
 // scale: 1 = the sprite's own pixels.  foe.scale 0 = auto (shrinks big sprites to fit `fit` px).
 // platform / platformX: the shadow ellipse.  trainerX / trainerBottom / trainerScale: the trainer sprites.  box: the HP box (top-left corner).
 // bottom.msg = the TEXT BOX (drawn on the TOP screen, over the field).  bottom.btn = the FIGHT / BAG / POKeMON / RUN grid on the BOTTOM screen (x, y = top-left
@@ -1163,7 +1179,7 @@ class BattleScene extends Phaser.Scene {
 // ---------------------------------------------------------------------------
 /*LAYOUT-BEGIN*/
 BattleScene.CONFIG = {
-  foe:  { x: 170, bottom: 72,  platform: 72,  platformX: 170, scale: 0, fit: 64, trainerX: 170, trainerBottom: 94,  trainerScale: 1, box: { x: 6,   y: 6,   w: 104 } },
+  foe:  { x: 170, bottom: 74,  platform: 72,  platformX: 170, scale: 0, fit: 64, trainerX: 170, trainerBottom: 74,   trainerScale: 1, box: { x: 6,   y: 6,   w: 104 } },
   ally: { x: 60,  bottom: 112, platform: 110, platformX: 60,  scale: 1, fit: 64, trainerX: 60,  trainerBottom: 112, trainerScale: 1, box: { x: 126, y: 84, w: 108 } },
   ballScale: 1.5,
   levelBox: { x: 148, y: 26 },
