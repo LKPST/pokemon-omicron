@@ -432,7 +432,7 @@ function createBattle(env) {
     const ee = env.engine ? env.engine() : {};
     const foe = (o.foe || []).map(f => (f && f.species && f.moves && (f.HP != null || f.maxHP != null || f.Attack != null)) ? f : E.makeMon({ db: ee.db, moves: ee.moves, learn: ee.learn }, f.species || f.key, f.level || 5, Object.assign({}, f.opts || f, f.isShiny != null ? { shiny: f.isShiny ? 1 : 0 } : (f.shiny != null ? { shiny: f.shiny ? 1 : 0 } : {}), f.ivs === 31 ? { maxIV: true, ivs: undefined } : {})));
     S.b = E.create(Object.assign({}, ee, { kind: o.kind || 'wild', trainerName: o.trainerName || 'Trainer', ai: o.ai, items: o.items, player: o.player || [], foe, seed: o.seed, money: o.money, noExp: o.noExp, expMultiplier: o.expMultiplier, weather: o.weather }));
-    S.onEnd = o.onEnd || env.onEnd || null; S.bgKind = o.bg || 'grass'; S.mapWeather = o.weather || null; S.bag = normBag(o.bag != null ? o.bag : (env.bag && env.bag()));
+    S.onEnd = o.onEnd || env.onEnd || null; S.bgKind = o.bg || 'grass'; S.mapWeather = o.weather || null; S.mapFx = !!o.weather; S.bag = normBag(o.bag != null ? o.bag : (env.bag && env.bag()));
     S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null;
     S.fade = 1; S.fadeDir = -1; S.done = false; S.editMode = false; S.finished = null; S.onFade = null; S.noAuto = false; S.nudged = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
     const skip = !!o.skipIntro;
@@ -484,7 +484,7 @@ function createBattle(env) {
         sd.hpFrom = sd.dhp; sd.hpTo = ev.to; sd.maxhp = ev.max || sd.maxhp; S.cur.dur = clamp(Math.abs(ev.to - ev.from) / Math.max(1, sd.maxhp) * 1.4, .25, 1.3);
         if (ev.to < ev.from) sd.blink = Math.min(.45, S.cur.dur + .1); break; }
       case 'status': if (sd) sd.status = ev.status || null; S.cur.dur = .15; break;
-      case 'weather': S.weather = ev.type && !/^(none|clear)$/i.test(ev.type) ? ev.type : null; S.cur.dur = .2; break;
+      case 'weather': if (S.mapFx && ev.type !== S.mapWeather) S.mapFx = false; S.weather = ev.type && !/^(none|clear)$/i.test(ev.type) ? ev.type : null; S.cur.dur = .2; break;
       case 'terrain': S.terrain = ev.type || null; S.cur.dur = .1; break;
       case 'switchin': {
         sd.vis = true; sd.name = ev.name; sd.species = ev.species; sd.level = ev.level; sd.hp = ev.hp; sd.maxhp = ev.maxhp; sd.dhp = ev.hp; sd.status = ev.status || null; sd.shiny = !!ev.shiny; sd.gender = ev.gender || ''; sd.idx = ev.idx;
@@ -773,6 +773,11 @@ function createBattle(env) {
   }
   function drawWeather(c) {
     const w = S.weather && String(S.weather).toLowerCase(); if (!w) return;
+    // the map's weather plays once at the start of the battle and fades out (a weather move keeps its effect for as long as it lasts)
+    let fa = 1; if (S.mapFx) { const T0 = CF.weatherSecs != null ? CF.weatherSecs : 6; fa = Math.max(0, Math.min(1, T0 + 1.5 - S.t)); if (fa <= 0) return; }
+    c.save(); c.globalAlpha = fa; try { drawWeatherFx(c, w); } finally { c.restore(); }
+  }
+  function drawWeatherFx(c, w) {
     if (/rain|drizzle/.test(w)) { c.fillStyle = 'rgba(40,70,140,0.18)'; c.fillRect(0, 0, W, H); c.fillStyle = '#d8e8ff'; for (let i = 0; i < 40; i++) { const x = (i * 37 + S.t * 90) % 250 - 6, y = (i * 53 + S.t * 220) % H; c.fillRect(Math.round(x), Math.round(y), 1, 4); } }
     else if (/sun|harsh/.test(w)) { c.fillStyle = 'rgba(255,200,60,0.16)'; c.fillRect(0, 0, W, H); }
     else if (/sand/.test(w)) { c.fillStyle = 'rgba(200,160,80,0.28)'; c.fillRect(0, 0, W, H); c.fillStyle = '#e8d098'; for (let i = 0; i < 40; i++) c.fillRect(Math.round((i * 41 + S.t * 160) % 250), Math.round((i * 29 + S.t * 40) % H), 2, 1); }
@@ -1060,6 +1065,8 @@ class BattleScene extends Phaser.Scene {
   // (nothing to preload: the music is fetched in the background after the scene is on screen, so the battle opens at once)
 
   create() {
+    this.tornDown = false;   // Phaser reuses this scene object: without this reset, the 2nd battle never cleaned up (music kept playing, keys stayed captured)
+    try { window.removeEventListener('keydown', this.kd, true); } catch (e) { /* ignore */ }
     const gsm = window.GameStateManager, d = this.battleData, sv = (gsm && gsm.saveData) || {};
     const cw = this.scale.width || 480, ch = this.scale.height || 620, L = BattleScene.LAYOUT || {};
     const gap = L.gap != null ? L.gap : 4, topH = L.topH || Math.round((ch - gap) / 2), botY = topH + gap;
