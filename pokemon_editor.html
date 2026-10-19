@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Palette Swap Sheets</title>
+<html lang="en"><head><meta charset="utf-8"><title>Pokémon Editor</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 *{box-sizing:border-box}
@@ -25,8 +25,56 @@ th{position:sticky;top:0;background:#222634;color:#9ab;font-weight:600}
 .frames{display:flex;gap:6px;color:#8a93a6;font-size:11px}.frames i{font-style:normal;background:#262a36;padding:2px 6px;border-radius:4px}
 #msg{position:sticky;bottom:0;background:#222a40;border:1px solid #3a6df0;border-radius:8px;padding:8px 12px;margin-top:10px;display:none}
 progress{width:220px}
+.tabs{display:flex;gap:6px;margin:0 0 14px;border-bottom:1px solid #2c3140}
+.tabs button{border-radius:8px 8px 0 0;border-bottom:none;background:#1c1f28;padding:9px 18px;font-weight:600;color:#9ab}
+.tabs button.on{background:#3a6df0;border-color:#5d8aff;color:#fff}
+.ed2{display:grid;grid-template-columns:310px minmax(0,1fr);gap:12px;align-items:start}
+@media(max-width:900px){.ed2{grid-template-columns:1fr}}
+.edlist{background:#1c1f28;border:1px solid #2c3140;border-radius:10px;padding:10px;position:sticky;top:8px}
+.edlist input[type=text],.edlist select{width:100%;margin-bottom:6px}
+.edrows{max-height:68vh;overflow:auto;border:1px solid #2c3140;border-radius:6px}
+.edrow{padding:5px 8px;border-bottom:1px solid #262a36;cursor:pointer;display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.edrow:hover{background:#252b3d}.edrow.sel{background:#26324f}.edrow small{color:#8a93a6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.edform section{margin-bottom:12px}
+.edform h3{font-size:13px;margin:0 0 8px;color:#7fa4ff;display:flex;gap:10px;align-items:center}
+.fg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:11px;color:#8a93a6}
+label.f input,label.f select,label.f textarea{width:100%;color:#eef}
+label.f input[type=checkbox]{width:auto;align-self:flex-start;margin-top:4px}
+textarea{font:inherit;background:#262a36;color:#eef;border:1px solid #3a4052;border-radius:6px;padding:7px 11px}
+.sbar{height:6px;border-radius:3px;background:#262a36;overflow:hidden;margin-top:2px}.sbar i{display:block;height:100%}
+.hdr{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.hdr canvas{image-rendering:pixelated;background:repeating-conic-gradient(#2a2e3a 0 25%,#222633 0 50%) 0 0/12px 12px;border-radius:6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}
+.chip{background:#262a36;border:1px solid #3a4052;border-radius:12px;padding:2px 4px 2px 9px;font-size:11px;display:flex;gap:6px;align-items:center}
+.chip b{cursor:pointer;color:#ff8a80;padding:0 4px;font-weight:400}
+.ltab td,.ltab th{padding:3px 6px}.ltab input[type=number]{width:62px}.ltab input[type=text]{width:190px}
+.badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;color:#fff}
+.xbtn{padding:2px 8px;border-color:#6a3a3a}
+#edProblems{max-height:260px;overflow:auto;font-size:12px;line-height:1.6;white-space:pre-wrap}
+button.dirty{outline:2px solid #ffd166}
+
 </style></head><body>
-<h1>Palette Swap Sheets</h1>
+<h1>Pokémon Editor</h1>
+<div class="tabs"><button data-tab="sprites" class="on">Sprites</button><button data-tab="pokemon">Pokémon</button><button data-tab="moves">Moves</button></div>
+<div id="edcommon" hidden>
+<section id="edload">
+  <div class="hint" style="margin-top:0">Load your tables, edit them in the <b>Pokémon</b> and <b>Moves</b> tabs, then download the changed files and put them back in <code>tables/</code>. Everything runs in your browser; nothing is uploaded.
+    <b>Choose project folder</b> picks up all of them at once (and the sprites, icons and cries by file name).</div>
+  <div class="row">
+    <button class="pri" id="edFolder">Choose project folder</button>
+    <button id="edLDb">PokemonDatabase.js</button><button id="edLLn">LearnsetTables.js</button><button id="edLEv">EvolutionTables.js</button><button id="edLMv">MoveTables.js</button><button id="edLTy">TypeTables.js</button>
+    <input type="file" id="edfFolder" webkitdirectory multiple hidden><input type="file" id="edfDb" accept=".js,.txt" hidden><input type="file" id="edfLn" accept=".js,.txt" hidden><input type="file" id="edfEv" accept=".js,.txt" hidden><input type="file" id="edfMv" accept=".js,.txt" hidden><input type="file" id="edfTy" accept=".js,.txt" hidden>
+  </div>
+  <div class="stats" id="edStats"></div>
+  <div class="row"><span style="color:#8a93a6">Download:</span>
+    <button class="ok" data-dl="db">PokemonDatabase.js</button><button class="ok" data-dl="learn">LearnsetTables.js</button><button class="ok" data-dl="evo">EvolutionTables.js</button><button class="ok" data-dl="moves">MoveTables.js</button>
+    <button id="edCheck">Check for problems</button></div>
+  <div id="edProblems" class="hint" hidden></div>
+</section>
+</div>
+
+<div id="tab-sprites">
 <div class="sub">Folder A (reference) and Folder B (images to update) are paired by Sprite ID + name. Each pair becomes one sheet named <code>gSprite&lt;ID&gt;&lt;Name&gt;.png</code> with four frames:
   <b>A original · A with B's palette · B with A's palette · B original</b>. Everything runs in your browser.</div>
 
@@ -47,6 +95,17 @@ progress{width:220px}
     <input type="file" id="fBd" webkitdirectory multiple hidden><input type="file" id="fBf" accept="image/*" multiple hidden></div>
   <div class="stats" id="stB"></div>
   <div class="tw"><table><thead><tr><th>Folder B file</th><th>ID</th><th>Paired with (Folder A)</th><th>Status</th></tr></thead><tbody id="tbB"></tbody></table></div>
+</section>
+
+<section id="s2b">
+  <h2><span>&#9733;</span>Already in your project (optional)</h2>
+  <div class="hint">Choose the folder <code>graphics/pokemon_battle_sprites/battle/</code> from your game. Only the file names are read, nothing is uploaded.
+    Sheets whose <code>gSprite&lt;ID&gt;&lt;Name&gt;.png</code> is already in that folder are <b>skipped</b>: they are not generated and not put in the ZIP. The list is remembered in this browser, so you only need to reload it when the folder changes.</div>
+  <div class="drop" id="dropH">Drop your <code>battle</code> folder here</div>
+  <div class="row"><button class="pri" id="bHd">Choose battle folder</button><button id="bHc">Clear list</button>
+    <label class="in"><input type="checkbox" id="skipEx" checked> Skip sheets that already exist</label>
+    <input type="file" id="fHd" webkitdirectory multiple hidden></div>
+  <div class="stats" id="stH"></div>
 </section>
 
 <section id="s3" class="off">
@@ -76,6 +135,35 @@ progress{width:220px}
   <div class="tw"><table><thead><tr><th>Sprite ID</th><th>Name</th><th>Variant</th><th>Key</th></tr></thead><tbody id="tbDb"></tbody></table></div>
   <div class="row"><button class="ok" id="bDb" disabled>Download PokemonDatabase.js</button></div>
 </section>
+</div>
+<div id="tab-pokemon" hidden>
+  <div class="ed2">
+    <div class="edlist">
+      <input type="text" id="spQ" placeholder="search name, key or number">
+      <select id="spT"><option value="">any type</option></select>
+      <label class="in" style="margin-bottom:6px"><input type="checkbox" id="spPh"> only entries with no base stats yet</label>
+      <div class="edrows" id="spRows"></div>
+      <div class="hint" id="spCount" style="margin:6px 0 0"></div>
+      <div class="row" style="margin:8px 0 0"><input type="text" id="spNew" placeholder="SPECIES_NEW_KEY" style="flex:1;min-width:0"><button id="spAdd">New</button></div>
+    </div>
+    <div class="edform" id="spForm"><section><div class="hint" style="margin:0">Load <code>PokemonDatabase.js</code> (or the project folder) to start.</div></section></div>
+  </div>
+</div>
+
+<div id="tab-moves" hidden>
+  <div class="ed2">
+    <div class="edlist">
+      <input type="text" id="mvQ" placeholder="search name or key">
+      <select id="mvT"><option value="">any type</option></select>
+      <div class="edrows" id="mvRows"></div>
+      <div class="hint" id="mvCount" style="margin:6px 0 0"></div>
+      <div class="row" style="margin:8px 0 0"><input type="text" id="mvNew" placeholder="MOVE_NEW_KEY" style="flex:1;min-width:0"><button id="mvAdd">New</button></div>
+    </div>
+    <div class="edform" id="mvForm"><section><div class="hint" style="margin:0">Load <code>MoveTables.js</code> (or the project folder) to start.</div></section></div>
+  </div>
+</div>
+<datalist id="dlMoves"></datalist><datalist id="dlSpecies"></datalist><datalist id="dlAbil"></datalist><datalist id="dlItem"></datalist><datalist id="dlTutor"></datalist><datalist id="dlTypes"></datalist><datalist id="dlEffects"></datalist>
+
 <div id="msg"></div>
 
 <script>
@@ -109,6 +197,26 @@ function pair(b,ix){
   return{a:null,status:'none'}}
 const LBL={ok:['good','paired (ID + name)'],idonly:['warn','paired by ID only (names differ)'],manual:['good','paired by hand'],skipped:['warn','skipped'],ambiguous:['bad','several Folder A files share this ID – choose one'],none:['bad','no Folder A file with this ID']};
 let pairs=[];
+// ---------- sheets that already exist in the game ----------
+let have=new Set(),haveFiles=0,haveIgnored=0;
+try{const sv=JSON.parse(localStorage.getItem('palette_tool_have')||'null');if(sv&&Array.isArray(sv.keys)){have=new Set(sv.keys);haveFiles=sv.files||sv.keys.length;haveIgnored=sv.ignored||0}}catch(e){}
+const skipOn=()=>$('skipEx')&&$('skipEx').checked;
+const isHave=p=>!!(p.a&&skipOn()&&have.has(p.a.key));
+function saveHave(){try{localStorage.setItem('palette_tool_have',JSON.stringify({keys:[...have],files:haveFiles,ignored:haveIgnored}))}catch(e){}}
+function loadHave(list){
+  const files=[...list].filter(f=>IMG.test(f.name));let ok=0,bad=0;
+  for(const f of files){const m=/^gSprite(\d+)(.*)\.(png|gif|webp|bmp)$/i.exec(f.name);if(!m){bad++;continue}have.add(normId(m[1])+'|'+m[2].toLowerCase());ok++}
+  haveFiles+=ok;haveIgnored+=bad;saveHave();renderH();renderB();
+  msg(`${ok} sprite name(s) read from your project folder${bad?`, ${bad} ignored (not named gSprite<ID><Name>)`:''}.`)}
+function renderH(){
+  $('stH').innerHTML=have.size?`<span class="good"><b>${have.size}</b> sprites already in your project</span>${haveIgnored?`<span><b>${haveIgnored}</b> other files ignored</span>`:''}`:'<span>No list loaded: every sheet will be generated.</span>'}
+$('bHd').onclick=()=>$('fHd').click();
+$('fHd').onchange=e=>{loadHave(e.target.files);e.target.value=''};
+$('bHc').onclick=()=>{have=new Set();haveFiles=haveIgnored=0;saveHave();renderH();renderB();msg('')};
+$('skipEx').onchange=renderB;
+{const z=$('dropH');z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('hot')});z.addEventListener('dragleave',()=>z.classList.remove('hot'));
+  z.addEventListener('drop',async e=>{e.preventDefault();z.classList.remove('hot');const its=[...e.dataTransfer.items||[]];
+    loadHave(its.length&&its[0].webkitGetAsEntry?await readEntries(its):e.dataTransfer.files)})}
 function renderA(){
   const ids=new Set(A.map(a=>normId(a.id))),pre={};A.forEach(a=>pre[a.prefix]=(pre[a.prefix]||0)+1);
   $('stA').innerHTML=`<span><b>${A.length}</b> files</span><span><b>${ids.size}</b> Sprite IDs</span>`+Object.entries(pre).map(([k,v])=>`<span>${esc(k)}: <b>${v}</b></span>`).join('');
@@ -116,13 +224,13 @@ function renderA(){
 function renderB(){
   setTimeout(renderDb,0);
   const ix=mapA();pairs=B.map(b=>({b,...pair(b,ix)}));
-  const good=pairs.filter(p=>p.a).length,bad=pairs.filter(p=>!p.a&&p.status!=='skipped').length;
-  $('stB').innerHTML=`<span><b>${B.length}</b> files</span><span class="good"><b>${good}</b> paired</span><span class="${bad?'bad':''}"><b>${bad}</b> need attention</span>`;
+  const good=pairs.filter(p=>p.a).length,exist=pairs.filter(isHave).length,todoN=good-exist,bad=pairs.filter(p=>!p.a&&p.status!=='skipped').length;
+  $('stB').innerHTML=`<span><b>${B.length}</b> files</span><span class="good"><b>${good}</b> paired</span>${exist?`<span class="warn"><b>${exist}</b> already in project (skipped)</span><span><b>${todoN}</b> to generate</span>`:''}<span class="${bad?'bad':''}"><b>${bad}</b> need attention</span>`;
   $('tbB').innerHTML=pairs.slice(0,2000).map((p,i)=>{
     const cands=ix.byId.get(normId(p.b.id))||[];
     const sel=`<select data-i="${i}"><option value="">${p.a?esc(p.a.path):'— none (skip) —'}</option>${cands.filter(c=>c!==p.a).map(c=>`<option value="${A.indexOf(c)}">${esc(c.path)}</option>`).join('')}${p.a?'<option value="-1">— none (skip) —</option>':''}</select>`;
-    return`<tr><td>${esc(p.b.path)}</td><td>${p.b.id}</td><td>${sel}</td><td class="${LBL[p.status][0]}">${LBL[p.status][1]}</td></tr>`}).join('')||'<tr><td colspan=4 style="color:#8a93a6">No files yet.</td></tr>';
-  $('s3').classList.toggle('off',!good);$('bGo').disabled=!good}
+    return`<tr><td>${esc(p.b.path)}</td><td>${p.b.id}</td><td>${sel}</td><td class="${LBL[p.status][0]}">${LBL[p.status][1]}${isHave(p)?' <span class="warn">· already in project, skipped</span>':''}</td></tr>`}).join('')||'<tr><td colspan=4 style="color:#8a93a6">No files yet.</td></tr>';
+  $('s3').classList.toggle('off',!good);$('bGo').disabled=!todoN;$('bGo').textContent=exist&&!todoN?'Nothing to generate (all already exist)':'Generate sheets'}
 $('tbB').addEventListener('change',e=>{const i=e.target.dataset.i;if(i==null)return;const v=e.target.value;if(v==='')return;
   B[+i].override=v==='-1'?null:A[+v];renderB()});
 
@@ -190,7 +298,7 @@ async function readImg(file){const bm=await createImageBitmap(file),c=document.c
 // ---------- generate ----------
 const toBlob=c=>new Promise(r=>c.toBlob(r,'image/png'));
 $('bGo').onclick=async()=>{
-  const todo=pairs.filter(p=>p.a),method=$('method').value,padMode=$('padMode').value;
+  const todo=pairs.filter(p=>p.a&&!isHave(p)),skippedN=pairs.filter(isHave).length,method=$('method').value,padMode=$('padMode').value;
   results.forEach(r=>URL.revokeObjectURL(r.url));results=[];$('grid').innerHTML='';
   $('bGo').disabled=true;$('prog').style.display='inline-block';$('prog').max=todo.length;let done=0,fail=[];const warn=[],sizeWarn=[],fallback=[];
   for(const p of todo){
@@ -221,7 +329,7 @@ $('bGo').onclick=async()=>{
   const used=new Map();for(const r of results){const k=r.name.toLowerCase(),n=used.get(k)||0;used.set(k,n+1);if(n)r.name=r.name.replace(/\.png$/,`_${n+1}.png`)}
   $('grid').innerHTML=results.map((r,i)=>`<div class="card"><img src="${r.url}" alt=""><div class="t" title="${esc(r.a)} + ${esc(r.b)}">${esc(r.name)} <span style="color:${r.mode==='indexed'?'#6fe3a0':'#ffd166'}">· ${r.mode}</span></div><button data-i="${i}">Download this sheet</button></div>`).join('');
   $('bZip').disabled=!results.length;
-  msg(`${results.length} sheet(s) created.${fallback.length?` ${fallback.length} pair(s) were NOT indexed PNGs and were matched by colour instead (e.g. ${fallback[0]}).`:''}${sizeWarn.length?` ${sizeWarn.length} pair(s) have different palette sizes – extra slots keep their own colour (e.g. ${sizeWarn[0]}).`:''}${warn.length?` ${warn.length} had frames of different sizes and were padded (e.g. ${warn[0]}).`:''}${fail.length?` ${fail.length} failed: ${fail.slice(0,3).join('; ')}${fail.length>3?'…':''}`:''}`)};
+  msg(`${results.length} sheet(s) created.${skippedN?` ${skippedN} skipped because they already exist in your project.`:''}${fallback.length?` ${fallback.length} pair(s) were NOT indexed PNGs and were matched by colour instead (e.g. ${fallback[0]}).`:''}${sizeWarn.length?` ${sizeWarn.length} pair(s) have different palette sizes – extra slots keep their own colour (e.g. ${sizeWarn[0]}).`:''}${warn.length?` ${warn.length} had frames of different sizes and were padded (e.g. ${warn[0]}).`:''}${fail.length?` ${fail.length} failed: ${fail.slice(0,3).join('; ')}${fail.length>3?'…':''}`:''}`)};
 $('grid').addEventListener('click',e=>{const i=e.target.dataset.i;if(i!=null)dl(results[+i].blob,results[+i].name)});
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}
 
@@ -284,7 +392,300 @@ $('fDb').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)re
   try{const t=await f.text();oldDb=new Function(t+'\n;return typeof PokemonDatabase!=="undefined"?PokemonDatabase:(window.PokemonDatabase||null)')();
     if(!oldDb||typeof oldDb!=='object')throw 0;$('dbInfo').textContent=`${f.name}: ${Object.keys(oldDb).length} species loaded`;msg('Existing database loaded.')}
   catch(x){oldDb=null;$('dbInfo').textContent='could not read that file';msg('That file could not be read (expected: const PokemonDatabase = {...}).')}
-  renderDb()};
+  renderDb();window.edFromSprite&&window.edFromSprite()};
 $('bDb').onclick=()=>{const r=buildDb();dl(new Blob([r.text],{type:'text/javascript'}),'PokemonDatabase.js');msg(`PokemonDatabase.js downloaded: ${r.count} species${r.kept?` + ${r.kept} kept from your old file`:''}.`)};
-renderA();
+renderH();renderA();
+</script>
+<script>
+// =====================================================================================================================
+//  POKÉMON / MOVE EDITOR  (shares msg(), dl(), esc(), $ and oldDb with the sprite tool above)
+// =====================================================================================================================
+(()=>{
+'use strict';
+const ED={db:null,learn:null,evo:null,moves:null,alias:{},types:null,dirty:{db:false,learn:false,evo:false,moves:false},spSel:null,mvSel:null};
+const files=new Map(),urls=new Map();
+const h=(tag,attrs,...kids)=>{const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(k==='class')e.className=v;else if(k==='on'){for(const[ev,fn]of Object.entries(v))e.addEventListener(ev,fn)}else if(k==='list'||k==='style'||k==='data'||k.startsWith('data-'))e.setAttribute(k,v);else if(k in e)e[k]=v;else e.setAttribute(k,v)}for(const c of kids.flat())if(c!=null&&c!==false)e.append(c.nodeType?c:document.createTextNode(c));return e};
+const prettyKey=k=>String(k||'').replace(/^(SPECIES|MOVE|TYPE|ABILITY|ITEM)_/,'').toLowerCase().split('_').map(w=>w?w[0].toUpperCase()+w.slice(1):'').join(' ');
+const dexOf=e=>{const m=/gSprite(\d+)/.exec(e&&e.battleSprite||'');return m?parseInt(m[1],10):0};
+const DEFAULT_TYPES=['TYPE_NONE','TYPE_NORMAL','TYPE_FIGHTING','TYPE_FLYING','TYPE_POISON','TYPE_GROUND','TYPE_ROCK','TYPE_BUG','TYPE_GHOST','TYPE_STEEL','TYPE_MYSTERY','TYPE_FIRE','TYPE_WATER','TYPE_GRASS','TYPE_ELECTRIC','TYPE_PSYCHIC','TYPE_ICE','TYPE_DRAGON','TYPE_DARK','TYPE_FAIRY','TYPE_STELLAR'];
+const typeKeys=()=>ED.types&&ED.types.order?['TYPE_NONE',...ED.types.order]:DEFAULT_TYPES;
+const TYPE_COL={NORMAL:'#a8a878',FIRE:'#f08030',WATER:'#6890f0',ELECTRIC:'#f0c820',GRASS:'#78c850',ICE:'#98d8d8',FIGHTING:'#c03028',POISON:'#a040a0',GROUND:'#d8b858',FLYING:'#a890f0',PSYCHIC:'#f85888',BUG:'#a8b820',ROCK:'#b8a038',GHOST:'#705898',DRAGON:'#7038f8',DARK:'#705848',STEEL:'#a8a8c0',FAIRY:'#ee99ac',STELLAR:'#58b8c8',MYSTERY:'#68a090'};
+const tcol=k=>(ED.types&&ED.types.types&&ED.types.types[k]&&ED.types.types[k].color)||TYPE_COL[String(k).replace('TYPE_','')]||'#777';
+const tbadge=k=>k&&k!=='TYPE_NONE'?h('span',{class:'badge',style:`background:${tcol(k)}`},prettyKey(k)):null;
+const GROWTH=['GROWTH_ERRATIC','GROWTH_FAST','GROWTH_MEDIUM_FAST','GROWTH_MEDIUM_SLOW','GROWTH_SLOW','GROWTH_FLUCTUATING'];
+const EGGG=['EGG_GROUP_NONE','EGG_GROUP_MONSTER','EGG_GROUP_WATER_1','EGG_GROUP_BUG','EGG_GROUP_FLYING','EGG_GROUP_FIELD','EGG_GROUP_FAIRY','EGG_GROUP_GRASS','EGG_GROUP_HUMAN_LIKE','EGG_GROUP_WATER_3','EGG_GROUP_MINERAL','EGG_GROUP_AMORPHOUS','EGG_GROUP_WATER_2','EGG_GROUP_DITTO','EGG_GROUP_DRAGON','EGG_GROUP_UNDISCOVERED'];
+const SPLITS=['PHYSICAL','SPECIAL','STATUS'],TARGETS=['SELECTED','DEPENDS','USER_OR_PARTNER','RANDOM','BOTH','USER','ALL','OPPONENTS_FIELD'];
+const FLAGS=['contact','protect','magicCoat','snatch','mirrorMove','kingsRock','triage'];
+const EVOMETHODS=['LEVEL','ITEM','TRADE','TRADE_ITEM','FRIENDSHIP','FRIENDSHIP_DAY','FRIENDSHIP_NIGHT','LEVEL_DAY','LEVEL_NIGHT','LEVEL_HOLD_ITEM','HOLD_ITEM_DAY','HOLD_ITEM_NIGHT','MOVE','MOVE_TYPE','MAP','BEAUTY','MALE_LEVEL','FEMALE_LEVEL','COINS','ITEM_NIGHT'];
+function dirty(k){ED.dirty[k]=true;renderStats()}
+
+// ------------------------------------------------ loading
+function evalTable(text,names){return new Function('window',text+'\n;return {'+names.map(n=>`${n}: typeof ${n}!=="undefined"?${n}:null`).join(',')+'}')({})}
+function setDb(o,from){ED.db=o;oldDb=o;ED.dirty.db=false;ED.spSel=null;refreshLists();renderStats();try{renderDb()}catch(e){}msg(`${from}: ${Object.keys(o).length} species.`)}
+function loadText(kind,text,from){
+  try{
+    if(kind==='db'){const r=evalTable(text,['PokemonDatabase']);if(!r.PokemonDatabase)throw new Error('no PokemonDatabase found');setDb(r.PokemonDatabase,from);return}
+    if(kind==='learn'){const r=evalTable(text,['LearnsetTable']);if(!r.LearnsetTable)throw new Error('no LearnsetTable found');ED.learn=r.LearnsetTable;ED.dirty.learn=false}
+    if(kind==='evo'){const r=evalTable(text,['EvolutionTable']);if(!r.EvolutionTable)throw new Error('no EvolutionTable found');ED.evo=r.EvolutionTable;ED.dirty.evo=false}
+    if(kind==='moves'){const r=evalTable(text,['MoveTable','MoveAlias']);if(!r.MoveTable)throw new Error('no MoveTable found');ED.moves=r.MoveTable;ED.alias=r.MoveAlias||{};ED.dirty.moves=false;ED.mvSel=null}
+    if(kind==='types'){const r=evalTable(text,['TypeTable']);if(!r.TypeTable)throw new Error('no TypeTable found');ED.types=r.TypeTable}
+    refreshLists();renderStats();msg(`${from} loaded.`);
+  }catch(e){msg(`Could not read ${from}: ${e.message}`)}
+}
+const KIND={pokemondatabase:'db',learnsettables:'learn',evolutiontables:'evo',movetables:'moves',typetables:'types'};
+for(const[btn,inp,kind]of[['edLDb','edfDb','db'],['edLLn','edfLn','learn'],['edLEv','edfEv','evo'],['edLMv','edfMv','moves'],['edLTy','edfTy','types']]){
+  $(btn).onclick=()=>$(inp).click();
+  $(inp).onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)loadText(kind,await f.text(),f.name)}}
+$('edFolder').onclick=()=>$('edfFolder').click();
+$('edfFolder').onchange=async e=>{const fs=[...e.target.files];e.target.value='';await addFolder(fs)};
+async function addFolder(fs){
+  for(const f of fs)files.set(f.name.toLowerCase(),f);urls.forEach(u=>URL.revokeObjectURL(u));urls.clear();
+  const got=[];
+  for(const[name,kind]of Object.entries(KIND)){const f=files.get(name+'.js');if(f){loadText(kind==='db'?'db':kind,await f.text(),f.name);got.push(f.name)}}
+  msg(`${fs.length} files read. Tables found: ${got.join(', ')||'none (is this the project folder?)'}.`);renderForms()}
+window.addEventListener('drop',async e=>{if(!$('tab-pokemon').hidden||!$('tab-moves').hidden){const its=[...e.dataTransfer.items||[]];addFolder(its.length&&its[0].webkitGetAsEntry?await readEntries(its):[...e.dataTransfer.files])}});
+function fileUrl(path){const f=files.get(String(path||'').split('/').pop().toLowerCase());if(!f)return null;const k=f.name;if(!urls.has(k))urls.set(k,URL.createObjectURL(f));return urls.get(k)}
+
+// ------------------------------------------------ shared lists
+function refreshLists(){
+  const set=(id,vals)=>{const dl=$(id);dl.innerHTML='';for(const v of vals)dl.append(h('option',{value:v}))};
+  set('dlMoves',ED.moves?Object.keys(ED.moves):[]);
+  set('dlSpecies',ED.db?Object.keys(ED.db).filter(k=>k!=='SPECIES_NONE'):[]);
+  const ab=new Set(),it=new Set();if(ED.db)for(const e of Object.values(ED.db)){for(const k of['ability1','ability2','hiddenAbility'])if(e[k])ab.add(e[k]);for(const k of['item1','item2'])if(e[k])it.add(e[k])}
+  set('dlAbil',[...ab].sort());set('dlItem',[...it].sort());
+  const tu=new Set();if(ED.learn)for(const e of Object.values(ED.learn))(e.tutor||[]).forEach(x=>tu.add(x));set('dlTutor',[...tu].sort());
+  set('dlTypes',typeKeys());
+  const ef=new Set();if(ED.moves)for(const e of Object.values(ED.moves))if(e.effect)ef.add(e.effect);set('dlEffects',[...ef].sort());
+  for(const id of['spT','mvT']){const s=$(id),cur=s.value;s.innerHTML='<option value="">any type</option>'+typeKeys().filter(t=>t!=='TYPE_NONE').map(t=>`<option value="${t}">${prettyKey(t)}</option>`).join('');s.value=cur}
+  renderLists();renderForms()}
+function renderStats(){
+  const n=o=>o?Object.keys(o).length:0,d=ED.dirty,mark=k=>d[k]?' <b class="warn">(edited)</b>':'';
+  $('edStats').innerHTML=`<span>Species: <b>${n(ED.db)}</b>${mark('db')}</span><span>Learnsets: <b>${n(ED.learn)}</b>${mark('learn')}</span><span>Evolutions: <b>${n(ED.evo)}</b>${mark('evo')}</span><span>Moves: <b>${n(ED.moves)}</b>${mark('moves')}</span><span>Types: <b>${ED.types?n(ED.types.types):'built-in list'}</b></span>`;
+  document.querySelectorAll('[data-dl]').forEach(b=>b.classList.toggle('dirty',!!d[b.dataset.dl]))}
+
+// ------------------------------------------------ cascading renames
+function renameKeyIn(obj,from,to){const out={};for(const k of Object.keys(obj))out[k===from?to:k]=obj[k];return out}
+function renameSpecies(from,to){
+  if(!/^SPECIES_[A-Z0-9_]+$/.test(to))return msg('A species key looks like SPECIES_NAME (capital letters, digits and _).');
+  if(ED.db[to])return msg(to+' already exists.');
+  ED.db=renameKeyIn(ED.db,from,to);oldDb=ED.db;
+  if(ED.learn&&ED.learn[from])ED.learn=renameKeyIn(ED.learn,from,to);
+  if(ED.evo){if(ED.evo[from])ED.evo=renameKeyIn(ED.evo,from,to);for(const rows of Object.values(ED.evo))for(const r of rows)if(r.to===from)r.to=to}
+  ED.spSel=to;['db','learn','evo'].forEach(k=>ED.dirty[k]=true);refreshLists();msg(`Renamed ${from} to ${to} (learnset and evolutions updated too).`)}
+function renameMove(from,to){
+  if(!/^MOVE_[A-Z0-9_]+$/.test(to))return msg('A move key looks like MOVE_NAME (capital letters, digits and _).');
+  if(ED.moves[to])return msg(to+' already exists.');
+  ED.moves=renameKeyIn(ED.moves,from,to);let n=0;
+  for(const[k,v]of Object.entries(ED.alias))if(v===from)ED.alias[k]=to;
+  if(ED.learn)for(const e of Object.values(ED.learn)){if(e.levelUp)for(const r of e.levelUp)if(r[1]===from){r[1]=to;n++}for(const l of['egg','tm'])if(e[l])e[l]=e[l].map(m=>m===from?(n++,to):m)}
+  if(ED.evo)for(const rows of Object.values(ED.evo))for(const r of rows)if(r.param===from)r.param=to;
+  ED.mvSel=to;ED.dirty.moves=true;if(n)ED.dirty.learn=true;refreshLists();msg(`Renamed ${from} to ${to} (${n} learnset entries updated).`)}
+
+// ------------------------------------------------ form helpers
+function fld(obj,prop,label,kind,o={}){
+  const cur=obj[prop];let inp;
+  if(kind==='sel'){inp=h('select',{});[...new Set([...(o.opts||[]),cur].filter(v=>v!==undefined))].forEach(v=>inp.append(h('option',{value:v,selected:v===cur},String(v))))}
+  else if(kind==='bool')inp=h('input',{type:'checkbox',checked:!!cur});
+  else if(kind==='area')inp=h('textarea',{rows:3,value:cur??''});
+  else{inp=h('input',{type:kind==='num'?'number':'text',value:cur??''});if(kind==='num')inp.step=o.step||'any';if(o.list)inp.setAttribute('list',o.list)}
+  const read=()=>kind==='num'?(inp.value===''?0:Number(inp.value)):kind==='bool'?inp.checked:inp.value;
+  inp.addEventListener('input',()=>{if(o.live)o.live(read())});
+  inp.addEventListener('change',()=>{obj[prop]=read();dirty(o.tbl||'db');if(o.after)o.after(read())});
+  return h('label',{class:'f',style:o.wide?'grid-column:1/-1':''},h('span',{},label),inp)}
+function chipList(arr,tbl,datalist,onChange){
+  const box=h('div',{});const draw=()=>{box.innerHTML='';const chips=h('div',{class:'chips'});
+    arr.forEach((v,i)=>chips.append(h('span',{class:'chip'},v,h('b',{on:{click:()=>{arr.splice(i,1);dirty(tbl);draw();onChange&&onChange()}}},'×'))));
+    const inp=h('input',{type:'text',placeholder:'add…',style:'width:210px'});inp.setAttribute('list',datalist);
+    const add=()=>{const v=inp.value.trim();if(v&&!arr.includes(v)){arr.push(v);dirty(tbl);draw();onChange&&onChange()}};
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();add()}});inp.addEventListener('change',add);
+    box.append(chips,h('div',{class:'row',style:'margin:0'},inp,h('button',{on:{click:add}},'Add'),h('span',{style:'color:#8a93a6'},`${arr.length} total`)))};
+  draw();return box}
+function twoClick(label,fn){const b=h('button',{class:'xbtn'},label);let armed=false;b.onclick=()=>{if(!armed){armed=true;b.textContent='Click again to confirm';setTimeout(()=>{armed=false;b.textContent=label},2500)}else fn()};return b}
+
+// ------------------------------------------------ Pokémon tab
+const rowsMax=500;
+function renderLists(){renderSpList();renderMvList()}
+function spMatches(k,e,q,t,ph){
+  if(k==='SPECIES_NONE')return false;
+  if(t&&e.type1!==t&&e.type2!==t)return false;
+  if(ph&&(e.baseHP||e.baseAttack||e.baseSpeed))return false;
+  if(!q)return true;const s=(k+' '+(e.name||'')+' '+dexOf(e)).toLowerCase();return q.split(/\s+/).every(w=>s.includes(w))}
+function renderSpList(){
+  const box=$('spRows');box.innerHTML='';if(!ED.db){$('spCount').textContent='';return}
+  const q=$('spQ').value.trim().toLowerCase(),t=$('spT').value,ph=$('spPh').checked;let n=0,shown=0;
+  const ents=Object.entries(ED.db).filter(([k,e])=>spMatches(k,e,q,t,ph)).sort((a,b)=>dexOf(a[1])-dexOf(b[1])||a[0].localeCompare(b[0]));
+  for(const[k,e]of ents){n++;if(shown>=rowsMax)continue;shown++;
+    const r=h('div',{class:'edrow'+(k===ED.spSel?' sel':''),on:{click:()=>{ED.spSel=k;renderSpList();renderSpForm()}}},h('span',{},`${dexOf(e)||'—'}  ${e.name||prettyKey(k)}`),h('small',{},[e.type1,e.type2].filter(x=>x&&x!=='TYPE_NONE').map(x=>prettyKey(x)).join(' / ')));box.append(r)}
+  $('spCount').textContent=`${n} species${n>shown?` (first ${shown} shown, narrow the search)`:''}`}
+['spQ','spT','spPh'].forEach(id=>$(id).addEventListener('input',renderSpList));
+$('spAdd').onclick=()=>{if(!ED.db)return msg('Load PokemonDatabase.js first.');const k=$('spNew').value.trim().toUpperCase();
+  if(!/^SPECIES_[A-Z0-9_]+$/.test(k))return msg('Type a key like SPECIES_NEWMON first.');if(ED.db[k])return msg(k+' already exists.');
+  ED.db[k]={...TEMPLATE,name:prettyKey(k)};ED.spSel=k;dirty('db');$('spNew').value='';refreshLists();msg('Created '+k+'.')};
+
+function spritePreview(e,host){
+  host.innerHTML='';
+  const bs=fileUrl(e.battleSprite),ic=fileUrl(e.iconSprite);
+  const mk=(url,draw)=>{if(!url)return h('div',{class:'hint',style:'width:96px'},'(no image: choose the project folder)');const c=h('canvas',{});const im=new Image();im.onload=()=>draw(c,im);im.src=url;return c};
+  host.append(mk(bs,(c,im)=>{const n=im.naturalWidth/im.naturalHeight>=3.5?4:1,fw=Math.floor(im.naturalWidth/n);c.width=fw;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0,fw,im.naturalHeight,0,0,fw,im.naturalHeight);c.style.width=Math.min(fw*2,256)+'px'}));
+  host.append(mk(ic,(c,im)=>{const n=im.naturalHeight>=im.naturalWidth*2?2:1,fh=Math.floor(im.naturalHeight/n);c.width=im.naturalWidth;c.height=fh;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,im.naturalWidth,fh,0,0,im.naturalWidth,fh);
+    const id=x.getImageData(0,0,c.width,c.height),d=id.data;if(d[3]===255){const r=d[0],g=d[1],b=d[2];for(let i=0;i<d.length;i+=4)if(Math.abs(d[i]-r)<=12&&Math.abs(d[i+1]-g)<=12&&Math.abs(d[i+2]-b)<=12)d[i+3]=0;x.putImageData(id,0,0)}c.style.width=c.width*3+'px'}))}
+let cryAudio=null;
+function evolvesFrom(key){const out=[];if(ED.evo)for(const[s,rows]of Object.entries(ED.evo))for(const r of rows)if(r.to===key)out.push(`${(ED.db[s]&&ED.db[s].name)||prettyKey(s)} (${r.method.toLowerCase().replace(/_/g,' ')}${r.param?' '+r.param:''})`);return out}
+function renderSpForm(){
+  const F=$('spForm');F.innerHTML='';
+  if(!ED.db){F.append(h('section',{},h('div',{class:'hint',style:'margin:0'},'Load PokemonDatabase.js (or the project folder) to start.')));return}
+  const k=ED.spSel,e=k&&ED.db[k];if(!e){F.append(h('section',{},h('div',{class:'hint',style:'margin:0'},'Pick a Pokémon from the list.')));return}
+  // header
+  const prev=h('div',{class:'hdr'});spritePreview(e,prev);
+  const keyIn=h('input',{type:'text',value:k,style:'width:260px'});
+  const hdr=h('section',{},h('div',{class:'hdr'},prev,h('div',{},
+    h('div',{style:'font-size:18px;font-weight:700'},e.name||prettyKey(k),' ',tbadge(e.type1),' ',tbadge(e.type2)),
+    h('div',{class:'hint',style:'margin:2px 0'},`Dex sprite number ${dexOf(e)||'?'}`),
+    h('div',{class:'row',style:'margin:4px 0'},keyIn,h('button',{on:{click:()=>renameSpecies(k,keyIn.value.trim().toUpperCase())}},'Rename key'),
+      h('button',{on:{click:()=>{const nk=prompt('Key for the copy (SPECIES_…):',k+'_COPY');if(!nk)return;const K=nk.trim().toUpperCase();if(!/^SPECIES_[A-Z0-9_]+$/.test(K)||ED.db[K])return msg('Invalid or existing key.');
+        ED.db[K]=JSON.parse(JSON.stringify(e));ED.db[K].name=(e.name||'')+' copy';if(ED.learn&&ED.learn[k])ED.learn[K]=JSON.parse(JSON.stringify(ED.learn[k]));if(ED.evo&&ED.evo[k])ED.evo[K]=JSON.parse(JSON.stringify(ED.evo[k]));
+        ED.spSel=K;['db','learn','evo'].forEach(x=>ED.dirty[x]=true);refreshLists()}}},'Duplicate'),
+      twoClick('Delete',()=>{delete ED.db[k];if(ED.learn)delete ED.learn[k];if(ED.evo){delete ED.evo[k];for(const[s,rows]of Object.entries(ED.evo)){ED.evo[s]=rows.filter(r=>r.to!==k);if(!ED.evo[s].length)delete ED.evo[s]}}
+        ED.spSel=null;['db','learn','evo'].forEach(x=>ED.dirty[x]=true);refreshLists()}),
+      e.cry&&fileUrl(e.cry)?h('button',{on:{click:()=>{if(cryAudio)cryAudio.pause();cryAudio=new Audio(fileUrl(e.cry));cryAudio.play().catch(()=>{})}}},'▶ Cry'):null),
+    evolvesFrom(k).length?h('div',{class:'hint',style:'margin:2px 0'},'Evolves from: '+evolvesFrom(k).join(', ')):null)));
+  F.append(hdr);
+  // base stats
+  const statDefs=[['baseHP','HP','#4cc860'],['baseAttack','Attack','#e85a4c'],['baseDefense','Defense','#e8a43c'],['baseSpAttack','Sp. Atk','#4c8ce8'],['baseSpDefense','Sp. Def','#58c8b8'],['baseSpeed','Speed','#d868c8']];
+  const totalEl=h('b',{}),bars=[];
+  const upd=()=>{let t=0;statDefs.forEach(([p],i)=>{t+=Number(e[p])||0;bars[i].style.width=Math.min(100,(Number(e[p])||0)/255*100)+'%'});totalEl.textContent=t};
+  const grid=h('div',{class:'fg'});
+  statDefs.forEach(([p,l,c],i)=>{const bar=h('i',{style:`background:${c}`});bars.push(bar);const lab=fld(e,p,l,'num',{step:1,live:v=>{e[p]=v;upd()},after:()=>{upd();renderSpList()}});lab.append(h('div',{class:'sbar'},bar));grid.append(lab)});
+  const tsel=(p,l)=>fld(e,p,l,'sel',{opts:typeKeys(),after:()=>{renderSpList();renderSpForm()}});
+  F.append(h('section',{},h('h3',{},'Base stats  ',h('span',{style:'color:#9ab;font-weight:400'},'total ',totalEl)),grid,
+    h('div',{class:'fg',style:'margin-top:8px'},fld(e,'name','Name','text',{after:renderSpList}),tsel('type1','Type 1'),tsel('type2','Type 2'),
+      fld(e,'ability1','Ability 1','text',{list:'dlAbil'}),fld(e,'ability2','Ability 2','text',{list:'dlAbil'}),fld(e,'hiddenAbility','Hidden ability','text',{list:'dlAbil'}))));
+  upd();
+  F.append(h('section',{},h('h3',{},'Breeding, growth and drops'),h('div',{class:'fg'},
+    fld(e,'catchRate','Catch rate','num',{step:1}),fld(e,'expYield','Exp yield','num',{step:1}),fld(e,'growthRate','Growth rate','sel',{opts:GROWTH}),
+    fld(e,'genderRatio','Female % (-1 = genderless)','num',{step:.1}),fld(e,'eggCycles','Egg cycles','num',{step:1}),fld(e,'friendship','Base friendship','num',{step:1}),
+    fld(e,'eggGroup1','Egg group 1','sel',{opts:EGGG}),fld(e,'eggGroup2','Egg group 2','sel',{opts:EGGG}),fld(e,'safariZoneFleeRate','Safari flee rate','num',{step:1}),
+    fld(e,'item1','Held item 1 (common)','text',{list:'dlItem'}),fld(e,'item2','Held item 2 (rare)','text',{list:'dlItem'}),fld(e,'noFlip','Do not flip sprite','bool')),
+    h('div',{class:'fg',style:'margin-top:8px'},...['HP','Attack','Defense','SpAttack','SpDefense','Speed'].map(s=>fld(e,'evYield_'+s,'EV yield '+s,'num',{step:1})))));
+  F.append(h('section',{},h('h3',{},'Contest values and sprites'),h('div',{class:'fg'},
+    ...['cool','cute','smart','tough','beauty'].map(s=>fld(e,s+'Value',s[0].toUpperCase()+s.slice(1),'num',{step:1})),
+    fld(e,'xPosFront','Front x','num',{step:1}),fld(e,'yPosFront','Front y','num',{step:1}),fld(e,'xPosBack','Back x','num',{step:1}),fld(e,'yPosBack','Back y','num',{step:1})),
+    h('div',{class:'fg',style:'margin-top:8px;grid-template-columns:1fr'},fld(e,'battleSprite','Battle sprite path','text',{after:()=>spritePreview(e,prev)}),fld(e,'iconSprite','Icon path','text',{after:()=>spritePreview(e,prev)}),fld(e,'cry','Cry path','text'))));
+  // learnset
+  if(!ED.learn)F.append(h('section',{},h('h3',{},'Learnset'),h('div',{class:'hint',style:'margin:0'},'Load LearnsetTables.js to edit level-up, egg, TM and tutor moves.')));
+  else{
+    const L=ED.learn[k]||(ED.learn[k]={});
+    const lv=L.levelUp||(L.levelUp=[]);const tb=h('tbody',{});
+    const drawLv=()=>{tb.innerHTML='';lv.forEach((r,i)=>{
+      const lvl=h('input',{type:'number',value:r[0],min:0,max:100,on:{change:()=>{r[0]=Number(lvl.value)||0;dirty('learn')}}});
+      const mv=h('input',{type:'text',value:r[1],on:{change:()=>{r[1]=mv.value.trim();dirty('learn');info.textContent=moveInfo(r[1])}}});mv.setAttribute('list','dlMoves');
+      const info=h('td',{style:'color:#8a93a6'},moveInfo(r[1]));
+      tb.append(h('tr',{},h('td',{},lvl),h('td',{},mv),info,h('td',{},h('button',{class:'xbtn',on:{click:()=>{lv.splice(i,1);dirty('learn');drawLv()}}},'×'))))})};
+    drawLv();
+    F.append(h('section',{},h('h3',{},'Level-up moves ',h('span',{style:'color:#8a93a6;font-weight:400'},`${lv.length}`)),
+      h('div',{class:'tw',style:'max-height:340px'},h('table',{class:'ltab'},h('thead',{},h('tr',{},h('th',{},'Level'),h('th',{},'Move'),h('th',{},'Info'),h('th',{}))),tb)),
+      h('div',{class:'row'},h('button',{on:{click:()=>{lv.push([lv.length?lv[lv.length-1][0]:1,'MOVE_TACKLE']);dirty('learn');drawLv()}}},'+ Add move'),
+        h('button',{on:{click:()=>{lv.sort((a,b)=>a[0]-b[0]);dirty('learn');drawLv()}}},'Sort by level'))));
+    F.append(h('section',{},h('h3',{},'Egg moves'),chipList(L.egg||(L.egg=[]),'learn','dlMoves')));
+    F.append(h('section',{},h('h3',{},'TM / HM moves'),chipList(L.tm||(L.tm=[]),'learn','dlMoves')));
+    F.append(h('section',{},h('h3',{},'Move tutor moves (names)'),chipList(L.tutor||(L.tutor=[]),'learn','dlTutor')))}
+  // evolutions
+  if(!ED.evo)F.append(h('section',{},h('h3',{},'Evolutions'),h('div',{class:'hint',style:'margin:0'},'Load EvolutionTables.js to edit evolutions.')));
+  else{
+    const ev=ED.evo[k]||(ED.evo[k]=[]);const box=h('div',{});
+    const draw=()=>{box.innerHTML='';ev.forEach((r,i)=>{
+      const m=h('select',{});[...new Set([...EVOMETHODS,r.method])].forEach(x=>m.append(h('option',{value:x,selected:x===r.method},x)));m.onchange=()=>{r.method=m.value;dirty('evo')};
+      const p=h('input',{type:'text',value:r.param??'',style:'width:170px',placeholder:'level / item / move'});p.onchange=()=>{const v=p.value.trim();r.param=/^-?\d+$/.test(v)?Number(v):v;dirty('evo')};
+      const t=h('input',{type:'text',value:r.to,style:'width:220px'});t.setAttribute('list','dlSpecies');t.onchange=()=>{r.to=t.value.trim();dirty('evo')};
+      box.append(h('div',{class:'row',style:'margin:4px 0'},m,p,'→',t,h('button',{class:'xbtn',on:{click:()=>{ev.splice(i,1);dirty('evo');draw()}}},'×')))});
+      if(!ev.length)box.append(h('div',{class:'hint',style:'margin:0'},'Does not evolve.'))};
+    draw();
+    F.append(h('section',{},h('h3',{},'Evolutions'),box,h('div',{class:'row'},h('button',{on:{click:()=>{ev.push({method:'LEVEL',param:16,to:''});dirty('evo');draw()}}},'+ Add evolution')),
+      h('div',{class:'hint',style:'margin:0'},'Mega and Gigantamax forms are not part of this table.')))}
+}
+function moveInfo(key){const m=ED.moves&&(ED.moves[key]||ED.moves[ED.alias[key]]);return m?`${m.name} · ${prettyKey(m.type)} · ${m.power||'—'} pow · ${m.pp} pp`:(ED.moves?'(move not in MoveTables)':'')}
+
+// ------------------------------------------------ Moves tab
+function renderMvList(){
+  const box=$('mvRows');box.innerHTML='';if(!ED.moves){$('mvCount').textContent='';return}
+  const q=$('mvQ').value.trim().toLowerCase(),t=$('mvT').value;let n=0,shown=0;
+  const ents=Object.entries(ED.moves).filter(([k,e])=>(!t||e.type===t)&&(!q||q.split(/\s+/).every(w=>(k+' '+e.name).toLowerCase().includes(w)))).sort((a,b)=>a[1].id-b[1].id);
+  for(const[k,e]of ents){n++;if(shown>=rowsMax)continue;shown++;
+    box.append(h('div',{class:'edrow'+(k===ED.mvSel?' sel':''),on:{click:()=>{ED.mvSel=k;renderMvList();renderMvForm()}}},h('span',{},`${e.id}  ${e.name}`),h('small',{},prettyKey(e.type)+(e.power?' · '+e.power:''))))}
+  $('mvCount').textContent=`${n} moves${n>shown?` (first ${shown} shown, narrow the search)`:''}`}
+['mvQ','mvT'].forEach(id=>$(id).addEventListener('input',renderMvList));
+$('mvAdd').onclick=()=>{if(!ED.moves)return msg('Load MoveTables.js first.');const k=$('mvNew').value.trim().toUpperCase();
+  if(!/^MOVE_[A-Z0-9_]+$/.test(k))return msg('Type a key like MOVE_NEW_MOVE first.');if(ED.moves[k])return msg(k+' already exists.');
+  const id=Math.max(0,...Object.values(ED.moves).map(m=>m.id||0))+1;
+  ED.moves[k]={id,name:prettyKey(k),type:'TYPE_NORMAL',power:40,accuracy:100,pp:20,split:'PHYSICAL',priority:0,effect:'HIT',effectChance:0,target:'SELECTED',flags:['contact','protect','mirrorMove'],description:''};
+  ED.mvSel=k;dirty('moves');$('mvNew').value='';refreshLists()};
+function learnedBy(key){const out={level:[],egg:[],tm:[],tutor:0};if(!ED.learn)return out;
+  for(const[s,e]of Object.entries(ED.learn)){if((e.levelUp||[]).some(r=>r[1]===key))out.level.push(s);else if((e.egg||[]).includes(key))out.egg.push(s);else if((e.tm||[]).includes(key))out.tm.push(s)}return out}
+function renderMvForm(){
+  const F=$('mvForm');F.innerHTML='';
+  if(!ED.moves){F.append(h('section',{},h('div',{class:'hint',style:'margin:0'},'Load MoveTables.js (or the project folder) to start.')));return}
+  const k=ED.mvSel,e=k&&ED.moves[k];if(!e){F.append(h('section',{},h('div',{class:'hint',style:'margin:0'},'Pick a move from the list.')));return}
+  const keyIn=h('input',{type:'text',value:k,style:'width:260px'});
+  const dup=Object.entries(ED.moves).filter(([kk,m])=>kk!==k&&m.id===e.id).map(x=>x[0]);
+  F.append(h('section',{},h('div',{style:'font-size:18px;font-weight:700'},e.name,' ',tbadge(e.type),' ',h('span',{class:'badge',style:'background:#3a4052'},e.split)),
+    h('div',{class:'row'},keyIn,h('button',{on:{click:()=>renameMove(k,keyIn.value.trim().toUpperCase())}},'Rename key'),
+      h('button',{on:{click:()=>{const nk=prompt('Key for the copy (MOVE_…):',k+'_COPY');if(!nk)return;const K=nk.trim().toUpperCase();if(!/^MOVE_[A-Z0-9_]+$/.test(K)||ED.moves[K])return msg('Invalid or existing key.');
+        ED.moves[K]=JSON.parse(JSON.stringify(e));ED.moves[K].id=Math.max(...Object.values(ED.moves).map(m=>m.id||0))+1;ED.moves[K].name=e.name+' copy';ED.mvSel=K;dirty('moves');refreshLists()}}},'Duplicate'),
+      twoClick('Delete',()=>{delete ED.moves[k];for(const[a,v]of Object.entries(ED.alias))if(v===k)delete ED.alias[a];ED.mvSel=null;dirty('moves');refreshLists()})),
+    dup.length?h('div',{class:'warn'},`Another move has the same id ${e.id}: ${dup.slice(0,3).join(', ')}`):null));
+  const flagBox=h('div',{class:'row',style:'margin:2px 0'},...FLAGS.map(f=>{const c=h('input',{type:'checkbox',checked:e.flags.includes(f),on:{change:()=>{const i=e.flags.indexOf(f);if(c.checked&&i<0)e.flags.push(f);if(!c.checked&&i>=0)e.flags.splice(i,1);dirty('moves')}}});return h('label',{class:'in'},c,f)}));
+  F.append(h('section',{},h('h3',{},'Battle data'),h('div',{class:'fg'},
+    fld(e,'name','Name (max 12 characters in game)','text',{tbl:'moves',after:renderMvList}),fld(e,'id','Move id','num',{tbl:'moves',step:1}),fld(e,'type','Type','sel',{tbl:'moves',opts:typeKeys().filter(t=>t!=='TYPE_NONE'),after:()=>{renderMvList();renderMvForm()}}),
+    fld(e,'split','Category','sel',{tbl:'moves',opts:SPLITS,after:renderMvForm}),fld(e,'power','Power','num',{tbl:'moves',step:1,after:renderMvList}),fld(e,'accuracy','Accuracy (0 = never misses)','num',{tbl:'moves',step:1}),
+    fld(e,'pp','PP','num',{tbl:'moves',step:1}),fld(e,'priority','Priority','num',{tbl:'moves',step:1}),fld(e,'target','Target','sel',{tbl:'moves',opts:TARGETS}),
+    fld(e,'effect','Effect (EFFECT_… without the prefix)','text',{tbl:'moves',list:'dlEffects'}),fld(e,'effectChance','Effect chance %','num',{tbl:'moves',step:1})),
+    h('div',{class:'hint',style:'margin:8px 0 2px'},'Flags'),flagBox));
+  F.append(h('section',{},h('h3',{},'Description'),fld(e,'description','Shown on the summary screen (about 21 characters per line, two lines)','area',{tbl:'moves',wide:true})));
+  const lb=learnedBy(k),link=s=>h('span',{class:'chip',style:'cursor:pointer;padding:2px 9px',on:{click:()=>{ED.spSel=s;showTab('pokemon')}}},(ED.db&&ED.db[s]&&ED.db[s].name)||prettyKey(s));
+  F.append(h('section',{},h('h3',{},'Who learns it ',h('span',{style:'color:#8a93a6;font-weight:400'},ED.learn?`${lb.level.length} by level · ${lb.egg.length} by egg · ${lb.tm.length} by TM/HM`:'(load LearnsetTables.js)')),
+    ED.learn?h('div',{class:'chips'},...lb.level.slice(0,40).map(link),lb.level.length>40?h('span',{class:'hint'},`…and ${lb.level.length-40} more by level`):null):null));
+}
+
+// ------------------------------------------------ problems check
+$('edCheck').onclick=()=>{
+  const out=[],P=$('edProblems');
+  if(ED.db&&ED.learn){const miss=Object.keys(ED.db).filter(k=>k!=='SPECIES_NONE'&&k!=='SPECIES_EGG'&&k!=='SPECIES_'&&!ED.learn[k]);if(miss.length)out.push(`${miss.length} species have no learnset: ${miss.slice(0,8).join(', ')}${miss.length>8?'…':''}`);
+    const ex=Object.keys(ED.learn).filter(k=>!ED.db[k]);if(ex.length)out.push(`${ex.length} learnsets belong to species that are not in the database: ${ex.slice(0,6).join(', ')}`)}
+  if(ED.learn&&ED.moves){const bad=new Map();for(const[s,e]of Object.entries(ED.learn))for(const m of[...(e.levelUp||[]).map(r=>r[1]),...(e.egg||[]),...(e.tm||[])])if(!ED.moves[m]&&!ED.alias[m])bad.set(m,(bad.get(m)||0)+1);
+    if(bad.size)out.push(`${bad.size} moves used in learnsets are not in MoveTables.js: ${[...bad.keys()].slice(0,10).join(', ')}${bad.size>10?'…':''}`)}
+  if(ED.evo&&ED.db){let n=0;const ex=[];for(const[s,rows]of Object.entries(ED.evo)){if(!ED.db[s])ex.push(s);for(const r of rows)if(!ED.db[r.to]){n++;if(ex.length<8)ex.push(s+'→'+r.to)}}if(n||ex.length)out.push(`Evolutions pointing to species that are not in the database: ${ex.slice(0,10).join(', ')}`)}
+  if(ED.moves){const ids=new Map();for(const[k,m]of Object.entries(ED.moves)){if(ids.has(m.id))out.push(`Moves ${ids.get(m.id)} and ${k} share the id ${m.id}`);else ids.set(m.id,k);if(!TYPE_COL[String(m.type).replace('TYPE_','')]&&!(ED.types&&ED.types.types&&ED.types.types[m.type]))out.push(`${k} has an unknown type ${m.type}`)}}
+  if(ED.db){const types=new Set(typeKeys()),bad=Object.entries(ED.db).filter(([k,e])=>k!=='SPECIES_NONE'&&((e.type1&&!types.has(e.type1))||(e.type2&&!types.has(e.type2)))).map(x=>x[0]);if(bad.length)out.push(`${bad.length} species use a type that is not in the type list: ${bad.slice(0,6).join(', ')}`);
+    const ph=Object.values(ED.db).filter(e=>e.name&&e.name!=='None'&&!e.baseHP&&!e.baseAttack&&!e.baseSpeed).length;if(ph)out.push(`${ph} species still have no base stats`)}
+  P.hidden=false;P.textContent=out.length?out.join('\n'):'No problems found.';P.style.color=out.length?'#ffd166':'#6fe3a0'};
+
+// ------------------------------------------------ saving
+const q2=s=>JSON.stringify(s),cj=v=>JSON.stringify(v);
+function serDb(){const out=[];for(const[k,e]of Object.entries(ED.db))out.push(serEntry(k,e));return`// tables/PokemonDatabase.js\n\nconst PokemonDatabase = {\n${out.join('\n')}\n};\n`}
+function serLearn(){const L=['// tables/LearnsetTables.js  (edited with pokemon_editor.html)','// Keys = PokemonDatabase species keys; moves use MoveTables.js keys.','//   levelUp [[level, move], ...]   egg [move, ...]   tm [move, ...] (every TM/HM the species can learn)   tutor [tutor move name, ...]','','const LearnsetTable = {'];
+  for(const[s,e]of Object.entries(ED.learn)){const p=[];if(e.levelUp&&e.levelUp.length)p.push('levelUp:'+cj(e.levelUp));if(e.egg&&e.egg.length)p.push('egg:'+cj(e.egg));if(e.tm&&e.tm.length)p.push('tm:'+cj(e.tm));if(e.tutor&&e.tutor.length)p.push('tutor:'+cj(e.tutor));if(p.length)L.push(`  ${s}: { ${p.join(', ')} },`)}
+  L.push('};','','// LearnsetTable.movesAt(speciesKey, level) -> the moves the species would know at that level (latest 4 level-up moves)',"Object.defineProperty(LearnsetTable, 'movesAt', { enumerable: false, value(key, level) {",'  const e = this[key]; if (!e || !e.levelUp) return [];','  const out = []; for (const [lv, mv] of e.levelUp) { if (lv <= level && !out.includes(mv)) out.push(mv); }','  return out.slice(-4);','} });','window.LearnsetTable = LearnsetTable;','');return L.join('\n')}
+function serEvo(){const L=['// tables/EvolutionTables.js  (edited with pokemon_editor.html; Mega and Gigantamax forms are not part of it)','// method: LEVEL, ITEM, TRADE, FRIENDSHIP, ... (the EVO_ name without EVO_), param: level / item / move / etc.','','const EvolutionTable = {'];
+  for(const[s,rows]of Object.entries(ED.evo))if(rows.length)L.push(`  ${s}: ${cj(rows)},`);L.push('};','window.EvolutionTable = EvolutionTable;','');return L.join('\n')}
+function serMoves(){const L=['// tables/MoveTables.js  (edited with pokemon_editor.html)','//','// Keys are the move ids used in the save (MOVE_CLOSE_COMBAT). `MoveAlias` maps the original CFRU constant (MOVE_CLOSECOMBAT) to the key.','','const MoveTable = {'];
+  for(const[k,e]of Object.entries(ED.moves))L.push(`  ${k}: { id: ${e.id|0}, name: ${q2(e.name)}, type: ${q2(e.type)}, power: ${e.power|0}, accuracy: ${e.accuracy|0}, pp: ${e.pp|0}, split: ${q2(e.split)}, priority: ${e.priority|0}, effect: ${q2(e.effect||'')}, effectChance: ${e.effectChance|0}, target: ${q2(e.target||'SELECTED')}, flags: ${cj(e.flags||[])}, description: ${q2(e.description||'')} },`);
+  L.push('};','','const MoveAlias = '+JSON.stringify(ED.alias,null,1)+';','',"// MoveTable.get('MOVE_CLOSE_COMBAT') or ...get('MOVE_CLOSECOMBAT') or ...get(13)","Object.defineProperty(MoveTable, 'get', { enumerable: false, value(id) {","  if (typeof id === 'number') { for (const k in this) if (this[k].id === id) return this[k]; return null; }","  return this[id] || this[MoveAlias[id]] || null;",'} });','window.MoveTable = MoveTable;','window.MoveAlias = MoveAlias;','');return L.join('\n')}
+const SAVERS={db:['PokemonDatabase.js',serDb,()=>ED.db],learn:['LearnsetTables.js',serLearn,()=>ED.learn],evo:['EvolutionTables.js',serEvo,()=>ED.evo],moves:['MoveTables.js',serMoves,()=>ED.moves]};
+document.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>{const[name,fn,get]=SAVERS[b.dataset.dl];if(!get())return msg('Load '+name+' first.');dl(new Blob([fn()],{type:'text/javascript'}),name);ED.dirty[b.dataset.dl]=false;renderStats();msg(name+' downloaded. Put it in tables/.')});
+
+// ------------------------------------------------ tabs
+function renderForms(){renderSpForm();renderMvForm()}
+function showTab(t){
+  for(const id of['sprites','pokemon','moves'])$('tab-'+id).hidden=id!==t;
+  $('edcommon').hidden=t==='sprites';
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  if(t==='pokemon'){renderSpList();renderSpForm()}if(t==='moves'){renderMvList();renderMvForm()}
+  try{location.hash=t}catch(e){}}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+window.edFromSprite=()=>{if(oldDb){ED.db=oldDb;ED.dirty.db=false;refreshLists();renderStats()}};
+window.ED=ED;
+{const t=(location.hash||'').replace('#','');showTab(['pokemon','moves'].includes(t)?t:'sprites')}
+refreshLists();renderStats();
+})();
+
 </script></body></html>
