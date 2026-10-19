@@ -65,6 +65,8 @@ ul.k{margin:6px 0 0;padding-left:18px;color:#9ab;line-height:1.7;font-size:12px}
     <label class="f"><span>Party slot</span><select id="fSlot"></select></label>
     <label class="f"><span>Opponent Pok&eacute;mon</span><input type="text" id="fSp" list="spl"></label>
     <div class="row" style="margin:0"><label class="f"><span>Lv</span><input type="number" id="fLv" value="15" min="1" max="100"></label><label class="in" style="margin-top:16px"><input type="checkbox" id="fSh"> shiny</label></div>
+    <label class="f" style="grid-column:1/-1"><span>Opponent trainer front sprite &mdash; <b id="fPathSt" style="font-weight:600"></b></span>
+      <div class="row" style="margin:0;flex-wrap:nowrap"><input type="text" id="fPath" placeholder="graphics/trainer_front_sprites/name.png (filled from the trainer; you can type another path)"><button id="fPick" type="button" style="white-space:nowrap">pick image…</button><input type="file" id="fFile" accept="image/*" style="display:none"></div></label>
     <label class="f"><span>Your trainer sprite</span><select id="pTr"></select></label>
     <label class="f"><span>Background</span><select id="bg"><option>grass</option><option>cave</option><option>water</option><option>indoor</option><option>sand</option></select></label>
    </div>
@@ -76,7 +78,7 @@ ul.k{margin:6px 0 0;padding-left:18px;color:#9ab;line-height:1.7;font-size:12px}
     <label class="in"><input type="checkbox" id="sLB"> level-up box</label>
    </div>
    <div class="grid2">
-    <label class="f"><span>Bottom screen</span><select id="bm"><option value="cmd">Command menu</option><option value="move">Fight menu</option><option value="msg">Message only</option></select></label>
+    <label class="f"><span>Bottom screen</span><select id="bm"><option value="cmd">Command menu</option><option value="move">Fight menu</option><option value="msg">Nothing (text box is on top)</option></select></label>
     <label class="f"><span>Message text</span><input type="text" id="bt" value=""></label>
     <label class="f"><span>HP of both: <b id="hpv">100</b>%</span><input type="range" id="hp" min="1" max="100" value="100"></label>
     <label class="f"><span>EXP: <b id="xpv">60</b>%</span><input type="range" id="xp" min="0" max="100" value="60"></label>
@@ -108,7 +110,7 @@ ul.k{margin:6px 0 0;padding-left:18px;color:#9ab;line-height:1.7;font-size:12px}
 const $=id=>document.getElementById(id);
 const BASES=['','public/','../','../public/'];
 const ST={base:'',src:{},loaded:{},edits:{},orig:{},core:null,env:null,sel:null,drag:null};
-const LSKEY='battle_layout_editor_v1';
+const LSKEY='battle_layout_editor_v2';
 const FILES=[
  {id:'db',name:'PokemonDatabase.js',dirs:['tables/','','js/'],req:1},
  {id:'moves',name:'MoveTables.js',dirs:['tables/','','js/'],req:1},
@@ -166,12 +168,13 @@ const ELS={
  foeBalls:{label:'Opponent party balls',screen:'top',rel:['foe.box.x','foe.box.y','foe.balls.x','foe.balls.y'],fields:[['X (from box)','foe.balls.x',1],['Y (from box)','foe.balls.y',1]],show:'foe.balls.show'},
  allyBalls:{label:'Your party balls',screen:'top',rel:['ally.box.x','ally.box.y','ally.balls.x','ally.balls.y'],fields:[['X (from box)','ally.balls.x',1],['Y (from box)','ally.balls.y',1]],show:'ally.balls.show'},
  levelBox:{label:'Level-up stats box',screen:'top',drag:['levelBox.x','levelBox.y'],fields:[['X','levelBox.x',1],['Y','levelBox.y',1]]},
- msg:{label:'Text box',screen:'bottom',drag:['bottom.msg.x','bottom.msg.y'],fields:[['X','bottom.msg.x',1],['Y','bottom.msg.y',1],['Width','bottom.msg.w',1],['Height','bottom.msg.h',1]]},
+ msg:{label:'Text box (on the top screen)',screen:'top',drag:['bottom.msg.x','bottom.msg.y'],fields:[['X','bottom.msg.x',1],['Y','bottom.msg.y',1],['Width','bottom.msg.w',1],['Height','bottom.msg.h',1]]},
+ info:{label:'Move info / learn box (bottom screen)',screen:'bottom',drag:['bottom.info.x','bottom.info.y'],fields:[['X','bottom.info.x',1],['Y','bottom.info.y',1]]},
  buttons:{label:'Command buttons',screen:'bottom',drag:['bottom.btn.x','bottom.btn.y'],fields:[['X (first button)','bottom.btn.x',1],['Y (first button)','bottom.btn.y',1],['Button width','bottom.btn.w',1],['Button height','bottom.btn.h',1],['Gap across','bottom.btn.gapX',1],['Gap down','bottom.btn.gapY',1]]},
 };
-const ORDER_TOP=['foeBalls','allyBalls','foeBox','allyBox','levelBox','foeMon','allyMon','foeTrainer','allyTrainer','foePlat','allyPlat'];
-const ORDER_BOT=['buttons','msg'];
-const COL={foeMon:'#ff7a7a',allyMon:'#7affb0',foeTrainer:'#ffb36b',allyTrainer:'#6bd0ff',foePlat:'#d6c77a',allyPlat:'#d6c77a',foeBox:'#ffffff',allyBox:'#ffffff',foeBalls:'#ff9ad6',allyBalls:'#ff9ad6',levelBox:'#c8a0ff',msg:'#ffe066',buttons:'#66e0ff'};
+const ORDER_TOP=['msg','foeBalls','allyBalls','foeBox','allyBox','levelBox','foeMon','allyMon','foeTrainer','allyTrainer','foePlat','allyPlat'];
+const ORDER_BOT=['buttons','info'];
+const COL={foeMon:'#ff7a7a',allyMon:'#7affb0',foeTrainer:'#ffb36b',allyTrainer:'#6bd0ff',foePlat:'#d6c77a',allyPlat:'#d6c77a',foeBox:'#ffffff',allyBox:'#ffffff',foeBalls:'#ff9ad6',allyBalls:'#ff9ad6',levelBox:'#c8a0ff',msg:'#ffe066',info:'#ffe066',buttons:'#66e0ff'};
 
 // species database positions (legacy 640x480 absolute values, used as an offset from these defaults)
 const DEF={f:[503,107],b:[129,359]};
@@ -213,27 +216,38 @@ async function init(){
   $('pTr').innerHTML='<option value="">(none)</option>'+Object.keys(PB).map(k=>'<option value="'+PB[k]+'">'+k.toLowerCase()+'</option>').join('');
   if(PB.MALE)$('pTr').value=PB.MALE;
   if(TT){const k=Object.keys(TT)[0];if(k){$('fTr').value=k;onTrainer()}}
-  const core=ST.core=BattleSceneCore({urlFor:p=>ST.base+p,engine:()=>ST.env,types:()=>ST.env.types,glyphs:()=>{try{return typeof EmeraldFont!=='undefined'?new EmeraldFont(null).glyphMap:null}catch(e){return null}},onEnd:()=>{},onItemUsed:()=>{},bag:()=>[]});
+  const core=ST.core=BattleSceneCore({urlFor:p=>/^(blob:|data:|https?:)/.test(p)?p:ST.base+p,engine:()=>ST.env,types:()=>ST.env.types,glyphs:()=>{try{return typeof EmeraldFont!=='undefined'?new EmeraldFont(null).glyphMap:null}catch(e){return null}},onEnd:()=>{},onItemUsed:()=>{},bag:()=>[]});
   window.core=core;await core.initFont();
   if(restoreLocal())msg('Restored your unsaved work from last time. "Reset everything" throws it away.');
   ctxT=$('cT').getContext('2d');ctxB=$('cB').getContext('2d');
-  wire();setZoom(3);refresh();listEdits();
+  wire();setZoom(3);refresh();checkPath();listEdits();
   $('dDb').disabled=!ST.src.db;$('dSc').disabled=!ST.src.scene;
   let last=performance.now();(function loop(t){const dt=Math.min(.05,(t-last)/1000);last=t;try{core.update(dt);core.render(ctxT,ctxB)}catch(e){}drawOverlay();requestAnimationFrame(loop)})(last);
 }
 
 // ---------------------------------------------------------------- scene controls
 function onTrainer(){
+  $('fPath').value=defaultSprite();pathSeen='';
   const TT=tbl('TrainerTable'),id=$('fTr').value,t=TT&&id&&TT[id];
   $('fSlot').innerHTML=t?t.party.map((m,i)=>'<option value="'+i+'">'+(i+1)+': '+m.species.replace('SPECIES_','')+' Lv'+m.level+'</option>').join(''):'<option value="">—</option>';
   if(t){$('fSlot').value=0;onSlot();if(t.bg)$('bg').value=t.bg}
   $('fSlot').disabled=!t;
 }
 function onSlot(){const TT=tbl('TrainerTable'),t=TT&&TT[$('fTr').value];if(!t)return;const m=t.party[+$('fSlot').value||0];if(m){$('fSp').value=m.species;$('fLv').value=m.level;$('fSh').checked=!!(m.shiny)}}
-function trainerSprite(){
+function defaultSprite(){
   const id=$('fTr').value;if(!id)return'';
   const TT=tbl('TrainerTable'),t=TT&&TT[id];
   return(t&&t.frontSprite)||'graphics/trainer_front_sprites/'+id.replace(/^TRAINER_/,'').toLowerCase()+'.png';
+}
+const trainerSprite=()=>$('fPath').value.trim();
+let pathSeen='';
+function checkPath(){
+  const p=trainerSprite(),st=$('fPathSt');if(p===pathSeen)return;pathSeen=p;
+  if(!p){st.textContent='';return}
+  st.style.color='#9ab';st.textContent='checking…';
+  const im=new Image();im.onload=()=>{if(trainerSprite()===p){st.style.color='#9fe0b6';st.textContent='found ('+im.naturalWidth+'×'+im.naturalHeight+')'}};
+  im.onerror=()=>{if(trainerSprite()===p){st.style.color='#f0a8a8';st.textContent='NOT FOUND at '+(/^(blob:|data:|https?:)/.test(p)?p:ST.base+p)+' — set frontSprite in TrainerTables.js to the real file name, or type the path here'}};
+  im.src=/^(blob:|data:|https?:)/.test(p)?p:ST.base+p;
 }
 function trainerName(){const id=$('fTr').value;if(!id)return'';const TT=tbl('TrainerTable'),t=TT&&TT[id];return t?((t.class?t.class+' ':'')+t.name):id}
 const ok=sp=>ST.env.db[sp]&&ST.env.db[sp].battleSprite;
@@ -256,8 +270,9 @@ function applyLive(){
   if(S.mode==='cmd')S.cmd=S.cmd|0;
 }
 function wire(){
-  for(const id of['aSp','aLv','aSh','fSp','fLv','fSh','pTr','bg','sFM','sFT','sAM','sAT','bm','bt'])$(id).addEventListener('change',refresh);
-  $('fTr').addEventListener('change',()=>{onTrainer();refresh()});$('fSlot').addEventListener('change',()=>{onSlot();refresh()});
+  for(const id of['aSp','aLv','aSh','fSp','fLv','fSh','pTr','bg','sFM','sFT','sAM','sAT','bm','bt','fPath'])$(id).addEventListener('change',()=>{refresh();checkPath()});
+  $('fPick').onclick=()=>$('fFile').click();$('fFile').onchange=()=>{const f=$('fFile').files[0];if(f){$('fPath').value=URL.createObjectURL(f);refresh();checkPath()}};
+  $('fTr').addEventListener('change',()=>{onTrainer();refresh();checkPath()});$('fSlot').addEventListener('change',()=>{onSlot();refresh()});
   for(const id of['hp','xp','sLB'])$(id).addEventListener('input',applyLive);
   $('zoom').addEventListener('change',()=>setZoom(+$('zoom').value));
   for(const[w,o,scr]of[['wT','oT','top'],['wB','oB','bottom']]){
@@ -369,10 +384,10 @@ const n2=v=>{v=+v;return String(+v.toFixed(2))};
 function layoutBlock(){
   const C=CFG(),side=(k,n)=>{const s=C[k]||{},b=s.box||{},ba=s.balls||{};
     return `  ${n}{ x: ${n2(s.x)}, bottom: ${n2(s.bottom)}, platform: ${n2(s.platform)}, platformX: ${n2(s.platformX!=null?s.platformX:s.x)}, scale: ${n2(s.scale)}, fit: ${n2(s.fit)}, trainerX: ${n2(s.trainerX!=null?s.trainerX:s.x)}, trainerBottom: ${n2(s.trainerBottom)}, trainerScale: ${n2(s.trainerScale)}, box: { x: ${n2(b.x)}, y: ${n2(b.y)}, w: ${n2(b.w)} }, balls: { x: ${n2(ba.x)}, y: ${n2(ba.y)}, show: ${ba.show!==false} } },`};
-  const m=(C.bottom||{}).msg||{},b=(C.bottom||{}).btn||{},lb=C.levelBox||{};
+  const m=(C.bottom||{}).msg||{},b=(C.bottom||{}).btn||{},inf=(C.bottom||{}).info||{x:4,y:4},lb=C.levelBox||{};
   return 'BattleScene.CONFIG = {\n'+side('foe','foe:  ')+'\n'+side('ally','ally: ')+'\n'+
    `  ballScale: ${n2(C.ballScale!=null?C.ballScale:1.5)},\n  levelBox: { x: ${n2(lb.x)}, y: ${n2(lb.y)} },\n`+
-   `  bottom: { msg: { x: ${n2(m.x)}, y: ${n2(m.y)}, w: ${n2(m.w)}, h: ${n2(m.h)} }, btn: { x: ${n2(b.x)}, y: ${n2(b.y)}, w: ${n2(b.w)}, h: ${n2(b.h)}, gapX: ${n2(b.gapX)}, gapY: ${n2(b.gapY)} } },\n};`;
+   `  bottom: { msg: { x: ${n2(m.x)}, y: ${n2(m.y)}, w: ${n2(m.w)}, h: ${n2(m.h)} }, info: { x: ${n2(inf.x)}, y: ${n2(inf.y)} }, btn: { x: ${n2(b.x)}, y: ${n2(b.y)}, w: ${n2(b.w)}, h: ${n2(b.h)}, gapX: ${n2(b.gapX)}, gapY: ${n2(b.gapY)} } },\n};`;
 }
 function dl(text,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/javascript'}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
 function dlScene(){
