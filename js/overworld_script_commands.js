@@ -121,6 +121,7 @@ window.OverworldScriptCommands = (() => {
         ribbons: [],
         superTrainingFlags: { hpMedal: false, atkMedal: false, defMedal: false, spatkMedal: false, spdefMedal: false, speedMedal: false },
       };
+      if (window.Dex) window.Dex.catch(speciesKey);   // Pokedex: caught
       if (window.GivePokemonSystem && typeof window.GivePokemonSystem.give === 'function') window.GivePokemonSystem.give(mon);
       else console.warn('[ScriptEngine] GivePokemonSystem not found!');
       next();
@@ -188,6 +189,20 @@ window.OverworldScriptCommands = (() => {
     if (ctx.preview || !window.BagMenu) { if (!ctx.preview) console.warn('[ScriptEngine] BagMenu.js is not loaded'); return next(); }
     window.BagMenu.open(ctx.scene, { mode: 'storage', onClose: () => next() });
   });
+
+  // ------------------------------------------------------------------ Aide's Log (quests, start menu page 2)
+  const QS = () => window.Quests;
+  const noQ = () => { console.warn('[ScriptEngine] StartMenu.js is not loaded (Quests API missing)'); return null; };
+  def('addquest', "Aide's Log", "Add (or update) a task in the Aide's Log", [A('id', 'text', 0, 'find_rotom', 'short name, no spaces'), A('title', 'text', 0, 'Find the Rotom'), A('text', 'text', 1, '', 'description'), A('giver', 'text', 1, '', 'who asked')],
+    (a, ctx, next) => { if (ctx.preview) { ctx.host.note(`Log: new task "${a.title}"`); return next(); } if (!QS()) noQ(); else QS().add(a.id, a.title, a.text, a.giver); next(); });
+  def('addqueststep', "Aide's Log", 'Add a step to a task, or tick it off (done = true)', [A('id', 'text', 0, 'find_rotom'), A('step', 'text', 0, 'Search the cave'), A('done', 'bool', 1, false)],
+    (a, ctx, next) => { if (ctx.preview) { ctx.host.note(`Log: step "${a.step}"`); return next(); } if (!QS()) noQ(); else QS().step(a.id, a.step, a.done === true || a.done === 'true'); next(); });
+  def('completequest', "Aide's Log", 'Mark a task as finished', [A('id', 'text', 0, 'find_rotom')],
+    (a, ctx, next) => { if (ctx.preview) { ctx.host.note(`Log: finished "${a.id}"`); return next(); } if (!QS()) noQ(); else QS().complete(a.id); next(); });
+  def('checkquest', "Aide's Log", 'Is the task in the log? status = active / done. Then goto_if_yes / goto_if_no', [A('id', 'text', 0, 'find_rotom'), A('status', 'text', 1, 'done', 'done or active')],
+    (a, ctx, next) => { if (ctx.preview) { ctx.choice = true; return next(); } const q = QS() && QS().get(a.id); ctx.choice = !!q && (q.status === (a.status || 'done')); next(); });
+  def('openmenu', 'Menu', 'Open the start menu (screen: pokedex / map / log / card / save / options)', [A('screen', 'text', 1, '', 'optional')],
+    (a, ctx, next) => { if (ctx.preview || !window.StartMenu) return next(); window.StartMenu.open(ctx.scene, { screen: ({ pokedex: 'dex', rotomdex: 'dex', map: 'map', townmap: 'map', log: 'log', card: 'card', save: 'save', options: 'options', nav: 'nav' })[String(a.screen || '').toLowerCase()], onClose: () => next() }); });
 
   return C;
 })();
