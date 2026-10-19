@@ -512,31 +512,33 @@ function createStart(env) {
 
   // ===================================================================== TRAINER CARD
   function badgeFlag(i) { const f = flagsOf(); return !!(f['FLAG_BADGE0' + i + '_GET'] || f['FLAG_BADGE' + i + '_GET'] || f['FLAG_BADGE' + two(i) + '_GET'] || f['BADGE_' + i]); }
-  const CD = { page: 0, scroll: 0, lines: 0 };      // page 0 = badges, page 1 = ribbons
+  const CD = { page: 0, sel: 0, ptop: 0, tscroll: 0, focus: 'party' };      // page 0 = badges, page 1 = ribbons
   const BADGECOL = ['#e8d048', '#e86838', '#58b8e8', '#98d048', '#d870d8', '#f0f0f0', '#e84848', '#8868e8'];
   const BADGES = () => (env.badges ? env.badges() : 8);
   const prettyRib = r => String(r).replace(/^RIBBON_/, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
   const trainerSpritePath = () => { const male = String((saveData().player || {}).gender || 'MALE').toUpperCase() !== 'FEMALE'; return (env.trainerSprite && env.trainerSprite(male)) || (male ? 'graphics/trainer_front_sprites/player_male.png' : 'graphics/trainer_front_sprites/player_female.png'); };
-  function ribbonLines() {      // [{h:'TITLE'} | {t:'text', icon:'path'}]
-    const sv = saveData(), L = [], tr = (sv.player && sv.player.ribbons) || sv.trainerRibbons || [];
-    L.push({ h: 'TRAINER RIBBONS' }); if (!tr.length) L.push({ t: 'None yet.', mute: true }); else tr.forEach(r => L.push({ t: prettyRib(r) }));
-    L.push({ h: 'POKéMON RIBBONS' }); let any = false;
-    party().forEach(m => { const rb = m.ribbons || []; if (!rb.length) return; any = true; L.push({ t: String(m.nickname || m.species.replace(/^SPECIES_/, '').replace(/_/g, ' ')).toUpperCase(), sub: true, icon: dbOf(m.species).iconSprite }); rb.forEach(r => L.push({ t: prettyRib(r), indent: true })); });
-    if (!any) L.push({ t: 'None yet.', mute: true });
-    return L;
+  const RIBCOL = ['#e8c838', '#e85a5a', '#58a8f0', '#68c868', '#d870d8', '#f09040'];
+  const trainerRibbons = () => { const sv = saveData(); return (sv.player && sv.player.ribbons) || sv.trainerRibbons || []; };
+  function partyRibbons() {      // [{ name, owners:[party index] }] one row per different ribbon
+    const map = new Map(), pt = party().slice(0, 6);
+    pt.forEach((m, i) => { for (const r of (m.ribbons || [])) { if (!map.has(r)) map.set(r, { id: r, name: prettyRib(r), owners: [] }); map.get(r).owners.push(i); } });
+    return [...map.values()];
   }
+  function ribbonIcon(c, x, y, col) { rect(c, x + 3, y + 5, 3, 5, col); rect(c, x + 8, y + 5, 3, 5, col); rect(c, x + 4, y + 8, 1, 2, '#00000040'); ell(c, x + 6, y + 4, 4, 4, col); ell(c, x + 6, y + 4, 2, 2, '#ffffff90'); }
+  function star(c, x, y, col) { const m = ['0001000', '0001000', '1111111', '0111110', '0011100', '0110110', '1100011']; c.fillStyle = col || '#ffd23c'; m.forEach((r, j) => { for (let i = 0; i < 7; i++) if (r[i] === '1') c.fillRect(x + i, y + j, 1, 1); }); }
   function tabs(c, x, y, w, h, hit) {     // BADGES | RIBBONS switcher with a red marker on the active one
-    ['BADGES', 'RIBBONS'].forEach((lab, i) => { const tx = x + i * (w + 4), on = CD.page === i; if (hit) S.hit.push({ x: tx, y, w, h, f: () => { CD.page = i; CD.scroll = 0; } });
+    ['BADGES', 'RIBBONS'].forEach((lab, i) => { const tx = x + i * (w + 4), on = CD.page === i; if (hit) S.hit.push({ x: tx, y, w, h, f: () => { CD.page = i; } });
       rect(c, tx - 1, y - 1, w + 2, h + 2, on ? '#ffffff' : '#0a0c12'); rect(c, tx, y, w, h, on ? '#d8283c' : '#2a3050'); if (on) rect(c, tx, y, w, 2, '#ff7a8a'); T(c, lab, Math.round(tx + (w - tw(lab)) / 2), Math.round(y + (h - FT.cap) / 2), 'white'); });
   }
+  const PR = { x: 6, y: 59, w: 228, rows: 5, h: 13 };      // the party ribbon list on the lower screen
   SCREENS.card = {
-    enter() { CD.page = 0; CD.scroll = 0; trainerPre(); },
+    enter() { CD.page = 0; CD.sel = 0; CD.ptop = 0; CD.tscroll = 0; CD.focus = 'party'; trainerPre(); },
     top(c) {
       const inf = SS() ? SS().info() : { name: 'Player', money: 0, badges: 0, playTime: 0, dexSeen: 0, dexCaught: 0 }, sv = saveData(), p = sv.player || {};
       grad(c, 0, 0, BW, TH, '#10204a', '#06101e');
       const off = (S.t * 14) % 24; c.fillStyle = 'rgba(120,160,255,.06)'; for (let k = -6; k < 16; k++) c.fillRect(k * 24 + off, 0, 10, TH);
       rr(c, 6, 6, 228, 148, 8, '#d8a020'); rr(c, 8, 8, 224, 144, 7, '#1c3a8a'); rr(c, 8, 8, 224, 20, 7, '#2a54c0'); rect(c, 8, 20, 224, 8, '#2a54c0');
-      T(c, CD.page === 0 ? 'TRAINER CARD' : 'RIBBONS', 16, 12, 'white'); tabs(c, 138, 11, 42, 13, false);
+      T(c, CD.page === 0 ? 'TRAINER CARD' : 'TRAINER RIBBONS', 16, 12, 'white'); tabs(c, 138, 11, 42, 13, false);
       if (CD.page === 0) {
         const row = (lab, val, y) => { T(c, lab, 16, y, 'gold'); TR(c, val, 138, y, 'white'); };
         row('NAME', String(p.name || inf.name).toUpperCase(), 33); row('ID No.', String(inf.id || 0).padStart(5, '0'), 44); row('MONEY', String(+p.money || 0), 55); row('POKéDEX', inf.dexCaught + ' / ' + inf.dexSeen, 66); row('TIME', fmtTime(inf.playTime), 77);
@@ -548,27 +550,35 @@ function createStart(env) {
           rr(c, x, y, step - 3, 32, 4, '#0c1a46'); ell(c, x + Math.floor((step - 3) / 2), y + 15, 8, 8, got ? BADGECOL[(i - 1) % 8] : '#26346a');
           if (got) { rect(c, x + 6, y + 10, 3, 2, 'rgba(255,255,255,.8)'); const sh = ((S.t * 40 + i * 20) % 120) - 20; if (sh > 0 && sh < step - 3) rect(c, x + sh, y + 5, 2, 20, 'rgba(255,255,255,.25)'); } else T(c, String(i), x + Math.floor((step - 3) / 2) - 3, y + 11, 'grey'); }
       } else {
-        const L = ribbonLines(), rows = 8, pitch = 14, y0 = 34; CD.lines = L.length; CD.scroll = clamp(CD.scroll, 0, Math.max(0, L.length - rows));
-        rr(c, 14, 31, 212, rows * pitch + 4, 4, '#0c1a46'); c.save(); c.beginPath(); c.rect(14, 31, 212, rows * pitch + 4); c.clip();
-        for (let r = 0; r < rows; r++) { const e = L[CD.scroll + r]; if (!e) break; const y = y0 + r * pitch;
-          if (e.h) { rect(c, 16, y - 1, 202, 12, '#2a54c0'); T(c, e.h, 20, y, 'white'); }
-          else { const x = 22 + (e.indent ? 12 : 0); if (e.icon) drawIcon(c, e.icon, 20, y - 5, 16, false); else if (!e.mute) ell(c, x + 3, y + 5, 3, 3, '#e8c838'); T(c, e.t, e.icon ? 38 : x + 10, y, e.mute ? 'grey' : (e.sub ? 'gold' : 'white')); } }
-        c.restore(); if (L.length > rows) { const sbH = rows * pitch; rect(c, 220, y0 - 2, 3, sbH, '#06101e'); rect(c, 220, y0 - 2 + Math.round((sbH - 14) * CD.scroll / (L.length - rows)), 3, 14, '#ffd23c'); }
-              }
+        const L = trainerRibbons(), rows = 8, pitch = 14, y0 = 34; CD.tscroll = clamp(CD.tscroll, 0, Math.max(0, L.length - rows));
+        rr(c, 14, 31, 212, rows * pitch + 4, 4, CD.focus === 'trainer' ? '#ffd23c' : '#0c1a46'); rr(c, 15, 32, 210, rows * pitch + 2, 4, '#0c1a46');
+        if (!L.length) { T(c, 'No trainer ribbons yet.', 24, 70, 'grey'); T(c, 'Earn them from events and', 24, 84, 'mute'); T(c, 'achievements.', 24, 96, 'mute'); }
+        for (let r = 0; r < rows; r++) { const id = L[CD.tscroll + r]; if (id == null) break; const y = y0 + r * pitch; rect(c, 17, y - 2, 198, 13, r % 2 ? 'rgba(255,255,255,.04)' : 'rgba(255,255,255,.09)'); ribbonIcon(c, 20, y - 3, RIBCOL[(CD.tscroll + r) % RIBCOL.length]); T(c, prettyRib(id), 38, y, 'white'); }
+        if (L.length > rows) { const sbH = rows * pitch; rect(c, 219, y0 - 2, 3, sbH, '#06101e'); rect(c, 219, y0 - 2 + Math.round((sbH - 14) * CD.tscroll / (L.length - rows)), 3, 14, '#ffd23c'); }
+        T(c, L.length + ' RIBBON' + (L.length === 1 ? '' : 'S'), 16, 146 - 1, 'gold');
+      }
     },
     bot(c) {
-      S.hit = []; menuBg(c, BW, BH, S.t); statusBar(c, 1);
-      T(c, 'YOUR PARTY', 12, 20, 'mute'); const pt = party();
-      rr(c, 8, 32, 224, 76, 6, 'rgba(10,12,22,.75)');
-      for (let i = 0; i < 6; i++) { const ix = 14 + (i % 3) * 72, iy = 36 + Math.floor(i / 3) * 36, m = pt[i]; rr(c, ix - 2, iy - 1, 68, 36, 4, 'rgba(255,255,255,.05)'); if (!m || !m.species) continue;
-        if (!drawIcon(c, dbOf(m.species).iconSprite, ix + 2, iy, 32, false)) ball(c, ix + 12, iy + 10, 'poke', 1);
-        T(c, String(m.nickname || m.species.replace(/^SPECIES_/, '').replace(/_/g, ' ')).toUpperCase().slice(0, 5), ix + 36, iy + 4, 'white'); T(c, 'Lv' + (m.level || 1), ix + 36, iy + 17, 'mute'); }
-      tabs(c, 12, 118, 70, 20, true);
-      btn(c, BW - 74, BH - 24, 68, 18, 'B  BACK', () => back(), '#4a2030');
+      S.hit = []; menuBg(c, BW, BH, S.t); statusBar(c, 1); const pt = party().slice(0, 6), pr = partyRibbons();
+      CD.sel = clamp(CD.sel, 0, Math.max(0, pr.length - 1)); if (CD.sel < CD.ptop) CD.ptop = CD.sel; if (CD.sel >= CD.ptop + PR.rows) CD.ptop = CD.sel - PR.rows + 1; CD.ptop = clamp(CD.ptop, 0, Math.max(0, pr.length - PR.rows));
+      const cur = CD.page === 1 && pr[CD.sel];
+      // party icons in a row, like the battle party menu
+      for (let i = 0; i < 6; i++) { const ix = 8 + i * 38, iy = 22, m = pt[i], has = cur && cur.owners.indexOf(i) >= 0;
+        rr(c, ix, iy - 2, 36, 36, 5, has ? '#6a5410' : 'rgba(10,12,22,.8)'); if (has) { rr(c, ix + 1, iy - 1, 34, 34, 4, '#3a2e08'); star(c, ix + 15, iy - 9 + Math.round(Math.abs(Math.sin(S.t * 6)) * -2), '#ffd23c'); }
+        if (m && m.species) { if (!drawIcon(c, dbOf(m.species).iconSprite, ix + 2, iy, 32, false)) ball(c, ix + 14, iy + 12, 'poke', 1); } else rr(c, ix + 8, iy + 8, 20, 18, 4, 'rgba(255,255,255,.06)'); }
+      // scrollable list of the party's ribbons
+      rr(c, PR.x - 1, PR.y - 1, PR.w + 2, PR.rows * PR.h + 2, 4, CD.focus === 'party' && CD.page === 1 ? '#ffd23c' : '#0a0c12'); rr(c, PR.x, PR.y, PR.w, PR.rows * PR.h, 4, 'rgba(10,12,22,.9)');
+      if (!pr.length) { T(c, 'No Pokémon has a ribbon yet.', 16, PR.y + 12, 'grey'); T(c, 'Ribbons they earn are listed here.', 16, PR.y + 26, 'mute'); }
+      for (let r = 0; r < PR.rows; r++) { const e = pr[CD.ptop + r]; if (!e) break; const y = PR.y + r * PR.h, on = CD.ptop + r === CD.sel && CD.page === 1;
+        S.hit.push({ x: PR.x, y, w: PR.w - 8, h: PR.h, f: () => { CD.page = 1; CD.focus = 'party'; CD.sel = CD.ptop + r; } });
+        if (on) rect(c, PR.x + 2, y + 1, PR.w - 12, PR.h - 1, 'rgba(255,214,60,.25)'); ribbonIcon(c, PR.x + 4, y - 1, RIBCOL[(CD.ptop + r) % RIBCOL.length]); T(c, e.name.slice(0, 26), PR.x + 22, y + 2, on ? 'white' : 'mute'); for (let k = 0; k < e.owners.length; k++) star(c, PR.x + PR.w - 14 - k * 9, y + 3, '#ffd23c'); }
+      if (pr.length > PR.rows) { const sbH = PR.rows * PR.h - 4; rect(c, PR.x + PR.w - 5, PR.y + 2, 3, sbH, '#06101e'); rect(c, PR.x + PR.w - 5, PR.y + 2 + Math.round((sbH - 12) * CD.ptop / (pr.length - PR.rows)), 3, 12, '#ffd23c'); }
+      tabs(c, 12, 128, 70, 16, true); btn(c, BW - 74, BH - 24, 68, 18, 'B  BACK', () => back(), '#4a2030');
     },
     press(k) {
-      if (k === 'b') return back(); if (k === 'left') { CD.page = 0; CD.scroll = 0; } else if (k === 'right') { CD.page = 1; CD.scroll = 0; } else if (k === 'a') { CD.page = 1 - CD.page; CD.scroll = 0; }
-      else if (CD.page === 1) { if (k === 'down') CD.scroll++; else if (k === 'up') CD.scroll = Math.max(0, CD.scroll - 1); }
+      if (k === 'b') return back(); if (k === 'left') { CD.page = 0; } else if (k === 'right') { CD.page = 1; }
+      else if (CD.page === 1) { const d = k === 'down' ? 1 : k === 'up' ? -1 : 0; if (k === 'a') CD.focus = CD.focus === 'party' ? 'trainer' : 'party'; else if (d) { if (CD.focus === 'party') CD.sel += d; else CD.tscroll += d; } }
+      else if (k === 'a') CD.page = 1;
     }, click() {},
   };
   function trainerPre() { getImg(trainerSpritePath()); for (const m of party()) getImg(dbOf(m.species).iconSprite); }
@@ -778,7 +788,7 @@ function createStart(env) {
   const dexCounts = () => { const D = DEXAPI(); if (!D) return { seen: 0, caught: 0, total: 0 }; const cn = D.counts(); return DX.shiny ? { seen: cn.shiny || 0, caught: cn.shiny || 0, total: cn.total } : cn; };
   function lockIcon(c, x, y) { c.fillStyle = '#8a93ab'; c.fillRect(x + 2, y, 6, 1); c.fillRect(x + 1, y + 1, 1, 4); c.fillRect(x + 8, y + 1, 1, 4); c.fillStyle = '#ffd23c'; c.fillRect(x, y + 5, 10, 8); c.fillStyle = '#7a5a0c'; c.fillRect(x + 4, y + 7, 2, 3); }
   SCREENS.dex = {
-    enter() { if (DX.dirty || !DX.list.length) dxBuild(false); DX.stage = 'list'; dxPreload(); },
+    enter() { if (DX.dirty || !DX.list.length) dxBuild(false); DX.stage = 'list'; queueAllIcons(); pumpIcons(400); dxPreload(); },
     top(c) {
       const D = DEXAPI(), sc = rotomFrame(c), H = HUD().dex, cn = dexCounts();
       grad(c, sc.x, sc.y, sc.w, sc.h, '#e8f4ff', '#b8d4f0'); c.save(); c.beginPath(); c.rect(sc.x, sc.y, sc.w, sc.h); c.clip();
@@ -855,7 +865,7 @@ function createStart(env) {
     if (S.sub && S.sub.click) S.sub.click(x, y, area);
   }
   function update(dt) {
-    S.t += dt; S.since += dt; if (S.pageAnim) { S.pageAnim.t += dt; if (S.pageAnim.t >= .28) S.pageAnim = null; }
+    pumpIcons(S.scr === 'dex' ? 60 : 12); S.t += dt; S.since += dt; if (S.pageAnim) { S.pageAnim.t += dt; if (S.pageAnim.t >= .28) S.pageAnim = null; }
     if (S.closing) { S.closeT += dt; if (S.closeT >= .25 && !S.exited) { S.exited = true; env.onExit && env.onExit(); } }
     if (S.t > (S.lookHold || 0)) { S.look.tx = Math.sin(S.t * .9) * .7; S.look.ty = Math.cos(S.t * 1.3) * .35; }
     if (S.sub && S.sub.tick) S.sub.tick(dt);
@@ -866,12 +876,19 @@ function createStart(env) {
   }
   function renderTop(c) { c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, TH); if (S.scr !== 'menu' && S.sub) S.sub.top(c); }
   function start(o) {
-    o = o || {}; S.exited = false; enterMenu(o); SCREENS_RESET(); trainerPre();
+    o = o || {}; S.exited = false; enterMenu(o); SCREENS_RESET(); trainerPre(); queueAllIcons();
     const keys = []; for (const pg of PAGES) pg.forEach(d => keys.push(d[0]));
     if (o.screen && SCREENS[o.screen]) openScreen(o.screen); else if (o.activate) activate(PAGES[0][S.sel] || PAGES[0][0]);
   }
   function SCREENS_RESET() { DX.dirty = true; }
-  function preload() { trainerPre(); }
+  const ICONQ = []; let iconQDone = false;
+  function queueAllIcons() {
+    if (iconQDone) return; const D = DEXAPI(); if (!D || !env.db || !env.db()) return; iconQDone = true;
+    for (let n = 1; n <= 1100; n++) { const e = D.entry(n); if (!e) break; const d = dbOf(e.species); if (d.iconSprite) ICONQ.push(d.iconSprite); }
+    for (let n = 1; n <= 1100; n++) { const e = D.entry(n); if (!e) break; const d = dbOf(e.species); if (d.battleSprite) ICONQ.push(d.battleSprite); }   // the big pictures come after all icons
+  }
+  function pumpIcons(n) { while (n-- > 0 && ICONQ.length) getImg(ICONQ.shift()); }
+  function preload() { trainerPre(); queueAllIcons(); }
   function status() { return { scr: S.scr, page: S.page, sel: S.sel, closing: S.closing, child: S.child, dexList: DX.list.length, warnings: [...warnings] }; }
   return { icon, preload, renderIdle, HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
 }
