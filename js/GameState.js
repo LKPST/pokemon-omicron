@@ -252,12 +252,12 @@ function createBattle(env) {
   };
   function mkSide() { return { vis: false, name: '', species: '', level: 1, hp: 1, maxhp: 1, dhp: 1, status: null, shiny: false, gender: '', idx: 0, ox: 0, oy: 0, dx: 0, dy: 0, alpha: 1, scale: 1, blink: 0, exp: 0, hpFrom: 0, hpTo: 0 }; }
   const side = i => S.sides[i];
-  let FLASH = .6, SLIDE = .7;   // intro lengths (seconds); BattleScene.CONFIG.intro overrides
+  let FLASH = .9, SLIDE = 1.0;   // intro lengths (seconds); BattleScene.CONFIG.intro overrides
   // layout of the TOP surface (GBA pixels)
   // Live values: copied every frame from BattleScene.CONFIG (see the top of BattleScene.js), so editing the config in the console moves things at once.
   const FOE = { cx: 170, bottom: 74, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 6, boxW: 104, fit: 64, scale: 0, trBottom: 74, trScale: 1 };
   const ALLY = { cx: 60, bottom: 112, platY: 110, platX: 60, trX: 60, boxX: 126, boxY: 84, boxW: 108, fit: 64, scale: 1, trBottom: 112, trScale: 1 };
-  const CF = { levelBox: { x: 148, y: 26 }, ball: 1.5, msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, party: { x: 4, y: 12, gap: 38, show: true }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } };
+  const CF = { levelBox: { x: 148, y: 26 }, ball: 1, msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, party: { x: 4, y: 12, gap: 38, show: true }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } };
   function applyConfig() {
     const g = root.BattleScene && root.BattleScene.CONFIG; if (!g) return; const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
     for (const [o, k] of [[FOE, 'foe'], [ALLY, 'ally']]) {
@@ -431,9 +431,9 @@ function createBattle(env) {
     const E = BE(); if (!E) throw new Error('BattleEngine.js is not loaded (load it before BattleScene.js)');
     const ee = env.engine ? env.engine() : {};
     const foe = (o.foe || []).map(f => (f && f.species && f.moves && (f.HP != null || f.maxHP != null || f.Attack != null)) ? f : E.makeMon({ db: ee.db, moves: ee.moves, learn: ee.learn }, f.species || f.key, f.level || 5, Object.assign({}, f.opts || f, f.isShiny != null ? { shiny: f.isShiny ? 1 : 0 } : (f.shiny != null ? { shiny: f.shiny ? 1 : 0 } : {}), f.ivs === 31 ? { maxIV: true, ivs: undefined } : {})));
-    S.b = E.create(Object.assign({}, ee, { kind: o.kind || 'wild', trainerName: o.trainerName || 'Trainer', ai: o.ai, items: o.items, player: o.player || [], foe, seed: o.seed, money: o.money, noExp: o.noExp, expMultiplier: o.expMultiplier }));
-    S.onEnd = o.onEnd || env.onEnd || null; S.bgKind = o.bg || 'grass'; S.bag = normBag(o.bag != null ? o.bag : (env.bag && env.bag()));
-    S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = null; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null;
+    S.b = E.create(Object.assign({}, ee, { kind: o.kind || 'wild', trainerName: o.trainerName || 'Trainer', ai: o.ai, items: o.items, player: o.player || [], foe, seed: o.seed, money: o.money, noExp: o.noExp, expMultiplier: o.expMultiplier, weather: o.weather }));
+    S.onEnd = o.onEnd || env.onEnd || null; S.bgKind = o.bg || 'grass'; S.mapWeather = o.weather || null; S.bag = normBag(o.bag != null ? o.bag : (env.bag && env.bag()));
+    S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null;
     S.fade = 1; S.fadeDir = -1; S.done = false; S.editMode = false; S.finished = null; S.onFade = null; S.noAuto = false; S.nudged = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
     const skip = !!o.skipIntro;
     S.tr = { me: { path: o.playerTrainerSprite || '', vis: !skip && !!o.playerTrainerSprite, ox: skip ? 0 : 130, frame: 0 }, foe: { path: o.foeTrainerSprite || '', vis: !skip && S.b.kind === 'trainer' && !!o.foeTrainerSprite, ox: skip ? 0 : -130, frame: 0 } };
@@ -633,14 +633,14 @@ function createBattle(env) {
     S.t += dt;
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
     for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
-    if (S.fadeDir) { S.fade = clamp(S.fade + S.fadeDir * dt * 2.2); if ((S.fadeDir < 0 && S.fade <= 0) || (S.fadeDir > 0 && S.fade >= 1)) { S.fadeDir = 0; const f = S.onFade; S.onFade = null; if (f) f(); } }
+    if (S.fadeDir) { S.fade = clamp(S.fade + S.fadeDir * dt * 1.5); if ((S.fadeDir < 0 && S.fade <= 0) || (S.fadeDir > 0 && S.fade >= 1)) { S.fadeDir = 0; const f = S.onFade; S.onFade = null; if (f) f(); } }
     if (!S.b) return;
     if (S.mode === 'intro') {
       S.introT += dt; const t = S.introT; if (S.fade > 0) S.fade = 0, S.fadeDir = 0;
       const q = clamp((t - FLASH) / SLIDE), e = ease(q);
       if (S.tr.me.path) S.tr.me.ox = 130 * (1 - e); if (S.tr.foe.path) S.tr.foe.ox = -130 * (1 - e);
       if (t >= FLASH && !S.introTextSet) { S.introTextSet = true; const m = S.q.find(e => e.t === 'msg'); if (m) { setText(m.text, true); S.preShown = m.text; } }
-      if (t >= FLASH + SLIDE + .2) { S.mode = 'play'; S.tr.me.ox = 0; S.tr.foe.ox = 0; S.cur = null; }
+      if (t >= FLASH + SLIDE + .3) { S.mode = 'play'; S.tr.me.ox = 0; S.tr.foe.ox = 0; S.cur = null; }
       return;
     }
     if (S.mode === 'play') {
@@ -891,7 +891,7 @@ function createBattle(env) {
       const [x, y] = btnXY(i), s = P.moves[i];
       if (!s) { pill(c, x, y, CF.btn.w, CF.btn.h, '#1e2232', 9); continue; }
       const m = mvInfo(s.key), dis = us[i] && us[i].disabled, col = dis ? '#6b7080' : TYPE_COLOR(m.type), off = btn(c, x, y, CF.btn.w, CF.btn.h, col, sel === i);
-      const nm = m.name.length > 10 ? m.name.slice(0, 10) : m.name;
+      let nm = m.name; const avail = CF.btn.w - 16; while (nm.length > 3 && tw(nm) > avail) nm = nm.slice(0, -1);
       T(c, nm, x + 9, y + 8 + off, 'white');
       T(c, '{PP}', x + 9, y + 25 + off, 'white'); T(c, s.pp + '/' + s.maxpp, x + 28, y + 25 + off, s.pp <= Math.floor(s.maxpp / 4) ? 'red' : 'white');
       badge(c, m.type, x + 74, y + 24 + off);
@@ -1096,6 +1096,9 @@ class BattleScene extends Phaser.Scene {
     const spriteId = tt ? tt.id.replace(/^TRAINER_/, '').toLowerCase() : String(id || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
     const prize = kind !== 'trainer' ? 0 : (d.money != null ? d.money : (tt && typeof trainerMoney === 'function' ? trainerMoney(tt) : ((gsm && gsm.activeOpponentMoneyBankA) || 0)));
     if (tt && gsm && typeof gsm.setOpponentBankA === 'function') gsm.setOpponentBankA({ name: tt.name, id: tt.id, sprite: spriteId, trainerClass: tt.class || '', money: prize });
+    // weather of the map the player was on (the overworld keeps it in window.OverworldWeather), or d.weather ('rain', 'sun', 'sand', 'hail', 'fog', 'none')
+    const rawW = d.weather !== undefined ? d.weather : (BattleScene.USE_MAP_WEATHER ? window.OverworldWeather : null);
+    const battleWeather = rawW ? (BattleScene.WEATHER_MAP[String(rawW).toLowerCase().replace(/[^a-z]/g, '')] || (['rain', 'sun', 'sand', 'hail', 'fog'].includes(rawW) ? rawW : null)) : null;
     const player = (sv.party || []).filter(m => m && m.species);
     const back = (BattleScene.PLAYER_BACK || {})[String(sv.player && sv.player.gender || 'MALE').toUpperCase()] || (BattleScene.PLAYER_BACK || {}).MALE;
     this.cleanup = this.cleanup || [];
@@ -1103,7 +1106,7 @@ class BattleScene extends Phaser.Scene {
       if (!this.sys || !this.sys.isActive()) return;
       try {
         core.start({
-          kind, trainerName, player, foe, bag: d.bag, bg: d.bg || (tt && tt.bg) || 'grass', ai: tt && tt.ai, items: tt && tt.items, seed: d.seed, skipIntro: !!d.skipIntro,
+          weather: battleWeather, kind, trainerName, player, foe, bag: d.bag, bg: d.bg || (tt && tt.bg) || 'grass', ai: tt && tt.ai, items: tt && tt.items, seed: d.seed, skipIntro: !!d.skipIntro,
           money: prize,
           foeTrainerSprite: d.foeTrainerSprite || (tt && tt.frontSprite) || (kind === 'trainer' && spriteId ? `graphics/trainer_front_sprites/${spriteId}.png` : ''),
           playerTrainerSprite: d.playerTrainerSprite || back,
@@ -1114,11 +1117,8 @@ class BattleScene extends Phaser.Scene {
     });
 
     // ---- music
-    const playMusic = () => { try { if (!this.sys || !this.sys.isActive() || this.tornDown || this.battleMusic || !this.cache.audio.exists('battle_music')) return; this.battleMusic = this.sound.add('battle_music', { loop: true, volume: 0.5 }); this.battleMusic.play(); } catch (e) { /* no audio */ } };
-    if (BattleScene.MUSIC) {
-      if (this.cache.audio.exists('battle_music')) playMusic();
-      else { try { this.load.audio('battle_music', BattleScene.MUSIC); this.load.once('complete', playMusic); this.load.start(); } catch (e) { /* no audio */ } }
-    }
+    // music: a plain <audio> element, created (and downloading) as soon as BattleScene.js loads, so it starts at once
+    try { const m = BattleScene.musicEl(); if (m) { m.loop = true; m.volume = 0.5; m.currentTime = 0; const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a key press */ }); this.battleMusic = m; } } catch (e) { /* no audio */ }
 
     // ---- input
     const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b' };
@@ -1177,7 +1177,7 @@ class BattleScene extends Phaser.Scene {
   teardown() {
     if (this.tornDown) return; this.tornDown = true;
     try { window.removeEventListener('keydown', this.kd, true); } catch (e) { /* ignore */ }
-    try { if (this.battleMusic) { this.battleMusic.stop(); this.battleMusic.destroy(); } } catch (e) { /* ignore */ }
+    try { if (this.battleMusic) { this.battleMusic.pause(); this.battleMusic.currentTime = 0; } } catch (e) { /* ignore */ }
     // The two canvas textures are NOT removed here: the scene's images still use them for the frame being drawn, and removing a texture
     // in use makes WebGL throw "Cannot read properties of null (reading 'isGLTexture')". create() replaces them on the next battle.
     this.ctxTop = this.ctxBot = null;
@@ -1200,13 +1200,19 @@ BattleScene.CONFIG = {
   foe:  { x: 170, bottom: 74,  platform: 72,  platformX: 170, scale: 0, fit: 64, trainerX: 170, trainerBottom: 74,   trainerScale: 1, box: { x: 6,   y: 6,   w: 104 } },
   ally: { x: 60,  bottom: 112, platform: 110, platformX: 60,  scale: 1, fit: 64, trainerX: 60,  trainerBottom: 112, trainerScale: 1, box: { x: 126, y: 84, w: 108 } },
   ballScale: 1,
-  intro: { flash: 0.6, slide: 0.7 },   // seconds: the ball flash, then the trainers sliding in
+  intro: { flash: 0.9, slide: 1.0 },   // seconds: the ball flash, then the trainers sliding in
   levelBox: { x: 148, y: 26 },
   bottom: { msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, party: { x: 4, y: 12, gap: 38, show: true }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } },
 };
 /*LAYOUT-END*/
 BattleScene.MUSIC = 'audio/music/victory_march.mp3';     // set to null for no music
 BattleScene.RETURN_SCENE = 'OverworldScene';
+BattleScene._m = null;
+BattleScene.musicEl = () => { if (!BattleScene.MUSIC) return null; if (!BattleScene._m || BattleScene._m._src !== BattleScene.MUSIC) { const a = new Audio(BattleScene.MUSIC); a._src = BattleScene.MUSIC; a.preload = 'auto'; BattleScene._m = a; } return BattleScene._m; };
+try { BattleScene.musicEl(); } catch (e) { /* no audio */ }   // start downloading now
+// map weather -> battle weather (rain, sun, sand, hail change the rules; fog is only visual). Set BattleScene.USE_MAP_WEATHER = false to ignore the map.
+BattleScene.USE_MAP_WEATHER = true;
+BattleScene.WEATHER_MAP = { rain: 'rain', thunderstorm: 'rain', sunny: 'sun', drought: 'sun', snow: 'hail', sandstorm: 'sand', fog: 'fog' };
 BattleScene.LAYOUT = null;                               // {topH, gap}; default: split the canvas height in two
 BattleScene.PLAYER_BACK = { MALE: 'graphics/trainer_back_sprites/gTrainerBackPic_Brendan.png', FEMALE: 'graphics/trainer_back_sprites/gTrainerBackPic_May.png' };
 window.BattleScene = BattleScene;
