@@ -59,7 +59,9 @@ faceplayer
 goto_if_set FLAG_DEFEATED_ROXANNE roxanne_after
 msgbox.normal
 {
-Roxanne: ...before-battle speech...
+Portia: Hey, do you wanna test my\n
+Rock-hard Pokemon?\p
+I won't back down!
 }
 setflag FLAG_DEFEATED_ROXANNE
 release
@@ -68,7 +70,7 @@ end
 label roxanne_after
 msgbox.normal
 {
-Roxanne: ...after-battle speech...
+Portia: Why are you so mean to me?
 }
 release
 end
@@ -116,10 +118,10 @@ lock
 faceplayer
 msgbox.normal
 {
-Hello, $player!
-Take this Sprigatito with you.
+Hello, $player! Take this Sprigatito\n
+with you.
 }
-givepokemon SPECIES_SPRIGATITO 20 Flora moves=MOVE_LEAFAGE
+givepokemon SPECIES_SPRIGATITO 20 Flora moves=MOVE_TACKLE
 release
 end
 `;
