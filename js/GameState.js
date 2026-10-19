@@ -1112,9 +1112,9 @@ class BattleScene extends Phaser.Scene {
 // Species-by-species nudges still use the T/F/G/H keys (Y switches target) and the xPos/yPos database fields.
 // ---------------------------------------------------------------------------
 BattleScene.CONFIG = {
-  foe:  { x: 170, bottom: 72,  platform: 72,  scale: 0, fit: 64, trainerBottom: 94,  trainerScale: 1, box: { x: 6,   y: 6 } },
+  foe:  { x: 170, bottom: 72,  platform: 72,  scale: 1, fit: 64, trainerBottom: 94,  trainerScale: 1, box: { x: 6,   y: 6 } },
   ally: { x: 60,  bottom: 142, platform: 140, scale: 1, fit: 64, trainerBottom: 142, trainerScale: 1, box: { x: 126, y: 106 } },
-  ballScale: 1.5,
+  ballScale: 1,
 };
 BattleScene.MUSIC = 'audio/music/victory_march.mp3';     // set to null for no music
 BattleScene.RETURN_SCENE = 'OverworldScene';
