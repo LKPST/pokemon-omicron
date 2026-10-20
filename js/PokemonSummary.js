@@ -189,7 +189,7 @@ function createSummary(env) {
     }
     x.putImageData(id, 0, 0); fontCache.set(key, c); return c;
   }
-  const TX = { dark: ['#2a2a3a', '#b4bad0'], white: ['#ffffff', '#5a5e7c'], mute: ['#6a7396', '#cdd3e6'], blue: ['#2f64e0', '#a9bdf2'], red: ['#e0344f', '#f2aab8'], badge: ['#ffffff', '#00000070'] };
+  const TX = { dark: ['#2a2a3a', '#b4bad0'], white: ['#ffffff', '#5a5e7c'], mute: ['#6a7396', '#cdd3e6'], blue: ['#2f64e0', '#a9bdf2'], red: ['#e0344f', '#f2aab8'], badge: ['#ffffff', '#00000070'], cyan: ['#7ff3e4', '#134a4a'], dim: ['#b6c0e6', '#161c3a'], gold: ['#ffe27a', '#4a3a10'] };
   // advance of a glyph: 6 px like EmeraldFont, a little more for the wide bitmap glyphs (Lv, PP, ID, arrows ...)
   function advOf(key) {
     if (advCache.has(key)) return advCache.get(key);
@@ -473,18 +473,31 @@ function createSummary(env) {
   }
 
   // ------------------------------------------------ NAMING view (Pokémon nickname / player name)
-  const KB = { upper: ['ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXYZ.,!?', '0123456789', "-'&♂♀ "], lower: ['abcdefghij', 'klmnopqrst', 'uvwxyz.,!?', '0123456789', "-'&♂♀ "] };
-  const KX = 96, KY = 57, KW = 13, KH = 13, FY = 126, FOOT = ['CASE', 'BACK', 'OK'], ALLOWED = /[A-Za-z0-9.,!?'&\-♂♀]/;
+  // dark glass panels with cyan edges over the party background; tabs UPPER / lower / Others, DELETE and OK on top
+  const GX = 10, GY = 64, KCW = 18, KCH = 15, GCOLS = 12, GROWS = 5, ACC = '#4de3d1', GLASS = 'rgba(8,12,32,.66)', GLASS2 = 'rgba(8,12,32,.82)';
+  const TABS = [{ lb: 'UPPER', x: 6, w: 38 }, { lb: 'lower', x: 48, w: 34 }, { lb: 'Others', x: 86, w: 38 }, { lb: 'DELETE', x: 146, w: 46 }, { lb: 'OK', x: 196, w: 38 }], TY = 41, TH = 14;
+  const L1 = 'ABCDEFGHIJ', L2 = 'KLMNOPQRST', L3 = 'UVWXYZ', D = '0123456789';
+  function gridRow(page, r) {
+    const row = new Array(GCOLS).fill(''), put = (str, at) => [...str].forEach((ch, i) => { row[at + i] = ch; });
+    if (page < 2) {
+      const f = page === 0 ? (x => x) : (x => x.toLowerCase());
+      if (r === 0) { put(f(L1), 0); put(',.', 10); } else if (r === 1) { put(f(L2), 0); put("'-", 10); } else if (r === 2) { put(f(L3), 0); put('♂♀', 10); }
+      else if (r === 3) { for (let i = 2; i < 10; i++) row[i] = ' '; } else put(D, 0);
+    } else {
+      const O = [['!', '?', '&', ':', ';', '~', '#', '%', '+', '=', 'é', 'É'], ['*', '@', '_', '$', '^', '|', '"', '`', '·', '…', 'ñ', 'Ñ'], ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '♂', '♀']];
+      if (r < 3) O[r].forEach((ch, i) => { row[i] = ch; }); else if (r === 3) { for (let i = 2; i < 10; i++) row[i] = ' '; }
+    }
+    return row.map(ch => (ch === ' ' || ch === '' || GLY[ch]) ? ch : '');
+  }
   function startName(o) {
     let mon = o.mon; if (!mon && o.raw) { mon = buildMon(o.raw); getImg(mon.icon); }
-    S.name = { mode: o.mode, mi: o.mi, mon, title: o.title || 'NICKNAME?', max: o.max || 10, text: String(o.initial || '').slice(0, o.max || 10), page: 0, cx: 0, cy: 0, foot: -1, orig: o.orig || '', gender: o.gender || '',
+    S.name = { mode: o.mode, mi: o.mi, mon, title: o.title || 'NICKNAME?', max: o.max || 10, text: String(o.initial || '').slice(0, o.max || 10), page: 0, cx: 0, cy: 0, top: -1, orig: o.orig || '', gender: o.gender || '',
       trainer: o.trainer || '', allowEmpty: o.allowEmpty !== false, allowCancel: o.allowCancel !== false, raw: o.raw, t0: S.t };
     if (o.trainer) getImg(o.trainer);
     if (!o.fromParty) { S.view = 'name'; S.tr = null; }
   }
-  const nameChars = () => KB[S.name.page === 0 ? 'upper' : 'lower'];
   function typeChar(ch) { const N = S.name; if (N.text.length < N.max) { N.text += ch; N.bump = S.t; } }
-  function backChar() { const N = S.name; if (N.text.length) N.text = N.text.slice(0, -1); }
+  function backChar() { const N = S.name; if (N.text.length) { N.text = N.text.slice(0, -1); N.bump = S.t; } }
   function nameConfirm() {
     const N = S.name, txt = N.text.replace(/\s+$/, '');
     if (N.mode === 'player') { if (!txt.trim()) return; if (env.nameDone) env.nameDone(txt); return; }
@@ -499,22 +512,23 @@ function createSummary(env) {
   }
   function namePressCell() {
     const N = S.name;
-    if (N.foot >= 0) { if (N.foot === 0) N.page = 1 - N.page; else if (N.foot === 1) backChar(); else nameConfirm(); return; }
-    const ch = nameChars()[N.cy][N.cx]; if (ch) typeChar(ch);
+    if (N.top >= 0) { if (N.top < 3) N.page = N.top; else if (N.top === 3) backChar(); else nameConfirm(); return; }
+    const ch = gridRow(N.page, N.cy)[N.cx]; if (ch) typeChar(ch);
   }
+  const topFromCx = cx => (cx <= 2 ? 0 : cx <= 4 ? 1 : cx <= 6 ? 2 : cx <= 9 ? 3 : 4), cxFromTop = t => [1, 3, 5, 8, 10][t];
   function nameKeyPress(k) {
     const N = S.name; if (!N) return;
-    if (k === 'left') { if (N.foot >= 0) N.foot = (N.foot + 2) % 3; else N.cx = (N.cx + 9) % 10; }
-    else if (k === 'right') { if (N.foot >= 0) N.foot = (N.foot + 1) % 3; else N.cx = (N.cx + 1) % 10; }
-    else if (k === 'up') { if (N.foot >= 0) { N.cx = Math.min(9, Math.round(N.foot * 4.5)); N.foot = -1; N.cy = 4; } else N.cy = (N.cy + 4) % 5; }
-    else if (k === 'down') { if (N.foot < 0 && N.cy === 4) { N.foot = Math.min(2, Math.floor(N.cx / 3.4)); } else if (N.foot >= 0) { N.foot = -1; N.cy = 0; } else N.cy++; }
+    if (k === 'left') { if (N.top >= 0) N.top = (N.top + 4) % 5; else N.cx = (N.cx + GCOLS - 1) % GCOLS; }
+    else if (k === 'right') { if (N.top >= 0) N.top = (N.top + 1) % 5; else N.cx = (N.cx + 1) % GCOLS; }
+    else if (k === 'up') { if (N.top >= 0) { N.cx = cxFromTop(N.top); N.top = -1; N.cy = GROWS - 1; } else if (N.cy === 0) { N.top = topFromCx(N.cx); } else N.cy--; }
+    else if (k === 'down') { if (N.top >= 0) { N.cx = cxFromTop(N.top); N.top = -1; N.cy = 0; } else if (N.cy === GROWS - 1) { N.top = topFromCx(N.cx); } else N.cy++; }
     else if (k === 'a') namePressCell();
     else if (k === 'b') { if (N.text.length) backChar(); else nameCancel(); }
   }
-  function nameKey(e) {      // raw keyboard: letters are typed, Backspace deletes, Enter = OK, Esc = cancel
+  function nameKey(e) {      // raw keyboard: letters are typed, Backspace deletes, Enter = OK, Esc = cancel (Space presses the highlighted key)
     if (S.view !== 'name' || S.tr || !S.name) return false;
     const k = e.key;
-    if (k.length === 1 && k !== ' ' && ALLOWED.test(k)) { typeChar(k); return true; }
+    if (k.length === 1 && k !== ' ' && (/[A-Za-z0-9.,!?'&\-]/.test(k) || GLY[k])) { typeChar(k); return true; }
     if (k === 'Backspace') { backChar(); return true; }
     if (k === 'Enter') { nameConfirm(); return true; }
     if (k === 'Escape') { nameCancel(); return true; }
@@ -522,45 +536,68 @@ function createSummary(env) {
   }
   function nameClick(x, y) {
     const N = S.name; if (!N) return;
-    const col = Math.floor((x - KX) / KW), row = Math.floor((y - KY) / KH);
-    if (col >= 0 && col < 10 && row >= 0 && row < 5) { N.foot = -1; N.cx = col; N.cy = row; namePressCell(); return; }
-    if (y >= FY && y < FY + 16 && x >= 96 && x < 230) { const i = Math.floor((x - 97) / 44); if (i >= 0 && i < 3) { N.foot = i; namePressCell(); } }
+    for (let i = 0; i < TABS.length; i++) { const t = TABS[i]; if (x >= t.x && x < t.x + t.w && y >= TY && y < TY + TH) { N.top = i; namePressCell(); return; } }
+    const col = Math.floor((x - GX) / KCW), row = Math.floor((y - GY) / KCH);
+    if (col >= 0 && col < GCOLS && row >= 0 && row < GROWS) { N.top = -1; N.cx = col; N.cy = row; namePressCell(); }
+  }
+  // glass panel: translucent dark fill, 1px edge, rounded corners
+  function glass(c, x, y, w, h, fill, line, R = 3) {
+    pill(c, x, y, w, h, fill, R); c.fillStyle = line;
+    c.fillRect(x + R, y, w - 2 * R, 1); c.fillRect(x + R, y + h - 1, w - 2 * R, 1); c.fillRect(x, y + R, 1, h - 2 * R); c.fillRect(x + w - 1, y + R, 1, h - 2 * R);
+    for (const [px, py] of [[x + 1, y + 1], [x + w - 2, y + 1], [x + 1, y + h - 2], [x + w - 2, y + h - 2]]) c.fillRect(px, py, 1, 1);
+  }
+  function brackets(c, x, y, w, h, col, L = 7) {
+    c.fillStyle = col;
+    for (const [bx, by, dx, dy] of [[x, y, 1, 1], [x + w - 1, y, -1, 1], [x, y + h - 1, 1, -1], [x + w - 1, y + h - 1, -1, -1]]) { c.fillRect(dx > 0 ? bx : bx - L + 1, by, L, 1); c.fillRect(bx, dy > 0 ? by : by - L + 1, 1, L); }
   }
   function drawName(c) {
-    const N = S.name; if (!N) return;
-    pill(c, 8, 4, 224, 17, '#000000'); pill(c, 8, 3, 224, 17, '#1c1c28'); T(c, N.title, 16, 5, 'white');
-    // left card: icon / trainer, kind, current name, gender
-    pill(c, 8, 27, 76, 127, '#9aa6cc', 8); pill(c, 8, 26, 76, 127, '#fbfcff', 8);
-    const m = N.mon;
+    const N = S.name; if (!N) return; const m = N.mon, pulse = .5 + .5 * Math.sin(S.t * 5);
+    // header: icon + name field
+    glass(c, 6, 5, 34, 32, GLASS2, ACC, 4);
     if (N.mode === 'player') {
-      const e = N.trainer && getImg(N.trainer); ell(c, 46, 94, 24, 4, '#cdd3e6');
-      if (e && e.ok) { c.imageSmoothingEnabled = false; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, k = Math.min(1, 64 / Math.max(iw, ih)); c.drawImage(e.img, Math.round(46 - iw * k / 2), Math.round(94 - ih * k), Math.round(iw * k), Math.round(ih * k)); }
-      T(c, N.gender === 'F' ? 'GIRL' : 'BOY', 14, 98, N.gender === 'F' ? 'red' : 'blue'); genderGlyph(c, N.gender === 'F' ? 'F' : 'M', 78, 98);
+      const e = N.trainer && getImg(N.trainer);
+      if (e && e.ok) { c.imageSmoothingEnabled = false; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, k = Math.min(30 / iw, 30 / ih); c.drawImage(e.img, Math.round(23 - iw * k / 2), Math.round(36 - ih * k), Math.round(iw * k), Math.round(ih * k)); }
+    } else if (m) { drawIcon(c, m, 7, 5, true, 0); }
+    glass(c, 44, 5, 190, 32, GLASS2, 'rgba(77,227,209,.55)', 4);
+    if (N.mode === 'player') {
+      const fem = N.gender === 'F'; T(c, fem ? 'GIRL' : 'BOY', 52, 7, fem ? 'red' : 'blue'); genderGlyph(c, fem ? 'F' : 'M', 90, 7);
+      if (N.orig) TR(c, 'now: ' + N.orig, 228, 7, 'dim');
     } else if (m) {
-      ell(c, 46, 56, 14, 3, '#cdd3e6'); drawIcon(c, m, 30, 26, true, 0);
-      const sx = Math.max(12, Math.round(46 - tw(m.species) / 2)); const ex = T(c, m.species, sx, 66, 'dark'); if (m.shiny) star(c, ex + 2, 68);
-      T(c, '{Lv}' + m.lv, 14, 80, 'dark'); genderGlyph(c, m.gender, 78, 80);
+      const ex = T(c, m.species, 52, 7, 'white'); if (m.shiny) star(c, ex + 2, 9); T(c, '{Lv}' + m.lv, ex + (m.shiny ? 11 : 8), 7, 'dim'); genderGlyph(c, m.gender, ex + 40 + tw('{Lv}' + m.lv), 7);
+      if (N.orig) TR(c, 'now: ' + String(N.orig).slice(0, 10), 228, 7, 'dim');
     }
-    T(c, 'CURRENT', 14, 112, 'mute'); T(c, String(N.orig || '-').slice(0, 10), 14, 125, 'dark');
-    // name bar
-    pill(c, 92, 26, 142, 24, '#9aa6cc'); pill(c, 92, 25, 142, 24, '#fbfcff');
-    const sw = 12, x0 = 100 + Math.round((120 - N.max * sw) / 2), blink = Math.floor(S.t * 2.2) % 2 === 0;
+    const sw = N.max > 8 ? 16 : 20, x0 = 52, blink = Math.floor(S.t * 2.4) % 2 === 0;
     for (let i = 0; i < N.max; i++) {
-      const x = x0 + i * sw, ch = N.text[i];
-      if (ch) { const bump = N.bump && S.t - N.bump < .12 && i === N.text.length - 1 ? -1 : 0; T(c, ch, x + Math.round((sw - tw(ch)) / 2), 30 + bump, 'dark'); }
-      rect(c, x + 1, 43, sw - 3, 1, i === N.text.length && blink ? '#d83a50' : '#9aa6cc');
+      const x = x0 + i * sw, ch = N.text[i], act = i === N.text.length;
+      if (ch) { const dy = N.bump && S.t - N.bump < .1 && i === N.text.length - 1 ? -2 : 0; T(c, ch, x + Math.round((sw - 4 - tw(ch)) / 2), 19 + dy, 'white'); }
+      rect(c, x, 31, sw - 3, 1, act && blink ? '#ffffff' : 'rgba(127,243,228,.45)'); if (act && blink) rect(c, x, 32, sw - 3, 1, ACC);
     }
+    // tabs + DELETE / OK
+    TABS.forEach((t, i) => {
+      const active = i < 3 && N.page === i, focus = N.top === i;
+      glass(c, t.x, TY, t.w, TH, active ? 'rgba(240,248,255,.94)' : GLASS2, focus ? '#ffffff' : (active ? '#ffffff' : 'rgba(77,227,209,.5)'), 3);
+      if (focus) { c.fillStyle = `rgba(77,227,209,${.35 + .4 * pulse})`; c.fillRect(t.x + 3, TY - 1, t.w - 6, 1); c.fillRect(t.x + 3, TY + TH, t.w - 6, 1); c.fillRect(t.x - 1, TY + 3, 1, TH - 6); c.fillRect(t.x + t.w, TY + 3, 1, TH - 6); }
+      const col = active ? 'dark' : (i === 4 ? 'cyan' : 'white'), lb = t.lb; T(c, lb, t.x + Math.round((t.w - tw(lb)) / 2), TY + 1, col);
+    });
     // keyboard
-    pill(c, 92, 54, 142, 102, '#9aa6cc', 7); pill(c, 92, 53, 142, 102, '#fbfcff', 7);
-    const rows = nameChars();
-    for (let r = 0; r < 5; r++) for (let q = 0; q < 10; q++) {
-      const ch = rows[r][q], x = KX + q * KW, y = KY + r * KH, on = N.foot < 0 && N.cx === q && N.cy === r;
-      if (on) pill(c, x, y, KW - 1, KH - 1, '#1c1c28', 4);
-      if (ch === ' ') rect(c, x + 3, y + 8, KW - 7, 1, on ? '#ffffff' : '#9aa6cc');
-      else if (ch) { const gx = x + Math.round((KW - 1 - tw(ch)) / 2); if (ch === '♂') T(c, ch, gx, y, on ? 'white' : 'blue'); else if (ch === '♀') T(c, ch, gx, y, on ? 'white' : 'red'); else T(c, ch, gx, y, on ? 'white' : 'dark'); }
+    glass(c, 6, 59, 228, 84, GLASS, 'rgba(77,227,209,.35)', 6); brackets(c, 6, 59, 228, 84, ACC, 8);
+    for (let r = 0; r < GROWS; r++) {
+      const row = gridRow(N.page, r);
+      for (let q = 0; q < GCOLS; q++) {
+        const ch = row[q], x = GX + q * KCW, y = GY + r * KCH, on = N.top < 0 && N.cx === q && N.cy === r, sp = ch === ' ';
+        if (r === 3 && N.page < 3) {   // the SPACE bar: one wide key
+          if (q !== 2) continue;
+          const bw = 8 * KCW - 2, on2 = N.top < 0 && N.cy === 3 && N.cx >= 2 && N.cx <= 9;
+          glass(c, x, y, bw, KCH - 2, on2 ? 'rgba(240,248,255,.94)' : 'rgba(8,12,32,.55)', on2 ? '#ffffff' : 'rgba(77,227,209,.35)', 3);
+          rect(c, x + Math.round(bw / 2) - 10, y + 9, 20, 1, on2 ? '#1c1c28' : 'rgba(127,243,228,.8)'); continue;
+        }
+        const live = !!ch;
+        glass(c, x, y, KCW - 2, KCH - 2, on ? 'rgba(240,248,255,.95)' : (live ? 'rgba(8,12,32,.55)' : 'rgba(8,12,32,.28)'), on ? '#ffffff' : (live ? 'rgba(77,227,209,.38)' : 'rgba(77,227,209,.14)'), 2);
+        if (on) { c.fillStyle = `rgba(77,227,209,${.25 + .35 * pulse})`; c.fillRect(x + 2, y - 1, KCW - 6, 1); c.fillRect(x + 2, y + KCH - 2, KCW - 6, 1); }
+        if (live && !sp) { const gx = x + Math.round((KCW - 2 - tw(ch)) / 2), tcol = on ? (ch === '♂' ? 'blue' : ch === '♀' ? 'red' : 'dark') : (ch === '♂' ? 'blue' : ch === '♀' ? 'red' : 'white'); T(c, ch, gx, y - 1, tcol); }
+      }
     }
-    rect(c, 98, FY - 3, 130, 1, '#cdd3e6');
-    FOOT.forEach((lb, i) => { const x = 97 + i * 44, on = N.foot === i, txt = i === 0 ? (N.page === 0 ? 'abc' : 'ABC') : lb; pill(c, x, FY, 41, 15, on ? '#1c1c28' : '#e6eaf6', 6); T(c, txt, x + Math.round((41 - tw(txt)) / 2), FY + 1, on ? 'white' : 'dark'); });
+    TR(c, 'A add   B delete   Enter OK', 230, 146, 'dim');
   }
 
   // ------------------------------------------------ SUMMARY view
