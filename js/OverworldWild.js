@@ -147,7 +147,7 @@
       let bx = Math.round(m.spr.x), by = Math.round(m.spr.y - head - 3);
       const wv = scene.cameras.main.worldView;
       if (wv && wv.width > 0) { bx = Math.max(wv.x + 14, Math.min(wv.right - 14, bx)); by = Math.max(wv.y + 40, Math.min(wv.bottom - 4, by)); }   // never outside the picture
-      const bang = scene.add.image(bx, by, bangTex(scene)).setOrigin(0.5, 1).setDepth(99999999); m.bang = bang;
+      const bang = scene.add.image(bx, by, bangTex(scene)).setOrigin(0.5, 1).setDepth(99999); m.bang = bang;
       bang.setScale(0.2); scene.tweens.add({ targets: bang, scaleX: 2, scaleY: 2, duration: 140, ease: 'Back.Out' });
       scene.tweens.add({ targets: bang, y: by - 6, duration: 200, yoyo: true, repeat: 1, delay: 140 }); scene.tweens.add({ targets: m.spr, y: m.spr.y - 5, duration: 120, yoyo: true, repeat: 2 });
       console.log('[WILD v4] BUMPED', m.sp, 'Lv' + m.lvl, {
