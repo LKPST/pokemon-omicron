@@ -67,7 +67,7 @@
         for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
         if (x1 >= 0) big = Math.max(big, x1 - x0 + 1, y1 - y0 + 1);
       }
-      S.art.set(sp, big || Math.max(w, h));
+      S.art.set(sp, big || Math.max(w, h)); log('art size', sp, (big || '?') + 'px in a ' + w + 'x' + h + ' cell');
     } catch (_) { S.art.set(sp, Math.max(w, h)); }
     for (const v of ['n', 's']) for (let d = 0; d < 4; d++) for (let st = 0; st < 2; st++)
       tex.add(`${v}_${DIRS[d]}_${st}`, 0, (v === 's' ? 2 * w : 0) + st * w, d * h, w, h);
@@ -122,11 +122,16 @@
     has: (scene, sp) => !!(entry(sp) && S.ent.has(sp) && scene.textures.exists(keyOf(sp))),
     hasSprite: sp => !!entry(sp),
     frameName, textureKey: keyOf, nameToKey,
-    // Draw scale that makes every overworld Pokémon the same size class: base (2 = the game's pixel size) normally, but art that is
-    // bigger than OWSprites.artMax native pixels (default 32) is shrunk so its largest side ends up at artMax * base (= 64 px on screen).
-    // Smaller art keeps the base scale. An optional  scale: 1.2  on a species entry in tables/OverworldSprites.js multiplies the result.
-    get artMax() { return S.artMax; }, set artMax(n) { S.artMax = +n || 32; },
-    fitScale(sp, base) { const a = S.art.get(sp) || S.artMax, e = entry(sp); return (Number(base) || 2) * Math.min(1, S.artMax / a) * ((e && e.scale) || 1); },
+
+    // Grookey and everything after it at OWSprites.bigScale (2 = 200%). Decided by the sprite number in tables/OverworldSprites.js.
+    // An optional  scale: 1.2  on a species entry multiplies the result. OWSprites.bigFrom = 'SPECIES_GROOKEY' changes the turning point.
+    normalScale: 1, bigScale: 2, bigFrom: 'SPECIES_GROOKEY', maxPx: 64,
+    fitScale(sp) {
+      const e = entry(sp), t = entry(API.bigFrom), from = t ? t.src : 816, art = S.art.get(sp) || 0;
+      let sc = (e && e.src >= from) ? API.bigScale : API.normalScale;
+      if (art && API.maxPx > 0 && art * sc > API.maxPx) sc = API.maxPx / art;    // never taller/wider than maxPx on screen
+      return sc * ((e && e.scale) || 1);
+    },
     retain(sp) { const e = S.ent.get(sp); if (e) { e.refs++; e.last = ++S.tick; } },
     release(sp) { const e = S.ent.get(sp); if (e && e.refs > 0) e.refs--; },
     async create(scene, x, y, sp, o) {
