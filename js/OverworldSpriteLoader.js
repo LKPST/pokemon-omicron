@@ -21,7 +21,7 @@
 (function () {
   'use strict';
   const DIRS = ['down', 'left', 'right', 'up'];
-  const S = { max: 30, ent: new Map(), blob: null, blobP: null, bmp: null, bmpTimer: 0, queue: Promise.resolve(), warned: false, tick: 0, holdMs: 4000 };
+  const S = { art: new Map(), artMax: 32, max: 30, ent: new Map(), blob: null, blobP: null, bmp: null, bmpTimer: 0, queue: Promise.resolve(), warned: false, tick: 0, holdMs: 4000 };
 
   const table = () => (typeof window !== 'undefined' && window.OverworldSprites) || (typeof OverworldSprites !== 'undefined' ? OverworldSprites : null);
   const keyOf = sp => 'ow_' + sp;
@@ -60,6 +60,15 @@
     const mgr = scene.textures, key = keyOf(sp);
     if (mgr.exists(key)) mgr.remove(key);
     const tex = mgr.addCanvas(key, c);
+    try {   // size of the real art (largest side of the drawn pixels over the normal frames): used by fitScale
+      const cx = c.getContext('2d'); let big = 0;
+      for (let d = 0; d < 4; d++) for (let st = 0; st < 2; st++) {
+        const px = cx.getImageData(st * w, d * h, w, h).data; let x0 = w, x1 = -1, y0 = h, y1 = -1;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (x1 >= 0) big = Math.max(big, x1 - x0 + 1, y1 - y0 + 1);
+      }
+      S.art.set(sp, big || Math.max(w, h));
+    } catch (_) { S.art.set(sp, Math.max(w, h)); }
     for (const v of ['n', 's']) for (let d = 0; d < 4; d++) for (let st = 0; st < 2; st++)
       tex.add(`${v}_${DIRS[d]}_${st}`, 0, (v === 's' ? 2 * w : 0) + st * w, d * h, w, h);
     try { if (typeof Phaser !== 'undefined' && Phaser.Textures && tex.setFilter) tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (_) { }
@@ -113,6 +122,11 @@
     has: (scene, sp) => !!(entry(sp) && S.ent.has(sp) && scene.textures.exists(keyOf(sp))),
     hasSprite: sp => !!entry(sp),
     frameName, textureKey: keyOf, nameToKey,
+    // Draw scale that makes every overworld Pokémon the same size class: base (2 = the game's pixel size) normally, but art that is
+    // bigger than OWSprites.artMax native pixels (default 32) is shrunk so its largest side ends up at artMax * base (= 64 px on screen).
+    // Smaller art keeps the base scale. An optional  scale: 1.2  on a species entry in tables/OverworldSprites.js multiplies the result.
+    get artMax() { return S.artMax; }, set artMax(n) { S.artMax = +n || 32; },
+    fitScale(sp, base) { const a = S.art.get(sp) || S.artMax, e = entry(sp); return (Number(base) || 2) * Math.min(1, S.artMax / a) * ((e && e.scale) || 1); },
     retain(sp) { const e = S.ent.get(sp); if (e) { e.refs++; e.last = ++S.tick; } },
     release(sp) { const e = S.ent.get(sp); if (e && e.refs > 0) e.refs--; },
     async create(scene, x, y, sp, o) {
