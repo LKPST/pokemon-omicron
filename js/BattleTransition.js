@@ -12,7 +12,7 @@
 // Used by js/OverworldWild.js (wild encounters) and by the trainerbattle script command (js/overworld_script_commands.js).
 (function () {
   'use strict';
-  const T = { enabled: true, dimMs: 130, flashMs: 520, spinMs: 900, holdMs: 240, turn: 0.75, busy: false };
+  const T = { enabled: true, exitMs: 650, dimMs: 130, flashMs: 520, spinMs: 900, holdMs: 240, turn: 0.75, busy: false };
 
   T.start = function (scene, key, data) {
     const go = () => { T.busy = false; scene.isLocked = false; scene.scene.start(key, data); };
@@ -26,7 +26,8 @@
     let snapped = false;
     try {
       const r = scene.game && scene.game.renderer;
-      if (r && r.snapshot) r.snapshot(im => { snapped = true; if (!began) { try { const k = '__bt_snap' + Date.now(); scene.textures.addImage(k, im); begin(k); } catch (e) { begin(null); } } });
+      const scr = (window.OW_TEXT && window.OW_TEXT.screen) || { x: 0, y: 0, w: W, h: H };   // only the TOP screen is captured
+      if (r && r.snapshotArea) r.snapshotArea(scr.x, scr.y, scr.w, scr.h, im => { snapped = true; if (!began) { try { const k = '__bt_snap' + Date.now(); scene.textures.addImage(k, im); begin(k); } catch (e) { begin(null); } } });
       else begin(null);
     } catch (e) { begin(null); }
     setTimeout(() => { if (!snapped) begin(null); }, 250);
@@ -44,6 +45,7 @@
     // brightness: two quick pulses (white added on top), then it falls back to normal
     const pulse = ms => { const p = ms / T.flashMs; return cl(Math.max(Math.sin(cl(p / .5) * Math.PI) * .75, Math.sin(cl((p - .42) / .58) * Math.PI) * .95)); };
     const draw = ms => {
+      if (window.StartMenu && StartMenu.setExit) StartMenu.setExit(cl(ms / T.exitMs));
       white.clear(); black.clear();
       const f = pulse(Math.min(ms, T.flashMs)); if (f > 0 && ms < T.flashMs) { white.fillStyle(0xffffff, f * .8); white.fillRect(0, 0, W, H); }
       const q = cl((ms - T.flashMs) / T.spinMs), e = q * q * q * .35 + ease(q) * .65;
