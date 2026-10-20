@@ -1,0 +1,125 @@
+// js/OverworldFollower.js
+//
+// The first Pokémon of the party walks one tile behind the player in the overworld.
+// Uses js/OverworldSpriteLoader.js (OWSprites) + tables/OverworldSprites.js for the sprites.
+//
+// How it follows: the player's path is recorded every frame and the Pokémon always stands on that path exactly one tile
+// (32 px) behind the player. So it works with every kind of movement (walking, scripts, map connections) without
+// touching them. Walking back into it simply swaps places. After a warp / fly / dig / map change it starts on the
+// player's tile and steps out behind him as soon as he moves.
+//
+// Hook-up (already done in overworld_scene.js):   create():  OWFollower.attach(this)      update():  OWFollower.update(this, time, delta)
+//
+// Settings (change them any time, e.g. from the console while testing):
+//   OWFollower.enabled   = true | false          also: GameStateManager.saveData.follower = false  turns it off for that save
+//   OWFollower.scale     = 'auto' | number       'auto' = 32 / frame width for frames wider than 32px (a 64px frame is drawn at 0.5)
+//   OWFollower.offsetY   = 14                    how far below the tile centre the feet are (px)
+//   OWFollower.distance  = 32                    path distance behind the player
+//   map option:  follower: false  in a map in overworld_map.js hides it there (shops, indoors ...)
+//   OWFollower.leadMon(saveData) can be replaced if the lead should be chosen differently (default: first Pokémon with HP > 0)
+(function () {
+  'use strict';
+  const F = {
+    enabled: true, scale: 'auto', offsetY: 14, distance: 32,
+    spr: null, species: null, shiny: false, pts: [], last: null, trav: 0, dir: 'down', busy: false, nextCheck: 0, scene: null, wasHidden: true,
+  };
+
+  F.leadMon = function (sd) {
+    const party = (sd && sd.party) || [];
+    for (const m of party) if (m && m.species && !(m.hp <= 0 || m.currentHp <= 0 || m.fainted)) return m;
+    return null;
+  };
+
+  function wanted(scene) {
+    const gsm = window.GameStateManager, sd = gsm && gsm.saveData;
+    if (!F.enabled || (sd && sd.follower === false)) return null;
+    if (scene.currentMap && scene.currentMap.follower === false) return null;
+    const m = F.leadMon(sd);
+    if (!m || !window.OWSprites || !window.OWSprites.hasSprite(m.species)) return null;
+    return m;
+  }
+
+  function dropSprite() {
+    if (F.spr) { window.OWSprites.destroy(F.spr); F.spr = null; }
+    F.species = null;
+  }
+
+  async function makeSprite(scene, m) {
+    F.busy = true;
+    try {
+      const spr = await window.OWSprites.create(scene, -999, -999, m.species, { shiny: !!m.isShiny, dir: F.dir });
+      if (!spr) return;
+      if (F.scene !== scene || !scene.sys || !scene.add) { window.OWSprites.destroy(spr); return; }
+      const e = window.OverworldSprites.species[m.species], w = e ? e.w : 32;
+      const sc = F.scale === 'auto' ? (w > 32 ? 32 / w : 1) : Number(F.scale) || 1;
+      spr.setOrigin(0.5, 1).setScale(sc).setVisible(false);
+      if (F.spr) window.OWSprites.destroy(F.spr);
+      F.spr = spr; F.species = m.species; F.shiny = !!m.isShiny; F.wasHidden = true;
+    } finally { F.busy = false; }
+  }
+
+  F.attach = function (scene) {
+    F.scene = scene; F.spr = null; F.species = null; F.pts = []; F.last = null; F.trav = 0; F.nextCheck = 0; F.busy = false;
+    scene.events.once('shutdown', () => { F.detach(); });
+  };
+  F.detach = function () { dropSprite(); F.pts = []; F.last = null; F.scene = null; };
+
+  // call after the party changed (the check also runs by itself twice a second)
+  F.refresh = function () { F.nextCheck = 0; };
+
+  F.update = function (scene, time, delta) {
+    if (F.scene !== scene) F.attach(scene);
+    const p = scene.player; if (!p) return;
+
+    // 1. who should follow?
+    if (time >= F.nextCheck && !F.busy) {
+      F.nextCheck = time + 500;
+      const m = wanted(scene);
+      if (!m) { if (F.spr) dropSprite(); }
+      else if (!F.spr || F.species !== m.species || F.shiny !== !!m.isShiny) makeSprite(scene, m);
+    }
+
+    // 2. record the player's path (a jump = warp / map change: start again from there)
+    const hidden = p.alpha < 0.5 || p.visible === false;
+    if (!hidden) {
+      const q = { x: p.x, y: p.y }, l = F.last;
+      if (!l || Math.hypot(q.x - l.x, q.y - l.y) > 96) { F.pts = [q]; F.trav = 0; if (F.spr) F.wasHidden = true; }
+      else if (Math.hypot(q.x - l.x, q.y - l.y) >= 0.5) F.pts.push(q);
+      F.last = q;
+      if (F.pts.length > 400) F.pts.splice(0, F.pts.length - 300);
+    }
+
+    const s = F.spr; if (!s) return;
+    if (hidden || F.pts.length === 0) { s.setVisible(false); return; }
+
+    // 3. the point `distance` px back along the path
+    const pts = F.pts; let need = F.distance, i = pts.length - 1, x = pts[i].x, y = pts[i].y;
+    while (i > 0 && need > 0) {
+      const a = pts[i], b = pts[i - 1], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d >= need) { const t = need / d; x = a.x + (b.x - a.x) * t; y = a.y + (b.y - a.y) * t; need = 0; break; }
+      need -= d; x = b.x; y = b.y; i--;
+    }
+    if (need > 0) { x = pts[0].x; y = pts[0].y; }
+    // path older than needed is not kept
+    if (i > 8) pts.splice(0, i - 4);
+
+    // 4. move, face, animate
+    const ox = s.owX === undefined ? x : s.owX, oy = s.owY === undefined ? y : s.owY, mx = x - ox, my = y - oy, mv = Math.hypot(mx, my);
+    s.owX = x; s.owY = y;
+    if (F.wasHidden) { F.wasHidden = false; s.owX = x; s.owY = y; }
+    else if (mv > 0.05) {
+      F.dir = Math.abs(mx) >= Math.abs(my) ? (mx > 0 ? 'right' : 'left') : (my > 0 ? 'down' : 'up');
+      F.trav += mv;
+    }
+    const moving = mv > 0.05 && !F.wasHidden, step = moving ? Math.floor(F.trav / 12) % 2 : 0;
+    window.OWSprites.setFrame(s, F.dir, step, F.shiny);
+    s.setPosition(Math.round(x), Math.round(y + F.offsetY - (step ? 1 : 0)));
+    s.setDepth(y - 0.5);
+    // not drawn while it still sits on the player's own tile right after a warp (it steps out when he moves)
+    const dp = Math.hypot(x - p.x, y - p.y);
+    s.setVisible(dp > 6);
+    s.setAlpha(1);
+  };
+
+  window.OWFollower = F;
+})();
