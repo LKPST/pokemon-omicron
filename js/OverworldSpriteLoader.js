@@ -26,12 +26,13 @@
   const table = () => (typeof window !== 'undefined' && window.OverworldSprites) || (typeof OverworldSprites !== 'undefined' ? OverworldSprites : null);
   const keyOf = sp => 'ow_' + sp;
   const entry = sp => { const t = table(); return t && t.species[sp] || null; };
-  const warn = m => { if (!S.warned) { S.warned = true; console.warn('[OWSprites] ' + m); } };
+  const warn = m => console.warn('[OWSprites] ' + m);
+  const log = (...a) => { if (API.log) console.log('[OWSprites]', ...a); };
 
   async function getBlob() {
     if (S.blob) return S.blob;
-    if (!S.blobP) S.blobP = fetch(table().image).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + table().image); return r.blob(); })
-      .then(b => (S.blob = b)).catch(e => { S.blobP = null; throw e; });
+    if (!S.blobP) log('fetching the sheet', table().image), S.blobP = fetch(table().image).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + table().image); return r.blob(); })
+      .then(b => (S.blob = b, log('sheet downloaded:', Math.round(b.size / 1024) + ' KB'), b)).catch(e => { S.blobP = null; throw e; });
     return S.blobP;
   }
   // The decoded sheet is kept only for a few seconds (so a burst of requests decodes it once), then closed to free the memory.
@@ -77,6 +78,7 @@
       try {
         if (!table()) throw new Error('tables/OverworldSprites.js is not loaded');
         const bmp = await getBitmap();
+        log('sheet decoded', bmp.width + 'x' + bmp.height, '- cutting', todo.join(', '));
         for (const sp of todo) cut(scene, bmp, sp);
         evict(scene, new Set(want));   // what was just asked for is never dropped (the cap is soft for one request)
         return true;
@@ -99,6 +101,7 @@
   function touch(sp) { const e = S.ent.get(sp); if (e) e.last = ++S.tick; }
 
   const API = {
+    log: true,
     get max() { return S.max; }, set max(n) { S.max = Math.max(1, n | 0); },
     ensure,
     ensureNames: (scene, names) => ensure(scene, (names || []).map(nameToKey).filter(Boolean)),
@@ -113,8 +116,8 @@
     retain(sp) { const e = S.ent.get(sp); if (e) { e.refs++; e.last = ++S.tick; } },
     release(sp) { const e = S.ent.get(sp); if (e && e.refs > 0) e.refs--; },
     async create(scene, x, y, sp, o) {
-      if (!entry(sp)) return null;
-      if (!(await ensure(scene, [sp])) || !scene.textures.exists(keyOf(sp))) return null;
+      if (!entry(sp)) { warn('create: no entry for ' + sp); return null; }
+      if (!(await ensure(scene, [sp])) || !scene.textures.exists(keyOf(sp))) { warn('create: texture for ' + sp + ' was not made'); return null; }
       const f = frameName(sp, o), spr = scene.add.sprite(x, y, f.key, f.frame);
       spr.owSpecies = sp; spr.owShiny = !!(o && o.shiny); API.retain(sp); return spr;
     },
