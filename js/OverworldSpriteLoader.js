@@ -122,6 +122,7 @@
     has: (scene, sp) => !!(entry(sp) && S.ent.has(sp) && scene.textures.exists(keyOf(sp))),
     hasSprite: sp => !!entry(sp),
     frameName, textureKey: keyOf, nameToKey,
+    info: sp => ({ entry: entry(sp) ? Object.assign({}, entry(sp)) : null, artPx: S.art.get(sp) || 0, artHeightPx: S.artH.get(sp) || 0, scale: API.fitScale ? API.fitScale(sp) : null }),
     artHeight: sp => S.artH.get(sp) || 0,   // height in pixels of the real art (not the cell)
 
     // Grookey and everything after it at OWSprites.bigScale (2 = 200%). Decided by the sprite number in tables/OverworldSprites.js.
