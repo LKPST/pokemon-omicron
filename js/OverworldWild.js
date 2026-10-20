@@ -10,7 +10,7 @@
 //
 // Settings (change from the console while testing):
 //   OWWild.enabled = true | false      OWWild.max = 15         most wild Pokémon around the screen at once
-//   OWWild.fit = true                  every Pokémon is drawn at the same size class (art bigger than OWSprites.artMax = 32 px is shrunk; see OWSprites.fitScale)
+//   OWWild.fit = true                  size by generation: before Grookey = OWSprites.normalScale (1), Grookey and later = OWSprites.bigScale (2); false = always OWFollower.scale
 //   OWWild.log = true                  OWWild.debug()          prints the state
 //   OWWild.shinyOdds = 4096            (1 in N)                OWWild.fill = 0.25   at most this share of the visible grass tiles is occupied
 //   OWWild.spawnEvery = 1200 (ms)      OWWild.safeRadius = 3   no spawns this close (tiles) to the player
@@ -133,6 +133,9 @@
   }
 
   W.update = function (scene, time, delta) {
+    try { run(scene, time, delta); } catch (err) { if (!W.errAt || scene.time.now - W.errAt > 3000) { W.errAt = scene.time.now; console.error('[WILD] error (the game keeps running):', err); } }
+  };
+  function run(scene, time, delta) {
     if (W.scene !== scene) reset(scene);
     if (!scene.player || !scene.currentMap || !scene.sys || !scene.sys.isActive()) return;
     const sd = (window.GameStateManager || {}).saveData || {};
@@ -145,7 +148,7 @@
     // new map -> new grass
     if (W.mapKey !== scene.currentMapKey) {
       for (const m of W.mons) kill(m); W.mons = [];
-      W.mapKey = scene.currentMapKey; W.grass = scanGrass(scene); W.lastBucket = ''; W.nextSpawn = time + 400; W.fresh = true; W.freshUntil = scene.time.now + 6000; W.grace = scene.time.now + 1500;
+      W.mapKey = scene.currentMapKey; W.grass = scanGrass(scene); W.lastBucket = ''; W.nextSpawn = scene.time.now + 400; W.fresh = true; W.freshUntil = scene.time.now + 6000; W.grace = scene.time.now + 1500;
       log('map', scene.currentMapKey, '-', W.grass.size, 'grass tiles');
       if (!W.grass.size) why('no tiles with behavior 5 (Grass) on this map: paint some with the Behavior tool in the map editor');
     }
@@ -189,7 +192,7 @@
       wander(scene, m, now);
       if (Math.hypot(m.spr.x - pp.x, (m.spr.y - m.oy) - pp.y) < 20 && now > (W.grace || 0)) { if (healthy(sd)) return encounter(scene, m); why('touched a wild Pokémon, but no party Pokémon can fight'); }
     }
-  };
+  }
 
   W.debug = function () {
     const o = { enabled: W.enabled, reason: W.why, map: W.mapKey, grassTiles: W.grass.size, slot: W.lastBucket, list: W.list, around: W.mons.filter(m => !m.dead).map(m => m.sp + ' Lv' + m.lvl + ' @' + m.gx + ',' + m.gy), loader: window.OWSprites && window.OWSprites.stats() };
