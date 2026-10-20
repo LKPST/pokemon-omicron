@@ -124,4 +124,17 @@ with you.
 givepokemon SPECIES_SPRIGATITO 20 Flora moves=MOVE_LEAFAGE
 release
 end
+
+start: "giveitem"
+lock
+faceplayer
+msgbox.normal
+{
+Hello, $player!\p
+I want you to take this item\n
+please.
+}
+giveitem ITEM_POKEBALL 5
+release
+end
 `;
