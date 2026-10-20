@@ -57,9 +57,22 @@ button.dirty{outline:2px solid #ffd166}
 .ck{background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/12px 12px;border-radius:4px;image-rendering:pixelated;max-width:100%}
 .frs{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:6px 0}.fr{display:flex;flex-direction:column;gap:4px;align-items:flex-start}.fr small{color:#8a93a6}
 
+.owbox{background:#1c1f28;border:1px solid #2c3140;border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.owbox h3{font-size:13px;margin:0 0 8px;color:#7fa4ff}
+.owbox .row{margin:6px 0}.owbox label.in{display:inline-flex;gap:6px;align-items:center;margin-right:10px}
+.owbox input[type=number]{width:78px}
+.ow2{display:grid;grid-template-columns:310px minmax(0,1fr);gap:12px;align-items:start}
+@media(max-width:900px){.ow2{grid-template-columns:1fr}}
+.owrow{padding:3px 8px;border-bottom:1px solid #262a36;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px;content-visibility:auto;contain-intrinsic-size:0 38px}
+.owrow:hover{background:#252b3d}.owrow.sel{background:#26324f}.owrow canvas{width:32px;height:32px;image-rendering:pixelated;background:#2a2e3b;border-radius:4px;flex:none}
+.owrow small{color:#8a93a6;margin-left:auto;white-space:nowrap}.owrow.none{opacity:.55}
+.owprev{background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/12px 12px;border-radius:6px;image-rendering:pixelated;max-width:100%}
+.owstrip{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.owstrip div{background:#222634;border:1px solid #2c3140;border-radius:6px;padding:3px;cursor:pointer;text-align:center;font-size:11px;color:#9ab}
+.owstrip div.cur{border-color:#5d8aff;background:#26324f}.owstrip canvas{width:48px;height:48px;image-rendering:pixelated;display:block}
 </style></head><body>
 <h1>Pokémon Editor</h1>
-<div class="tabs"><button data-tab="sprites" class="on">Sprites</button><button data-tab="pokemon">Pokémon</button><button data-tab="moves">Moves</button></div>
+<div class="tabs"><button data-tab="sprites" class="on">Sprites</button><button data-tab="pokemon">Pokémon</button><button data-tab="moves">Moves</button><button data-tab="ow">Overworld sprites</button></div>
 <div id="edcommon" hidden>
 <section id="edload">
   <div class="hint" style="margin-top:0">If this page sits in your project and is opened from the dev server, the tables load by themselves. Otherwise load your tables, edit them in the <b>Pokémon</b> and <b>Moves</b> tabs, then download the changed files and put them back in <code>tables/</code>. Everything runs in your browser; nothing is uploaded.
@@ -166,6 +179,60 @@ button.dirty{outline:2px solid #ffd166}
   </div>
 </div>
 <datalist id="dlMoves"></datalist><datalist id="dlSpecies"></datalist><datalist id="dlAbil"></datalist><datalist id="dlItem"></datalist><datalist id="dlTutor"></datalist><datalist id="dlTypes"></datalist><datalist id="dlEffects"></datalist>
+
+<div id="tab-ow" hidden>
+  <div class="owbox"><h3>1 · Pokédex data</h3>
+    <div class="row"><button id="owLdDex">Load PokedexTables.js</button><input type="file" id="owfDex" accept=".js,.txt" hidden><span class="hint" id="owDexSt" style="margin:0">not loaded</span></div>
+    <div class="hint">Maps species to National Dex numbers (also loaded by <i>Choose project folder</i> or automatically when this page is served from the project). Species list comes from PokemonDatabase.js; if that is not loaded the Pokédex species are used.</div></div>
+  <div class="owbox"><h3>2 · OW sprite folder</h3>
+    <div class="row"><button class="pri" id="owFolder">Choose OW sprite folder</button><input type="file" id="owfFolder" webkitdirectory multiple hidden>
+      <button id="owClear">Clear all loaded sprites</button><span class="hint" id="owFolderSt" style="margin:0"></span></div>
+    <div class="hint"><code>001.png</code> = normal, <code>001s.png</code> = shiny. Names with <code>_0</code> or <code>-Fighter</code> are ignored. Each file is cut as 4×4 frames; only columns 2 and 3 are kept (rows: down, left, right, up).</div></div>
+  <div class="owbox"><h3>3 · Spritesheet (for generations missing in the folder)</h3>
+    <div class="row"><button id="owSheetBtn">Choose spritesheet…</button><input type="file" id="owfSheet" accept="image/*" hidden><span class="hint" id="owSheetSt" style="margin:0"></span></div>
+    <div id="owSheetOpts" hidden>
+      <div class="row">
+        <label class="in">Pokémon per row <input type="number" id="owShN" min="1" value="10"></label>
+        <label class="in">Layout <select id="owShL"><option value="A">2 cols × 4 rows per Pokémon (small frames)</option><option value="B">4 cols × 2 rows per Pokémon (big frames)</option></select></label>
+        <label class="in">Row order (2×4 layout) <select id="owShR"><option value="DLRU">down, left, right, up</option><option value="DULR">down, up, left, right</option></select></label><label class="in"><input type="checkbox" id="owShAuto" checked> auto frame size</label>
+        <label class="in">frame W <input type="number" id="owShW" min="1" value="32"></label>
+        <label class="in">H <input type="number" id="owShH" min="1" value="32"></label>
+      </div>
+      <div class="row">
+        <label class="in">First Pokémon in sheet (dex #) <input type="number" id="owShStart" min="1" value="810"></label><span class="hint" id="owShStartName" style="margin:0"></span>
+        <label class="in"><input type="checkbox" id="owShShiny"> this sheet is the shiny version</label>
+        <label class="in"><input type="checkbox" id="owShKeep"> keep already loaded sprites</label>
+        <button class="ok" id="owShApply">Apply sheet</button>
+      </div>
+      <div class="hint" id="owShInfo"></div>
+      <div class="row"><canvas id="owShPrev" class="owprev" style="max-height:200px"></canvas></div>
+    </div></div>
+  <div class="owbox"><h3>4 · Fix wrong mappings (PLUS dex ID)</h3>
+    <div class="row"><label class="in">Global offset <input type="number" id="owOff" value="0"></label>
+      <button id="owOffM">−1</button><button id="owOffP">+1</button>
+      <span style="color:#8a93a6">from dex #</span><input type="number" id="owRuleFrom" min="1" value="1" style="width:70px"><label class="in">add <input type="number" id="owRuleDelta" value="1"></label><button id="owRuleAdd">Add rule</button>
+      <span id="owRules"></span></div>
+    <div class="hint">Pokémon with dex <i>D</i> uses sprite file number <i>D + offset + rules</i>. A rule applies to every Pokémon from that dex number onward. Individual fixes: select a Pokémon below and step through the sprites.</div></div>
+  <div class="owbox"><h3>5 · Output</h3>
+    <div class="row">
+      <label class="in">Frame size <select id="owFs"><option value="auto">largest used</option><option value="fixed">fixed</option></select></label>
+      <label class="in">W <input type="number" id="owFw" value="64" min="8"></label><label class="in">H <input type="number" id="owFh" value="64" min="8"></label>
+      <label class="in">Align smaller <select id="owAl"><option value="bc">bottom-center</option><option value="c">center</option><option value="tl">top-left</option></select></label>
+      <label class="in">Pokémon per row <input type="number" id="owPer" value="32" min="1"></label></div>
+    <div class="row"><label class="in">Image path in project <input type="text" id="owPath" value="graphics/overworld/pokemon_ow.png" style="width:280px"></label><span class="hint" id="owOutInfo" style="margin:0"></span></div>
+    <div class="row"><button class="ok" id="owDlPng">Download sheet PNG</button><button class="ok" id="owDlJs">Download OverworldSprites.js</button><button class="ok" id="owDlZip">Download both (ZIP)</button>
+      <button id="owToDb">Write <code>ow</code> field into PokemonDatabase</button>
+      <button id="owLdPrev">Load previous output (PNG + .js)…</button><input type="file" id="owfPrev" accept=".png,.js,.txt" multiple hidden></div>
+    <div class="hint">One image: every Pokémon takes 4×4 frames (normal columns 1-2, shiny columns 3-4; rows down/left/right/up). Frames are located by x/y in <code>OverworldSprites.js</code>.</div></div>
+  <div class="ow2">
+    <div class="edlist">
+      <input type="text" id="owQ" placeholder="search name, key or number">
+      <label class="in" style="margin-bottom:6px"><input type="checkbox" id="owOnlyMissing"> only Pokémon without OW sprite</label>
+      <div class="edrows" id="owRows"></div><div class="hint" id="owCount" style="margin:6px 0 0"></div>
+    </div>
+    <div id="owDetail"><div class="owbox"><div class="hint" style="margin:0">Load sprites, then pick a Pokémon.</div></div></div>
+  </div>
+</div>
 
 <div id="msg"></div>
 
@@ -738,7 +805,7 @@ function showTab(t){
   try{location.hash=t}catch(e){}}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 window.edFromSprite=()=>{if(oldDb){ED.db=oldDb;ED.dirty.db=false;refreshLists();renderStats()}};
-window.ED=ED;
+window.ED=ED;window.edDirty=dirty;
 // when this page is served from the project (StackBlitz / dev server), read the tables straight from the project
 (async()=>{
   if(location.protocol==='file:')return;
@@ -749,8 +816,243 @@ window.ED=ED;
         try{const rr=await fetch(b+'tables/'+n+'.js',{cache:'no-store'});if(rr.ok)loadText(kind,await rr.text(),'tables/'+n+'.js')}catch(e){}}
       msg('Read the tables from the project ('+(b||'./')+'tables/). Download an edited table and replace the file in tables/.');renderForms();return}catch(e){}}
 })();
-{const t=(location.hash||'').replace('#','');showTab(['pokemon','moves'].includes(t)?t:'sprites')}
+{const t=(location.hash||'').replace('#','');showTab(['pokemon','moves','ow'].includes(t)?t:'sprites')}
 refreshLists();renderStats();
 })();
 
+</script>
+<script>
+// =====================================================================================================================
+//  OVERWORLD SPRITE MAPPING TAB  (uses $, msg, dl, buildZip from the sprite tool and window.ED from the editor)
+// =====================================================================================================================
+(()=>{
+'use strict';
+const g=id=>document.getElementById(id);
+const DIRS=['down','left','right','up'];
+const OW={src:new Map(),off:0,rules:[],manual:{},sel:null,dex:null,sheet:null,out:null,q:'',onlyMissing:false};
+// src: number -> {n:canvas|null, s:canvas|null, label}; a canvas is a "block": 2 columns (foot A, foot B) x 4 rows (down,left,right,up)
+const mk=(w,h)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);return c};
+const fsz=c=>({w:c.width/2,h:c.height/4});
+const srcSize=s=>fsz(s.n||s.s);
+const pad3=n=>String(n).padStart(3,'0');
+
+// ------------------------------------------------ dex data
+function loadDex(text,from){
+  try{
+    const r=new Function(text+'\n;return {DexEntries:typeof DexEntries!=="undefined"?DexEntries:null,SpeciesToDex:typeof SpeciesToDex!=="undefined"?SpeciesToDex:null}')();
+    if(!r.SpeciesToDex)throw new Error('no SpeciesToDex found');
+    OW.dex={entries:r.DexEntries||[],map:r.SpeciesToDex,names:{}};for(const e of OW.dex.entries)OW.dex.names[e[0]]=e[1];
+    g('owDexSt').textContent=`${from}: ${OW.dex.entries.length} dex entries`;refresh();
+  }catch(e){g('owDexSt').textContent='Could not read '+from+': '+e.message}}
+g('owLdDex').onclick=()=>g('owfDex').click();
+g('owfDex').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)loadDex(await f.text(),f.name)};
+document.addEventListener('change',async e=>{ // the project-folder picker of the editor also carries PokedexTables.js
+  if(e.target&&e.target.id==='edfFolder'){const f=[...e.target.files].find(x=>/^pokedextables\.js$/i.test(x.name));if(f)loadDex(await f.text(),f.name)}},true);
+(async()=>{if(location.protocol==='file:')return;
+  for(const b of['','public/','../','../public/']){try{const r=await fetch(b+'tables/PokedexTables.js',{cache:'no-store'});if(!r.ok)continue;const t=await r.text();if(/^\s*<(!doctype|html)/i.test(t))continue;loadDex(t,'tables/PokedexTables.js');return}catch(e){}}})();
+
+const species=()=>{const db=window.ED&&window.ED.db;if(db)return Object.keys(db).filter(k=>k!=='SPECIES_NONE');
+  return OW.dex?OW.dex.entries.map(e=>e[5]).filter(Boolean):[]};
+const dexOf=k=>OW.dex?(OW.dex.map[String(k).replace(/^SPECIES_/,'').replace(/_/g,'')]||0):0;
+const nameOf=k=>{const db=window.ED&&window.ED.db;if(db&&db[k]&&db[k].name)return db[k].name;const d=dexOf(k);return(OW.dex&&OW.dex.names[d])||String(k).replace(/^SPECIES_/,'')};
+const delta=d=>OW.rules.reduce((a,r)=>d>=r.from?a+r.delta:a,0);
+const autoSrc=k=>{const d=dexOf(k);return d?d+OW.off+delta(d):0};
+const srcFor=k=>k in OW.manual?OW.manual[k]:autoSrc(k);
+const srcObj=k=>{const n=srcFor(k);return n>0&&OW.src.get(n)||null};
+
+// ------------------------------------------------ folder import
+const FILE_RE=/^(\d+)(s?)\.png$/i;
+async function blockFromFolderFile(f){
+  const bmp=await createImageBitmap(f),fw=Math.floor(bmp.width/4),fh=Math.floor(bmp.height/4);
+  const c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,fw,0,2*fw,4*fh,0,0,2*fw,4*fh);bmp.close&&bmp.close();return c}
+g('owFolder').onclick=()=>g('owfFolder').click();
+g('owfFolder').onchange=async e=>{const fs=[...e.target.files];e.target.value='';await importFolder(fs)};
+async function importFolder(fs){
+  let n=0,s=0,ign=0,bad=0;const ignored=[];
+  g('owFolderSt').textContent='reading…';
+  for(const f of fs){
+    const m=FILE_RE.exec(f.name);
+    if(!m){if(/\.(png|gif|webp)$/i.test(f.name)){ign++;if(ignored.length<4)ignored.push(f.name)}continue}
+    const no=parseInt(m[1],10);if(!no)continue;
+    try{const c=await blockFromFolderFile(f);let o=OW.src.get(no);if(!o){o={n:null,s:null,label:'folder '+pad3(no)};OW.src.set(no,o)}
+      if(m[2])(o.s=c,s++);else(o.n=c,n++)}catch(err){bad++}}
+  g('owFolderSt').textContent=`${n} normal + ${s} shiny sprites loaded`+(ign?`, ${ign} ignored (${ignored.join(', ')}${ign>4?', …':''})`:'')+(bad?`, ${bad} unreadable`:'');
+  refresh()}
+g('owClear').onclick=()=>{OW.src.clear();OW.manual={};g('owFolderSt').textContent='cleared';refresh()};
+
+// ------------------------------------------------ spritesheet import
+const SH=()=>({N:Math.max(1,+g('owShN').value|0),L:g('owShL').value,fw:Math.max(1,+g('owShW').value|0),fh:Math.max(1,+g('owShH').value|0),start:Math.max(1,+g('owShStart').value|0)});
+g('owSheetBtn').onclick=()=>g('owfSheet').click();
+g('owfSheet').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{OW.sheet=await createImageBitmap(f);g('owSheetSt').textContent=`${f.name} — ${OW.sheet.width}×${OW.sheet.height}px`;g('owSheetOpts').hidden=false;sheetUpdate()}catch(err){g('owSheetSt').textContent='Could not read image'}};
+function sheetGeom(){const p=SH(),cols=p.L==='A'?2:4,rowsPer=p.L==='A'?4:2;let fw=p.fw,fh=p.fh;
+  if(g('owShAuto').checked&&OW.sheet){fw=fh=Math.max(1,Math.floor(OW.sheet.width/(p.N*cols)));g('owShW').value=fw;g('owShH').value=fh}
+  const cw=cols*fw,ch=rowsPer*fh,rows=OW.sheet?Math.floor(OW.sheet.height/ch):0;return{...p,fw,fh,cw,ch,cols,rowsPer,rows,total:p.N*rows}}
+function cellBlock(G,i){ // slot i -> block canvas (2 cols x 4 rows of frames) or null when the cell is empty
+  const col=i%G.N,row=Math.floor(i/G.N),x=col*G.cw,y=row*G.ch,{fw,fh}=G,sc=OW.sheet;
+  const b=mk(2*fw,4*fh),ctx=b.getContext('2d');ctx.imageSmoothingEnabled=false;
+  if(G.L==='A'){const mp=g('owShR').value==='DULR'?[0,2,3,1]:[0,1,2,3];for(let r=0;r<4;r++)ctx.drawImage(sc,x,y+mp[r]*fh,2*fw,fh,0,r*fh,2*fw,fh)}
+  else{ctx.drawImage(sc,x,y,2*fw,fh,0,0,2*fw,fh);ctx.drawImage(sc,x+2*fw,y,2*fw,fh,0,fh,2*fw,fh);
+       ctx.drawImage(sc,x,y+fh,2*fw,fh,0,2*fh,2*fw,fh);ctx.drawImage(sc,x+2*fw,y+fh,2*fw,fh,0,3*fh,2*fw,fh)}
+  const d=ctx.getImageData(0,0,b.width,b.height).data;for(let j=3;j<d.length;j+=4)if(d[j])return b;return null}
+function sheetUpdate(){
+  if(!OW.sheet)return;const G=sheetGeom();
+  g('owShStartName').textContent=OW.dex&&OW.dex.names[G.start]?'= '+OW.dex.names[G.start]:'';
+  g('owShInfo').textContent=`Each Pokémon = ${G.cols}×${G.rowsPer} frames of ${G.fw}×${G.fh}px → cell ${G.cw}×${G.ch}px. ${G.N} per row × ${G.rows} rows = ${G.total} Pokémon, dex ${G.start} – ${G.start+G.total-1}.`+(G.rows<1?' (frame size too large for this sheet)':'');
+  const p=g('owShPrev'),sc=Math.min(1,600/OW.sheet.width);p.width=OW.sheet.width*sc;p.height=OW.sheet.height*sc;
+  const c=p.getContext('2d');c.imageSmoothingEnabled=false;c.drawImage(OW.sheet,0,0,p.width,p.height);c.strokeStyle='rgba(255,80,80,.7)';c.lineWidth=1;
+  for(let x=0;x<=G.N;x++){c.beginPath();c.moveTo(x*G.cw*sc,0);c.lineTo(x*G.cw*sc,p.height);c.stroke()}
+  for(let y=0;y<=G.rows;y++){c.beginPath();c.moveTo(0,y*G.ch*sc);c.lineTo(p.width,y*G.ch*sc);c.stroke()}}
+for(const id of['owShN','owShL','owShAuto','owShW','owShH','owShStart'])g(id).addEventListener('input',sheetUpdate);
+g('owShApply').onclick=()=>{
+  if(!OW.sheet)return;const G=sheetGeom();if(G.rows<1)return msg('Frame size is larger than the sheet.');
+  const shiny=g('owShShiny').checked,keep=g('owShKeep').checked;let put=0,skip=0,empty=0;
+  for(let i=0;i<G.total;i++){
+    const no=G.start+i,o=OW.src.get(no);
+    if(keep&&o&&(shiny?o.s:o.n)){skip++;continue}
+    const b=cellBlock(G,i);if(!b){empty++;continue}
+    let t=o;if(!t){t={n:null,s:null,label:'sheet '+pad3(no)};OW.src.set(no,t)}
+    if(shiny)t.s=b;else t.n=b;put++}
+  msg(`Sheet applied: ${put} ${shiny?'shiny ':''}sprites placed from dex ${G.start}`+(skip?`, ${skip} kept as they were`:'')+(empty?`, ${empty} empty cells skipped`:'')+'.');
+  refresh()};
+
+// ------------------------------------------------ offsets
+function offUI(){g('owOff').value=OW.off;const r=g('owRules');r.innerHTML='';
+  OW.rules.forEach((x,i)=>{const b=document.createElement('button');b.textContent=`#${x.from}+ : ${x.delta>0?'+':''}${x.delta}  ✕`;b.onclick=()=>{OW.rules.splice(i,1);refresh()};r.append(b)})}
+g('owOff').oninput=e=>{OW.off=+e.target.value|0;refresh()};
+g('owOffM').onclick=()=>{OW.off--;refresh()};g('owOffP').onclick=()=>{OW.off++;refresh()};
+g('owRuleAdd').onclick=()=>{const f=+g('owRuleFrom').value|0,d=+g('owRuleDelta').value|0;if(f>0&&d){OW.rules.push({from:f,delta:d});refresh()}};
+
+// ------------------------------------------------ list + detail
+let rowsCache=[];
+function thumb(k){const c=mk(32,32),o=srcObj(k);if(o){const b=o.n||o.s,{w,h}=fsz(b),x=c.getContext('2d');x.imageSmoothingEnabled=false;const s=Math.min(32/w,32/h);x.drawImage(b,0,0,w,h,(32-w*s)/2,32-h*s,w*s,h*s)}return c}
+function renderList(){
+  const box=g('owRows'),q=OW.q.trim().toLowerCase();box.innerHTML='';let shown=0,have=0,all=species();
+  for(const k of all){
+    const o=srcObj(k);if(o)have++;
+    if(OW.onlyMissing&&o)continue;
+    const nm=nameOf(k),d=dexOf(k);
+    if(q&&!(k.toLowerCase().includes(q)||nm.toLowerCase().includes(q)||String(d)===q))continue;
+    if(shown>=1500)break;shown++;
+    const row=document.createElement('div');row.className='owrow'+(o?'':' none')+(OW.sel===k?' sel':'');row.dataset.k=k;
+    const n=srcFor(k),sm=document.createElement('small');sm.textContent=(d?'#'+d:'—')+(n?' → '+pad3(n):'')+(k in OW.manual?' ✎':'')+(o&&o.s?' ✦':'');
+    const sp=document.createElement('span');sp.textContent=nm;
+    row.append(thumb(k),sp,sm);row.onclick=()=>{OW.sel=k;renderList();renderDetail()};box.append(row)}
+  g('owCount').textContent=`${have} / ${all.length} Pokémon have an OW sprite`+(all.length?'':' — load PokemonDatabase.js or PokedexTables.js')}
+g('owQ').oninput=e=>{OW.q=e.target.value;renderList()};g('owOnlyMissing').onchange=e=>{OW.onlyMissing=e.target.checked;renderList()};
+
+const nums=()=>[...OW.src.keys()].sort((a,b)=>a-b);
+function stepSrc(k,dir){const cur=srcFor(k),ns=nums();let t=null;
+  if(dir>0){t=ns.find(n=>n>cur)}else{for(const n of ns)if(n<cur)t=n}
+  if(t!=null){OW.manual[k]=t;refresh()}}
+let anim=null,animT=0;
+function renderDetail(){
+  const box=g('owDetail');clearInterval(anim);anim=null;box.innerHTML='';const k=OW.sel;
+  if(!k){box.innerHTML='<div class="owbox"><div class="hint" style="margin:0">Pick a Pokémon on the left.</div></div>';return}
+  const d=dexOf(k),cur=srcFor(k),o=srcObj(k),a=autoSrc(k);
+  const wrap=document.createElement('div');wrap.className='owbox';
+  wrap.innerHTML=`<h3>${esc(nameOf(k))} <span style="color:#8a93a6;font-weight:400">${esc(k)} · dex ${d||'?'} · auto → ${a||'—'}</span></h3>
+   <div class="row"><b>Sprite #</b><button id="owD-">▲ prev</button><input type="number" id="owDn" value="${cur||''}" style="width:80px"><button id="owD+">▼ next</button>
+   <button id="owDauto">Auto</button><button id="owDnone">No sprite</button>
+   <button id="owDshM">Shift this &amp; following −1</button><button id="owDshP">Shift this &amp; following +1</button></div>
+   <div class="hint" style="margin:2px 0 8px">Scroll the mouse wheel over the preview to step through the available sprites.</div>`;
+  const cv=document.createElement('canvas');cv.className='owprev';wrap.append(cv);
+  const strip=document.createElement('div');strip.className='owstrip';wrap.append(strip);box.append(wrap);
+  const draw=()=>{const oo=srcObj(k);const sc=3;let fw=32,fh=32;if(oo)({w:fw,h:fh}=srcSize(oo));
+    const gap=6,W=(4*fw*sc+gap*3),H=(2*fh*sc+gap);if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}
+    const x=cv.getContext('2d');x.imageSmoothingEnabled=false;x.clearRect(0,0,W,H);if(!oo){x.fillStyle='#9ab';x.font='13px sans-serif';x.fillText('no sprite',10,20);return}
+    const st=animT%2;[['n',0],['s',1]].forEach(([key,r])=>{const b=oo[key];if(!b){x.fillStyle='#678';x.font='12px sans-serif';x.fillText(key==='s'?'no shiny sprite':'',4,r*(fh*sc+gap)+16);return}
+      const f=fsz(b);for(let di=0;di<4;di++)x.drawImage(b,st*f.w,di*f.h,f.w,f.h,di*(fw*sc+gap),r*(fh*sc+gap),f.w*sc,f.h*sc)})};
+  draw();anim=setInterval(()=>{animT++;draw()},380);
+  cv.addEventListener('wheel',e=>{e.preventDefault();stepSrc(k,e.deltaY>0?1:-1)},{passive:false});
+  // neighbours
+  const ns=nums(),idx=ns.findIndex(n=>n>=cur);const from=Math.max(0,(idx<0?ns.length:idx)-5),list=ns.slice(from,from+11);
+  for(const n of list){const s=OW.src.get(n),b=s.n||s.s,c=mk(48,48),x=c.getContext('2d'),{w,h}=fsz(b);x.imageSmoothingEnabled=false;const z=Math.min(48/w,48/h);x.drawImage(b,0,0,w,h,(48-w*z)/2,48-h*z,w*z,h*z);
+    const t=document.createElement('div');if(n===cur)t.className='cur';t.append(c,document.createTextNode(pad3(n)+(s.s?' ✦':'')));t.onclick=()=>{OW.manual[k]=n;refresh()};strip.append(t)}
+  g('owD-').onclick=()=>stepSrc(k,-1);g('owD+').onclick=()=>stepSrc(k,1);
+  g('owDn').onchange=e=>{const v=+e.target.value|0;if(v>0)OW.manual[k]=v;else OW.manual[k]=0;refresh()};
+  g('owDauto').onclick=()=>{delete OW.manual[k];refresh()};g('owDnone').onclick=()=>{OW.manual[k]=0;refresh()};
+  g('owDshM').onclick=()=>{if(d){OW.rules.push({from:d,delta:-1});delete OW.manual[k];refresh()}};
+  g('owDshP').onclick=()=>{if(d){OW.rules.push({from:d,delta:1});delete OW.manual[k];refresh()}};
+}
+
+// ------------------------------------------------ output
+function plan(){
+  const by=new Map();
+  for(const k of species()){const n=srcFor(k);if(n>0&&OW.src.has(n)){if(!by.has(n))by.set(n,[]);by.get(n).push(k)}}
+  const order=[...by.keys()].sort((a,b)=>a-b);
+  let cw=0,ch=0;for(const n of order){const{w,h}=srcSize(OW.src.get(n));cw=Math.max(cw,w);ch=Math.max(ch,h)}
+  if(g('owFs').value==='fixed'){cw=Math.max(8,+g('owFw').value|0);ch=Math.max(8,+g('owFh').value|0)}
+  const per=Math.max(1,+g('owPer').value|0),rows=Math.ceil(order.length/per);
+  return{by,order,cw,ch,per,rows,W:per*4*cw,H:rows*4*ch}}
+function outInfo(){if(!OW.src.size){g('owOutInfo').textContent='';return}const p=plan();
+  g('owOutInfo').textContent=`${p.order.length} sprites for ${[...p.by.values()].reduce((a,v)=>a+v.length,0)} Pokémon → ${p.W}×${p.H}px, frame ${p.cw}×${p.ch}`+(Math.max(p.W,p.H)>16384?' ⚠ larger than most browsers can save — raise "per row" or lower the frame size':'')}
+function place(ctx,b,dx,dy,cw,ch,al){const f=fsz(b);
+  for(let r=0;r<4;r++)for(let c=0;c<2;c++){let ox=Math.floor((cw-f.w)/2),oy=al==='bc'?ch-f.h:al==='c'?Math.floor((ch-f.h)/2):0;if(al==='tl')ox=0;
+    ctx.drawImage(b,c*f.w,r*f.h,f.w,f.h,dx+c*cw+ox,dy+r*ch+oy,f.w,f.h)}}
+function build(){
+  const p=plan();if(!p.order.length)throw new Error('Nothing to export: no Pokémon are mapped to a loaded sprite yet.');
+  if(Math.max(p.W,p.H)>16384)throw new Error('The sheet would be '+p.W+'×'+p.H+'px — too large. Increase "Pokémon per row" or reduce the frame size.');
+  const cv=mk(p.W,p.H),ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;const al=g('owAl').value,pos={};
+  p.order.forEach((n,i)=>{const x=(i%p.per)*4*p.cw,y=Math.floor(i/p.per)*4*p.ch,s=OW.src.get(n);pos[n]={x,y};
+    if(s.n)place(ctx,s.n,x,y,p.cw,p.ch,al);if(s.s)place(ctx,s.s,x+2*p.cw,y,p.cw,p.ch,al)});
+  const ents=[];for(const n of p.order)for(const k of p.by.get(n)){const s=OW.src.get(n);ents.push([dexOf(k)||99999,k,n,pos[n],!!s.s,!!s.n])}
+  ents.sort((a,b)=>a[0]-b[0]||(a[1]<b[1]?-1:1));
+  const path=g('owPath').value.trim()||'graphics/overworld/pokemon_ow.png';
+  const L=[`// tables/OverworldSprites.js  (generated by pokemon_editor.html - Overworld tab)`,
+   `//`,`// ONE image holds every overworld sprite. Each Pokémon owns a block of 4 columns x 4 rows of ${p.cw}x${p.ch}px frames:`,
+   `//   columns 1-2 = normal (foot A, foot B)    columns 3-4 = shiny (foot A, foot B)    rows = down, left, right, up`,
+   `// species[KEY] = { x, y } top-left of the block, { w, h } frame size, shiny = true when a shiny version exists.`,
+   `// OverworldSprites.frame('SPECIES_PIKACHU', { dir: 'left', step: 0|1, shiny: false })  ->  { x, y, w, h }  (pixel rect inside the image)`,'',
+   `const OverworldSprites = {`,`  image: ${JSON.stringify(path)},`,`  width: ${p.W}, height: ${p.H}, frameW: ${p.cw}, frameH: ${p.ch},`,`  dirs: ['down', 'left', 'right', 'up'],`,
+   `  mapping: ${JSON.stringify({offset:OW.off,rules:OW.rules})},`,`  species: {`];
+  for(const[,k,n,ps,sh,nm]of ents)L.push(`    ${k}: { src: ${n}, x: ${ps.x}, y: ${ps.y}, w: ${p.cw}, h: ${p.ch}, shiny: ${sh}${nm?'':', normal: false'} },`);
+  L.push('  },','};','',
+   `OverworldSprites.has = function (species) { return !!this.species[species]; };`,
+   `OverworldSprites.frame = function (species, o) {`,`  const e = this.species[species]; if (!e) return null; o = o || {};`,
+   `  const d = Math.max(0, this.dirs.indexOf(o.dir || 'down')), st = (o.step | 0) & 1;`,
+   `  return { x: e.x + (o.shiny && e.shiny ? 2 * e.w : 0) + st * e.w, y: e.y + d * e.h, w: e.w, h: e.h };`,`};`,'',
+   `if (typeof window !== 'undefined') window.OverworldSprites = OverworldSprites;`,'');
+  return{cv,text:L.join('\n'),path,count:ents.length,w:p.W,h:p.H,ents}}
+const toBlob=cv=>new Promise(r=>cv.toBlob(r,'image/png'));
+const base=p=>p.split('/').pop();
+async function doOut(kind){
+  try{const o=build();OW.out=o;const png=await toBlob(o.cv),js=new Blob([o.text],{type:'text/javascript'});
+    if(kind==='png'){dl(png,base(o.path));msg(`Sheet ${o.w}×${o.h}px downloaded (${o.count} Pokémon). Put it at ${o.path}.`)}
+    if(kind==='js'){dl(js,'OverworldSprites.js');msg('OverworldSprites.js downloaded. Put it in tables/.')}
+    if(kind==='zip'){dl(await buildZip([{name:o.path,blob:png},{name:'tables/OverworldSprites.js',blob:js}]),'overworld_sprites.zip');msg(`ZIP with the sheet (${o.w}×${o.h}px, ${o.count} Pokémon) and OverworldSprites.js.`)}
+  }catch(e){msg(e.message)}}
+g('owDlPng').onclick=()=>doOut('png');g('owDlJs').onclick=()=>doOut('js');g('owDlZip').onclick=()=>doOut('zip');
+g('owToDb').onclick=()=>{const db=window.ED&&window.ED.db;if(!db)return msg('Load PokemonDatabase.js first.');
+  try{const o=build();const p=plan();let n=0;
+    for(const[,k,,ps,sh]of o.ents)if(db[k]){db[k].ow=`${ps.x},${ps.y},${p.cw},${p.ch}${sh?',shiny':''}`;n++}
+    if(window.edDirty)window.edDirty('db');msg(`Wrote the "ow" field (x,y,w,h[,shiny]) into ${n} PokemonDatabase entries. Download PokemonDatabase.js from the toolbar above.`)}catch(e){msg(e.message)}};
+for(const id of['owFs','owFw','owFh','owAl','owPer'])g(id).addEventListener('input',outInfo);
+
+// ------------------------------------------------ re-load a previous output (so new generations can be added later)
+g('owLdPrev').onclick=()=>g('owfPrev').click();
+g('owfPrev').onchange=async e=>{const fs=[...e.target.files];e.target.value='';
+  const js=fs.find(f=>/\.(js|txt)$/i.test(f.name)),png=fs.find(f=>/\.png$/i.test(f.name));
+  if(!js||!png)return msg('Choose both files at once: the sheet PNG and OverworldSprites.js (Ctrl-click).');
+  try{const T=new Function((await js.text())+'\n;return OverworldSprites')();const bmp=await createImageBitmap(png);let n=0;
+    for(const[k,en]of Object.entries(T.species)){const no=en.src||dexOf(k);if(!no)continue;
+      let o=OW.src.get(no);if(!o){o={n:null,s:null,label:'sheet '+pad3(no)};OW.src.set(no,o)}
+      const cut=x=>{const c=mk(2*en.w,4*en.h);c.getContext('2d').drawImage(bmp,x,en.y,2*en.w,4*en.h,0,0,2*en.w,4*en.h);return c};
+      if(en.normal!==false&&!o.n)o.n=cut(en.x);if(en.shiny&&!o.s)o.s=cut(en.x+2*en.w);n++;
+      if(autoSrc(k)!==no)OW.manual[k]=no}
+    if(T.mapping){OW.off=T.mapping.offset|0;OW.rules=(T.mapping.rules||[]).slice()}
+    g('owPath').value=T.image||g('owPath').value;msg(`Loaded ${n} Pokémon from the previous output.`);refresh()}catch(err){msg('Could not read the previous output: '+err.message)}};
+
+function refresh(){offUI();renderList();renderDetail();outInfo();sheetUpdate()}
+window.OWTAB={OW,refresh,build,plan};
+// the editor's tab switcher only knows its own tabs: wire ours
+const tabBtn=document.querySelector('.tabs button[data-tab="ow"]');
+tabBtn.addEventListener('click',()=>{ // runs after the editor's own handler (which ignores unknown tabs)
+  for(const id of['sprites','pokemon','moves'])g('tab-'+id).hidden=true;g('tab-ow').hidden=false;g('edcommon').hidden=false;
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b===tabBtn));
+  try{location.hash='ow'}catch(e){}refresh()});
+document.querySelectorAll('.tabs button:not([data-tab="ow"])').forEach(b=>b.addEventListener('click',()=>{g('tab-ow').hidden=true;clearInterval(anim)}));
+if((location.hash||'')==='#ow')tabBtn.click();
+offUI();
+})();
 </script></body></html>
