@@ -41,7 +41,13 @@
     let pic = null;
     if (imgKey) { pic = scene.add.image(cx, cy, imgKey).setScrollFactor(0).setDepth(100001); pic.setDisplaySize(W, H); pic.__sx = pic.scaleX; pic.__sy = pic.scaleY; back.clear(); back.fillStyle(0x000000, 1); back.fillRect(0, 0, W, H); back.setVisible(false); }
     let done = false;
-    const finish = () => { if (done) return; done = true; try { [back, white, black].forEach(g => g.destroy()); if (pic) { pic.destroy(); scene.textures.remove(imgKey); } } catch (e) { /* scene gone */ } go(); };
+    const cleanup = () => { try { [back, white, black].forEach(g => g.destroy()); if (pic) { pic.destroy(); if (scene.textures.exists(imgKey)) scene.textures.remove(imgKey); } } catch (e) { /* scene gone */ } };
+    scene.events.once('shutdown', cleanup);   // the black cover stays on screen until the battle scene has really taken over (no one-frame flash of the overworld)
+    const finish = () => {
+      if (done) return; done = true;
+      try { if (pic) pic.setVisible(false); white.clear(); black.clear(); black.fillStyle(0x000000, 1); black.fillRect(0, 0, W, H); } catch (e) { /* ignore */ }
+      go();
+    };
     // brightness: two quick pulses (white added on top), then it falls back to normal
     const pulse = ms => { const p = ms / T.flashMs; return cl(Math.max(Math.sin(cl(p / .5) * Math.PI) * .75, Math.sin(cl((p - .42) / .58) * Math.PI) * .95)); };
     const draw = ms => {
