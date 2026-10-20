@@ -645,7 +645,8 @@ function createBattle(env) {
   function update(dt) {
     S.t += dt;
     S.lowT = (S.lowT || 0) + dt; if (window.StartMenu && window.StartMenu.tickBg) window.StartMenu.tickBg(dt);
-    { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode; }
+    { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode;
+      const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else S.stripT = (S.stripT || 0) + dt; }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
     for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
     if (S.fadeDir) { S.fade = clamp(S.fade + S.fadeDir * dt * 1.5); if ((S.fadeDir < 0 && S.fade <= 0) || (S.fadeDir > 0 && S.fade >= 1)) { S.fadeDir = 0; const f = S.onFade; S.onFade = null; if (f) f(); } }
@@ -1009,19 +1010,35 @@ function createBattle(env) {
     c.restore();
   }
   // the player's party as icons, just above the menu buttons
+  // a 4-point sparkle
+  function sparkle(c, x, y, r, a) {
+    if (a <= 0 || r <= 0) return; c.save(); c.globalAlpha = clamp(a); c.fillStyle = '#fffbe0';
+    const R = Math.max(1, Math.round(r)); c.fillRect(Math.round(x) - 1, Math.round(y) - R, 2, R * 2); c.fillRect(Math.round(x) - R, Math.round(y) - 1, R * 2, 2);
+    c.fillStyle = '#ffd84a'; c.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2); c.restore();
+  }
   function partyStrip(c) {
     const P = CF.party; if (!P.show || !S.b) return;
-    const party = S.b.sides[0].party || [], gap = P.gap;
+    const party = S.b.sides[0].party || [], gap = P.gap, T0 = S.stripT == null ? 9 : S.stripT;
     S.hit.party = { x: P.x, y: P.y, w: gap * 5 + 32, h: 38 };
+    const bk = q => { q = clamp(q); const t = q - 1; return 1 + t * t * (2.6 * t + 1.6); };   // pop with a small overshoot
     for (let i = 0; i < 6; i++) {
-      const M = party[i], x = P.x + i * gap, y = P.y;
-      if (!M) { ballSil(c, x + 16, y + 18, 15, '#2a2e3e', '#3c4156'); continue; }
-      const faint = M.hp <= 0, active = i === S.b.sides[0].active;
-      ballSil(c, x + 16, y + 18, 15, faint ? '#5a3a46' : active ? '#3f86c8' : '#454957', faint ? '#8a6470' : active ? '#d8ecff' : '#eef0f8');
-      c.save(); if (faint) c.globalAlpha = .45; drawIconAt(c, M.species, x, y, false, i); c.restore();
+      const M = party[i], x = P.x + i * gap, y = P.y, t = T0 - i * .09;   // the balls come in from left to right
+      const bs = bk(t / .26); if (bs <= 0) continue;
+      const ballCols = !M ? ['#2a2e3e', '#3c4156'] : (M.hp <= 0 ? ['#5a3a46', '#8a6470'] : i === S.b.sides[0].active ? ['#3f86c8', '#d8ecff'] : ['#454957', '#eef0f8']);
+      c.save(); c.translate(x + 16, y + 18); c.scale(bs, bs); c.translate(-(x + 16), -(y + 18)); ballSil(c, x + 16, y + 18, 15, ballCols[0], ballCols[1]); c.restore();
+      if (!M) continue;
+      const faint = M.hp <= 0, it = t - .24;   // then the Pokémon icon appears with a sparkle
+      if (it > 0) {
+        const is = bk(it / .22);
+        c.save(); if (faint) c.globalAlpha = .45; c.translate(x + 16, y + 34); c.scale(is, is); c.translate(-(x + 16), -(y + 34)); drawIconAt(c, M.species, x, y, false, i);
+        if (it < .22) { c.globalAlpha = (1 - it / .22) * .6; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x + 16, y + 18, 14, 0, 6.2832); c.fill(); }   // a quick white shine on arrival
+        c.restore();
+        const sp = it / .55; if (sp < 1) { const a = Math.sin(sp * Math.PI), pts = [[x + 5, y + 6, 1], [x + 27, y + 9, .8], [x + 10, y + 28, .7], [x + 26, y + 26, 1.1]];
+          pts.forEach(([sx, sy, sc], n) => sparkle(c, sx, sy - sp * 4, (2 + 3 * sc) * a * (1 - Math.abs(sp - .35 - n * .08)), a)); }
+      }
       const bw = 24, fr = clamp(M.hp / Math.max(1, M.maxhp));
-      rect(c, x + 4, y + 34, bw, 3, '#12121c'); if (!faint) rect(c, x + 5, y + 35, Math.max(0, Math.round((bw - 2) * fr)), 1, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838');
-      const st = M.status && STATUS_LAB[M.status]; if (st && !faint) rect(c, x + 24, y + 4, 6, 6, st[1]);
+      if (it > .1) { rect(c, x + 4, y + 34, bw, 3, '#12121c'); if (!faint) rect(c, x + 5, y + 35, Math.max(0, Math.round((bw - 2) * fr)), 1, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838');
+        const st = M.status && STATUS_LAB[M.status]; if (st && !faint) rect(c, x + 24, y + 4, 6, 6, st[1]); }
     }
   }
   function drawBottom(c) {
@@ -1032,7 +1049,7 @@ function createBattle(env) {
     S.mode = m;
     try {
       c.save(); c.translate(0, Math.round((1 - (out ? k : bk(k))) * 80));
-      if (!['move', 'party', 'bag', 'learnPick'].includes(m)) { c.save(); c.translate(Math.round(-(1 - bk(k * 1.25)) * 40), 0); partyStrip(c); c.restore(); }
+      if (!['move', 'party', 'bag', 'learnPick'].includes(m)) partyStrip(c);
       if (m === 'cmd') { c.save(); c.translate(Math.round((1 - bk(k * 1.3 - .15)) * 70), 0); cmdButtons(c); c.restore(); }
       else if (m === 'move') { const P = S.b.active(0); moveInfoBox(c, P); moveButtons(c, P, null, S.mv); }
       else if (m === 'party') partyBottom(c);
