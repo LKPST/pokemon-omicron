@@ -440,7 +440,7 @@ function createBattle(env) {
     if (o.ballSheet) S.ball = Object.assign({}, S.ball, o.ballSheet); if (o.sparkleSheet) S.sparkle = Object.assign({}, S.sparkle, o.sparkleSheet); if (o.introIcon) S.introIcon = o.introIcon;
     for (const m of [...S.b.sides[0].party, ...S.b.sides[1].party]) { getImg(spritePath(m.species)); getImg(iconPath(m.species)); }
     for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.introIcon, ...SPARKS]) if (p) getImg(p);
-    S.introT = 0; S.introTextSet = false; S.preShown = null; S.mode = skip ? 'play' : 'intro'; S.q = S.b.start().slice(); if (skip) S.fadeDir = -1;
+    S.introT = 0; S.stripPlayed = false; S.stripT = 0; S.introTextSet = false; S.preShown = null; S.mode = skip ? 'play' : 'intro'; S.q = S.b.start().slice(); if (skip) S.fadeDir = -1;
     // wild battle: the wild Pokémon slides in from the left WHILE the player's trainer slides in (like the original), not after it
     S.introFoe = null;
     if (!skip && S.b.kind === 'wild') {
@@ -646,7 +646,7 @@ function createBattle(env) {
     S.t += dt;
     S.lowT = (S.lowT || 0) + dt; if (window.StartMenu && window.StartMenu.tickBg) window.StartMenu.tickBg(dt);
     { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode;
-      const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else S.stripT = (S.stripT || 0) + dt; }
+      const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else { S.stripT = (S.stripT || 0) + dt; if (S.stripT > 1.5) S.stripPlayed = true; } }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
     for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
     if (S.fadeDir) { S.fade = clamp(S.fade + S.fadeDir * dt * 1.5); if ((S.fadeDir < 0 && S.fade <= 0) || (S.fadeDir > 0 && S.fade >= 1)) { S.fadeDir = 0; const f = S.onFade; S.onFade = null; if (f) f(); } }
@@ -1025,7 +1025,7 @@ function createBattle(env) {
   }
   function partyStrip(c) {
     const P = CF.party; if (!P.show || !S.b) return;
-    const party = S.b.sides[0].party || [], gap = P.gap, T0 = S.stripT == null ? 9 : S.stripT;
+    const party = S.b.sides[0].party || [], gap = P.gap, T0 = S.stripPlayed || S.stripT == null ? 9 : S.stripT;   // the entrance plays once per battle
     S.hit.party = { x: P.x, y: P.y, w: gap * 5 + 32, h: 38 };
     const bk = q => { q = clamp(q); const t = q - 1; return 1 + t * t * (2.6 * t + 1.6); };   // pop with a small overshoot
     for (let i = 0; i < 6; i++) {
@@ -1041,7 +1041,7 @@ function createBattle(env) {
         if (it < .22) { c.globalAlpha = (1 - it / .22) * .6; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x + 16, y + 18, 14, 0, 6.2832); c.fill(); }   // a quick white shine on arrival
         c.restore();
         const pts = [[x + 5, y + 6, 16], [x + 27, y + 9, 13], [x + 10, y + 28, 12], [x + 26, y + 26, 17]];
-        pts.forEach(([sx, sy, sz], n) => { const p = (it - n * .07) / .5; if (p <= 0 || p >= 1) return; if (!sparkImg(c, sx, sy, sz, p)) { const a = Math.sin(p * Math.PI); sparkle(c, sx, sy - p * 4, (2 + 3 * sz / 20) * a, a); } });
+        pts.forEach(([sx, sy, sz], n) => { const p = (it - n * .07) / .6; if (p <= 0 || p >= 1) return; if (!sparkImg(c, sx, sy, sz, p)) { const a = Math.sin(p * Math.PI); sparkle(c, sx, sy - p * 4, (2 + 3 * sz / 20) * a, a); } });
       }
       const bw = 24, fr = clamp(M.hp / Math.max(1, M.maxhp));
       if (it > .1) { rect(c, x + 4, y + 34, bw, 3, '#12121c'); if (!faint) rect(c, x + 5, y + 35, Math.max(0, Math.round((bw - 2) * fr)), 1, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838');
