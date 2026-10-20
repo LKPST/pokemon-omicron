@@ -12,28 +12,48 @@
 // Used by js/OverworldWild.js (wild encounters) and by the trainerbattle script command (js/overworld_script_commands.js).
 (function () {
   'use strict';
-  const T = { enabled: true, dimMs: 130, flashMs: 560, spinMs: 950, holdMs: 260, turn: 0.62, busy: false };
+  const T = { enabled: true, dimMs: 130, flashMs: 520, spinMs: 900, holdMs: 240, turn: 0.75, busy: false };
 
   T.start = function (scene, key, data) {
     const go = () => { T.busy = false; scene.isLocked = false; scene.scene.start(key, data); };
     if (!T.enabled || !scene.add || !scene.cameras || !scene.cameras.main || typeof Phaser === 'undefined') return go();
     if (T.busy) return; T.busy = true;
-    const cam = scene.cameras.main, W = cam.width, H = cam.height, cx = W / 2, cy = H / 2, D = Math.max(W, H) * 3;
     scene.isLocked = true;
-    const mk = () => scene.add.graphics().setScrollFactor(0).setDepth(100000);
-    const dim = mk(), white = mk().setBlendMode(Phaser.BlendModes.ADD), black = mk();
+    const cam = scene.cameras.main, W = cam.width, H = cam.height;
+    let began = false;
+    const begin = img => { if (began) return; began = true; try { run(scene, go, cam, W, H, img); } catch (e) { console.warn('[BattleTransition]', e); go(); } };
+    // take a picture of the current screen, so the picture itself can spin; if that is not possible use the cropped-window version
+    let snapped = false;
+    try {
+      const r = scene.game && scene.game.renderer;
+      if (r && r.snapshot) r.snapshot(im => { snapped = true; if (!began) { try { const k = '__bt_snap' + Date.now(); scene.textures.addImage(k, im); begin(k); } catch (e) { begin(null); } } });
+      else begin(null);
+    } catch (e) { begin(null); }
+    setTimeout(() => { if (!snapped) begin(null); }, 250);
+  };
+
+  function run(scene, go, cam, W, H, imgKey) {
+    const cx = W / 2, cy = H / 2, D = Math.max(W, H) * 3;
+    const mk = d => scene.add.graphics().setScrollFactor(0).setDepth(100000 + (d || 0));
     const total = T.flashMs + T.spinMs + T.holdMs, ease = q => q * q * (3 - 2 * q), cl = q => Math.max(0, Math.min(1, q));
+    const back = mk(0), white = mk(3).setBlendMode(Phaser.BlendModes.ADD), black = mk(2);
+    let pic = null;
+    if (imgKey) { pic = scene.add.image(cx, cy, imgKey).setScrollFactor(0).setDepth(100001); pic.setDisplaySize(W, H); pic.__sx = pic.scaleX; pic.__sy = pic.scaleY; back.clear(); back.fillStyle(0x000000, 1); back.fillRect(0, 0, W, H); back.setVisible(false); }
     let done = false;
-    const finish = () => { if (done) return; done = true; try { [dim, white, black].forEach(g => g.destroy()); } catch (e) { /* scene gone */ } go(); };
+    const finish = () => { if (done) return; done = true; try { [back, white, black].forEach(g => g.destroy()); if (pic) { pic.destroy(); scene.textures.remove(imgKey); } } catch (e) { /* scene gone */ } go(); };
+    // brightness: two quick pulses (white added on top), then it falls back to normal
+    const pulse = ms => { const p = ms / T.flashMs; return cl(Math.max(Math.sin(cl(p / .5) * Math.PI) * .75, Math.sin(cl((p - .42) / .58) * Math.PI) * .95)); };
     const draw = ms => {
-      // 1. dim, then a bright flash that stays during the spin
-      dim.clear(); white.clear(); black.clear();
-      const d = cl(ms / T.dimMs) * (1 - cl((ms - T.dimMs) / 120)); if (d > 0) { dim.fillStyle(0x000000, .28 * d); dim.fillRect(0, 0, W, H); }
-      const f = cl((ms - T.dimMs) / 150) * (ms < T.flashMs + T.spinMs ? 1 : 0); if (f > 0) { white.fillStyle(0xffffff, .72 * f); white.fillRect(0, 0, W, H); }
-      // 2. spin + shrink: the visible part is a rotated rectangle, the 4 half-planes outside its edges are painted black
-      const q = cl((ms - T.flashMs) / T.spinMs);
-      if (ms >= T.flashMs) {
-        const e = ease(q), s = 1.3 * (1 - e), ang = -e * Math.PI * T.turn, hw = W / 2 * s, hh = H / 2 * s;
+      white.clear(); black.clear();
+      const f = pulse(Math.min(ms, T.flashMs)); if (f > 0 && ms < T.flashMs) { white.fillStyle(0xffffff, f * .8); white.fillRect(0, 0, W, H); }
+      const q = cl((ms - T.flashMs) / T.spinMs), e = q * q * q * .35 + ease(q) * .65;
+      if (pic) {
+        back.setVisible(ms >= T.flashMs); if (ms >= T.flashMs) { back.clear(); back.fillStyle(0x000000, 1); back.fillRect(0, 0, W, H); }
+        const s = Math.max(0, 1 - e * 1.0);
+        pic.setRotation(-e * Math.PI * 2 * T.turn).setScale(pic.__sx * s, pic.__sy * s).setVisible(s > 0.004);
+      } else if (ms >= T.flashMs) {
+        // fallback: a rotating, shrinking window - everything outside it is painted black
+        const s = 1.3 * (1 - e), ang = -e * Math.PI * T.turn * 1.6, hw = W / 2 * s, hh = H / 2 * s;
         black.fillStyle(0x000000, 1);
         if (q >= 1 || s <= 0.004) black.fillRect(0, 0, W, H);
         else {
@@ -48,6 +68,6 @@
     };
     draw(0);
     scene.tweens.addCounter({ from: 0, to: total, duration: total, ease: 'Linear', onUpdate: tw => { if (!done) draw(tw.getValue()); }, onComplete: finish });
-  };
+  }
   window.BattleTransition = T;
 })();
