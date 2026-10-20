@@ -19,7 +19,9 @@
 //   OWFollower.leadMon(saveData) can be replaced if the lead should be chosen differently (default: first Pokémon with HP > 0)
 (function () {
   'use strict';
+  const log = (...a) => { if (F.log) console.log('[FOLLOWER]', ...a); };
   const F = {
+    log: true, why: '',
     enabled: true, scale: 'auto', offsetY: 14, distance: 32,
     spr: null, species: null, shiny: false, pts: [], last: null, trav: 0, dir: 'down', busy: false, nextCheck: 0, scene: null, wasHidden: true,
   };
@@ -30,13 +32,21 @@
     return null;
   };
 
+  function why(r) { if (F.why !== r) { F.why = r; log(r); } return null; }
   function wanted(scene) {
     const gsm = window.GameStateManager, sd = gsm && gsm.saveData;
-    if (!F.enabled || (sd && sd.follower === false)) return null;
-    if (scene.currentMap && scene.currentMap.follower === false) return null;
+    if (!F.enabled) return why('not following: OWFollower.enabled is false');
+    if (sd && sd.follower === false) return why('not following: saveData.follower is false');
+    if (scene.currentMap && scene.currentMap.follower === false) return why('not following: this map has follower:false');
+    if (!window.OWSprites) return why('not following: js/OverworldSpriteLoader.js is not loaded (window.OWSprites missing)');
+    if (!window.OverworldSprites) return why('not following: tables/OverworldSprites.js is not loaded (window.OverworldSprites missing)');
+    if (!sd) return why('not following: GameStateManager.saveData is missing');
+    const party = sd.party || [];
+    if (!party.length) return why('not following: the party is empty');
     const m = F.leadMon(sd);
-    if (!m || !window.OWSprites || !window.OWSprites.hasSprite(m.species)) return null;
-    return m;
+    if (!m) return why('not following: no party Pokémon with HP > 0 (' + party.map(x => x && x.species + ' hp=' + (x && (x.hp ?? x.currentHp))).join(', ') + ')');
+    if (!window.OWSprites.hasSprite(m.species)) return why('not following: "' + m.species + '" has no entry in tables/OverworldSprites.js (map it in the editor, Overworld tab)');
+    F.why = 'ok'; return m;
   }
 
   function dropSprite() {
@@ -47,32 +57,36 @@
   async function makeSprite(scene, m) {
     F.busy = true;
     try {
+      log('creating the follower for', m.species, m.isShiny ? '(shiny)' : '', '…');
       const spr = await window.OWSprites.create(scene, -999, -999, m.species, { shiny: !!m.isShiny, dir: F.dir });
-      if (!spr) return;
+      if (!spr) { log('FAILED: OWSprites.create returned nothing - see the [OWSprites] message above (image path / fetch?)'); F.why = 'create failed'; F.fails = (F.fails || 0) + 1; if (F.fails >= 3) log('giving up after 3 failures - fix the problem, then run OWFollower.refresh()'); return; }
       if (F.scene !== scene || !scene.sys || !scene.add) { window.OWSprites.destroy(spr); return; }
       const e = window.OverworldSprites.species[m.species], w = e ? e.w : 32;
       const sc = F.scale === 'auto' ? (w > 32 ? 32 / w : 1) : Number(F.scale) || 1;
       spr.setOrigin(0.5, 1).setScale(sc).setVisible(false);
       if (F.spr) window.OWSprites.destroy(F.spr);
       F.spr = spr; F.species = m.species; F.shiny = !!m.isShiny; F.wasHidden = true;
+      log('follower ready:', m.species, 'frame', e ? e.w + 'x' + e.h : '?', 'scale', sc, '| player at', Math.round(scene.player.x), Math.round(scene.player.y));
     } finally { F.busy = false; }
   }
 
   F.attach = function (scene) {
+    log('attach: OWSprites=' + !!window.OWSprites + ' OverworldSprites=' + (window.OverworldSprites ? Object.keys(window.OverworldSprites.species).length + ' species, image ' + window.OverworldSprites.image : 'MISSING') + ' party=' + (((window.GameStateManager || {}).saveData || {}).party || []).length);
+    F.why = '';
     F.scene = scene; F.spr = null; F.species = null; F.pts = []; F.last = null; F.trav = 0; F.nextCheck = 0; F.busy = false;
     scene.events.once('shutdown', () => { F.detach(); });
   };
   F.detach = function () { dropSprite(); F.pts = []; F.last = null; F.scene = null; };
 
   // call after the party changed (the check also runs by itself twice a second)
-  F.refresh = function () { F.nextCheck = 0; };
+  F.refresh = function () { F.nextCheck = 0; F.fails = 0; };
 
   F.update = function (scene, time, delta) {
     if (F.scene !== scene) F.attach(scene);
     const p = scene.player; if (!p) return;
 
     // 1. who should follow?
-    if (time >= F.nextCheck && !F.busy) {
+    if (time >= F.nextCheck && !F.busy && (F.fails || 0) < 3) {
       F.nextCheck = time + 500;
       const m = wanted(scene);
       if (!m) { if (F.spr) dropSprite(); }
@@ -121,5 +135,12 @@
     s.setAlpha(1);
   };
 
+  // OWFollower.debug() in the console prints the whole state
+  F.debug = function () {
+    const sc = F.scene, sd = (window.GameStateManager || {}).saveData || {}, m = sc && F.leadMon(sd);
+    const o = { attached: !!sc, enabled: F.enabled, reason: F.why, lead: m && m.species, hasSprite: !!(m && window.OWSprites && window.OWSprites.hasSprite(m.species)),
+      sprite: F.spr ? { x: F.spr.x, y: F.spr.y, visible: F.spr.visible, frame: F.spr.frame, scale: F.spr.scaleX } : null, pathPoints: F.pts.length, loader: window.OWSprites ? window.OWSprites.stats() : null };
+    console.log('[FOLLOWER] debug', o); return o;
+  };
   window.OWFollower = F;
 })();
