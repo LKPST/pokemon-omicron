@@ -654,6 +654,7 @@ class OverworldScene extends Phaser.Scene {
     this.renderUnifiedWorld();
     this.spawnAllEvents();
     this.spawnPlayer();
+    if (window.OWFollower) window.OWFollower.attach(this);   // [FOLLOWER] the first party Pokémon walks behind the player
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
@@ -1628,6 +1629,7 @@ class OverworldScene extends Phaser.Scene {
   update(time, delta) {
     if (this.weather) this.weather.update(delta);
     this.tickTileAnim(delta);
+    if (window.OWFollower) window.OWFollower.update(this, time, delta);   // [FOLLOWER]
 
     // [CHANGED] depth is updated every frame (also while walking), before the early return
     if (this.player && this.npcs) {
