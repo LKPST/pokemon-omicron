@@ -1139,7 +1139,7 @@ class OverworldScene extends Phaser.Scene {
       const c = this.parseTileCell(grid[gridY] && grid[gridY][gridX]);
       if (!c) { console.log(`• Layer ${layer}: empty`); continue; }
       const def = (window.OverworldTiles && window.OverworldTiles[c.tileID]) || {};
-      console.log(`• Layer ${layer}: tile ${c.tileID} (${def.tileName || 'Unknown'}) frame ${c.frameID} · behavior: ${['passable', 'BLOCKED', 'passable (above NPC)', 'surf', 'dive'][c.pass] || c.pass}`);
+      console.log(`• Layer ${layer}: tile ${c.tileID} (${def.tileName || 'Unknown'}) frame ${c.frameID} · behavior: ${['passable', 'BLOCKED', 'passable (above NPC)', 'surf', 'dive', 'GRASS (wild)'][c.pass] || c.pass}`);
     }
     console.groupEnd();
   }
@@ -1630,6 +1630,7 @@ class OverworldScene extends Phaser.Scene {
     if (this.weather) this.weather.update(delta);
     this.tickTileAnim(delta);
     if (window.OWFollower) window.OWFollower.update(this, time, delta);   // [FOLLOWER]
+    if (window.OWWild) window.OWWild.update(this, time, delta);           // [WILD] wild Pokémon on grass (behavior 5)
 
     // [CHANGED] depth is updated every frame (also while walking), before the early return
     if (this.player && this.npcs) {
