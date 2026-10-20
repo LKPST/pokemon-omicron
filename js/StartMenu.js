@@ -459,23 +459,31 @@ function createStart(env) {
     else { cloud('#cfd6ea'); }
   }
   function renderIdle(c) {
-    c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, BH); menuBg(c, BW, BH, S.t); statusBar(c, 1);
+    c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, BH); menuBg(c, BW, BH, S.t); const ek = S.exitK || 0, bk = x => { x = Math.max(0, Math.min(1, x)); return x * x * (2.6 * x - 1.6); }, kR = bk(ek * 1.5), kL = bk(ek * 1.5 - .12), kP = bk(ek * 1.5 - .25), kF = bk(ek * 1.5 - .35), sbk = Math.max(0, Math.min(1, ek * 1.5 - .4)); statusBar(c, 1 - sbk * sbk * (3 - 2 * sbk));
     const sv = saveData(), pt = party(), lead = pt[0], inf = SS() ? SS().info() : {}, mp = (env.mapName && env.mapName()) || sv.mapID || '', wth = (env.weather && env.weather()) || '';
     // left card: place and weather
     const card = (x, y, w, h, hot) => { slant(c, x - 1, y - 1, w + 2, h + 2, 7, '#0a0c12'); slant(c, x, y, w, h, 7, '#171a24'); slant(c, x + 1, y + 1, w - 2, Math.floor(h / 2) - 1, 7, 'rgba(255,255,255,.05)'); };
+    c.save(); c.translate(-Math.round(kL * 135), 0);
     card(6, 20, 114, 58); T(c, 'LOCATION', 18, 25, 'mute'); wrapText(String(mp).toUpperCase(), 100).slice(0, 2).forEach((l, i) => T(c, l, 16, 37 + i * 12, 'white'));
     weatherIcon(c, wth, 24, 66, S.t); T(c, String(wth || 'clear').replace(/^WEATHER_/, '').replace(/_/g, ' ').toUpperCase().slice(0, 12), 40, 62, 'grey');
+    c.restore();
     // right card: partner
+    c.save(); c.translate(Math.round(kR * 135), 0);
     card(124, 20, 110, 58); const nick = lead ? String(lead.nickname || lead.species.replace(/^SPECIES_/, '').replace(/_/g, ' ')).toUpperCase().slice(0, 9) : '-----';
     rr(c, 130, 28, 30, 30, 5, '#0e1018'); if (lead) { const ip = dbOf(lead.species).iconSprite; if (!drawIcon(c, ip, 133, 31 + Math.round(Math.abs(Math.sin(S.t * 4)) * -2), 24, false)) ball(c, 141, 39, 'poke', 1); }
     T(c, nick, 164, 25, 'white'); if (lead) { T(c, 'Lv' + (lead.level || 1), 164, 37, 'mute'); const hp = clamp((lead.HP != null ? lead.HP : 1) / Math.max(1, lead.maxHP || 1)); rect(c, 164, 50, 62, 4, '#0a0c12'); rect(c, 165, 51, Math.round(60 * hp), 2, hp > .5 ? '#58c868' : hp > .2 ? '#f0c040' : '#e84848'); }
     const md = moodOf(lead); const hb = Math.abs(Math.sin(S.t * (2 + md.f * 3))); heart(c, 164, 62 - Math.round(hb), md.col, true); T(c, md.label, 174, 60, 'grey');
     for (let i = 0; i < 5; i++) rect(c, 134 + i * 6, 66, 5, 3, i < Math.round(md.f * 5) ? md.col : '#2a2e3e');
+    c.restore();
     // press start
+    c.save(); c.translate(0, Math.round(kP * 70));
     const pulse = .5 + .5 * Math.sin(S.t * 4); slant(c, 30, 86, 180, 34, 8, '#0a0c12'); slant(c, 31, 87, 178, 32, 8, 'rgba(' + Math.round(40 + pulse * 40) + ',' + Math.round(50 + pulse * 40) + ',' + Math.round(90 + pulse * 60) + ',1)');
     const lab = 'PRESS START'; T(c, lab, Math.round(120 - tw(lab) / 2), 93, 'white'); const sub = 'or tap here'; T(c, sub, Math.round(120 - tw(sub) / 2), 106, 'mute');
+    c.restore();
+    c.save(); c.translate(0, Math.round(kF * 40));
     const dd = now(); const dn = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][dd.getDay()]; T(c, dn + ' ' + dd.getDate() + '/' + (dd.getMonth() + 1), 8, BH - 22, 'grey'); TR(c, 'PLAYED ' + fmtTime(inf.playTime || 0), BW - 8, BH - 22, 'grey');
     if (inf.dirty) { rect(c, BW / 2 - 2, BH - 20, 4, 4, '#ffd23c'); }
+    c.restore();
   }
 
   // ===================================================================== shared helpers for the sub screens
@@ -1046,7 +1054,7 @@ function createStart(env) {
   function pumpIcons(n) { while (n-- > 0 && ICONQ.length) getImg(ICONQ.shift()); }
   function preload() { trainerPre(); queueAllIcons(); }
   function status() { return { scr: S.scr, page: S.page, sel: S.sel, closing: S.closing, child: S.child, dexList: DX.list.length, warnings: [...warnings] }; }
-  return { icon, preload, renderIdle, HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
+  return { icon, preload, renderIdle, setExit: p => { S.exitK = p; }, HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
 }
 root.StartMenuCore = createStart;
 })(window);
@@ -1155,17 +1163,18 @@ const StartMenu = {
     slog('attach() called, IDLE=' + this.IDLE); if (!scene || !scene.add) return; const self = this; this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
     const g = this._geom(scene); this._cam(scene, g); let img = null, tex = null, ctx = null, acc = 0, ready = false, idle = null;
     const sv = () => (root.GameStateManager && root.GameStateManager.saveData) || {};
-    idle = root.StartMenuCore(this._env(scene, g)); idle.initFont().then(() => { idle.preload(); ready = true; slog('idle screen ready'); }).catch(e => console.error('[SM] idle screen font:', e));
+    idle = root.StartMenuCore(this._env(scene, g)); this._idle = idle; idle.initFont().then(() => { idle.preload(); ready = true; slog('idle screen ready'); }).catch(e => console.error('[SM] idle screen font:', e));
     const draw = (time, delta) => {
       const vis = this.IDLE && !this.active && ready;
       if (!img && vis) { if (scene.textures.exists(KD)) scene.textures.remove(KD); tex = scene.textures.createCanvas(KD, idle.W, idle.H); try { tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } ctx = tex.getContext ? tex.getContext() : tex.context; img = self._lower(scene, g, 0, 0, KD).setDepth(80); slog('idle screen created'); }
-      if (img) img.setVisible(!!vis); if (!vis || !ctx) return; acc += delta; if (acc < 33) return; const dt = Math.min(.1, acc / 1000); acc = 0;
+      if (img) img.setVisible(!!vis); if (!vis || !ctx) return; acc += delta; if (acc < ((idle.S.exitK || 0) > 0 ? 8 : 33)) return; const dt = Math.min(.1, acc / 1000); acc = 0;
       try { idle.update(dt); idle.renderIdle(ctx); tex.refresh(); } catch (e) { console.error('[SM] idle screen:', e); self.IDLE = false; }
     };
     const down = p => { if (self.active || !img || !img.visible) return; if (p.y >= g.y0 && p.y < g.y0 + g.bh * g.s) { slog('idle screen click -> open'); self.open(scene, {}); } };
     scene.events.on('update', draw); scene.input.on('pointerdown', down);
-    scene.events.once('shutdown', () => { scene.events.off('update', draw); try { scene.input.off('pointerdown', down); } catch (e) { /* ignore */ } if (img) img.destroy(); img = null; if (scene.textures.exists(KD)) scene.textures.remove(KD); });
+    scene.events.once('shutdown', () => { try { idle.setExit(0); } catch (e) { /* ignore */ } scene.events.off('update', draw); try { scene.input.off('pointerdown', down); } catch (e) { /* ignore */ } if (img) img.destroy(); img = null; if (scene.textures.exists(KD)) scene.textures.remove(KD); });
   },
+  setExit(p) { try { if (this._idle) this._idle.setExit(p); } catch (e) { /* ignore */ } },
   _env(scene, geo) {
     const gs = root.GameStateManager, sv = () => (gs && gs.saveData) || {};
     return {
