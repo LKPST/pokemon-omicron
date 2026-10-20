@@ -204,5 +204,20 @@ window.OverworldScriptCommands = (() => {
   def('openmenu', 'Menu', 'Open the start menu (screen: pokedex / map / log / card / save / options)', [A('screen', 'text', 1, '', 'optional')],
     (a, ctx, next) => { if (ctx.preview || !window.StartMenu) return next(); window.StartMenu.open(ctx.scene, { screen: ({ pokedex: 'dex', rotomdex: 'dex', map: 'map', townmap: 'map', log: 'log', card: 'card', save: 'save', options: 'options', nav: 'nav' })[String(a.screen || '').toLowerCase()], onClose: () => next() }); });
 
+  // ------------------------------------------------------------------ naming screens (js/PokemonSummary.js)
+  def('nameplayer', 'Player', "Open the naming screen for the player's name (stored in saveData.player.name)", [A('gender', 'text', 1, '', 'male or female (picture); empty = from the save'), A('max', 'num', 1, 7, 'longest name')],
+    (a, ctx, next) => {
+      if (ctx.preview) { ctx.host.note('Asks for the player name'); return next(); }
+      if (!window.PokemonSummary || !window.PokemonSummary.namePlayer) { console.warn('[ScriptEngine] js/PokemonSummary.js is not loaded'); return next(); }
+      window.PokemonSummary.namePlayer(ctx.scene, { gender: a.gender || undefined, max: +a.max || 7, onDone: () => next() });
+    });
+  def('namepokemon', 'Pokémon', 'Open the nickname screen for a party Pokémon (slot 1 = first)', [A('slot', 'num', 0, 1)],
+    (a, ctx, next) => {
+      if (ctx.preview) { ctx.host.note(`Asks for a nickname for party slot ${a.slot || 1}`); return next(); }
+      const gs = window.GameStateManager && window.GameStateManager.saveData, mon = gs && gs.party && gs.party[(+a.slot || 1) - 1];
+      if (!mon || !window.PokemonSummary || !window.PokemonSummary.nameMon) return next();
+      window.PokemonSummary.nameMon(ctx.scene, mon, { onDone: () => next() });
+    });
+
   return C;
 })();
