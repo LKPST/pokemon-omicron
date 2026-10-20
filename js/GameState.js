@@ -402,7 +402,9 @@ function createBattle(env) {
   function mvInfo(key) { const m = S.b && S.b.mv(key); return m ? { name: m.name, type: m.type, power: m.power, acc: m.accuracy, split: m.split, key: m.key, mv: m } : { name: pretty(key), type: 'TYPE_NORMAL', power: 0, acc: 0, split: 'STATUS', key, mv: null }; }
   const TYPE_COLOR = k => { const TT = env.types && env.types(), te = TT && TT.types && TT.types[k]; return (te && te.color) || TYPE_COL[pretty(k)] || '#a8a878'; };
   const BALL_KIND = k => { const n = NORMK(k); return n === 'GREATBALL' ? 'great' : n === 'ULTRABALL' ? 'ultra' : n === 'PREMIERBALL' ? 'premier' : n === 'MASTERBALL' ? 'master' : 'poke'; };
-  const isBall = k => /BALL$/.test(NORMK(k));
+  const BALL_RE = /^(MASTER|ULTRA|GREAT|POKE|SAFARI|NET|DIVE|NEST|REPEAT|TIMER|LUXURY|PREMIER|CHERISH|DUSK|HEAL|QUICK|FAST|LEVEL|LURE|HEAVY|LOVE|FRIEND|MOON|SPORT|BEAST|DREAM|PARK)BALL$/;
+  const ballDef = k => { try { const T = window.PokeballTables; const t = T && T.get ? T.get(k) : null; return t || null; } catch (e) { return null; } };
+  const isBall = k => !!ballDef(k) || BALL_RE.test(NORMK(k));   // (not Smoke Ball, Light Ball, Iron Ball ...)
   const STATUS_LAB = { psn: ['PSN', '#a040a0', 'white'], tox: ['PSN', '#782878', 'white'], brn: ['BRN', '#f08030', 'white'], par: ['PAR', '#f0c820', 'dark'], slp: ['SLP', '#8890a8', 'white'], frz: ['FRZ', '#58b8d8', 'white'] };
   const HEAL_ITEMS = new Set('POTION SUPERPOTION HYPERPOTION MAXPOTION FULLRESTORE ANTIDOTE PARALYZEHEAL AWAKENING BURNHEAL ICEHEAL FULLHEAL REVIVE MAXREVIVE XATTACK XDEFENSE XSPEED XSPATK XSPECIAL XSPDEF XACCURACY DIREHIT ETHER MAXETHER FRESHWATER SODAPOP LEMONADE MOOMOOMILK BERRYJUICE'.split(' '));
   const prettyItem = k => pretty(String(k).replace(/^ITEM_/, '')).replace(/\bPoke\b/, 'Poké');
@@ -431,7 +433,8 @@ function createBattle(env) {
     const E = BE(); if (!E) throw new Error('BattleEngine.js is not loaded (load it before BattleScene.js)');
     const ee = env.engine ? env.engine() : {};
     const foe = (o.foe || []).map(f => (f && f.species && f.moves && (f.HP != null || f.maxHP != null || f.Attack != null)) ? f : E.makeMon({ db: ee.db, moves: ee.moves, learn: ee.learn }, f.species || f.key, f.level || 5, Object.assign({}, f.opts || f, f.isShiny != null ? { shiny: f.isShiny ? 1 : 0 } : (f.shiny != null ? { shiny: f.shiny ? 1 : 0 } : {}), f.ivs === 31 ? { maxIV: true, ivs: undefined } : {})));
-    S.b = E.create(Object.assign({}, ee, { kind: o.kind || 'wild', trainerName: o.trainerName || 'Trainer', ai: o.ai, items: o.items, player: o.player || [], foe, seed: o.seed, money: o.money, noExp: o.noExp, expMultiplier: o.expMultiplier, weather: o.weather }));
+    S.b = E.create(Object.assign({}, ee, { kind: o.kind || 'wild', trainerName: o.trainerName || 'Trainer', ai: o.ai, items: o.items, player: o.player || [], foe, seed: o.seed, money: o.money, noExp: o.noExp, expMultiplier: o.expMultiplier, weather: o.weather,
+      fishing: o.fishing, surfing: o.surfing, mapType: o.mapType, night: o.night, noCatching: o.noCatching, catchRateBonus: o.catchRateBonus, criticalCapture: o.criticalCapture, catchingCharm: o.catchingCharm, catchDifficulty: o.catchDifficulty, alwaysCatchable: o.alwaysCatchable }));
     S.onEnd = o.onEnd || env.onEnd || null; S.bgKind = o.bg || 'grass'; S.mapWeather = o.weather || null; S.mapFx = !!o.weather; S.bag = normBag(o.bag != null ? o.bag : (env.bag && env.bag()));
     S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null;
     S.fade = 1; S.fadeDir = -1; S.done = false; S.editMode = false; S.finished = null; S.onFade = null; S.noAuto = false; S.nudged = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
@@ -582,31 +585,54 @@ function createBattle(env) {
   // ------------------------------------------------ catching
   function startBall(ev) {
     const shakes = ev.shakes | 0;
-    S.ballFx = { kind: BALL_KIND(ev.ball), shakes, caught: !!ev.caught, blocked: !!ev.blocked, t: 0 };
-    S.cur.dur = ev.blocked ? 1.2 : .55 + .35 + .5 + shakes * .75 + .6 + (ev.caught ? .5 : .35);
+    S.ballFx = { kind: BALL_KIND(ev.ball), shakes, caught: !!ev.caught, blocked: !!ev.blocked, crit: !!ev.crit, t: 0 };
+    S.cur.dur = ev.blocked ? 1.2 : BT.total(shakes, !!ev.caught);
   }
+  // ball timing, from pokeball.c (frames / 60): the throw, the ball opens + the Pokémon shrinks into it, 4 bounces, a pause, the shakes, then caught or released
+  const BT = { throw: .57, absorb: .65, drop: 1.35, pause: .5, shake: .8, tail: .3,
+    tShake(n) { return this.throw + this.absorb + this.drop + this.pause + n * this.shake + this.tail; },
+    total(n, caught) { return this.tShake(n) + (caught ? 1.0 : .45); } };
   function tickBall(c, dt) {
     const f = S.ballFx; if (!f) return; f.t = c.t; const F = side(1), sh = f.shakes;
-    const tThrow = .55, tAbs = tThrow + .35, tDrop = tAbs + .5, tShake = tDrop + sh * .75 + .3;
+    const tThrow = BT.throw, tAbs = tThrow + BT.absorb, tDrop = tAbs + BT.drop, tShake0 = tDrop + BT.pause, tShake = BT.tShake(sh);
     if (f.blocked) { if (c.t > .6) f.t = .6 - (c.t - .6); return; }
-    if (c.t < tThrow) F.scale = 1; else if (c.t < tAbs) F.scale = 1 - ease((c.t - tThrow) / .35); else if (c.t < tShake) F.scale = 0; else if (!f.caught) F.scale = ease(clamp((c.t - tShake) / .3));
+    if (c.t < tThrow + .17) F.scale = 1; else if (c.t < tAbs - .2) F.scale = 1 - ease(clamp((c.t - tThrow - .17) / .33)); else if (c.t < tShake) F.scale = 0; else if (!f.caught) F.scale = ease(clamp((c.t - tShake) / .3));
     if (f.caught && c.t >= tShake) F.scale = 0;
-    f.tThrow = tThrow; f.tAbs = tAbs; f.tDrop = tDrop; f.tShake = tShake;
+    f.tThrow = tThrow; f.tAbs = tAbs; f.tDrop = tDrop; f.tShake0 = tShake0; f.tShake = tShake;
+  }
+  // the ball picture: the table's sheet (3 frames of 16x16: closed, half open, open) with its background made transparent; the drawn ball if the sheet is missing
+  function ballSprite(c, item, cx, cy, frame, rotDeg, kind) {
+    const d = ballDef(item), path = d && d.spriteSheet, e = path ? getImg(path) : null;
+    if (e && e.ok) {
+      const fw = d.frameWidth || 16, fh = d.frameHeight || 16, ks = keyedIcon(e.img, path), n = Math.max(1, Math.floor(e.img.height / fh));
+      c.save(); c.translate(Math.round(cx), Math.round(cy)); if (rotDeg) c.rotate(rotDeg * Math.PI / 180); c.imageSmoothingEnabled = false;
+      c.drawImage(ks, 0, Math.min(n - 1, frame) * fh, fw, fh, -fw / 2, -fh / 2, fw, fh); c.restore(); return true;
+    }
+    if (e && !e.fail) return true;   // still loading
+    ball(c, Math.round(cx - 9), Math.round(cy - 9), kind || 'poke', 2); return true;
   }
   function drawBallFx(c) {
     const f = S.ballFx; if (!f || !S.cur || S.cur.ev.t !== 'ball') return;
-    const sx = 50, sy = ALLY.bottom - 38, tx = FOE.cx, ty = FOE.bottom - 24, gy = FOE.platY - 4, t = f.t;
-    let x, y, rot = 0;
-    if (f.blocked) { const p = clamp(t / .6); x = sx + (tx - sx) * p; y = sy + (ty - sy) * p - Math.sin(p * Math.PI) * 28; }
-    else if (t < f.tThrow) { const p = t / f.tThrow; x = sx + (tx - sx) * p; y = sy + (ty - sy) * p - Math.sin(p * Math.PI) * 38; }
-    else if (t < f.tAbs) { x = tx; y = ty + (t - f.tThrow) / .35 * 3; }
-    else if (t < f.tDrop) { const p = (t - f.tAbs) / .5; x = tx; y = ty + (gy - ty) * p * p; if (p > .85) y -= Math.sin((p - .85) / .15 * Math.PI) * 4; }
-    else if (t < f.tShake) { x = tx; y = gy; const k = t - f.tDrop; if (k < f.shakes * .75) { const ph = (k % .75) / .75; if (ph < .6) rot = Math.sin(ph / .6 * Math.PI * 2) * 4; } }
+    const sx = 50, sy = ALLY.bottom - 38, tx = FOE.cx, ty = FOE.bottom - 24, gy = FOE.platY - 4, t = f.t, item = S.cur.ev.ball;
+    let x, y, rot = 0, fr = 0;
+    if (f.blocked) { const p = clamp(t / .6); x = sx + (tx - sx) * p; y = sy + (ty - sy) * p - Math.sin(p * Math.PI) * 28; rot = p * 540; ballSprite(c, item, x, y, 0, rot, f.kind); return; }
+    const rolls = f.crit ? 5 : 3;
+    if (t < f.tThrow) { const p = t / f.tThrow; x = sx + (tx - sx) * p; y = sy + (ty - sy) * p - Math.sin(p * Math.PI) * 38; rot = -p * 360 * rolls; }
+    else if (t < f.tAbs) {   // reached the Pokémon: opens (2 frames), waits, closes again once it has shrunk in
+      x = tx; y = ty + Math.min(1, (t - f.tThrow) / .35) * 3; const k = t - f.tThrow; fr = k < .08 ? 1 : k < .17 ? 2 : (k > BT.absorb - .17 ? (k > BT.absorb - .08 ? 0 : 1) : 2); }
+    else if (t < f.tDrop) {   // falls and bounces 4 times: 32, 22, 12, 2 px (CFRU), each bounce a little quicker
+      let lift;
+      x = tx; const q = (t - f.tAbs) / BT.drop, H0 = [32, 22, 12, 2], lift0 = 32;
+      const parts = [['dn', 0, .30], ['up', 1, .13], ['dn', 1, .13], ['up', 2, .11], ['dn', 2, .11], ['up', 3, .09], ['dn', 3, .09]], tot = parts.reduce((s, p) => s + p[2], 0); let u = q * tot; lift = 0;
+      for (const [dir, bi, len] of parts) { if (u <= len) { const r = clamp(u / len); lift = dir === 'dn' ? (bi === 0 ? lift0 : H0[bi]) * (1 - r * r) : H0[bi] * Math.sin(r * Math.PI / 2); break; } u -= len; }
+      y = gy - lift; }
+    else if (t < f.tShake) {
+      x = tx; y = gy; const k = t - f.tShake0;
+      if (k > 0 && k < f.shakes * BT.shake) { const ph = (k % BT.shake) / BT.shake; if (ph < .55) { const s = Math.sin(ph / .55 * Math.PI * 2); x += Math.round(s * 3); rot = s * 25; } } }
     else { x = tx; y = gy; }
-    if (f.blocked && t < .02) return;
-    if (f.caught && t >= f.tShake) { ball(c, Math.round(x - 9), Math.round(y - 9), f.kind, 2); star(c, Math.round(x - 14 + Math.sin(t * 20) * 2), Math.round(y - 20)); star(c, Math.round(x + 10), Math.round(y - 16 + Math.cos(t * 17) * 2)); star(c, Math.round(x - 2), Math.round(y - 26)); return; }
+    if (f.caught && t >= f.tShake) { ballSprite(c, item, x, y, 0, 0, f.kind); star(c, Math.round(x - 14 + Math.sin(t * 20) * 2), Math.round(y - 20)); star(c, Math.round(x + 10), Math.round(y - 16 + Math.cos(t * 17) * 2)); star(c, Math.round(x - 2), Math.round(y - 26)); return; }
     if (t >= f.tShake) return;
-    ball(c, Math.round(x - 9 + rot), Math.round(y - 9), f.kind, 2);
+    ballSprite(c, item, x, y, fr, rot, f.kind);
   }
 
   // ================================================== flow
@@ -987,7 +1013,7 @@ function createBattle(env) {
     for (let i = 0; i < vis; i++) {
       const k = S.bagTop + i, it = S.bag[k]; if (!it) continue; const y = 30 + i * 20;
       if (k === S.bagSel) { pill(c, 9, y - 2, 222, 18, '#cfe0ff', 6); tri(c, 12 + Math.round(Math.sin(S.t * 9)), y + 6, 3, '#d04040'); }
-      if (isBall(it.item)) ball(c, 20, y, BALL_KIND(it.item), 1);
+      if (isBall(it.item)) ballSprite(c, it.item, 24, y + 5, 0, 0, BALL_KIND(it.item));
       T(c, it.name, 34, y + 3, 'dark'); TR(c, 'x' + it.count, 224, y + 3, 'dark');
     }
     if (S.bag.length > vis) { const th = 100 * vis / S.bag.length, ty = 28 + (100 - th) * (S.bagTop / Math.max(1, S.bag.length - vis)); rect(c, 232, 28, 2, 100, '#d0d4e4'); rect(c, 232, Math.round(ty), 2, Math.round(th), '#586080'); }
@@ -1169,7 +1195,7 @@ class BattleScene extends Phaser.Scene {
 
     const audioCache = {};
     const cry = sp => { const db = typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null; let e = db && db[sp]; if (!e && db) { const k = Object.keys(db).find(x => x.toUpperCase().replace(/[^A-Z0-9]/g, '') === String(sp).toUpperCase().replace(/[^A-Z0-9]/g, '')); e = k && db[k]; } if (!e || !e.cry) return; try { const a = audioCache[e.cry] || (audioCache[e.cry] = new Audio(e.cry)); a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => { /* blocked until a key press */ }); } catch (er) { /* no audio */ } };
-    const tables = typeof PokeballTables !== 'undefined' ? PokeballTables : null, first = (sv.party || []).find(m => m && m.species) || {}, bt = tables && (tables[first.ballId || 1] || tables[1]);
+    const tables = typeof PokeballTables !== 'undefined' ? PokeballTables : null, first = (sv.party || []).find(m => m && m.species) || {}, bt = tables && ((tables.get ? tables.get(first.ballId) : null) || tables[first.ballId || 1] || tables[1]);
     const core = BattleSceneCore({
       urlFor: p => p, engine: engineEnv, types: () => engineEnv().types, cry,
       bag: () => sv.bag || sv.items || sv.inventory || [],
@@ -1205,6 +1231,8 @@ class BattleScene extends Phaser.Scene {
         core.start({
           weather: battleWeather, kind, trainerName, player, foe, bag: d.bag, bg: d.bg || (tt && tt.bg) || 'grass', ai: tt && tt.ai, items: tt && tt.items, seed: d.seed, skipIntro: !!d.skipIntro,
           money: prize,
+          fishing: d.fishing, surfing: d.surfing, mapType: d.mapType, night: d.night, noCatching: d.noCatching,
+          catchRateBonus: d.catchRateBonus != null ? d.catchRateBonus : (BattleScene.CATCH || {}).catchRateBonus, criticalCapture: d.criticalCapture != null ? d.criticalCapture : (BattleScene.CATCH || {}).criticalCapture, catchingCharm: d.catchingCharm != null ? d.catchingCharm : (BattleScene.CATCH || {}).catchingCharm, catchDifficulty: d.catchDifficulty != null ? d.catchDifficulty : (BattleScene.CATCH || {}).catchDifficulty, alwaysCatchable: d.alwaysCatchable != null ? d.alwaysCatchable : (BattleScene.CATCH || {}).alwaysCatchable,
           foeTrainerSprite: d.foeTrainerSprite || (tt && tt.frontSprite) || (kind === 'trainer' && spriteId ? `graphics/trainer_front_sprites/${spriteId}.png` : ''),
           playerTrainerSprite: d.playerTrainerSprite || back,
           ballSheet: bt ? { path: bt.spriteSheet, fw: bt.frameWidth || 16, fh: bt.frameHeight || 16 } : undefined,
@@ -1308,6 +1336,8 @@ BattleScene._m = null;
 BattleScene.musicEl = () => { if (!BattleScene.MUSIC) return null; if (!BattleScene._m || BattleScene._m._src !== BattleScene.MUSIC) { const a = new Audio(BattleScene.MUSIC); a._src = BattleScene.MUSIC; a.preload = 'auto'; BattleScene._m = a; } return BattleScene._m; };
 try { BattleScene.musicEl(); } catch (e) { /* no audio */ }   // start downloading now
 // map weather -> battle weather (rain, sun, sand, hail change the rules; fog is only visual). Set BattleScene.USE_MAP_WEATHER = false to ignore the map.
+// catching options (CFRU) - per battle, the battle data can also have: fishing, surfing, mapType ('underwater' | 'underground'), night, noCatching
+BattleScene.CATCH = { criticalCapture: true, catchingCharm: false, catchRateBonus: 0, catchDifficulty: false, alwaysCatchable: false };
 BattleScene.USE_MAP_WEATHER = true;
 BattleScene.WEATHER_MAP = { rain: 'rain', thunderstorm: 'rain', sunny: 'sun', drought: 'sun', snow: 'hail', sandstorm: 'sand', fog: 'fog' };
 BattleScene.LAYOUT = null;                               // {topH, gap}; default: split the canvas height in two
