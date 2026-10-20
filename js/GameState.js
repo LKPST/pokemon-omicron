@@ -1032,6 +1032,18 @@ function createBattle(env) {
     const R = Math.max(1, Math.round(r)); c.fillRect(Math.round(x) - 1, Math.round(y) - R, 2, R * 2); c.fillRect(Math.round(x) - R, Math.round(y) - 1, R * 2, 2);
     c.fillStyle = '#ffd84a'; c.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2); c.restore();
   }
+  // a fainted Pokémon's icon: darkened grey, with a small red X at the top right
+  let darkCv = null;
+  function drawIconDark(c, sp, x, y, i) {
+    if (!darkCv) { darkCv = document.createElement('canvas'); darkCv.width = 32; darkCv.height = 32; }
+    const t = darkCv.getContext('2d'); t.clearRect(0, 0, 32, 32); t.globalCompositeOperation = 'source-over'; drawIconAt(t, sp, 0, 0, false, i);
+    t.globalCompositeOperation = 'source-atop'; t.fillStyle = 'rgba(70,72,90,.7)'; t.fillRect(0, 0, 32, 32); t.fillStyle = 'rgba(0,0,0,.25)'; t.fillRect(0, 0, 32, 32); t.globalCompositeOperation = 'source-over';
+    c.imageSmoothingEnabled = false; c.drawImage(darkCv, x, y);
+  }
+  function faintX(c, x, y) {
+    const m = ['1000001', '1100011', '0110110', '0011100', '0110110', '1100011', '1000001'];
+    for (let pass = 0; pass < 2; pass++) m.forEach((r, j) => { for (let k = 0; k < 7; k++) if (r[k] === '1') { c.fillStyle = pass ? '#ff4a4a' : '#1a0a10'; if (pass) c.fillRect(x + k, y + j, 1, 1); else c.fillRect(x + k - 1, y + j - 1, 3, 3); } });
+  }
   function partyStrip(c) {
     const P = CF.party; if (!P.show || !S.b) return;
     const party = S.b.sides[0].party || [], gap = P.gap, T0 = S.stripPlayed || S.stripT == null ? 9 : S.stripT;   // the entrance plays once per battle
@@ -1046,14 +1058,14 @@ function createBattle(env) {
       const faint = M.hp <= 0, it = t - .24;   // then the Pokémon icon appears with a sparkle
       if (it > 0) {
         const is = bk(it / .22);
-        c.save(); if (faint) c.globalAlpha = .45; c.translate(x + 16, y + 34); c.scale(is, is); c.translate(-(x + 16), -(y + 34)); drawIconAt(c, M.species, x, y, false, i);
+        c.save(); c.translate(x + 16, y + 34); c.scale(is, is); c.translate(-(x + 16), -(y + 34)); if (faint) drawIconDark(c, M.species, x, y, i); else drawIconAt(c, M.species, x, y, false, i);
         if (it < .22) { c.globalAlpha = (1 - it / .22) * .6; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x + 16, y + 18, 14, 0, 6.2832); c.fill(); }   // a quick white shine on arrival
         c.restore();
         if (it < .4 && !sparkImg(c, x + 16, y + 18, 32, it)) { const p = it / .4, a = Math.sin(p * Math.PI); [[x + 5, y + 6, 1], [x + 27, y + 9, .8], [x + 10, y + 28, .7], [x + 26, y + 26, 1.1]].forEach(([sx, sy, sc]) => sparkle(c, sx, sy - p * 4, (2 + 3 * sc) * a, a)); }   // (the drawn one only if the sheet is missing)
       }
       const bw = 24, fr = clamp(M.hp / Math.max(1, M.maxhp));
       if (it > .1) { rect(c, x + 4, y + 34, bw, 3, '#12121c'); if (!faint) rect(c, x + 5, y + 35, Math.max(0, Math.round((bw - 2) * fr)), 1, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838');
-        const st = M.status && STATUS_LAB[M.status]; if (st && !faint) rect(c, x + 24, y + 4, 6, 6, st[1]); }
+        const st = M.status && STATUS_LAB[M.status]; if (st && !faint) rect(c, x + 24, y + 4, 6, 6, st[1]); if (faint) faintX(c, x + 23, y + 3); }
     }
   }
   function drawBottom(c) {
