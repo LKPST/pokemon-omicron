@@ -1012,10 +1012,19 @@ function createBattle(env) {
   // the player's party as icons, just above the menu buttons
   // sparkle.png: 6 frames of 32x32 stacked vertically (graphics/poke_ball/sparkle.png); the drawn 4-point one is used if the file is missing
   const SPARKS = ['graphics/poke_ball/sparkle.png', 'graphics/poke_ball/Sparkle.png'], SPARK = SPARKS[0];   // both spellings are tried (a server can be case-sensitive)
-  function sparkImg(c, cx, cy, size, p) {
+  // the sheet's background colour (the first pixel) is made transparent once, like the other sprites
+  function sparkSheet() {
+    if (S.sparkKeyed) return S.sparkKeyed;
     let e = null; for (const path of SPARKS) { const g = getImg(path); if (g && g.ok) { e = g; break; } }
-    if (!e) { if (!S.sparkWarned && SPARKS.every(path => { const g = getImg(path); return g && g.fail; })) { S.sparkWarned = true; console.warn('[BattleScene] sparkle sheet not found: tried ' + SPARKS.join(' and ') + ' (relative to index.html); using the drawn sparkle'); } return false; }
-    const n = 6, fh = Math.floor(e.img.height / n) || 32, fw = e.img.width, f = Math.min(n - 1, Math.max(0, Math.floor(p * n))); c.drawImage(e.img, 0, f * fh, fw, fh, Math.round(cx - size / 2), Math.round(cy - size / 2), size, size); return true;
+    if (!e) { if (!S.sparkWarned && SPARKS.every(path => { const g = getImg(path); return g && g.fail; })) { S.sparkWarned = true; console.warn('[BattleScene] sparkle sheet not found: tried ' + SPARKS.join(' and ') + ' (relative to index.html); using the drawn sparkle'); } return null; }
+    const w = e.img.width, h = e.img.height, cv = document.createElement('canvas'); cv.width = w; cv.height = h; const x = cv.getContext('2d', { willReadFrequently: true }); x.drawImage(e.img, 0, 0);
+    try { const id = x.getImageData(0, 0, w, h), d = id.data, r0 = d[0], g0 = d[1], b0 = d[2]; if (d[3] > 0) { for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - r0) < 6 && Math.abs(d[i + 1] - g0) < 6 && Math.abs(d[i + 2] - b0) < 6) d[i + 3] = 0; x.putImageData(id, 0, 0); } } catch (er) { /* keep as is */ }
+    return S.sparkKeyed = { cv, w, h };
+  }
+  // ONE sparkle, all 6 frames in order at 20 fps (like ThrowPokeBallAnim); p = seconds since it started
+  function sparkImg(c, cx, cy, size, sec) {
+    const sh = sparkSheet(); if (!sh) return false; const n = 6, f = Math.floor(sec * 20); if (f < 0 || f >= n) return true;
+    const fh = Math.floor(sh.h / n) || 32; c.imageSmoothingEnabled = false; c.drawImage(sh.cv, 0, f * fh, sh.w, fh, Math.round(cx - size / 2), Math.round(cy - size / 2), size, size); return true;
   }
   // a 4-point sparkle
   function sparkle(c, x, y, r, a) {
@@ -1040,8 +1049,7 @@ function createBattle(env) {
         c.save(); if (faint) c.globalAlpha = .45; c.translate(x + 16, y + 34); c.scale(is, is); c.translate(-(x + 16), -(y + 34)); drawIconAt(c, M.species, x, y, false, i);
         if (it < .22) { c.globalAlpha = (1 - it / .22) * .6; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x + 16, y + 18, 14, 0, 6.2832); c.fill(); }   // a quick white shine on arrival
         c.restore();
-        const pts = [[x + 5, y + 6, 16], [x + 27, y + 9, 13], [x + 10, y + 28, 12], [x + 26, y + 26, 17]];
-        pts.forEach(([sx, sy, sz], n) => { const p = (it - n * .07) / .6; if (p <= 0 || p >= 1) return; if (!sparkImg(c, sx, sy, sz, p)) { const a = Math.sin(p * Math.PI); sparkle(c, sx, sy - p * 4, (2 + 3 * sz / 20) * a, a); } });
+        if (it < .4 && !sparkImg(c, x + 16, y + 18, 32, it)) { const p = it / .4, a = Math.sin(p * Math.PI); [[x + 5, y + 6, 1], [x + 27, y + 9, .8], [x + 10, y + 28, .7], [x + 26, y + 26, 1.1]].forEach(([sx, sy, sc]) => sparkle(c, sx, sy - p * 4, (2 + 3 * sc) * a, a)); }   // (the drawn one only if the sheet is missing)
       }
       const bw = 24, fr = clamp(M.hp / Math.max(1, M.maxhp));
       if (it > .1) { rect(c, x + 4, y + 34, bw, 3, '#12121c'); if (!faint) rect(c, x + 5, y + 35, Math.max(0, Math.round((bw - 2) * fr)), 1, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838');
