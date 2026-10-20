@@ -1172,7 +1172,10 @@ class OverworldScene extends Phaser.Scene {
 
     if (!this.player) {
       this.player = this.add.sprite(px, py, 'brendan_ow', 0).setOrigin(0.5, 0.85);
-      this.player.direction = 'down';
+      const sd0 = window.GameStateManager && window.GameStateManager.saveData;
+      const dir0 = ['up', 'down', 'left', 'right'].includes(this.lastDir) ? this.lastDir : (sd0 && ['up', 'down', 'left', 'right'].includes(sd0.facing) ? sd0.facing : 'down');
+      this.player.direction = dir0;   // the way the player was facing before the battle / menu / map change
+      if (window.getOverworldFrame) this.player.setFrame(window.getOverworldFrame(dir0, 0));
     } else {
       this.player.setPosition(px, py);
     }
@@ -1633,6 +1636,7 @@ class OverworldScene extends Phaser.Scene {
     if (window.OWWild) window.OWWild.update(this, time, delta);           // [WILD] wild Pokémon on grass (behavior 5)
 
     // [CHANGED] depth is updated every frame (also while walking), before the early return
+    if (this.player && this.player.direction) { this.lastDir = this.player.direction; const sd1 = window.GameStateManager && window.GameStateManager.saveData; if (sd1) sd1.facing = this.lastDir; }
     if (this.player && this.npcs) {
       this.player.setDepth(this.player.y);
       this.npcs.forEach(npc => npc.setDepth(npc.y));
