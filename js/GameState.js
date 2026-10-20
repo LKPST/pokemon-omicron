@@ -644,7 +644,7 @@ function createBattle(env) {
   const HUDM = ['cmd', 'move', 'party', 'bag', 'learnAsk', 'learnPick'];
   function update(dt) {
     S.t += dt;
-    if (window.StartMenu && window.StartMenu.tickBg) window.StartMenu.tickBg(dt);
+    S.lowT = (S.lowT || 0) + dt; if (window.StartMenu && window.StartMenu.tickBg) window.StartMenu.tickBg(dt);
     { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode; }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
     for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
@@ -891,10 +891,23 @@ function createBattle(env) {
   }
 
   // ================================================== drawing: BOTTOM surface (messages + menus)
+  // the same animated lower-screen background as the overworld (StartMenu.drawBg); this copy is used only if an older StartMenu.js is loaded
+  function lowerBgCopy(c, W2, H2, t) {
+    const g0 = c.createLinearGradient(0, 0, 0, H2); g0.addColorStop(0, '#1a1e2c'); g0.addColorStop(1, '#0c0e16'); c.fillStyle = g0; c.fillRect(0, 0, W2, H2);
+    c.save(); c.beginPath(); c.rect(0, 0, W2, H2); c.clip();
+    const off = (t * 9) % 36; c.fillStyle = 'rgba(120,140,200,.055)';
+    for (let k = -8; k < W2 / 18 + 8; k++) { const x0 = k * 36 + off - H2; c.beginPath(); c.moveTo(x0, 0); c.lineTo(x0 + 14, 0); c.lineTo(x0 + 14 + H2, H2); c.lineTo(x0 + H2, H2); c.closePath(); c.fill(); }
+    for (let i = 0; i < 9; i++) { const sp = 6 + (i * 7) % 9, px = (i * 53 + 17) % W2, py = H2 + 14 - ((t * sp + i * 41) % (H2 + 28)), r = 4 + (i * 5) % 9, a = .05 + (i % 3) * .015;
+      c.strokeStyle = 'rgba(190,205,255,' + a * 2.2 + ')'; c.lineWidth = 1; c.beginPath(); c.arc(px + Math.sin(t * .7 + i) * 4, py, r, 0, 6.2832); c.stroke();
+      c.fillStyle = 'rgba(190,205,255,' + a + ')'; c.beginPath(); c.arc(px + Math.sin(t * .7 + i) * 4, py, r - 1, 0, 6.2832); c.fill(); }
+    const gx = W2 / 2 + Math.sin(t * .4) * W2 * .3, g = c.createRadialGradient(gx, H2 * .4, 4, gx, H2 * .4, W2 * .6); g.addColorStop(0, 'rgba(80,110,200,.16)'); g.addColorStop(1, 'rgba(80,110,200,0)'); c.fillStyle = g; c.fillRect(0, 0, W2, H2);
+    c.restore();
+  }
   function drawBottomBg(c) {
-    if (window.StartMenu && window.StartMenu.drawBg) { try { if (window.StartMenu.drawBg(c, W, H)) return; } catch (e) { /* use the plain one */ } }
-    rect(c, 0, 0, W, H, '#262b3c');
-    for (let y = -8; y < H; y += 8) { c.fillStyle = '#2b3145'; for (let x = 0; x < W; x += 16) c.fillRect(x + ((y >> 3) & 1) * 8, y + 4, 8, 4); }
+    const SM = window.StartMenu;
+    if (SM && SM.drawBg) { try { if (SM.drawBg(c, W, H)) return; } catch (e) { /* fall through to the copy */ } }
+    if (!S.bgWarned) { S.bgWarned = true; console.warn('[BattleScene] StartMenu.drawBg is missing or has no idle screen yet: drawing the lower-screen background with its own copy (is js/StartMenu.js the latest version?)'); }
+    lowerBgCopy(c, W, H, (SM && SM.bgT) || S.lowT || 0);
   }
   function msgBox(c, y, h) {
     const m = CF.msg; y = y == null ? m.y : y; h = h == null ? m.h : h;
