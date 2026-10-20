@@ -641,8 +641,11 @@ function createBattle(env) {
   }
 
   // ================================================== update
+  const HUDM = ['cmd', 'move', 'party', 'bag', 'learnAsk', 'learnPick'];
   function update(dt) {
     S.t += dt;
+    if (window.StartMenu && window.StartMenu.tickBg) window.StartMenu.tickBg(dt);
+    { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode; }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
     for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
     if (S.fadeDir) { S.fade = clamp(S.fade + S.fadeDir * dt * 1.5); if ((S.fadeDir < 0 && S.fade <= 0) || (S.fadeDir > 0 && S.fade >= 1)) { S.fadeDir = 0; const f = S.onFade; S.onFade = null; if (f) f(); } }
@@ -889,6 +892,7 @@ function createBattle(env) {
 
   // ================================================== drawing: BOTTOM surface (messages + menus)
   function drawBottomBg(c) {
+    if (window.StartMenu && window.StartMenu.drawBg) { try { if (window.StartMenu.drawBg(c, W, H)) return; } catch (e) { /* use the plain one */ } }
     rect(c, 0, 0, W, H, '#262b3c');
     for (let y = -8; y < H; y += 8) { c.fillStyle = '#2b3145'; for (let x = 0; x < W; x += 16) c.fillRect(x + ((y >> 3) & 1) * 8, y + 4, 8, 4); }
   }
@@ -1009,14 +1013,20 @@ function createBattle(env) {
   }
   function drawBottom(c) {
     drawBottomBg(c);
-    if (S.mode === 'intro') return;
-    if (!['move', 'party', 'bag', 'learnPick'].includes(S.mode)) partyStrip(c);
-    if (S.mode === 'cmd') cmdButtons(c);
-    else if (S.mode === 'move') { const P = S.b.active(0); moveInfoBox(c, P); moveButtons(c, P, null, S.mv); }
-    else if (S.mode === 'party') partyBottom(c);
-    else if (S.mode === 'bag') bagBottom(c);
-    else if (S.mode === 'learnAsk' || S.mode === 'learnPick') learnBottom(c);
-    // (play / end / others: the bottom screen stays empty, the text box is on the top screen)
+    const k = S.botIn || 0; if (k <= 0.001 || !S.botMode) return;
+    const real = S.mode, m = S.botMode, bk = x => { x = clamp(x); const t = x - 1; return 1 + t * t * (2.2 * t + 1.2); };   // ease-out-back: a small overshoot
+    const out = real !== m && !HUDM.includes(real);   // sliding out while the battle goes on
+    S.mode = m;
+    try {
+      c.save(); c.translate(0, Math.round((1 - (out ? k : bk(k))) * 80));
+      if (!['move', 'party', 'bag', 'learnPick'].includes(m)) { c.save(); c.translate(Math.round(-(1 - bk(k * 1.25)) * 40), 0); partyStrip(c); c.restore(); }
+      if (m === 'cmd') { c.save(); c.translate(Math.round((1 - bk(k * 1.3 - .15)) * 70), 0); cmdButtons(c); c.restore(); }
+      else if (m === 'move') { const P = S.b.active(0); moveInfoBox(c, P); moveButtons(c, P, null, S.mv); }
+      else if (m === 'party') partyBottom(c);
+      else if (m === 'bag') bagBottom(c);
+      else if (m === 'learnAsk' || m === 'learnPick') learnBottom(c);
+      c.restore();
+    } finally { S.mode = real; }
   }
   function fadeOverlay(c) { if (S.fade > 0) { c.fillStyle = `rgba(0,0,0,${clamp(S.fade)})`; c.fillRect(0, 0, W, H); } }
 
