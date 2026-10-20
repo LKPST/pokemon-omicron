@@ -109,7 +109,7 @@ let repo={},active='',tool='pencil',brush={tid:0,cells:[['0|0']],frames:new Set(
 let hist=[],redoS=[],pending=false,unsaved=false,fileHandle=null,hover=null,stroke=null,rectA=null,drag=null,pan=null,pal=null,spaceDown=false,showGrid=true,showSpr=true;
 const cv=$('cv'),ctx=cv.getContext('2d');
 const EMPTY=l=>l>1?'':'0|0';
-// cell = "tileID|frameID|behavior"  0 passable · 1 blocked · 2 passable, NPC below · 3 surfable · 4 diveable
+// cell = "tileID|frameID|behavior"  0 passable · 1 blocked · 2 passable, NPC below · 3 surfable · 4 diveable · 5 grass (wild Pokémon roam and fight here; passable)
 const passOf=v=>parseInt((v||'').split('|')[2])||0;
 const setPass=(v,p)=>{const[a,b]=v.split('|');return `${a}|${b||0}|${p}`};
 let pass=0,clip=null;
@@ -196,7 +196,7 @@ function draw(){const W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W||cv.hei
   if($('borT').checked)drawBorders(L,W,H);
   for(const[k,m]of Object.entries(repo)){const p=L[k],{width:w,height:h}=m.dimensions;
     for(let l=1;l<=5;l++){if(viewMode==='active'&&l!==layer)continue;if(viewMode==='below'&&l>layer)continue;const g=m['tileData_'+l];for(let r=0;r<h;r++)for(let c=0;c<w;c++)drawTile(ctx,g[r][c],(p.x+c)*TS,(p.y+r)*TS,TS)}
-    if($('bhvT').checked){const g=m['tileData_'+layer],C=['','rgba(255,0,0,.35)','rgba(80,120,255,.35)','rgba(0,220,220,.35)','rgba(170,0,255,.35)'];
+    if($('bhvT').checked){const g=m['tileData_'+layer],C=['','rgba(255,0,0,.35)','rgba(80,120,255,.35)','rgba(0,220,220,.35)','rgba(170,0,255,.35)','rgba(60,210,60,.38)'];
       for(let r=0;r<h;r++)for(let c=0;c<w;c++){const q=passOf(g[r][c]);if(q){ctx.fillStyle=C[q];ctx.fillRect((p.x+c)*TS,(p.y+r)*TS,TS,TS);ctx.fillStyle='#fff';ctx.font='bold 12px monospace';ctx.fillText(q,(p.x+c)*TS+4,(p.y+r)*TS+14)}}}
     if(showGrid&&cam.z>.4){ctx.strokeStyle='rgba(255,255,255,.13)';ctx.lineWidth=1/cam.z;ctx.beginPath();
       for(let c=0;c<=w;c++){ctx.moveTo((p.x+c)*TS,p.y*TS);ctx.lineTo((p.x+c)*TS,(p.y+h)*TS)}
@@ -766,7 +766,7 @@ if(window.__missing&&window.__missing.length)setTimeout(()=>{$('status').textCon
 window.addEventListener('resize',redraw);window.addEventListener('beforeunload',e=>{if(unsaved||sDirty){e.preventDefault();e.returnValue=''}});
 $('tabs').innerHTML=[['env','Environment'],['border','Border'],['events','Events'],['conn','Connections'],['wild','Wild'],['props','Properties'],['scripts','Scripts']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
 $('tabs').onclick=e=>{if(e.target.dataset.t)setTab(e.target.dataset.t)};
-$('layerBtns').innerHTML=[1,2,3,4,5].map(n=>`<button data-l="${n}">L${n}${n==1?' ▼ bottom':n==5?' ▲ top':''}</button>`).join('')+'<select id="viewMode"><option value="all">Show all layers</option><option value="below">Active + below</option><option value="active">Active only</option></select><select id="passSel"><option value="0">Behavior 0 · Passable</option><option value="1">1 · Blocked</option><option value="2">2 · Passable, NPC below</option><option value="3">3 · Surfable</option><option value="4">4 · Diveable</option></select><label style="flex-direction:row;gap:4px"><input type="checkbox" id="copyAll" checked> copy all layers</label><label style="flex-direction:row;gap:4px"><input type="checkbox" id="bhvT" checked> show behavior</label>';
+$('layerBtns').innerHTML=[1,2,3,4,5].map(n=>`<button data-l="${n}">L${n}${n==1?' ▼ bottom':n==5?' ▲ top':''}</button>`).join('')+'<select id="viewMode"><option value="all">Show all layers</option><option value="below">Active + below</option><option value="active">Active only</option></select><select id="passSel"><option value="0">Behavior 0 · Passable</option><option value="1">1 · Blocked</option><option value="2">2 · Passable, NPC below</option><option value="3">3 · Surfable</option><option value="4">4 · Diveable</option><option value="5">5 · Grass (wild Pokémon)</option></select><label style="flex-direction:row;gap:4px"><input type="checkbox" id="copyAll" checked> copy all layers</label><label style="flex-direction:row;gap:4px"><input type="checkbox" id="bhvT" checked> show behavior</label>';
 $('layerBtns').onclick=e=>{if(e.target.dataset.l)setLayer(+e.target.dataset.l)};
 $('layerBtns').onchange=e=>{const id=e.target.id;if(id==='viewMode'){viewMode=e.target.value;redraw()}
   else if(id==='passSel'){pass=+e.target.value;brush.cells=brush.cells.map(r=>r.map(v=>v?setPass(v,pass):v));info();redraw()}else if(id==='bhvT')redraw()};
