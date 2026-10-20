@@ -10,6 +10,7 @@
 //
 // Settings (change from the console while testing):
 //   OWWild.enabled = true | false      OWWild.max = 15         most wild Pokémon around the screen at once
+//   OWWild.fit = true                  every Pokémon is drawn at the same size class (art bigger than OWSprites.artMax = 32 px is shrunk; see OWSprites.fitScale)
 //   OWWild.log = true                  OWWild.debug()          prints the state
 //   OWWild.shinyOdds = 4096            (1 in N)                OWWild.fill = 0.25   at most this share of the visible grass tiles is occupied
 //   OWWild.spawnEvery = 1200 (ms)      OWWild.safeRadius = 3   no spawns this close (tiles) to the player
@@ -20,7 +21,7 @@
 (function () {
   'use strict';
   const W = {
-    enabled: true, max: 15, log: true, shinyOdds: 4096, fill: 0.25, spawnEvery: 1200, safeRadius: 3, margin: 3, walkMs: 420,
+    enabled: true, fit: true, max: 15, log: true, shinyOdds: 4096, fill: 0.25, spawnEvery: 1200, safeRadius: 3, margin: 3, walkMs: 420,
     hours: { dawn: [4, 6], morning: [6, 12], afternoon: [12, 18] },
     scene: null, mapKey: null, grass: new Set(), mons: [], loading: 0, nextSpawn: 0, busy: false, why: '', list: [], lastBucket: '', warned: {},
   };
@@ -37,7 +38,8 @@
 
   function reset(scene) {
     for (const m of W.mons) kill(m);
-    W.mons = []; W.scene = scene; W.mapKey = null; W.grass = new Set(); W.list = []; W.busy = false; W.nextSpawn = 0; W.lastBucket = '';
+    W.mons = []; if (W.scene !== scene) scene.events.once('shutdown', () => { for (const m of W.mons) kill(m); W.mons = []; W.scene = null; W.mapKey = null; W.busy = false; });
+    W.scene = scene; W.mapKey = null; W.grass = new Set(); W.list = []; W.busy = false; W.nextSpawn = 0; W.lastBucket = '';
   }
   function kill(m) { m.dead = true; if (m.tw) { try { m.tw.stop(); } catch (_) { } } if (m.spr) { window.OWSprites.destroy(m.spr); m.spr = null; } if (m.bang) { m.bang.destroy(); m.bang = null; } }
 
@@ -87,7 +89,7 @@
       const spr = await window.OWSprites.create(scene, -999, -999, m.sp, { shiny: m.shiny, dir: m.dir });
       if (!spr || m.dead || W.scene !== scene || !scene.sys || !scene.add) { if (spr) window.OWSprites.destroy(spr); m.dead = true; return; }
       const F = window.OWFollower || {};
-      spr.setOrigin(0.5, 1).setScale(Number(F.scale) || 2);
+      spr.setOrigin(0.5, 1).setScale(W.fit ? window.OWSprites.fitScale(m.sp, Number(F.scale) || 2) : (Number(F.scale) || 2));
       const p = toWorld(scene, gx, gy); m.oy = F.offsetY === undefined ? 14 : F.offsetY;
       spr.setPosition(p.x, p.y + m.oy).setDepth(p.y); m.spr = spr;
       window.OWSprites.setFrame(spr, m.dir, 0, m.shiny);
