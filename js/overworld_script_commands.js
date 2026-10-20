@@ -140,7 +140,8 @@ window.OverworldScriptCommands = (() => {
         window.GameStateManager.opponentPartyMon1 = { species: m.species || old.species, level: m.level || 5, isShiny: m.isShiny !== undefined ? m.isShiny : 1 };
       }
       ctx.finish();   // the script is over, the scene is about to change
-      scene.scene.start('BattleScene', { name: a.trainerID, trainerID: a.trainerID, matchType: a.matchType || 'single', pokemon });   // no `pokemon` given: BattleScene reads the team from TrainerTable
+      const bd = { name: a.trainerID, trainerID: a.trainerID, matchType: a.matchType || 'single', pokemon };
+      if (window.BattleTransition) window.BattleTransition.start(scene, 'BattleScene', bd); else scene.scene.start('BattleScene', bd);   // js/BattleTransition.js: flash + spin-out, then the battle   // no `pokemon` given: BattleScene reads the team from TrainerTable
     });
 
   // ------------------------------------------------------------------ items (js/ItemSystem.js, tables/ItemTables.js)
