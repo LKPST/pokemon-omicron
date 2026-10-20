@@ -19,6 +19,12 @@
 'use strict';
 
 // ------------------------------------------------------------------------------------------------ small helpers
+
+// ---- catching (see ballDef / baseCatchOdds below)
+const ULTRA_BEASTS = new Set('NIHILEGO BUZZWOLE PHEROMOSA XURKITREE CELESTEELA KARTANA GUZZLORD NECROZMA POIPOLE NAGANADEL STAKATAKA BLACEPHALON'.split(' ').concat(['NECROZMADUSKMANE', 'NECROZMADAWNWINGS', 'NECROZMAULTRA']));
+const MOON_LINE = new Set('NIDORANF NIDORINA NIDOQUEEN NIDORANM NIDORINO NIDOKING CLEFFA CLEFAIRY CLEFABLE IGGLYBUFF JIGGLYPUFF WIGGLYTUFF SKITTY DELCATTY MUNNA MUSHARNA'.split(' '));
+const CRIT_TABLE = [[30, 0], [150, 5], [300, 10], [450, 15], [600, 20], [0xFFFF, 25]];   // sCriticalCaptureSpeciesCounts (Pokédex caught -> multiplier x10)
+const BALL_FALLBACK = (() => { const o = {}; for (const e of 'POKEBALL:10 GREATBALL:15 ULTRABALL:20 MASTERBALL:255:G SAFARIBALL:15 NETBALL:10:net DIVEBALL:10:dive NESTBALL:10:nest REPEATBALL:10:repeat TIMERBALL:10:timer LUXURYBALL:10 PREMIERBALL:10 CHERISHBALL:10 DUSKBALL:10:dusk HEALBALL:10:-:heal QUICKBALL:10:quick FASTBALL:10:fast LEVELBALL:10:level LUREBALL:10:lure HEAVYBALL:10:heavy LOVEBALL:10:love FRIENDBALL:10:-:friend MOONBALL:10:moon SPORTBALL:15 BEASTBALL:10:beast DREAMBALL:10:dream PARKBALL:10:-:-:G'.split(' ')) { const [n, b, r, a, g] = e.split(':'); o[n] = { item: 'ITEM_' + n.replace(/BALL$/, '_BALL'), bonus: +b, rule: r && r !== '-' && r !== 'G' ? r : undefined, after: a && a !== '-' ? a : undefined, guaranteed: r === 'G' || g === 'G' }; } return o; })();
 const NORM = s => String(s == null ? '' : s).toUpperCase().replace(/^(ABILITY|ITEM|MOVE|SPECIES|TYPE|NATURE)_/, '').replace(/[^A-Z0-9]/g, '');
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const imul = Math.imul;
@@ -1203,20 +1209,79 @@ class Battle {
     this.ranAttempts++; const ps = this.effSpeed(P), fs = this.effSpeed(F);
     let ok = ps >= fs || P.ability === 'RUNAWAY' || this.hasItem(P, 'SMOKEBALL'); if (!ok) { const f = Math.floor(ps * 128 / fs) + 30 * (this.ranAttempts - 1); ok = f > 255 || this.rnd(256) < f; }
     if (ok) { this.finish('ran', 'Got away safely!'); return true; } this.msg("Can't escape!"); return false; }
+  // ---------------------------------------------------------------- catching: ported from CFRU (catching.c: atkEF_handleballthrow, GetBaseBallCatchOdds, CriticalCapture)
+  // The balls themselves (bonus, rule, guaranteed, after) are read from tables/PokeballTables.js; BALL_FALLBACK below is used if that table is not loaded.
+  ballDef(ball) {
+    const T = typeof PokeballTables !== 'undefined' ? PokeballTables : (typeof window !== 'undefined' ? window.PokeballTables : null);
+    let t = T && T.get ? T.get(ball) : null; if (t && t.item && NORM(t.item) !== NORM(ball) && NORM(ball) !== '' && !/^\d+$/.test(String(ball))) t = null;   // a different item that merely looks similar
+    return t || BALL_FALLBACK[NORM(ball)] || null; }
+  weightOf(species) {   // hectograms (the Pokédex table, as CFRU's GetPokedexHeightWeight)
+    try { const D = typeof Dex !== 'undefined' ? Dex : window.Dex, E = typeof DexEntries !== 'undefined' ? DexEntries : window.DexEntries, n = D.num(species); const r = E && E[n - 1]; return r && r[0] === n ? (+r[4] || 0) : ((E && E.find(x => x[0] === n)) || [])[4] || 0; } catch (e) { return 0; } }
+  dexCaught(species) { try { const D = typeof Dex !== 'undefined' ? Dex : window.Dex; return !!D.data().caught[D.num(species)]; } catch (e) { return false; } }
+  dexCaughtCount() { try { const D = typeof Dex !== 'undefined' ? Dex : window.Dex; return D.counts().caught; } catch (e) { return 0; } }
+  isNight() { const o = this.opts; if (o.night != null) return !!o.night; const h = new Date().getHours(); return h >= 20 || h < 6; }
+  // GetBaseBallCatchOdds
+  baseCatchOdds(ball, F) {
+    const def = this.ballDef(ball) || { bonus: 10 }, P = this.active(0), o = this.opts, turn = Math.max(0, this.turnNo - 1);   // CFRU's battleTurnCounter is 0 during the first turn
+    const sp = F.spData || {}, nsp = NORM(F.species), atkLevel = P.level, defLevel = F.level;
+    let rate = sp.catchRate != null ? sp.catchRate : 45, m = def.bonus != null ? def.bonus : 10;
+    if (/SAFARI/.test(NORM(def.item || ball)) && this.kind === 'safari' && this.safariCatchFactor != null) rate = (this.safariCatchFactor * 1275) % 100;
+    switch (def.rule) {
+      case 'net': m = (this.isType(F, 'TYPE_WATER') || this.isType(F, 'TYPE_BUG')) ? 35 : 10; break;
+      case 'dive': m = (o.mapType === 'underwater' || o.fishing || o.surfing) ? 35 : 10; break;
+      case 'nest': m = defLevel < 31 ? 41 - defLevel : 10; break;
+      case 'repeat': m = this.dexCaught(F.species) ? 35 : 10; break;
+      case 'timer': m = Math.min(40, 10 + turn * 3); break;
+      case 'level': m = atkLevel <= defLevel ? 10 : atkLevel < defLevel * 2 ? 20 : atkLevel < defLevel * 4 ? 40 : 80; break;
+      case 'lure': m = o.fishing ? 40 : 10; break;
+      case 'moon': m = MOON_LINE.has(nsp) ? 40 : 10; break;
+      case 'love': { m = 10; const D = typeof Dex !== 'undefined' ? Dex : window.Dex; let same = false; try { same = D.num(P.species) && D.num(P.species) === D.num(F.species); } catch (e) { same = P.species === F.species; }
+        if (same && P.gender && F.gender && P.gender !== F.gender) m = 80; break; }
+      case 'heavy': { m = 10; const w = this.weightOf(F.species); if (w) { if (w < 1000) { const old = rate; rate -= 20; if (rate < 0 || rate > old) rate = 1; } else if (w >= 2000 && w < 3000) rate += 20; else if (w > 3000) rate += 30; } rate = Math.max(1, Math.min(255, rate)); break; }
+      case 'fast': m = (sp.baseSpeed || 0) >= 100 ? 40 : 10; break;
+      case 'dusk': m = (o.mapType === 'underground' || this.isNight()) ? 30 : 10; break;   // CFRU DUSK_BALL_MULTIPLIER
+      case 'quick': m = turn === 0 ? 50 : 10; break;
+      case 'dream': m = (F.status === 'slp' || NORM(F.ability) === 'COMATOSE') ? 40 : 10; break;
+      case 'beast': m = ULTRA_BEASTS.has(nsp) ? 50 : 1; break;
+    }
+    if (o.catchRateBonus > 0) m += Math.floor(m * o.catchRateBonus / 100);   // VAR_CATCH_RATE_BONUS
+    if (ULTRA_BEASTS.has(nsp) && def.rule !== 'beast') m = 1;   // every ball except the Beast Ball has a hard time with Ultra Beasts
+    return Math.floor((Math.floor(rate * m / 10) * (F.maxhp * 3 - F.hp * 2)) / (3 * F.maxhp)); }
+  // the whole chain of modifiers of atkEF_handleballthrow; returns the final odds
   catchOdds(ball, F) {
-    const rate = F.spData && F.spData.catchRate != null ? F.spData.catchRate : 45; const n = NORM(ball) || 'POKEBALL'; const P = this.active(0);
-    let mult = { POKEBALL: 1, GREATBALL: 1.5, ULTRABALL: 2, SAFARIBALL: 1.5, PREMIERBALL: 1, LUXURYBALL: 1, HEALBALL: 1, CHERISHBALL: 1, DUSKBALL: 1, TIMERBALL: Math.min(4, 1 + this.turnNo * 0.3), QUICKBALL: this.turnNo <= 1 ? 5 : 1, NESTBALL: Math.max(1, (41 - F.level) / 10), NETBALL: (this.isType(F, 'TYPE_BUG') || this.isType(F, 'TYPE_WATER')) ? 3.5 : 1, DIVEBALL: 1, REPEATBALL: 1, LEVELBALL: P.level >= F.level * 4 ? 8 : P.level >= F.level * 2 ? 4 : P.level > F.level ? 2 : 1, FASTBALL: (F.stats.spe >= 100 ? 4 : 1), MOONBALL: 1, LOVEBALL: 1, HEAVYBALL: 1, FRIENDBALL: 1, LUREBALL: 1, MASTERBALL: 255 }[n]; if (mult == null) mult = 1;
-    if (n === 'DUSKBALL') mult = 1; let odds = Math.floor((3 * F.maxhp - 2 * F.hp) * rate * mult / (3 * F.maxhp));
-    if (F.level <= 20) odds = Math.floor(odds * (30 - F.level) / 10); // CFRU: SwSh low level modifier
-    if (F.status === 'slp') odds = Math.floor(odds * 25 / 10); else if (F.status) odds = Math.floor(odds * 15 / 10);
-    return n === 'MASTERBALL' ? 0xFFFF : odds; }
+    let odds = this.baseCatchOdds(ball, F); const o = this.opts, defLevel = F.level, frost = !!this.frostbite;
+    if (defLevel <= 20) odds = Math.floor(odds * (30 - defLevel) / 10);   // low-level modifier (SwSh)
+    if (F.status === 'slp' || (F.status === 'frz' && !frost)) odds = Math.floor(odds * 25 / 10);
+    if (['psn', 'tox', 'brn', 'par'].includes(F.status) || (F.status === 'frz' && frost)) odds = Math.floor(odds * 15 / 10);
+    if (o.catchDifficulty) { const sv = (typeof window !== 'undefined' && window.GameStateManager && window.GameStateManager.saveData) || {}; const clear = !!(sv.flags && sv.flags.FLAG_SYS_GAME_CLEAR); if (!clear && this.active(0).level < defLevel) odds = Math.floor(odds / 10); }   // SWSH_CATCHING_DIFFICULTY_MODIFIER (off unless opts.catchDifficulty)
+    return odds; }
+  // CriticalCapture
+  criticalCapture(odds) {
+    if (this.opts.criticalCapture === false) return false;
+    const base = Math.min(odds, 255), n = this.dexCaughtCount(); let pm = 25; for (const [lim, mul] of CRIT_TABLE) if (n <= lim) { pm = mul; break; }
+    const charm = this.opts.catchingCharm ? 2 : 1, crit = Math.floor(Math.floor(base * pm * charm / 10) / 6);
+    return this.rnd(256) < crit; }
   throwBall(ball) {
-    const F = this.active(1), P = this.active(0);
-    if (this.kind !== 'wild' && this.kind !== 'safari') { this.ev({ t: 'ball', ball, shakes: 0, caught: false, blocked: true }); this.msg("The trainer blocked the Ball! Don't be a thief!"); return false; }
-    const odds = this.catchOdds(ball, F); let shakes = 0;
-    if (odds >= 0xFF) shakes = 4; else { const b = Math.floor(0xFFFF0 / Math.sqrt(Math.sqrt(0xFF0000 / Math.max(1, odds)))); while (shakes < 4 && this.rnd(65536) < b) shakes++; }
-    const caught = shakes >= 4; this.ev({ t: 'ball', ball, shakes: Math.min(shakes, 3), caught }); this.usedItems = (this.usedItems || []).concat([ball || 'ITEM_POKE_BALL']);
-    if (caught) { this.msg('Gotcha! ' + F.name + ' was caught!'); const src = this.snapshot(F); src.ballId = ball; this.caught.push(src); this.giveExp(F); this.finish('caught'); return true; }
+    const F = this.active(1), P = this.active(0), o = this.opts, def = this.ballDef(ball) || { bonus: 10 };
+    if (this.kind !== 'wild' && this.kind !== 'safari') { this.ev({ t: 'ball', ball, shakes: 0, caught: false, blocked: true }); this.msg("The trainer blocked the Ball! Don't be a thief!"); return false; }   // BattleScript_TrainerBallBlock
+    if (o.noCatching) { this.ev({ t: 'ball', ball, shakes: 0, caught: false, blocked: true }); this.msg("The Pokémon dodged the thrown Ball! This Pokémon can't be caught!"); return false; }   // BattleScript_DodgedBall
+    this.usedItems = (this.usedItems || []).concat([ball || 'ITEM_POKE_BALL']);
+    const odds = this.catchOdds(ball, F); let shakes = 0, crit = false, caught = false;
+    if (odds >= 0xFF) { shakes = 4; caught = true; }   // Pokémon is caught
+    else {
+      crit = this.criticalCapture(odds); const maxShakes = crit ? 2 : 4;
+      if (def.guaranteed || o.alwaysCatchable) shakes = maxShakes;
+      else { const b = Math.floor(0xFFFF0 / Math.sqrt(Math.sqrt(0xFF0000 / Math.max(1, odds)))); while (shakes < maxShakes && this.rnd(65536) < b) shakes++; }
+      caught = shakes >= maxShakes;
+    }
+    const anim = crit ? Math.min(1, caught ? 1 : shakes) : Math.min(shakes, 3);   // a critical capture shakes the ball once
+    this.ev({ t: 'ball', ball, shakes: anim, caught, crit });
+    if (caught) {
+      this.msg('Gotcha! ' + F.name + ' was caught!'); const src = this.snapshot(F);
+      src.ballId = def.type === 'BALL_TYPE_PARK_BALL' ? 'ITEM_POKE_BALL' : ball;   // ApplyBallSpecialEffect / SetMonData(MON_DATA_POKEBALL)
+      if (def.after === 'heal') { src.HP = src.maxHP; delete src.status; if (Array.isArray(src.moves)) src.moves.forEach(mv => { if (mv.maxPP != null) mv.currentPP = mv.maxPP; }); }
+      else if (def.after === 'friend') src.friendship = 200;
+      this.caught.push(src); this.giveExp(F); this.finish('caught'); return true; }
     this.msg(['Oh no! The Pokémon broke free!', 'Aww! It appeared to be caught!', 'Aargh! Almost had it!', 'Shoot! It was so close, too!'][Math.min(shakes, 3)]); return false; }
   snapshot(M) { const s = JSON.parse(JSON.stringify(M.src || {})); this.writeBack(M, s); return s; }
   useBagItem(item, target, moveSlot, sd) {
