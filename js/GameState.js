@@ -317,7 +317,7 @@ function createBattle(env) {
   function drawMon(c, sd, front, cx, bottom, maxPx, wantScale) {
     if (!sd.vis || !sd.species || sd.alpha <= 0) return;
     const path = spritePath(sd.species), e = getImg(path), pop = sd.scale;
-    if (!e || e.fail || !path) { const bx = Math.round(cx + sd.dx + sd.ox - 13 * pop), by = Math.round(bottom + sd.dy + sd.oy - 30); S.hit[front ? 'foeMon' : 'allyMon'] = { x: bx, y: by, w: 26, h: 30 }; ball(c, bx, by, 'poke', 3); return; }
+    if (!e || e.fail || !path) { if (!sd._warned) { sd._warned = 1; try { console.warn('[BS] no sprite for ' + sd.species + ' (battleSprite/frontSprite = ' + JSON.stringify(path) + ') -> drawing a placeholder ball'); } catch (er) { /* no console */ } } const bx = Math.round(cx + sd.dx + sd.ox - 13 * pop), by = Math.round(bottom + sd.dy + sd.oy - 30); S.hit[front ? 'foeMon' : 'allyMon'] = { x: bx, y: by, w: 26, h: 30 }; ball(c, bx, by, 'poke', 3); return; }
     if (!e.ok) return;
     const n = frameCount(e), fw = Math.floor(e.img.naturalWidth / n), fh = e.img.naturalHeight;
     let fr = 0;
