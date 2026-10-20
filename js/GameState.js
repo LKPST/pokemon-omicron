@@ -439,7 +439,7 @@ function createBattle(env) {
     S.tr = { me: { path: o.playerTrainerSprite || '', vis: !skip && !!o.playerTrainerSprite, ox: skip ? 0 : 130, frame: 0 }, foe: { path: o.foeTrainerSprite || '', vis: !skip && S.b.kind === 'trainer' && !!o.foeTrainerSprite, ox: skip ? 0 : -130, frame: 0 } };
     if (o.ballSheet) S.ball = Object.assign({}, S.ball, o.ballSheet); if (o.sparkleSheet) S.sparkle = Object.assign({}, S.sparkle, o.sparkleSheet); if (o.introIcon) S.introIcon = o.introIcon;
     for (const m of [...S.b.sides[0].party, ...S.b.sides[1].party]) { getImg(spritePath(m.species)); getImg(iconPath(m.species)); }
-    for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.introIcon]) if (p) getImg(p);
+    for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.introIcon, SPARK]) if (p) getImg(p);
     S.introT = 0; S.introTextSet = false; S.preShown = null; S.mode = skip ? 'play' : 'intro'; S.q = S.b.start().slice(); if (skip) S.fadeDir = -1;
     // wild battle: the wild Pokémon slides in from the left WHILE the player's trainer slides in (like the original), not after it
     S.introFoe = null;
@@ -1010,6 +1010,9 @@ function createBattle(env) {
     c.restore();
   }
   // the player's party as icons, just above the menu buttons
+  // sparkle.png: 6 frames of 32x32 stacked vertically (graphics/poke_ball/sparkle.png); the drawn 4-point one is used if the file is missing
+  const SPARK = 'graphics/poke_ball/sparkle.png';
+  function sparkImg(c, cx, cy, size, p) { const e = getImg(SPARK); if (!e || !e.ok) return false; const n = 6, f = Math.min(n - 1, Math.max(0, Math.floor(p * n))); c.drawImage(e.img, 0, f * 32, 32, 32, Math.round(cx - size / 2), Math.round(cy - size / 2), size, size); return true; }
   // a 4-point sparkle
   function sparkle(c, x, y, r, a) {
     if (a <= 0 || r <= 0) return; c.save(); c.globalAlpha = clamp(a); c.fillStyle = '#fffbe0';
@@ -1033,8 +1036,8 @@ function createBattle(env) {
         c.save(); if (faint) c.globalAlpha = .45; c.translate(x + 16, y + 34); c.scale(is, is); c.translate(-(x + 16), -(y + 34)); drawIconAt(c, M.species, x, y, false, i);
         if (it < .22) { c.globalAlpha = (1 - it / .22) * .6; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x + 16, y + 18, 14, 0, 6.2832); c.fill(); }   // a quick white shine on arrival
         c.restore();
-        const sp = it / .55; if (sp < 1) { const a = Math.sin(sp * Math.PI), pts = [[x + 5, y + 6, 1], [x + 27, y + 9, .8], [x + 10, y + 28, .7], [x + 26, y + 26, 1.1]];
-          pts.forEach(([sx, sy, sc], n) => sparkle(c, sx, sy - sp * 4, (2 + 3 * sc) * a * (1 - Math.abs(sp - .35 - n * .08)), a)); }
+        const pts = [[x + 5, y + 6, 22], [x + 27, y + 9, 18], [x + 10, y + 28, 16], [x + 26, y + 26, 24]];
+        pts.forEach(([sx, sy, sz], n) => { const p = (it - n * .07) / .5; if (p <= 0 || p >= 1) return; if (!sparkImg(c, sx, sy, sz, p)) { const a = Math.sin(p * Math.PI); sparkle(c, sx, sy - p * 4, (2 + 3 * sz / 20) * a, a); } });
       }
       const bw = 24, fr = clamp(M.hp / Math.max(1, M.maxhp));
       if (it > .1) { rect(c, x + 4, y + 34, bw, 3, '#12121c'); if (!faint) rect(c, x + 5, y + 35, Math.max(0, Math.round((bw - 2) * fr)), 1, fr > .5 ? '#38d050' : fr > .2 ? '#f0c820' : '#f03838');
