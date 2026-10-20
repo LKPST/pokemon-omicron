@@ -40,7 +40,7 @@
   function snapshot() {
     if (!W.mapKey) return;
     const list = W.mons.filter(m => !m.dead && !m.fought && m.spr).map(m => ({ sp: m.sp, lvl: m.lvl, shiny: m.shiny, gx: m.gx, gy: m.gy, dir: m.dir }));
-    W.saved[W.mapKey] = { at: Date.now(), list };
+    W.saved[W.mapKey] = { at: Date.now(), list, battle: !!W.busy };
     log('remembered', list.length, 'wild Pokémon on', W.mapKey);
   }
   function reset(scene) {
@@ -78,9 +78,10 @@
   const off = scene => { const o = scene.getMapWorldOffset(scene.currentMapKey); return { x: Math.round(o.x / 32), y: Math.round(o.y / 32) }; };
   const toWorld = (scene, gx, gy) => { const o = off(scene); return { x: (o.x + gx) * 32 + 16, y: (o.y + gy) * 32 + 16 }; };
   function view(scene) {   // tile rectangle that is on screen (+ margin)
-    const cam = scene.cameras.main, v = cam.worldView, o = off(scene), m = W.margin;
-    return { x0: Math.floor(v.x / 32) - o.x - m, y0: Math.floor(v.y / 32) - o.y - m, x1: Math.floor((v.x + v.width) / 32) - o.x + m, y1: Math.floor((v.y + v.height) / 32) - o.y + m,
-      sx0: Math.floor(v.x / 32) - o.x, sy0: Math.floor(v.y / 32) - o.y, sx1: Math.floor((v.x + v.width) / 32) - o.x, sy1: Math.floor((v.y + v.height) / 32) - o.y };
+    const cam = scene.cameras.main, v = cam.worldView, o = off(scene), m = W.margin, px = scene.playerGridX, py = scene.playerGridY;
+    let sx0 = Math.floor(v.x / 32) - o.x, sy0 = Math.floor(v.y / 32) - o.y, sx1 = Math.floor((v.x + v.width) / 32) - o.x, sy1 = Math.floor((v.y + v.height) / 32) - o.y;
+    if (!(v.width > 0) || px < sx0 - 1 || px > sx1 + 1 || py < sy0 - 1 || py > sy1 + 1) { sx0 = px - 8; sx1 = px + 8; sy0 = py - 5; sy1 = py + 5; }   // camera not on the player yet (right after a scene start): use a window around the player
+    return { x0: sx0 - m, y0: sy0 - m, x1: sx1 + m, y1: sy1 + m, sx0, sy0, sx1, sy1 };
   }
   const inView = (v, x, y) => x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1;
   const onScreen = (v, x, y) => x >= v.sx0 - 1 && x <= v.sx1 + 1 && y >= v.sy0 - 1 && y <= v.sy1 + 1;
@@ -122,6 +123,16 @@
 
   function healthy(sd) { return (sd.party || []).some(p => p && p.species && !(p.hp <= 0 || p.currentHp <= 0 || p.fainted)); }
 
+  // the "!" bubble is a small pixel-art texture made once (a real image, so it is drawn like every other sprite)
+  function bangTex(scene) {
+    const key = 'wild_bang'; if (scene.textures.exists(key)) return key;
+    const cv = document.createElement('canvas'); cv.width = 13; cv.height = 17; const x = cv.getContext('2d');
+    const px = (c, a, b, w, h) => { x.fillStyle = c; x.fillRect(a, b, w, h); };
+    px('#202030', 2, 0, 9, 13); px('#202030', 0, 2, 13, 9); px('#ffffff', 2, 1, 9, 11); px('#ffffff', 1, 2, 11, 9); px('#202030', 5, 12, 3, 3); px('#202030', 6, 15, 1, 1); px('#ffffff', 5, 12, 3, 2); px('#ffffff', 6, 14, 1, 1);
+    px('#e02030', 5, 3, 3, 5); px('#e02030', 5, 9, 3, 2);
+    const tex = scene.textures.addCanvas(key, cv); try { if (typeof Phaser !== 'undefined' && Phaser.Textures && tex.setFilter) tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (_) { }
+    return key;
+  }
   function encounter(scene, m) {
     if (W.busy) return; W.busy = true;
     const sd = (window.GameStateManager || {}).saveData || {};
@@ -129,15 +140,17 @@
     log('ENCOUNTER:', m.sp, 'Lv' + m.lvl, m.shiny ? '(shiny)' : '');
     scene.isLocked = true;
     for (const q of W.mons) if (q.tw) { try { q.tw.pause(); } catch (_) { } }
-    if (m.spr) { const bang = scene.add.text(m.spr.x, m.spr.y - m.spr.displayHeight - 4, '!', { fontFamily: 'monospace', fontSize: '22px', color: '#ffffff', stroke: '#c00000', strokeThickness: 5, fontStyle: 'bold' }).setOrigin(0.5, 1).setDepth(9000); m.bang = bang;
-      scene.tweens.add({ targets: bang, y: bang.y - 8, duration: 180, yoyo: true }); scene.tweens.add({ targets: m.spr, y: m.spr.y - 6, duration: 120, yoyo: true, repeat: 1 }); }
+    if (m.spr) {
+      const bang = scene.add.image(m.spr.x, m.spr.y - m.spr.displayHeight - 2, bangTex(scene)).setOrigin(0.5, 1).setScale(2).setDepth(99999); m.bang = bang;
+      scene.tweens.add({ targets: bang, y: bang.y - 6, duration: 200, yoyo: true, repeat: 1 }); scene.tweens.add({ targets: m.spr, y: m.spr.y - 5, duration: 120, yoyo: true, repeat: 2 });
+    }
     const go = () => {
       if (scene.sound && scene.sound.stopAll) scene.sound.stopAll();
       if (window.GameStateManager) window.GameStateManager.opponentPartyMon1 = { species: m.sp, level: m.lvl, isShiny: m.shiny ? 1 : 0 };
       scene.isLocked = false;
       scene.scene.start('BattleScene', { kind: 'wild', pokemon: [{ species: m.sp, level: m.lvl, isShiny: m.shiny ? 1 : 0 }], bg: 'grass' });
     };
-    scene.time.delayedCall(650, go);
+    scene.time.delayedCall(850, go);
   }
 
   W.update = function (scene, time, delta) {
@@ -159,7 +172,7 @@
       W.mapKey = scene.currentMapKey; W.grass = scanGrass(scene); W.lastBucket = ''; W.nextSpawn = scene.time.now + 400; W.fresh = true; W.freshUntil = scene.time.now + 6000; W.grace = scene.time.now + 1500;
       log('map', scene.currentMapKey, '-', W.grass.size, 'grass tiles');
       const sv = W.saved[scene.currentMapKey]; delete W.saved[scene.currentMapKey];
-      if (sv && Date.now() - sv.at < W.keepMs && sv.list.length) {   // same Pokémon as before the battle, same spots
+      if (sv && (sv.battle || Date.now() - sv.at < W.keepMs) && sv.list.length) {   // a battle never ages the saved Pokémon: they come back exactly as they were   // same Pokémon as before the battle, same spots
         W.fresh = false; W.restoring = true;
         for (const q of sv.list) if (W.grass.has(key(q.gx, q.gy))) spawnAt(scene, q.gx, q.gy, q);
         log('restored', sv.list.length, 'wild Pokémon');
