@@ -147,8 +147,8 @@
     const go = () => {
       if (scene.sound && scene.sound.stopAll) scene.sound.stopAll();
       if (window.GameStateManager) window.GameStateManager.opponentPartyMon1 = { species: m.sp, level: m.lvl, isShiny: m.shiny ? 1 : 0 };
-      scene.isLocked = false;
-      scene.scene.start('BattleScene', { kind: 'wild', pokemon: [{ species: m.sp, level: m.lvl, isShiny: m.shiny ? 1 : 0 }], bg: 'grass' });
+      const bd = { kind: 'wild', pokemon: [{ species: m.sp, level: m.lvl, isShiny: m.shiny ? 1 : 0 }], bg: 'grass' };
+      if (window.BattleTransition) window.BattleTransition.start(scene, 'BattleScene', bd); else { scene.isLocked = false; scene.scene.start('BattleScene', bd); }
     };
     scene.time.delayedCall(850, go);
   }
