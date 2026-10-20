@@ -439,7 +439,7 @@ function createBattle(env) {
     S.tr = { me: { path: o.playerTrainerSprite || '', vis: !skip && !!o.playerTrainerSprite, ox: skip ? 0 : 130, frame: 0 }, foe: { path: o.foeTrainerSprite || '', vis: !skip && S.b.kind === 'trainer' && !!o.foeTrainerSprite, ox: skip ? 0 : -130, frame: 0 } };
     if (o.ballSheet) S.ball = Object.assign({}, S.ball, o.ballSheet); if (o.sparkleSheet) S.sparkle = Object.assign({}, S.sparkle, o.sparkleSheet); if (o.introIcon) S.introIcon = o.introIcon;
     for (const m of [...S.b.sides[0].party, ...S.b.sides[1].party]) { getImg(spritePath(m.species)); getImg(iconPath(m.species)); }
-    for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.introIcon, SPARK]) if (p) getImg(p);
+    for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.introIcon, ...SPARKS]) if (p) getImg(p);
     S.introT = 0; S.introTextSet = false; S.preShown = null; S.mode = skip ? 'play' : 'intro'; S.q = S.b.start().slice(); if (skip) S.fadeDir = -1;
     // wild battle: the wild Pokémon slides in from the left WHILE the player's trainer slides in (like the original), not after it
     S.introFoe = null;
@@ -1011,8 +1011,12 @@ function createBattle(env) {
   }
   // the player's party as icons, just above the menu buttons
   // sparkle.png: 6 frames of 32x32 stacked vertically (graphics/poke_ball/sparkle.png); the drawn 4-point one is used if the file is missing
-  const SPARK = 'graphics/poke_ball/sparkle.png';
-  function sparkImg(c, cx, cy, size, p) { const e = getImg(SPARK); if (!e || !e.ok) return false; const n = 6, f = Math.min(n - 1, Math.max(0, Math.floor(p * n))); c.drawImage(e.img, 0, f * 32, 32, 32, Math.round(cx - size / 2), Math.round(cy - size / 2), size, size); return true; }
+  const SPARKS = ['graphics/poke_ball/sparkle.png', 'graphics/poke_ball/Sparkle.png'], SPARK = SPARKS[0];   // both spellings are tried (a server can be case-sensitive)
+  function sparkImg(c, cx, cy, size, p) {
+    let e = null; for (const path of SPARKS) { const g = getImg(path); if (g && g.ok) { e = g; break; } }
+    if (!e) { if (!S.sparkWarned && SPARKS.every(path => { const g = getImg(path); return g && g.fail; })) { S.sparkWarned = true; console.warn('[BattleScene] sparkle sheet not found: tried ' + SPARKS.join(' and ') + ' (relative to index.html); using the drawn sparkle'); } return false; }
+    const n = 6, fh = Math.floor(e.img.height / n) || 32, fw = e.img.width, f = Math.min(n - 1, Math.max(0, Math.floor(p * n))); c.drawImage(e.img, 0, f * fh, fw, fh, Math.round(cx - size / 2), Math.round(cy - size / 2), size, size); return true;
+  }
   // a 4-point sparkle
   function sparkle(c, x, y, r, a) {
     if (a <= 0 || r <= 0) return; c.save(); c.globalAlpha = clamp(a); c.fillStyle = '#fffbe0';
@@ -1036,7 +1040,7 @@ function createBattle(env) {
         c.save(); if (faint) c.globalAlpha = .45; c.translate(x + 16, y + 34); c.scale(is, is); c.translate(-(x + 16), -(y + 34)); drawIconAt(c, M.species, x, y, false, i);
         if (it < .22) { c.globalAlpha = (1 - it / .22) * .6; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x + 16, y + 18, 14, 0, 6.2832); c.fill(); }   // a quick white shine on arrival
         c.restore();
-        const pts = [[x + 5, y + 6, 22], [x + 27, y + 9, 18], [x + 10, y + 28, 16], [x + 26, y + 26, 24]];
+        const pts = [[x + 5, y + 6, 16], [x + 27, y + 9, 13], [x + 10, y + 28, 12], [x + 26, y + 26, 17]];
         pts.forEach(([sx, sy, sz], n) => { const p = (it - n * .07) / .5; if (p <= 0 || p >= 1) return; if (!sparkImg(c, sx, sy, sz, p)) { const a = Math.sin(p * Math.PI); sparkle(c, sx, sy - p * 4, (2 + 3 * sz / 20) * a, a); } });
       }
       const bw = 24, fr = clamp(M.hp / Math.max(1, M.maxhp));
