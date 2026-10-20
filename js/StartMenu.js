@@ -1054,7 +1054,7 @@ function createStart(env) {
   function pumpIcons(n) { while (n-- > 0 && ICONQ.length) getImg(ICONQ.shift()); }
   function preload() { trainerPre(); queueAllIcons(); }
   function status() { return { scr: S.scr, page: S.page, sel: S.sel, closing: S.closing, child: S.child, dexList: DX.list.length, warnings: [...warnings] }; }
-  return { icon, preload, renderIdle, setExit: p => { S.exitK = p; }, HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
+  return { icon, preload, renderIdle, setExit: p => { S.exitK = p; }, bg: (c, w, h, t) => menuBg(c, w, h, t), HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
 }
 root.StartMenuCore = createStart;
 })(window);
@@ -1163,17 +1163,20 @@ const StartMenu = {
     slog('attach() called, IDLE=' + this.IDLE); if (!scene || !scene.add) return; const self = this; this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
     const g = this._geom(scene); this._cam(scene, g); let img = null, tex = null, ctx = null, acc = 0, ready = false, idle = null;
     const sv = () => (root.GameStateManager && root.GameStateManager.saveData) || {};
-    idle = root.StartMenuCore(this._env(scene, g)); this._idle = idle; idle.initFont().then(() => { idle.preload(); ready = true; slog('idle screen ready'); }).catch(e => console.error('[SM] idle screen font:', e));
+    idle = root.StartMenuCore(this._env(scene, g)); this._idle = idle; idle.S.t = this.bgT || 0; idle.initFont().then(() => { idle.preload(); ready = true; slog('idle screen ready'); }).catch(e => console.error('[SM] idle screen font:', e));
     const draw = (time, delta) => {
       const vis = this.IDLE && !this.active && ready;
       if (!img && vis) { if (scene.textures.exists(KD)) scene.textures.remove(KD); tex = scene.textures.createCanvas(KD, idle.W, idle.H); try { tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } ctx = tex.getContext ? tex.getContext() : tex.context; img = self._lower(scene, g, 0, 0, KD).setDepth(80); slog('idle screen created'); }
       if (img) img.setVisible(!!vis); if (!vis || !ctx) return; acc += delta; if (acc < ((idle.S.exitK || 0) > 0 ? 8 : 33)) return; const dt = Math.min(.1, acc / 1000); acc = 0;
-      try { idle.update(dt); idle.renderIdle(ctx); tex.refresh(); } catch (e) { console.error('[SM] idle screen:', e); self.IDLE = false; }
+      try { idle.update(dt); self.bgT = idle.S.t; idle.renderIdle(ctx); tex.refresh(); } catch (e) { console.error('[SM] idle screen:', e); self.IDLE = false; }
     };
     const down = p => { if (self.active || !img || !img.visible) return; if (p.y >= g.y0 && p.y < g.y0 + g.bh * g.s) { slog('idle screen click -> open'); self.open(scene, {}); } };
     scene.events.on('update', draw); scene.input.on('pointerdown', down);
     scene.events.once('shutdown', () => { try { idle.setExit(0); } catch (e) { /* ignore */ } scene.events.off('update', draw); try { scene.input.off('pointerdown', down); } catch (e) { /* ignore */ } if (img) img.destroy(); img = null; if (scene.textures.exists(KD)) scene.textures.remove(KD); });
   },
+  // the lower screen's background, shared with the battle scene (same pattern, continuing the same animation)
+  drawBg(c, w, h) { if (!this._idle || !this._idle.bg) return false; this._idle.bg(c, w, h, this.bgT || 0); return true; },
+  tickBg(dt) { this.bgT = (this.bgT || 0) + dt; },
   setExit(p) { try { if (this._idle) this._idle.setExit(p); } catch (e) { /* ignore */ } },
   _env(scene, geo) {
     const gs = root.GameStateManager, sv = () => (gs && gs.saveData) || {};
