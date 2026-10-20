@@ -539,9 +539,10 @@ function createSummary(env) {
   }
 
   // ------------------------------------------------ NAMING view (Pokémon nickname / player name)
-  // dark glass panels with cyan edges over the party background; tabs UPPER / lower / Others, DELETE and OK on top
-  const GX = 10, GY = 64, KCW = 18, KCH = 15, GCOLS = 12, GROWS = 5, ACC = '#4de3d1', GLASS = 'rgba(8,12,32,.66)', GLASS2 = 'rgba(8,12,32,.82)';
-  const TABS = [{ lb: 'UPPER', x: 6, w: 38 }, { lb: 'lower', x: 48, w: 34 }, { lb: 'Others', x: 86, w: 38 }, { lb: 'DELETE', x: 146, w: 46 }, { lb: 'OK', x: 196, w: 38 }], TY = 41, TH = 14;
+  // dark glass panels with thin cyan edges and chamfered corners over the party background.
+  // The cursor is a bright selector frame (not a filled key). OK asks "Keep this name?" YES / NO.
+  const GX = 10, GY = 64, KCW = 18, KCH = 15, GCOLS = 12, GROWS = 5, ACC = '#4de3d1', GLASS = 'rgba(6,10,30,.70)', GLASS2 = 'rgba(6,10,30,.84)', EDGE = 'rgba(77,227,209,.30)';
+  const TABS = [{ lb: 'UPPER', x: 8, w: 38 }, { lb: 'lower', x: 50, w: 34 }, { lb: 'Others', x: 88, w: 40 }, { lb: 'DELETE', x: 146, w: 46 }, { lb: 'OK', x: 196, w: 38 }], TY = 41, TH = 14;
   const L1 = 'ABCDEFGHIJ', L2 = 'KLMNOPQRST', L3 = 'UVWXYZ', D = '0123456789';
   function gridRow(page, r) {
     const row = new Array(GCOLS).fill(''), put = (str, at) => [...str].forEach((ch, i) => { row[at + i] = ch; });
@@ -558,14 +559,18 @@ function createSummary(env) {
   function startName(o) {
     let mon = o.mon; if (!mon && o.raw) { mon = buildMon(o.raw); getImg(mon.icon); }
     S.name = { mode: o.mode, mi: o.mi, mon, title: o.title || 'NICKNAME?', max: o.max || 10, text: String(o.initial || '').slice(0, o.max || 10), page: 0, cx: 0, cy: 0, top: -1, orig: o.orig || '', gender: o.gender || '',
-      trainer: o.trainer || '', allowEmpty: o.allowEmpty !== false, allowCancel: o.allowCancel !== false, raw: o.raw, t0: S.t };
+      trainer: o.trainer || '', allowEmpty: o.allowEmpty !== false, allowCancel: o.allowCancel !== false, raw: o.raw, t0: S.t, ask: null };
     if (o.trainer) getImg(o.trainer);
     if (!o.fromParty) { S.view = 'name'; S.tr = null; }
   }
   function typeChar(ch) { const N = S.name; if (N.text.length < N.max) { N.text += ch; N.bump = S.t; } }
   function backChar() { const N = S.name; if (N.text.length) { N.text = N.text.slice(0, -1); N.bump = S.t; } }
+  function nameAsk() {        // OK pressed: "Keep this name?"
+    const N = S.name; if (N.mode === 'player' && !N.text.trim()) { N.shake = S.t; return; }
+    N.ask = { i: 0, t: S.t };
+  }
   function nameConfirm() {
-    const N = S.name, txt = N.text.replace(/\s+$/, '');
+    const N = S.name, txt = N.text.replace(/\s+$/, ''); N.ask = null;
     if (N.mode === 'player') { if (!txt.trim()) return; if (env.nameDone) env.nameDone(txt); return; }
     if (N.mode === 'monraw') { if (env.nameDone) env.nameDone(txt); return; }
     if (env.rename) env.rename(N.mi, txt);
@@ -578,12 +583,13 @@ function createSummary(env) {
   }
   function namePressCell() {
     const N = S.name;
-    if (N.top >= 0) { if (N.top < 3) N.page = N.top; else if (N.top === 3) backChar(); else nameConfirm(); return; }
+    if (N.top >= 0) { if (N.top < 3) N.page = N.top; else if (N.top === 3) backChar(); else nameAsk(); return; }
     const ch = gridRow(N.page, N.cy)[N.cx]; if (ch) typeChar(ch);
   }
   const topFromCx = cx => (cx <= 2 ? 0 : cx <= 4 ? 1 : cx <= 6 ? 2 : cx <= 9 ? 3 : 4), cxFromTop = t => [1, 3, 5, 8, 10][t];
   function nameKeyPress(k) {
     const N = S.name; if (!N) return;
+    if (N.ask) { if (k === 'left' || k === 'right' || k === 'up' || k === 'down') N.ask.i = 1 - N.ask.i; else if (k === 'a') { if (N.ask.i === 0) nameConfirm(); else N.ask = null; } else if (k === 'b') N.ask = null; return; }
     if (k === 'left') { if (N.top >= 0) N.top = (N.top + 4) % 5; else N.cx = (N.cx + GCOLS - 1) % GCOLS; }
     else if (k === 'right') { if (N.top >= 0) N.top = (N.top + 1) % 5; else N.cx = (N.cx + 1) % GCOLS; }
     else if (k === 'up') { if (N.top >= 0) { N.cx = cxFromTop(N.top); N.top = -1; N.cy = GROWS - 1; } else if (N.cy === 0) { N.top = topFromCx(N.cx); } else N.cy--; }
@@ -593,77 +599,105 @@ function createSummary(env) {
   }
   function nameKey(e) {      // raw keyboard: letters are typed, Backspace deletes, Enter = OK, Esc = cancel (Space presses the highlighted key)
     if (S.view !== 'name' || S.tr || !S.name) return false;
-    const k = e.key;
+    const k = e.key, N = S.name;
+    if (N.ask) { if (k === 'Enter') { nameConfirm(); } else if (k === 'Escape' || k === 'Backspace' || k === 'n' || k === 'N') N.ask = null; else if (k === 'y' || k === 'Y') nameConfirm(); else if (k === 'ArrowLeft' || k === 'ArrowRight') N.ask.i = 1 - N.ask.i; else return false; return true; }
     if (k.length === 1 && k !== ' ' && (/[A-Za-z0-9.,!?'&\-]/.test(k) || GLY[k])) { typeChar(k); return true; }
     if (k === 'Backspace') { backChar(); return true; }
-    if (k === 'Enter') { nameConfirm(); return true; }
+    if (k === 'Enter') { nameAsk(); return true; }
     if (k === 'Escape') { nameCancel(); return true; }
     return false;
   }
+  const ASKB = [{ x: 62, y: 86, w: 52, h: 17 }, { x: 126, y: 86, w: 52, h: 17 }];
   function nameClick(x, y) {
     const N = S.name; if (!N) return;
+    if (N.ask) { ASKB.forEach((b, i) => { if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) { N.ask.i = i; if (i === 0) nameConfirm(); else N.ask = null; } }); return; }
     for (let i = 0; i < TABS.length; i++) { const t = TABS[i]; if (x >= t.x && x < t.x + t.w && y >= TY && y < TY + TH) { N.top = i; namePressCell(); return; } }
     const col = Math.floor((x - GX) / KCW), row = Math.floor((y - GY) / KCH);
     if (col >= 0 && col < GCOLS && row >= 0 && row < GROWS) { N.top = -1; N.cx = col; N.cy = row; namePressCell(); }
   }
-  // glass panel: translucent dark fill, 1px edge, rounded corners
-  function glass(c, x, y, w, h, fill, line, R = 3) {
-    pill(c, x, y, w, h, fill, R); c.fillStyle = line;
-    c.fillRect(x + R, y, w - 2 * R, 1); c.fillRect(x + R, y + h - 1, w - 2 * R, 1); c.fillRect(x, y + R, 1, h - 2 * R); c.fillRect(x + w - 1, y + R, 1, h - 2 * R);
-    for (const [px, py] of [[x + 1, y + 1], [x + w - 2, y + 1], [x + 1, y + h - 2], [x + w - 2, y + h - 2]]) c.fillRect(px, py, 1, 1);
+  // chamfered (cut-corner) glass panel: translucent dark fill + 1px edge
+  function chamfer(c, x, y, w, h, fill, line, cut = 2) {
+    c.fillStyle = fill; c.fillRect(x + cut, y, w - 2 * cut, h); c.fillRect(x, y + cut, w, h - 2 * cut);
+    if (!line) return; c.fillStyle = line;
+    c.fillRect(x + cut, y, w - 2 * cut, 1); c.fillRect(x + cut, y + h - 1, w - 2 * cut, 1); c.fillRect(x, y + cut, 1, h - 2 * cut); c.fillRect(x + w - 1, y + cut, 1, h - 2 * cut);
+    for (let i = 0; i < cut; i++) { const d = cut - 1 - i; c.fillRect(x + d, y + i, 1, 1); c.fillRect(x + w - 1 - d, y + i, 1, 1); c.fillRect(x + d, y + h - 1 - i, 1, 1); c.fillRect(x + w - 1 - d, y + h - 1 - i, 1, 1); }
   }
-  function brackets(c, x, y, w, h, col, L = 7) {
+  function brackets(c, x, y, w, h, col, L = 6) {
     c.fillStyle = col;
     for (const [bx, by, dx, dy] of [[x, y, 1, 1], [x + w - 1, y, -1, 1], [x, y + h - 1, 1, -1], [x + w - 1, y + h - 1, -1, -1]]) { c.fillRect(dx > 0 ? bx : bx - L + 1, by, L, 1); c.fillRect(bx, dy > 0 ? by : by - L + 1, 1, L); }
   }
+  // the selector: bright frame with brackets that stick out a little, softly pulsing
+  function selector(c, x, y, w, h, pulse) {
+    chamfer(c, x, y, w, h, `rgba(77,227,209,${.16 + .12 * pulse})`, '#bffcf3', 2);
+    brackets(c, x - 2, y - 2, w + 4, h + 4, '#ffffff', 4);
+  }
+  // controller-style key caps for the hint line
+  function padBtn(c, x, y, ch) {     // round button with a letter
+    ell(c, x + 5, y + 5, 5, 5, '#0a1430'); c.fillStyle = ACC; c.fillRect(x + 3, y, 5, 1); c.fillRect(x + 3, y + 10, 5, 1); c.fillRect(x, y + 3, 1, 5); c.fillRect(x + 10, y + 3, 1, 5);
+    c.fillRect(x + 1, y + 1, 2, 1); c.fillRect(x + 8, y + 1, 2, 1); c.fillRect(x + 1, y + 9, 2, 1); c.fillRect(x + 8, y + 9, 2, 1); c.fillRect(x + 1, y + 2, 1, 1); c.fillRect(x + 9, y + 2, 1, 1); c.fillRect(x + 1, y + 8, 1, 1); c.fillRect(x + 9, y + 8, 1, 1);
+    T(c, ch, x + 2, y + 1, 'white');
+  }
+  function enterKey(c, x, y) {       // keyboard Enter cap with the ↵ arrow
+    chamfer(c, x, y, 18, 11, '#0a1430', ACC, 2); c.fillStyle = '#ffffff';
+    c.fillRect(x + 5, y + 5, 1, 1); c.fillRect(x + 6, y + 4, 1, 3); c.fillRect(x + 7, y + 3, 1, 5); c.fillRect(x + 8, y + 5, 5, 1); c.fillRect(x + 12, y + 2, 1, 4);
+  }
   function drawName(c) {
-    const N = S.name; if (!N) return; const m = N.mon, pulse = .5 + .5 * Math.sin(S.t * 5);
-    // header: icon + name field
-    glass(c, 6, 5, 34, 32, GLASS2, ACC, 4);
+    const N = S.name; if (!N) return; const m = N.mon, pulse = .5 + .5 * Math.sin(S.t * 5), shake = N.shake && S.t - N.shake < .25 ? Math.round(Math.sin((S.t - N.shake) * 60) * 2) : 0;
+    // icon (no box, just a soft shadow) and the name field
+    ell(c, 26, 37, 13, 3, 'rgba(0,0,0,.28)');
     if (N.mode === 'player') {
       const e = N.trainer && getImg(N.trainer);
-      if (e && e.ok) { c.imageSmoothingEnabled = false; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, k = Math.min(30 / iw, 30 / ih); c.drawImage(e.img, Math.round(23 - iw * k / 2), Math.round(36 - ih * k), Math.round(iw * k), Math.round(ih * k)); }
-    } else if (m) { drawIcon(c, m, 7, 5, true, 0); }
-    glass(c, 44, 5, 190, 32, GLASS2, 'rgba(77,227,209,.55)', 4);
-    if (N.mode === 'player') {
-      const fem = N.gender === 'F'; T(c, fem ? 'GIRL' : 'BOY', 52, 7, fem ? 'red' : 'blue'); genderGlyph(c, fem ? 'F' : 'M', 90, 7);
-      if (N.orig) TR(c, 'now: ' + N.orig, 228, 7, 'dim');
-    } else if (m) {
-      const ex = T(c, m.species, 52, 7, 'white'); if (m.shiny) star(c, ex + 2, 9); T(c, '{Lv}' + m.lv, ex + (m.shiny ? 11 : 8), 7, 'dim'); genderGlyph(c, m.gender, ex + 40 + tw('{Lv}' + m.lv), 7);
-      if (N.orig) TR(c, 'now: ' + String(N.orig).slice(0, 10), 228, 7, 'dim');
-    }
-    const sw = N.max > 8 ? 16 : 20, x0 = 52, blink = Math.floor(S.t * 2.4) % 2 === 0;
+      if (e && e.ok) { c.imageSmoothingEnabled = false; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, k = Math.min(32 / iw, 34 / ih); c.drawImage(e.img, Math.round(26 - iw * k / 2), Math.round(37 - ih * k), Math.round(iw * k), Math.round(ih * k)); }
+    } else if (m) { drawIcon(c, m, 10, 5, true, 0); }
+    chamfer(c, 48 + shake, 8, 186, 28, GLASS2, ACC, 3);
+    const fem = N.gender === 'F' || (m && m.gender === 'F'), male = N.gender === 'M' || (m && m.gender === 'M');
+    if (fem || male) genderGlyph(c, fem ? 'F' : 'M', 229 + shake, 15);
+    const sw = N.max > 8 ? 16 : 22, x0 = 56 + shake, blink = Math.floor(S.t * 2.4) % 2 === 0;
     for (let i = 0; i < N.max; i++) {
       const x = x0 + i * sw, ch = N.text[i], act = i === N.text.length;
-      if (ch) { const dy = N.bump && S.t - N.bump < .1 && i === N.text.length - 1 ? -2 : 0; T(c, ch, x + Math.round((sw - 4 - tw(ch)) / 2), 19 + dy, 'white'); }
-      rect(c, x, 31, sw - 3, 1, act && blink ? '#ffffff' : 'rgba(127,243,228,.45)'); if (act && blink) rect(c, x, 32, sw - 3, 1, ACC);
+      if (ch) { const dy = N.bump && S.t - N.bump < .1 && i === N.text.length - 1 ? -2 : 0; T(c, ch, x + Math.round((sw - 4 - tw(ch)) / 2), 12 + dy, 'white'); }
+      rect(c, x, 28, sw - 4, 1, act && blink ? '#ffffff' : 'rgba(127,243,228,.40)');
     }
     // tabs + DELETE / OK
     TABS.forEach((t, i) => {
-      const active = i < 3 && N.page === i, focus = N.top === i;
-      glass(c, t.x, TY, t.w, TH, active ? 'rgba(240,248,255,.94)' : GLASS2, focus ? '#ffffff' : (active ? '#ffffff' : 'rgba(77,227,209,.5)'), 3);
-      if (focus) { c.fillStyle = `rgba(77,227,209,${.35 + .4 * pulse})`; c.fillRect(t.x + 3, TY - 1, t.w - 6, 1); c.fillRect(t.x + 3, TY + TH, t.w - 6, 1); c.fillRect(t.x - 1, TY + 3, 1, TH - 6); c.fillRect(t.x + t.w, TY + 3, 1, TH - 6); }
-      const col = active ? 'dark' : (i === 4 ? 'cyan' : 'white'), lb = t.lb; T(c, lb, t.x + Math.round((t.w - tw(lb)) / 2), TY + 1, col);
+      const active = i < 3 && N.page === i, focus = N.top === i && !N.ask;
+      chamfer(c, t.x, TY, t.w, TH, active ? 'rgba(77,227,209,.26)' : GLASS2, active ? ACC : EDGE, 3);
+      if (focus) selector(c, t.x, TY, t.w, TH, pulse);
+      T(c, t.lb, t.x + Math.round((t.w - tw(t.lb)) / 2), TY + 1, active || focus ? 'white' : (i === 4 ? 'cyan' : 'dim'));
     });
     // keyboard
-    glass(c, 6, 59, 228, 84, GLASS, 'rgba(77,227,209,.35)', 6); brackets(c, 6, 59, 228, 84, ACC, 8);
+    chamfer(c, 6, 59, 228, 84, GLASS, EDGE, 6); brackets(c, 6, 59, 228, 84, ACC, 9);
     for (let r = 0; r < GROWS; r++) {
       const row = gridRow(N.page, r);
       for (let q = 0; q < GCOLS; q++) {
-        const ch = row[q], x = GX + q * KCW, y = GY + r * KCH, on = N.top < 0 && N.cx === q && N.cy === r, sp = ch === ' ';
-        if (r === 3 && N.page < 3) {   // the SPACE bar: one wide key
+        const ch = row[q], x = GX + q * KCW, y = GY + r * KCH, on = N.top < 0 && N.cx === q && N.cy === r && !N.ask;
+        if (r === 3) {   // the SPACE bar: one wide key
           if (q !== 2) continue;
-          const bw = 8 * KCW - 2, on2 = N.top < 0 && N.cy === 3 && N.cx >= 2 && N.cx <= 9;
-          glass(c, x, y, bw, KCH - 2, on2 ? 'rgba(240,248,255,.94)' : 'rgba(8,12,32,.55)', on2 ? '#ffffff' : 'rgba(77,227,209,.35)', 3);
-          rect(c, x + Math.round(bw / 2) - 10, y + 9, 20, 1, on2 ? '#1c1c28' : 'rgba(127,243,228,.8)'); continue;
+          const bw = 8 * KCW - 2, on2 = N.top < 0 && N.cy === 3 && N.cx >= 2 && N.cx <= 9 && !N.ask;
+          chamfer(c, x, y, bw, KCH - 2, 'rgba(10,18,44,.55)', EDGE, 2); if (on2) selector(c, x, y, bw, KCH - 2, pulse);
+          rect(c, x + Math.round(bw / 2) - 12, y + 9, 24, 1, on2 ? '#ffffff' : 'rgba(127,243,228,.6)'); continue;
         }
         const live = !!ch;
-        glass(c, x, y, KCW - 2, KCH - 2, on ? 'rgba(240,248,255,.95)' : (live ? 'rgba(8,12,32,.55)' : 'rgba(8,12,32,.28)'), on ? '#ffffff' : (live ? 'rgba(77,227,209,.38)' : 'rgba(77,227,209,.14)'), 2);
-        if (on) { c.fillStyle = `rgba(77,227,209,${.25 + .35 * pulse})`; c.fillRect(x + 2, y - 1, KCW - 6, 1); c.fillRect(x + 2, y + KCH - 2, KCW - 6, 1); }
-        if (live && !sp) { const gx = x + Math.round((KCW - 2 - tw(ch)) / 2), tcol = on ? (ch === '♂' ? 'blue' : ch === '♀' ? 'red' : 'dark') : (ch === '♂' ? 'blue' : ch === '♀' ? 'red' : 'white'); T(c, ch, gx, y - 1, tcol); }
+        chamfer(c, x, y, KCW - 2, KCH - 2, live ? 'rgba(10,18,44,.55)' : 'rgba(10,18,44,.22)', live ? EDGE : 'rgba(77,227,209,.10)', 2);
+        if (on) selector(c, x, y, KCW - 2, KCH - 2, pulse);
+        if (live) { const gx = x + Math.round((KCW - 2 - tw(ch)) / 2); T(c, ch, gx, y - 1, ch === '♂' ? 'blue' : ch === '♀' ? 'red' : (on ? 'white' : 'white')); }
       }
     }
-    TR(c, 'A add   B delete   Enter OK', 230, 146, 'dim');
+    // hint line with controller keys
+    let hx = 12; const hy = 146;
+    padBtn(c, hx, hy, 'A'); hx += 14; hx = T(c, 'Add', hx, hy, 'dim') + 8;
+    padBtn(c, hx, hy, 'B'); hx += 14; hx = T(c, 'Delete', hx, hy, 'dim') + 8;
+    enterKey(c, hx, hy); hx += 22; T(c, 'OK', hx, hy, 'dim');
+    // "Keep this name?"  YES / NO
+    if (N.ask) {
+      const k = clamp((S.t - N.ask.t) / .18), e = ease(k); c.fillStyle = `rgba(0,0,10,${.55 * e})`; c.fillRect(0, 0, W, H);
+      const bw = 170, bh = 70, bx = 35, by = Math.round(50 + (1 - e) * 10);
+      chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.94)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
+      const nm = N.text.replace(/\s+$/, '') || (m ? m.species : ''), q = N.mode === 'player' ? 'Is this your name?' : (N.text ? 'Keep this nickname?' : 'Go back to the species name?');
+      T(c, q, bx + Math.round((bw - tw(q)) / 2), by + 8, 'white');
+      const sh = nm.slice(0, 12); T(c, sh, bx + Math.round((bw - tw(sh)) / 2), by + 24, 'gold');
+      ['YES', 'NO'].forEach((lb, i) => { const b = ASKB[i], on = N.ask.i === i; chamfer(c, b.x, b.y, b.w, b.h, on ? 'rgba(77,227,209,.24)' : GLASS2, on ? '#bffcf3' : EDGE, 3); if (on) selector(c, b.x, b.y, b.w, b.h, pulse); T(c, lb, b.x + Math.round((b.w - tw(lb)) / 2), b.y + 2, on ? 'white' : 'dim'); });
+    }
   }
 
   // ------------------------------------------------ SUMMARY view
