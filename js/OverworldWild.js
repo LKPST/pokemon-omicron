@@ -141,8 +141,13 @@
     scene.isLocked = true;
     for (const q of W.mons) if (q.tw) { try { q.tw.pause(); } catch (_) { } }
     if (m.spr) {
-      const bang = scene.add.image(m.spr.x, m.spr.y - m.spr.displayHeight - 2, bangTex(scene)).setOrigin(0.5, 1).setScale(2).setDepth(99999); m.bang = bang;
-      scene.tweens.add({ targets: bang, y: bang.y - 6, duration: 200, yoyo: true, repeat: 1 }); scene.tweens.add({ targets: m.spr, y: m.spr.y - 5, duration: 120, yoyo: true, repeat: 2 });
+      // the "!" sits above the bumped Pokémon's head: x of the sprite, y = its feet minus the height of its real art (the cell can be much taller than the art)
+      const sc = m.spr.scaleY || 1, ah = (window.OWSprites.artHeight && window.OWSprites.artHeight(m.sp)) || 32;
+      const head = Math.max(20, Math.min(ah * sc, m.spr.displayHeight || 64, 96));
+      const bx = Math.round(m.spr.x), by = Math.round(m.spr.y - head - 3);   // the sprite's feet are on its tile
+      const bang = scene.add.image(bx, by, bangTex(scene)).setOrigin(0.5, 1).setScale(2).setDepth(99999); m.bang = bang;
+      bang.setScale(0.2); scene.tweens.add({ targets: bang, scaleX: 2, scaleY: 2, duration: 140, ease: 'Back.Out' });
+      scene.tweens.add({ targets: bang, y: by - 6, duration: 200, yoyo: true, repeat: 1, delay: 140 }); scene.tweens.add({ targets: m.spr, y: m.spr.y - 5, duration: 120, yoyo: true, repeat: 2 });
     }
     const go = () => {
       if (scene.sound && scene.sound.stopAll) scene.sound.stopAll();
