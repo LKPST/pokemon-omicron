@@ -23,7 +23,7 @@
   const W = {
     enabled: true, fit: true, max: 15, log: true, shinyOdds: 4096, fill: 0.25, spawnEvery: 1200, safeRadius: 3, margin: 3, walkMs: 420,
     hours: { dawn: [4, 6], morning: [6, 12], afternoon: [12, 18] },
-    scene: null, mapKey: null, grass: new Set(), mons: [], loading: 0, nextSpawn: 0, busy: false, why: '', list: [], lastBucket: '', warned: {},
+    saved: {}, keepMs: 300000, scene: null, mapKey: null, grass: new Set(), mons: [], loading: 0, nextSpawn: 0, busy: false, why: '', list: [], lastBucket: '', warned: {},
   };
   const log = (...a) => { if (W.log) console.log('[WILD]', ...a); };
   const why = r => { if (W.why !== r) { W.why = r; log(r); } };
@@ -36,9 +36,16 @@
     return 'night';
   };
 
+  // remember who was where (per map) so the same wild Pokémon are still there after a battle
+  function snapshot() {
+    if (!W.mapKey) return;
+    const list = W.mons.filter(m => !m.dead && !m.fought && m.spr).map(m => ({ sp: m.sp, lvl: m.lvl, shiny: m.shiny, gx: m.gx, gy: m.gy, dir: m.dir }));
+    W.saved[W.mapKey] = { at: Date.now(), list };
+    log('remembered', list.length, 'wild Pokémon on', W.mapKey);
+  }
   function reset(scene) {
     for (const m of W.mons) kill(m);
-    W.mons = []; if (W.scene !== scene) scene.events.once('shutdown', () => { for (const m of W.mons) kill(m); W.mons = []; W.scene = null; W.mapKey = null; W.busy = false; });
+    W.mons = []; if (W.scene !== scene) scene.events.once('shutdown', () => { snapshot(); for (const m of W.mons) kill(m); W.mons = []; W.scene = null; W.mapKey = null; W.busy = false; });
     W.scene = scene; W.mapKey = null; W.grass = new Set(); W.list = []; W.busy = false; W.nextSpawn = 0; W.lastBucket = '';
   }
   function kill(m) { m.dead = true; if (m.tw) { try { m.tw.stop(); } catch (_) { } } if (m.spr) { window.OWSprites.destroy(m.spr); m.spr = null; } if (m.bang) { m.bang.destroy(); m.bang = null; } }
@@ -80,10 +87,10 @@
   const occupied = (x, y) => W.mons.some(m => !m.dead && ((m.gx === x && m.gy === y) || (m.tx === x && m.ty === y)));
   const walkable = (scene, x, y) => W.grass.has(key(x, y)) && !occupied(x, y) && scene.isPassable(x, y);
 
-  async function spawnAt(scene, gx, gy) {
-    if (!W.list.length) return;
-    const e = pickOne(W.list), lvl = e.lo + Math.floor(Math.random() * (Math.max(e.hi, e.lo) - e.lo + 1));
-    const m = { sp: e.sp, lvl, shiny: W.shinyOdds > 0 && Math.random() < 1 / W.shinyOdds, gx, gy, tx: gx, ty: gy, dir: DIRS[Math.floor(Math.random() * 4)][2], next: scene.time.now + 500 + Math.random() * 2000, spr: null, dead: false, step: 0 };
+  async function spawnAt(scene, gx, gy, pre) {
+    if (!pre && !W.list.length) return;
+    const e = pre ? null : pickOne(W.list), lvl = pre ? pre.lvl : e.lo + Math.floor(Math.random() * (Math.max(e.hi, e.lo) - e.lo + 1));
+    const m = { sp: pre ? pre.sp : e.sp, lvl, shiny: pre ? pre.shiny : W.shinyOdds > 0 && Math.random() < 1 / W.shinyOdds, gx, gy, tx: gx, ty: gy, dir: pre ? pre.dir : DIRS[Math.floor(Math.random() * 4)][2], next: scene.time.now + 500 + Math.random() * 2000, spr: null, dead: false, step: 0 };
     W.mons.push(m); W.loading++;
     try {
       const spr = await window.OWSprites.create(scene, -999, -999, m.sp, { shiny: m.shiny, dir: m.dir });
@@ -118,6 +125,7 @@
   function encounter(scene, m) {
     if (W.busy) return; W.busy = true;
     const sd = (window.GameStateManager || {}).saveData || {};
+    m.fought = true; snapshot();
     log('ENCOUNTER:', m.sp, 'Lv' + m.lvl, m.shiny ? '(shiny)' : '');
     scene.isLocked = true;
     for (const q of W.mons) if (q.tw) { try { q.tw.pause(); } catch (_) { } }
@@ -150,6 +158,12 @@
       for (const m of W.mons) kill(m); W.mons = [];
       W.mapKey = scene.currentMapKey; W.grass = scanGrass(scene); W.lastBucket = ''; W.nextSpawn = scene.time.now + 400; W.fresh = true; W.freshUntil = scene.time.now + 6000; W.grace = scene.time.now + 1500;
       log('map', scene.currentMapKey, '-', W.grass.size, 'grass tiles');
+      const sv = W.saved[scene.currentMapKey]; delete W.saved[scene.currentMapKey];
+      if (sv && Date.now() - sv.at < W.keepMs && sv.list.length) {   // same Pokémon as before the battle, same spots
+        W.fresh = false; W.restoring = true;
+        for (const q of sv.list) if (W.grass.has(key(q.gx, q.gy))) spawnAt(scene, q.gx, q.gy, q);
+        log('restored', sv.list.length, 'wild Pokémon');
+      }
       if (!W.grass.size) why('no tiles with behavior 5 (Grass) on this map: paint some with the Behavior tool in the map editor');
     }
     if (!W.grass.size) return;
