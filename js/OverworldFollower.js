@@ -23,7 +23,7 @@
   const log = (...a) => { if (F.log) console.log('[FOLLOWER]', ...a); };
   const F = {
     log: true, why: '',
-    enabled: true, scale: 2, offsetY: 14, distance: 32,
+    enabled: true, fit: true, scale: 2, offsetY: 14, distance: 32,
     spr: null, species: null, shiny: false, pts: [], last: null, trav: 0, dir: 'down', busy: false, nextCheck: 0, scene: null, wasHidden: true,
   };
 
@@ -71,7 +71,7 @@
         for (let y = 0; y < e.h; y++) for (let x = 0; x < e.w; x++) if (d[(y * e.w + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
         if (x1 >= 0) content = Math.max(x1 - x0 + 1, y1 - y0 + 1);
       } catch (_) { }
-      const sc = F.scale === 'auto' ? Math.min(0.5, 48 / content) : Number(F.scale) || 1;
+      const sc = F.scale === 'auto' ? Math.min(0.5, 48 / content) : (F.fit !== false && window.OWSprites.fitScale ? window.OWSprites.fitScale(m.species, Number(F.scale) || 1) : Number(F.scale) || 1);
       F.autoInfo = { cell: e ? e.w + 'x' + e.h : '?', content, scale: sc };
       spr.setOrigin(0.5, 1).setScale(sc).setVisible(false);
       if (F.spr) window.OWSprites.destroy(F.spr);
