@@ -142,13 +142,20 @@
     for (const q of W.mons) if (q.tw) { try { q.tw.pause(); } catch (_) { } }
     if (m.spr) {
       // the "!" sits above the bumped Pokémon's head: x of the sprite, y = its feet minus the height of its real art (the cell can be much taller than the art)
-      const sc = m.spr.scaleY || 1, ah = (window.OWSprites.artHeight && window.OWSprites.artHeight(m.sp)) || 32;
+      const sc = m.spr.scaleY || 1, OS = window.OWSprites, info = (OS.info && OS.info(m.sp)) || {}, ah = (OS.artHeight && OS.artHeight(m.sp)) || 32;
       const head = Math.max(20, Math.min(ah * sc, m.spr.displayHeight || 64, 96));
-      const bx = Math.round(m.spr.x), by = Math.round(m.spr.y - head - 3);   // the sprite's feet are on its tile
-      const bang = scene.add.image(bx, by, bangTex(scene)).setOrigin(0.5, 1).setScale(2).setDepth(99999); m.bang = bang;
+      let bx = Math.round(m.spr.x), by = Math.round(m.spr.y - head - 3);
+      const wv = scene.cameras.main.worldView;
+      if (wv && wv.width > 0) { bx = Math.max(wv.x + 14, Math.min(wv.right - 14, bx)); by = Math.max(wv.y + 40, Math.min(wv.bottom - 4, by)); }   // never outside the picture
+      const bang = scene.add.image(bx, by, bangTex(scene)).setOrigin(0.5, 1).setDepth(99999999); m.bang = bang;
       bang.setScale(0.2); scene.tweens.add({ targets: bang, scaleX: 2, scaleY: 2, duration: 140, ease: 'Back.Out' });
       scene.tweens.add({ targets: bang, y: by - 6, duration: 200, yoyo: true, repeat: 1, delay: 140 }); scene.tweens.add({ targets: m.spr, y: m.spr.y - 5, duration: 120, yoyo: true, repeat: 2 });
-    }
+      console.log('[WILD v4] BUMPED', m.sp, 'Lv' + m.lvl, {
+        owEntry: info.entry, tile: { gx: m.gx, gy: m.gy, moving: !!m.moving }, spriteWorld: { x: Math.round(m.spr.x), y: Math.round(m.spr.y) }, player: { x: Math.round(scene.player.x), y: Math.round(scene.player.y) },
+        scale: sc, frame: { w: m.spr.width, h: m.spr.height }, display: { w: Math.round(m.spr.displayWidth), h: Math.round(m.spr.displayHeight) }, artPx: info.artPx, artHeightPx: info.artHeightPx, headPx: Math.round(head),
+        bang: { x: bx, y: by, visible: bang.visible, texture: bang.texture && bang.texture.key }, camera: wv ? { x: Math.round(wv.x), y: Math.round(wv.y), w: Math.round(wv.width), h: Math.round(wv.height) } : null,
+      });
+    } else console.log('[WILD v4] BUMPED', m.sp, '- but it has no sprite object, so no "!"');
     const go = () => {
       if (scene.sound && scene.sound.stopAll) scene.sound.stopAll();
       if (window.GameStateManager) window.GameStateManager.opponentPartyMon1 = { species: m.sp, level: m.lvl, isShiny: m.shiny ? 1 : 0 };
