@@ -66,7 +66,7 @@ button.dirty{outline:2px solid #ffd166}
 .owrow{padding:3px 8px;border-bottom:1px solid #262a36;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px;content-visibility:auto;contain-intrinsic-size:0 38px}
 .owrow:hover{background:#252b3d}.owrow.sel{background:#26324f}.owrow canvas{width:32px;height:32px;image-rendering:pixelated;background:#2a2e3b;border-radius:4px;flex:none}
 .owrow small{color:#8a93a6;margin-left:auto;white-space:nowrap}.owrow.none{opacity:.55}
-.owprev{background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/12px 12px;border-radius:6px;image-rendering:pixelated;max-width:100%}
+.owprev{height:auto;background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/12px 12px;border-radius:6px;image-rendering:pixelated;max-width:100%}
 .owstrip{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .owstrip div{background:#222634;border:1px solid #2c3140;border-radius:6px;padding:3px;cursor:pointer;text-align:center;font-size:11px;color:#9ab}
 .owstrip div.cur{border-color:#5d8aff;background:#26324f}.owstrip canvas{width:48px;height:48px;image-rendering:pixelated;display:block}
@@ -200,11 +200,13 @@ button.dirty{outline:2px solid #ffd166}
       </div>
       <div class="row">
         <label class="in">First Pokémon in sheet (dex #) <input type="number" id="owShStart" min="1" value="810"></label><span class="hint" id="owShStartName" style="margin:0"></span>
-        <label class="in"><input type="checkbox" id="owShShiny"> this sheet is the shiny version</label>
-        <label class="in"><input type="checkbox" id="owShKeep"> keep already loaded sprites</label>
+        <label class="in"><b>This sheet is:</b> <select id="owShKind"><option value="n">REGULAR sprites</option><option value="s">SHINY sprites</option></select></label>
+        <label class="in"><input type="checkbox" id="owShKeep"> keep already loaded sprites</label><label class="in"><input type="checkbox" id="owShSame" checked> SHINY sheet: reuse the regular sheet's cutting (grid, sizes, overrides, order)</label>
         <button class="ok" id="owShApply">Apply sheet</button>
       </div>
-      <div class="hint" id="owShInfo"></div>
+      <div class="row"><label class="in" style="align-items:flex-start">Different frame size for some Pokémon <textarea id="owShOv" rows="2" cols="48" placeholder="810-815=64x64B   830=48x48A   (dex or range = WxH, then A = 2x4 layout / B = 4x2 layout)"></textarea></label></div>
+      <div class="hint">Frame sizes above are the sheet's <i>base</i> size = one grid cell. A Pokémon with a bigger size takes as many cells as it needs (e.g. 64px frames in a 32px sheet skip 3 cells) and the next Pokémon comes after it. Red boxes in the preview show exactly how the sheet is being cut.</div>
+<div class="hint" id="owShInfo"></div>
       <div class="row"><canvas id="owShPrev" class="owprev" style="max-height:200px"></canvas></div>
     </div></div>
   <div class="owbox"><h3>4 · Fix wrong mappings (PLUS dex ID)</h3>
@@ -888,32 +890,52 @@ g('owfSheet').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(
 function sheetGeom(){const p=SH(),cols=p.L==='A'?2:4,rowsPer=p.L==='A'?4:2;let fw=p.fw,fh=p.fh;
   if(g('owShAuto').checked&&OW.sheet){fw=fh=Math.max(1,Math.floor(OW.sheet.width/(p.N*cols)));g('owShW').value=fw;g('owShH').value=fh}
   const cw=cols*fw,ch=rowsPer*fh,rows=OW.sheet?Math.floor(OW.sheet.height/ch):0;return{...p,fw,fh,cw,ch,cols,rowsPer,rows,total:p.N*rows}}
-function cellBlock(G,i){ // slot i -> block canvas (2 cols x 4 rows of frames) or null when the cell is empty
-  const col=i%G.N,row=Math.floor(i/G.N),x=col*G.cw,y=row*G.ch,{fw,fh}=G,sc=OW.sheet;
+function parseOv(){const m=new Map(),re=/(\d+)(?:\s*-\s*(\d+))?\s*=\s*(\d+)(?:\s*[x×]\s*(\d+))?\s*([AaBb])?/g,t=g('owShOv').value;let x;
+  while((x=re.exec(t))){const a=+x[1],b=x[2]?+x[2]:a,w=+x[3],h=x[4]?+x[4]:w;for(let d=a;d<=b&&d-a<3000;d++)m.set(d,{fw:w,fh:h,L:x[5]?x[5].toUpperCase():null})}return m}
+function slots(G){ // walk the sheet in base cells; bigger Pokémon take several cells
+  const ov=parseOv(),uw=G.cw,uh=G.ch,ur=G.rows,occ=new Set(),out=[];let cr=0,cc=0,i=0;
+  const free=(c,r,w,h)=>{if(c+w>G.N||r+h>ur)return false;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(occ.has((r+y)*G.N+c+x))return false;return true};
+  while(ur>0&&i<5000){
+    const dex=G.start+i,o=ov.get(dex)||{},L=o.L||G.L,fw=o.fw||G.fw,fh=o.fh||G.fh,cols=L==='A'?2:4,rp=L==='A'?4:2,cw=cols*fw,ch=rp*fh;
+    const w=Math.max(1,Math.ceil(cw/uw)),h=Math.max(1,Math.ceil(ch/uh));
+    let c=cc,r=cr,ok=false;
+    while(r<ur){if(free(c,r,w,h)){ok=true;break}c++;if(c>=G.N){c=0;r++}}
+    if(!ok)break;
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)occ.add((r+y)*G.N+c+x);
+    out.push({dex,x:c*uw,y:r*uh,fw,fh,L,cw,ch});cc=c+w;cr=r;if(cc>=G.N){cc=0;cr++}i++}
+  return out}
+function cellBlock(S){ // slot -> block canvas (2 cols x 4 rows of frames) or null when the cell is empty
+  const {x,y,fw,fh}=S,sc=OW.sheet;
+  if(x+S.cw>sc.width||y+S.ch>sc.height)return null;
   const b=mk(2*fw,4*fh),ctx=b.getContext('2d');ctx.imageSmoothingEnabled=false;
-  if(G.L==='A'){const mp=g('owShR').value==='DULR'?[0,2,3,1]:[0,1,2,3];for(let r=0;r<4;r++)ctx.drawImage(sc,x,y+mp[r]*fh,2*fw,fh,0,r*fh,2*fw,fh)}
+  if(S.L==='A'){const mp=g('owShR').value==='DULR'?[0,2,3,1]:[0,1,2,3];for(let r=0;r<4;r++)ctx.drawImage(sc,x,y+mp[r]*fh,2*fw,fh,0,r*fh,2*fw,fh)}
   else{ctx.drawImage(sc,x,y,2*fw,fh,0,0,2*fw,fh);ctx.drawImage(sc,x+2*fw,y,2*fw,fh,0,fh,2*fw,fh);
        ctx.drawImage(sc,x,y+fh,2*fw,fh,0,2*fh,2*fw,fh);ctx.drawImage(sc,x+2*fw,y+fh,2*fw,fh,0,3*fh,2*fw,fh)}
   const d=ctx.getImageData(0,0,b.width,b.height).data;for(let j=3;j<d.length;j+=4)if(d[j])return b;return null}
 function sheetUpdate(){
-  if(!OW.sheet)return;const G=sheetGeom();
+  if(!OW.sheet)return;const G=sheetGeom(),S=G.rows>0?slots(G):[],ov=parseOv();
   g('owShStartName').textContent=OW.dex&&OW.dex.names[G.start]?'= '+OW.dex.names[G.start]:'';
-  g('owShInfo').textContent=`Each Pokémon = ${G.cols}×${G.rowsPer} frames of ${G.fw}×${G.fh}px → cell ${G.cw}×${G.ch}px. ${G.N} per row × ${G.rows} rows = ${G.total} Pokémon, dex ${G.start} – ${G.start+G.total-1}.`+(G.rows<1?' (frame size too large for this sheet)':'');
-  const p=g('owShPrev'),sc=Math.min(1,600/OW.sheet.width);p.width=OW.sheet.width*sc;p.height=OW.sheet.height*sc;
-  const c=p.getContext('2d');c.imageSmoothingEnabled=false;c.drawImage(OW.sheet,0,0,p.width,p.height);c.strokeStyle='rgba(255,80,80,.7)';c.lineWidth=1;
-  for(let x=0;x<=G.N;x++){c.beginPath();c.moveTo(x*G.cw*sc,0);c.lineTo(x*G.cw*sc,p.height);c.stroke()}
-  for(let y=0;y<=G.rows;y++){c.beginPath();c.moveTo(0,y*G.ch*sc);c.lineTo(p.width,y*G.ch*sc);c.stroke()}}
-for(const id of['owShN','owShL','owShAuto','owShW','owShH','owShStart'])g(id).addEventListener('input',sheetUpdate);
+  const last=S.length?S[S.length-1].dex:G.start-1;
+  g('owShInfo').textContent=`Base cell ${G.cw}×${G.ch}px (${G.cols}×${G.rowsPer} frames of ${G.fw}×${G.fh}). ${G.N} cells per row × ${G.rows} rows → ${S.length} Pokémon fit, dex ${G.start} – ${last}`+(ov.size?`, ${ov.size} with their own size`:'')+'.'+(G.rows<1?' (frame size too large for this sheet)':'');
+  const p=g('owShPrev'),sc=Math.min(1,900/OW.sheet.width);p.width=OW.sheet.width*sc;p.height=OW.sheet.height*sc;
+  const c=p.getContext('2d');c.imageSmoothingEnabled=false;c.drawImage(OW.sheet,0,0,p.width,p.height);c.lineWidth=1;c.font='10px sans-serif';
+  for(const t of S){c.strokeStyle=ov.has(t.dex)?'rgba(90,200,255,.9)':'rgba(255,80,80,.7)';c.strokeRect(t.x*sc+.5,t.y*sc+.5,t.cw*sc-1,t.ch*sc-1);c.fillStyle='#ffd166';c.fillText(t.dex,t.x*sc+2,t.y*sc+10)}}
+for(const id of['owShN','owShL','owShAuto','owShW','owShH','owShStart','owShOv'])g(id).addEventListener('input',sheetUpdate);
+g('owShAuto').addEventListener('change',sheetUpdate);
+const SNAPIDS=['owShN','owShL','owShAuto','owShW','owShH','owShStart','owShOv','owShR'];
+function useSnap(){if(!OW.snap||g('owShKind').value!=='s'||!g('owShSame').checked)return;
+  for(const id of SNAPIDS){const e=g(id);if(e.type==='checkbox')e.checked=OW.snap[id];else e.value=OW.snap[id]}}
+g('owShKind').addEventListener('change',()=>{useSnap();sheetUpdate()});g('owShSame').addEventListener('change',()=>{useSnap();sheetUpdate()});
 g('owShApply').onclick=()=>{
-  if(!OW.sheet)return;const G=sheetGeom();if(G.rows<1)return msg('Frame size is larger than the sheet.');
-  const shiny=g('owShShiny').checked,keep=g('owShKeep').checked;let put=0,skip=0,empty=0;
-  for(let i=0;i<G.total;i++){
-    const no=G.start+i,o=OW.src.get(no);
+  if(!OW.sheet)return;useSnap();const G=sheetGeom();if(G.rows<1)return msg('Frame size is larger than the sheet.');
+  const shiny=g('owShKind').value==='s',keep=g('owShKeep').checked;if(!shiny){OW.snap={};for(const id of SNAPIDS){const e=g(id);OW.snap[id]=e.type==='checkbox'?e.checked:e.value}}let put=0,skip=0,empty=0;
+  for(const S of slots(G)){
+    const no=S.dex,o=OW.src.get(no);
     if(keep&&o&&(shiny?o.s:o.n)){skip++;continue}
-    const b=cellBlock(G,i);if(!b){empty++;continue}
+    const b=cellBlock(S);if(!b){empty++;continue}
     let t=o;if(!t){t={n:null,s:null,label:'sheet '+pad3(no)};OW.src.set(no,t)}
     if(shiny)t.s=b;else t.n=b;put++}
-  msg(`Sheet applied: ${put} ${shiny?'shiny ':''}sprites placed from dex ${G.start}`+(skip?`, ${skip} kept as they were`:'')+(empty?`, ${empty} empty cells skipped`:'')+'.');
+  msg(`${shiny?'SHINY':'Regular'} sheet applied: ${put} sprites placed from dex ${G.start}`+(skip?`, ${skip} kept as they were`:'')+(empty?`, ${empty} empty cells skipped`:'')+'.');
   refresh()};
 
 // ------------------------------------------------ offsets
@@ -955,6 +977,9 @@ function renderDetail(){
    <div class="row"><b>Sprite #</b><button id="owD-">▲ prev</button><input type="number" id="owDn" value="${cur||''}" style="width:80px"><button id="owD+">▼ next</button>
    <button id="owDauto">Auto</button><button id="owDnone">No sprite</button>
    <button id="owDshM">Shift this &amp; following −1</button><button id="owDshP">Shift this &amp; following +1</button></div>
+   <div class="row"><b>Upload for this Pokémon</b><select id="owUf"><option value="A">4×4 file (columns 2-3 are used)</option><option value="B">2 columns × 4 rows, already trimmed</option></select>
+   <button id="owUn">Regular…</button><button id="owUs">Shiny…</button><button id="owUb">Both…</button><input type="file" id="owUfile" accept="image/*" multiple hidden></div>
+   <div class="hint" style="margin:0 0 6px">Both = two files (the one named ...s / ...shiny is the shiny one) or one image with regular in the left 2 columns and shiny in the right 2 columns (4×4 frames). Replaces the sprite for every Pokémon sharing this sprite number.</div>
    <div class="hint" style="margin:2px 0 8px">Scroll the mouse wheel over the preview to step through the available sprites.</div>`;
   const cv=document.createElement('canvas');cv.className='owprev';wrap.append(cv);
   const strip=document.createElement('div');strip.className='owstrip';wrap.append(strip);box.append(wrap);
@@ -969,6 +994,22 @@ function renderDetail(){
   const ns=nums(),idx=ns.findIndex(n=>n>=cur);const from=Math.max(0,(idx<0?ns.length:idx)-5),list=ns.slice(from,from+11);
   for(const n of list){const s=OW.src.get(n),b=s.n||s.s,c=mk(48,48),x=c.getContext('2d'),{w,h}=fsz(b);x.imageSmoothingEnabled=false;const z=Math.min(48/w,48/h);x.drawImage(b,0,0,w,h,(48-w*z)/2,48-h*z,w*z,h*z);
     const t=document.createElement('div');if(n===cur)t.className='cur';t.append(c,document.createTextNode(pad3(n)+(s.s?' ✦':'')));t.onclick=()=>{OW.manual[k]=n;refresh()};strip.append(t)}
+  let upMode='n';
+  const up=m=>{upMode=m;g('owUfile').click()};g('owUn').onclick=()=>up('n');g('owUs').onclick=()=>up('s');g('owUb').onclick=()=>up('b');
+  g('owUfile').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(!fs.length)return;
+    try{const fmt=g('owUf').value;
+      const cut=async f=>{const bmp=await createImageBitmap(f);if(fmt==='A'){const fw=Math.floor(bmp.width/4),fh=Math.floor(bmp.height/4),c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,fw,0,2*fw,4*fh,0,0,2*fw,4*fh);return c}
+        const c=mk(bmp.width,bmp.height);c.getContext('2d').drawImage(bmp,0,0);return c};
+      let nb=null,sb=null;
+      if(upMode==='n')nb=await cut(fs[0]);else if(upMode==='s')sb=await cut(fs[0]);
+      else if(fs.length>=2){const isS=f=>/(s|shiny)\.[a-z]+$/i.test(f.name);let a=fs.find(f=>!isS(f)),b=fs.find(isS);
+        if(!a||!b){const o=[...fs].sort((x,y)=>x.name<y.name?-1:1);a=o[0];b=o[1]}nb=await cut(a);sb=await cut(b)}
+      else{const bmp=await createImageBitmap(fs[0]),fw=Math.floor(bmp.width/4),fh=Math.floor(bmp.height/4);
+        const part=x=>{const c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,x,0,2*fw,4*fh,0,0,2*fw,4*fh);return c};nb=part(0);sb=part(2*fw)}
+      let n=srcFor(k);if(!(n>0)){n=dexOf(k)||1;while(OW.src.has(n)&&n===0)n++}
+      let o=OW.src.get(n);if(!o){o={n:null,s:null,label:'upload '+pad3(n)};OW.src.set(n,o)}
+      if(nb)o.n=nb;if(sb)o.s=sb;if(autoSrc(k)!==n)OW.manual[k]=n;
+      msg(`${nb&&sb?'Regular + shiny':nb?'Regular':'Shiny'} sprite set for ${nameOf(k)} (sprite #${n}).`);refresh()}catch(err){msg('Could not read the image: '+err.message)}};
   g('owD-').onclick=()=>stepSrc(k,-1);g('owD+').onclick=()=>stepSrc(k,1);
   g('owDn').onchange=e=>{const v=+e.target.value|0;if(v>0)OW.manual[k]=v;else OW.manual[k]=0;refresh()};
   g('owDauto').onclick=()=>{delete OW.manual[k];refresh()};g('owDnone').onclick=()=>{OW.manual[k]=0;refresh()};
