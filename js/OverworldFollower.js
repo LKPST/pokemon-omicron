@@ -12,7 +12,8 @@
 //
 // Settings (change them any time, e.g. from the console while testing):
 //   OWFollower.enabled   = true | false          also: GameStateManager.saveData.follower = false  turns it off for that save
-//   OWFollower.scale     = 'auto' | number       'auto' = 32 / frame width for frames wider than 32px (a 64px frame is drawn at 0.5)
+//   OWFollower.scale = 2 (default: the game draws every art pixel 2x, like the player and the tiles: a 32x32 sprite = 64x64 on screen)
+//                                                OWFollower.setScale(1.5) changes it live; 'auto' = half the art's native size, max 48px tall, measured on the real pixels)
 //   OWFollower.offsetY   = 14                    how far below the tile centre the feet are (px)
 //   OWFollower.distance  = 32                    path distance behind the player
 //   map option:  follower: false  in a map in overworld_map.js hides it there (shops, indoors ...)
@@ -22,7 +23,7 @@
   const log = (...a) => { if (F.log) console.log('[FOLLOWER]', ...a); };
   const F = {
     log: true, why: '',
-    enabled: true, scale: 'auto', offsetY: 14, distance: 32,
+    enabled: true, scale: 2, offsetY: 14, distance: 32,
     spr: null, species: null, shiny: false, pts: [], last: null, trav: 0, dir: 'down', busy: false, nextCheck: 0, scene: null, wasHidden: true,
   };
 
@@ -62,11 +63,20 @@
       if (!spr) { log('FAILED: OWSprites.create returned nothing - see the [OWSprites] message above (image path / fetch?)'); F.why = 'create failed'; F.fails = (F.fails || 0) + 1; if (F.fails >= 3) log('giving up after 3 failures - fix the problem, then run OWFollower.refresh()'); return; }
       if (F.scene !== scene || !scene.sys || !scene.add) { window.OWSprites.destroy(spr); return; }
       const e = window.OverworldSprites.species[m.species], w = e ? e.w : 32;
-      const sc = F.scale === 'auto' ? (w > 32 ? 32 / w : 1) : Number(F.scale) || 1;
+      // 'auto': half of the art's native size (the game draws a 32px tile), but never taller than 48px - measured on the drawn pixels, not on the empty cell around them
+      let content = e ? Math.max(e.w, e.h) : 32;
+      try {
+        const tex = scene.textures.get('ow_' + m.species), img = tex.getSourceImage(), cx = img.getContext('2d'), d = cx.getImageData(0, 0, e.w, e.h).data;
+        let x0 = e.w, x1 = -1, y0 = e.h, y1 = -1;
+        for (let y = 0; y < e.h; y++) for (let x = 0; x < e.w; x++) if (d[(y * e.w + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (x1 >= 0) content = Math.max(x1 - x0 + 1, y1 - y0 + 1);
+      } catch (_) { }
+      const sc = F.scale === 'auto' ? Math.min(0.5, 48 / content) : Number(F.scale) || 1;
+      F.autoInfo = { cell: e ? e.w + 'x' + e.h : '?', content, scale: sc };
       spr.setOrigin(0.5, 1).setScale(sc).setVisible(false);
       if (F.spr) window.OWSprites.destroy(F.spr);
       F.spr = spr; F.species = m.species; F.shiny = !!m.isShiny; F.wasHidden = true;
-      log('follower ready:', m.species, 'frame', e ? e.w + 'x' + e.h : '?', 'scale', sc, '| player at', Math.round(scene.player.x), Math.round(scene.player.y));
+      log('follower ready:', m.species, 'frame', e ? e.w + 'x' + e.h : '?', 'scale', sc, '(art ' + content + 'px in a ' + (e ? e.w : '?') + 'px cell) | player at', Math.round(scene.player.x), Math.round(scene.player.y));
     } finally { F.busy = false; }
   }
 
@@ -79,6 +89,9 @@
   F.detach = function () { dropSprite(); F.pts = []; F.last = null; F.scene = null; };
 
   // call after the party changed (the check also runs by itself twice a second)
+  // live size change, e.g. OWFollower.setScale(0.6)   (setScale('auto') goes back to the automatic size)
+  F.setScale = function (v) { F.scale = v; if (F.spr) { const sc = v === 'auto' ? (F.autoInfo ? F.autoInfo.scale : 0.5) : Number(v) || 1; F.spr.setScale(sc); } log('scale set to', v); };
+
   F.refresh = function () { F.nextCheck = 0; F.fails = 0; };
 
   F.update = function (scene, time, delta) {
