@@ -694,6 +694,7 @@ class OverworldScene extends Phaser.Scene {
   // MUSIC: loops forever, only changes when the new map uses a different track
   // ===========================================================================
   updateMapMusic(mapKey) {
+    if (window.BattleTransition && window.BattleTransition.busy) return;   // a battle is starting: the map music must stay stopped (this method is also called by a timer)
     const mapData = window.OverworldMaps[mapKey];
     if (!mapData || !mapData.music) return;
 
