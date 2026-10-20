@@ -437,7 +437,7 @@ function createStart(env) {
     const e = path && getImg(path); if (!e || !e.ok) return false; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = ih >= iw * 2 ? Math.round(ih / iw) : 1, fh = Math.floor(ih / n), fr = n > 1 ? Math.floor(S.t / .3) % n : 0;
     let src = keyedIcon(e.img, path);
     if (sil) { let sc = silCache2.get(path); if (!sc) { sc = mk(iw, ih); const x2 = sc.getContext('2d'); x2.drawImage(src, 0, 0); x2.globalCompositeOperation = 'source-in'; x2.fillStyle = '#10182c'; x2.fillRect(0, 0, iw, ih); silCache2.set(path, sc); } src = sc; }
-    const s = size / Math.max(iw, fh), w = Math.round(iw * s), h = Math.round(fh * s); c.imageSmoothingEnabled = false; c.drawImage(src, 0, fr * fh, iw, fh, Math.round(x + (size - w) / 2), Math.round(y + size - h), w, h); return true;
+    const sz = size > 0 ? size : Math.max(iw, fh), s = sz / Math.max(iw, fh), w = Math.round(iw * s), h = Math.round(fh * s); c.imageSmoothingEnabled = false; c.drawImage(src, 0, fr * fh, iw, fh, Math.round(x + (sz - w) / 2), Math.round(y + sz - h), w, h); return true;
   }
 
   // ------------------------------------------------------------ the idle lower screen (shown while the menu is closed)
@@ -803,7 +803,7 @@ function createStart(env) {
   function lockIcon(c, x, y) { c.fillStyle = '#8a93ab'; c.fillRect(x + 2, y, 6, 1); c.fillRect(x + 1, y + 1, 1, 4); c.fillRect(x + 8, y + 1, 1, 4); c.fillStyle = '#ffd23c'; c.fillRect(x, y + 5, 10, 8); c.fillStyle = '#7a5a0c'; c.fillRect(x + 4, y + 7, 2, 3); }
 
   // ---- drawing helpers for this screen (everything is drawn inside the 218x144 RotomDex screen, origin = its top-left corner)
-  const DG = { l: 72, lw: 143, ly: 32, rows: 5, rh: 22, cx: 35, cy: 76 };
+  const DG = { l: 72, lw: 143, ly: 32, rows: 3, rh: 36, cx: 35, cy: 76 };
   const dpanel = (c, x, y, w, h, fill, line, r = 3) => { rr(c, x, y, w, h, r, line || '#0f3a32'); rr(c, x + 1, y + 1, w - 2, h - 2, Math.max(1, r - 1), fill || '#eaf4ee'); };
   function dgBg(c, w, h) {
     grad(c, 0, 0, w, h, '#86d6b6', '#3a9a82'); const off = (S.t * 7) % 22;
@@ -812,34 +812,48 @@ function createStart(env) {
   function dgArrow(c, x, cy, dir, col) { c.fillStyle = col; for (let d = -3; d <= 3; d++) { const w = 4 - Math.abs(d); c.fillRect(dir < 0 ? x + 4 - w : x, cy + d, w, 1); } }
   function dgTop(c, w, cn) {
     grad(c, 0, 0, w, 14, '#2a7a68', '#164c42'); rect(c, 0, 14, w, 1, '#0b2a24');
-    dpanel(c, 3, 1, 56, 12, '#e6f5ee', '#0b2a24', 3); T(c, 'POKéDEX', 3 + Math.round((56 - tw('POKéDEX')) / 2), 3, 'dkgreen');
-    const cnt = DX.shiny ? 'OWN ' + cn.caught : 'SEEN ' + cn.seen + ' OWN ' + cn.caught, cw = tw(cnt) + 10; dpanel(c, 63, 1, cw, 12, '#e6f5ee', '#0b2a24', 3); T(c, cnt, 68, 3, 'dkgreen');
-    const d = new Date(), ck = two(d.getHours()) + ':' + two(d.getMinutes()), kw = tw(ck) + 10; dpanel(c, w - kw - 3, 1, kw, 12, '#e6f5ee', '#0b2a24', 3); T(c, ck, w - kw + 2, 3, 'dkgreen');
+    dpanel(c, 3, 1, 50, 12, '#e6f5ee', '#0b2a24', 3); T(c, 'POKéDEX', 3 + Math.round((50 - tw('POKéDEX')) / 2), 3, 'dkgreen');
+    const d = new Date(), ck = two(d.getHours()) + ':' + two(d.getMinutes()), kw = tw(ck) + 8; dpanel(c, w - kw - 3, 1, kw, 12, '#e6f5ee', '#0b2a24', 3); T(c, ck, w - kw + 1, 3, 'dkgreen');
+    const s1 = DX.shiny ? '' : 'SEEN ' + cn.seen, s2 = 'OWN ' + cn.caught, gap = s1 ? 8 : 0, cw = tw(s1) + gap + tw(s2) + 8, cx0 = 56 + Math.max(0, Math.round((w - kw - 3 - 56 - 3 - cw) / 2));
+    dpanel(c, cx0, 1, cw, 12, '#e6f5ee', '#0b2a24', 3); let tx = cx0 + 4; if (s1) tx = T(c, s1, tx, 3, 'dkgreen') + gap; T(c, s2, tx, 3, 'dkgreen');
+  }
+  const boxCache = new Map();
+  function contentBox(f) {     // centre of the drawn (non-transparent) pixels of a sprite frame, so the unknown "?" sprite sits in the middle
+    let b = boxCache.get(f.key); if (b) return b; b = { cx: f.w / 2, cy: f.h / 2 };
+    try { const cv = mk(f.w, f.h), x2 = cv.getContext('2d', { willReadFrequently: true }); x2.drawImage(f.img, f.sx, 0, f.w, f.h, 0, 0, f.w, f.h); const px = x2.getImageData(0, 0, f.w, f.h).data; let x0 = f.w, x1 = -1, y0 = f.h, y1 = -1;
+      for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) if (px[(y * f.w + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (x1 >= 0) b = { cx: (x0 + x1 + 1) / 2, cy: (y0 + y1 + 1) / 2 }; } catch (er) { /* keep the cell centre */ }
+    boxCache.set(f.key, b); return b;
   }
   function dgCircle(c, e, seen, got, d) {
-    const x = DG.cx, y = DX.stage === 'info' ? 70 : DG.cy; ell(c, x, y, 30, 30, '#0b241f'); ell(c, x, y, 28, 28, '#d6efe2'); ell(c, x, y, 22, 22, '#c4e6d4'); c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, 25.5, 0, 6.3); c.stroke();
-    c.save(); c.beginPath(); c.arc(x, y, 28, 0, 6.3); c.clip();
+    const R = 34, x = DG.cx, y = DX.stage === 'info' ? 65 : 79; ell(c, x, y, R + 2, R + 2, '#0b241f'); ell(c, x, y, R, R, '#d6efe2'); ell(c, x, y, R - 6, R - 6, '#c4e6d4'); c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, R - 2.5, 0, 6.3); c.stroke();
+    c.save(); c.beginPath(); c.arc(x, y, R, 0, 6.3); c.clip();
     if (e) {
       const path = seen ? d.battleSprite : noneSprite(), f = path ? battleFrame(path, DX.shiny && seen) : null, bob = Math.round(Math.sin(S.t * 3) * 1);
-      if (f) drawBattle(c, f, x - 25, y - 25 + bob, 50, 50); else if (!seen) T(c, '?', x - 3, y - 4, 'mute'); else T(c, 'NO IMAGE', x - 22, y - 4, 'mute');
-      if (!seen) drawIcon(c, d.iconSprite, x - 12, y - 12, 24, true);
+      if (f && !seen) { const bb = contentBox(f), w = f.w, h = f.h; c.imageSmoothingEnabled = false; c.drawImage(f.img, f.sx, 0, f.w, f.h, Math.round(x - bb.cx), Math.round(y - bb.cy), w, h); }
+      else if (f) {   // full size (100%); only a sprite bigger than the circle is scaled down to fit
+        const k = Math.min(1, (2 * R - 4) / Math.max(f.w, f.h)), w = Math.max(1, Math.round(f.w * k)), h = Math.max(1, Math.round(f.h * k)); c.imageSmoothingEnabled = false;
+        c.drawImage(f.img, f.sx, 0, f.w, f.h, Math.round(x - w / 2), Math.round(y - h / 2 + bob), w, h);
+      } else if (!seen) T(c, '?', x - 3, y - 4, 'mute'); else T(c, 'NO IMAGE', x - 22, y - 4, 'mute');
     }
-    c.restore(); if (e && got) { if (DX.shiny) T(c, '*', x - 27, y - 28, 'gold'); else ball(c, x - 28, y - 28, 'poke', 1); }
+    c.restore();
   }
   function dgList(c, D) {
     const L = DG; if (DX.idx < DX.top) DX.top = DX.idx; if (DX.idx >= DX.top + L.rows) DX.top = DX.idx - L.rows + 1; DX.top = clamp(DX.top, 0, Math.max(0, DX.list.length - L.rows));
     // header: red pill  "<dex>  <mode>"
     rr(c, L.l, 17, L.lw, 13, 4, '#5a0e14'); rr(c, L.l + 1, 18, L.lw - 2, 11, 3, '#d23a46'); rr(c, L.l + 1, 18, L.lw - 2, 5, 3, '#e8606a');
-    T(c, DX.shiny ? 'SHINY DEX' : (DXM[DX.mode][0] === 'regional' ? 'REGIONAL DEX' : 'NATIONAL DEX'), L.l + 6, 20, 'white'); TR(c, DXMODE[DX.mode], L.l + L.lw - 6, 20, 'white');
+    T(c, DX.shiny ? 'Shiny No.' : (DXM[DX.mode][0] === 'regional' ? 'RegDex No.' : 'NatDex No.'), L.l + 6, 20, 'white'); T(c, 'Name', L.l + 74, 20, 'white');
     dpanel(c, L.l, L.ly - 1, L.lw, L.rows * L.rh + 2, '#eaf4ee', '#0f3a32', 3);
+    const icons = [];
     for (let r = 0; r < L.rows; r++) {
       const i = DX.top + r, n = DX.list[i]; if (n == null) break; const y = L.ly + r * L.rh, sel = i === DX.idx, en = D.entry(n), sn = isSeen(n), cg = isGot(n), dd = dbOf(en.species);
       if (!sel && r < L.rows - 1) rect(c, L.l + 4, y + L.rh - 1, L.lw - 14, 1, '#c3d8cd');
       if (sel) { rr(c, L.l + 2, y + 1, L.lw - 10, L.rh - 1, 4, '#ffffff'); rr(c, L.l + 3, y + 2, L.lw - 12, L.rh - 3, 3, '#1f8a58'); rr(c, L.l + 3, y + 2, L.lw - 12, 9, 3, '#4cc986'); }
-      const tc = sel ? 'white' : 'dark'; T(c, 'No' + String(n).padStart(n > 999 ? 4 : 3, '0'), L.l + 6, y + 7, sel ? 'white' : 'mute');
-      if (cg) { if (DX.shiny) T(c, '*', L.l + 40, y + 7, 'gold'); else ball(c, L.l + 40, y + 7, 'poke', 1); }
-      drawIcon(c, dd.iconSprite, L.l + 51, y + 1, 20, !sn); T(c, sn ? en.name.toUpperCase().slice(0, 11) : '-----------', L.l + 74, y + 7, sn ? tc : (sel ? 'white' : 'mute'));
+      const tc = sel ? 'white' : 'dark'; T(c, 'No' + String(n).padStart(n > 999 ? 4 : 3, '0'), L.l + 6, y + 14, sel ? 'white' : 'mute');
+      if (cg) { if (DX.shiny) T(c, '*', L.l + 40, y + 7, 'gold'); else ball(c, L.l + 40, y + 14, 'poke', 1); }
+      icons.push([dd.iconSprite, L.l + 44, y + Math.round((L.rh - 32) / 2), !sn]); T(c, sn ? en.name.toUpperCase().slice(0, 11) : '-----------', L.l + 74, y + 14, sn ? tc : (sel ? 'white' : 'mute'));
     }
+    c.save(); c.beginPath(); c.rect(L.l + 2, L.ly, L.lw - 4, L.rows * L.rh); c.clip(); for (const [pth, ix, iy, sil] of icons) drawIcon(c, pth, ix, iy, 0, sil); c.restore();   // icons at 100%, drawn after the rows so no row covers them
     const tot = Math.max(1, DX.list.length - L.rows), sbH = L.rows * L.rh - 4, sx = L.l + L.lw - 6; rect(c, sx, L.ly + 1, 3, sbH, '#c3d8cd'); rect(c, sx, L.ly + 1 + Math.round((sbH - 14) * DX.top / tot), 3, 14, '#1f8a58');
     if (!DX.list.length) T(c, 'Nothing to show.', L.l + 10, L.ly + 40, 'mute');
   }
@@ -850,20 +864,31 @@ function createStart(env) {
       T(c, lab, x + Math.round((w - tw(lab)) / 2), 20, on || cancel ? 'white' : 'dkgreen');
     });
   }
-  function areaLines(e) {
-    const maps = window.OverworldMaps || {}, out = [], nm = String(e.name || '').toLowerCase();
+  function areaLines(e) {      // [[text, isMapName]] one line per map, then one line per time of day with its rate
+    const maps = window.OverworldMaps || {}, out = [], nm = String(e.name || '').toLowerCase(), SL = { morning: 'Morning', afternoon: 'Afternoon', night: 'Night', dawn: 'Dawn' };
     for (const [mk, m] of Object.entries(maps)) {
       if (!m.wildData) continue; const parts = [];
-      for (const slot of ['morning', 'afternoon', 'night', 'dawn']) { const w = (m.wildData[slot] || []).find(q => q && String(q.pokemonName || '').toLowerCase() === nm); if (w) parts.push(slot.slice(0, 3).toUpperCase() + ' ' + w.appearanceRate + '%'); }
-      if (parts.length) out.push([String(mk).toUpperCase().slice(0, 14), parts.join('  ')]);
+      for (const slot of ['morning', 'afternoon', 'night', 'dawn']) { const w = (m.wildData[slot] || []).find(q => q && String(q.pokemonName || '').toLowerCase() === nm); if (w) parts.push([SL[slot], w.appearanceRate]); }
+      if (parts.length) { out.push([String(mk).toUpperCase(), 1]); parts.forEach(q => out.push([q[0], 0, q[1]])); }
     }
     return out;
   }
+  const silCache3 = new Map();
+  function drawSil(c, f, x, y, bw, bh) {      // the same as drawBattle but as a grey silhouette
+    let sc = silCache3.get(f.key); if (!sc) { sc = mk(f.w, f.h); const x2 = sc.getContext('2d'); x2.drawImage(f.img, f.sx, 0, f.w, f.h, 0, 0, f.w, f.h); x2.globalCompositeOperation = 'source-in'; x2.fillStyle = '#8b9a93'; x2.fillRect(0, 0, f.w, f.h); silCache3.set(f.key, sc); }
+    drawBattle(c, { img: sc, sx: 0, w: f.w, h: f.h, key: f.key + '#g' }, x, y, bw, bh);
+  }
   function dgInfo(c, D, e, seen, got, d) {
     dgInfoTabs(c); const X = DG.l;
+    if (DX.tab === 4) { dpanel(c, X, 32, DG.lw, 110, '#eaf4ee'); const m = 'Back to the list', m2 = 'Press A'; T(c, m, X + Math.round((DG.lw - tw(m)) / 2), 80, 'dkgreen'); T(c, m2, X + Math.round((DG.lw - tw(m2)) / 2), 94, 'mute'); return; }
     if (DX.tab === 1) {       // AREA
       dpanel(c, X, 32, DG.lw, 110, '#eaf4ee'); T(c, 'WHERE TO FIND IT', X + 6, 36, 'green');
-      if (!seen) T(c, 'Nothing is known yet.', X + 6, 54, 'mute'); else { const ls = areaLines(e); if (!ls.length) wrapText('No wild habitat is recorded for this Pokémon.', DG.lw - 12).slice(0, 4).forEach((l, i) => T(c, l, X + 6, 54 + i * 11, 'mute')); ls.slice(0, 7).forEach(([m, s], i) => { T(c, m, X + 6, 52 + i * 14, 'dark'); T(c, s, X + 6, 52 + i * 14 + 7, 'mute'); }); }
+      if (!seen) T(c, 'Nothing is known yet.', X + 6, 54, 'mute'); else {
+        const ls = areaLines(e), per = 8, pages = Math.max(1, Math.ceil(ls.length / per)); DX.dpage = clamp(DX.dpage, 0, pages - 1);
+        if (!ls.length) wrapText('No wild habitat is recorded for this Pokémon.', DG.lw - 12).slice(0, 4).forEach((l, i) => T(c, l, X + 6, 52 + i * 11, 'mute'));
+        ls.slice(DX.dpage * per, DX.dpage * per + per).forEach(([t, isMap, rate], i) => { const y = 52 + i * 11; if (isMap) T(c, t.slice(0, 20), X + 6, y, 'dark'); else { T(c, t, X + 16, y, 'mute'); TR(c, rate + '%', X + DG.lw - 10, y, 'dark'); } });
+        if (pages > 1) { T(c, (DX.dpage + 1) + '/' + pages + '  A: next', X + DG.lw - 6 - tw((DX.dpage + 1) + '/' + pages + '  A: next'), 130, 'mute'); }
+      }
     } else if (DX.tab === 2) { // CRY
       dpanel(c, X, 32, DG.lw, 110, '#eaf4ee'); T(c, 'CRY', X + 6, 36, 'green'); const playing = S.t < DX.cryUntil;
       for (let k = 0; k < 12; k++) { const h = playing ? 4 + Math.abs(Math.sin(S.t * 14 + k * 1.3)) * 22 : 3; rect(c, X + 14 + k * 9, 92 - h / 2, 6, Math.max(2, h), playing ? '#1f8a58' : '#a9c9ba'); }
@@ -871,12 +896,12 @@ function createStart(env) {
     } else if (DX.tab === 3) { // SIZE
       dpanel(c, X, 32, DG.lw, 110, '#eaf4ee'); T(c, 'SIZE', X + 6, 36, 'green');
       if (!got) T(c, 'HT ???    WT ???', X + 6, 54, 'mute'); else {
-        const ground = 128, ref = 17, top = Math.max(e.height, ref), px = Math.min(5.5, 74 / top);
+        const ground = 126, ref = 17, top = Math.max(e.height, ref), px = Math.min(3, 50 / top);
         rect(c, X + 6, ground + 1, DG.lw - 12, 1, '#7aa595');
-        const pe = trainerSpritePath(), pf = pe ? battleFrame(pe, false) : null, ph = Math.max(10, Math.round(ref * px)), mh = Math.max(6, Math.round(e.height * px)), mf = d.battleSprite ? battleFrame(d.battleSprite, DX.shiny) : null;
-        if (pf) drawBattle(c, pf, X + 14, ground - ph, 40, ph); else rect(c, X + 28, ground - ph, 10, ph, '#9ab8aa');
-        if (mf) drawBattle(c, mf, X + 70, ground - mh, 64, mh); else rect(c, X + 90, ground - mh, 24, mh, '#9ab8aa');
-        T(c, 'YOU', X + 24, 130, 'mute'); T(c, fmtH(e.height) + '  ' + fmtW(e.weight), X + 74, 132, 'dark');
+        const pe = trainerSpritePath(), pf = pe ? battleFrame(pe, false) : null, ph = Math.max(8, Math.round(ref * px)), mh = Math.max(5, Math.round(e.height * px)), mf = d.battleSprite ? battleFrame(d.battleSprite, DX.shiny) : null;
+        if (pf) drawSil(c, pf, X + 22, ground - ph, 40, ph); else rect(c, X + 36, ground - ph, 8, ph, '#8b9a93');
+        if (mf) drawSil(c, mf, X + 74, ground - mh, 64, mh); else rect(c, X + 90, ground - mh, 20, mh, '#8b9a93');
+        T(c, 'YOU', X + 32, 130, 'mute'); T(c, fmtH(e.height) + '  ' + fmtW(e.weight), X + 74, 132, 'dark');
       }
     } else {                  // INFO
       dpanel(c, X, 32, DG.lw, 66, '#eaf4ee'); T(c, 'No' + String(e.num).padStart(e.num > 999 ? 4 : 3, '0'), X + 6, 36, 'mute'); T(c, seen ? e.name.toUpperCase() : '??????????', X + 42, 36, 'dark');
@@ -923,8 +948,6 @@ function createStart(env) {
       if (DX.stage === 'search') { dgSearch(c); c.restore(); return; }
       dgCircle(c, e, seen, got, d);
       if (DX.stage === 'list') {
-        dpanel(c, 3, 108, 64, 19, '#e6f5ee', '#0b2a24', 3); T(c, 'SEEN', 7, 110, 'dkgreen'); TR(c, String(cn.seen), 63, 110, 'dark'); T(c, 'OWN', 7, 118, 'dkgreen'); TR(c, String(cn.caught), 63, 118, 'dark');
-        rr(c, 3, 129, 64, 13, 4, '#5a0e14'); rr(c, 4, 130, 62, 11, 3, '#d23a46'); rr(c, 4, 130, 62, 5, 3, '#e8606a'); T(c, 'SEARCH', 3 + Math.round((64 - tw('SEARCH')) / 2), 132, 'white');
         dgList(c, D);
       } else if (e) dgInfo(c, D, e, seen, got, d);
       c.restore();
@@ -965,8 +988,8 @@ function createStart(env) {
       }
       if (DX.stage === 'info') {
         if (k === 'b') { DX.stage = 'list'; return; }
-        if (k === 'left') DX.tab = (DX.tab + 4) % 5; else if (k === 'right') DX.tab = (DX.tab + 1) % 5; else if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1);
-        else if (k === 'a') { const e = dxEntry(); if (DX.tab === 4) DX.stage = 'list'; else if (DX.tab === 2 && e) cryPlay(dbOf(e.species)); else if (DX.tab === 0) DX.dpage++; }
+        if (k === 'left') { DX.tab = (DX.tab + 4) % 5; DX.dpage = 0; } else if (k === 'right') { DX.tab = (DX.tab + 1) % 5; DX.dpage = 0; } else if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1);
+        else if (k === 'a') { const e = dxEntry(); if (DX.tab === 4) DX.stage = 'list'; else if (DX.tab === 2 && e) cryPlay(dbOf(e.species)); else if (DX.tab === 0 || DX.tab === 1) DX.dpage++; }
         return;
       }
       if (k === 'b') return back(); if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1); else if (k === 'left') dxMove(-5); else if (k === 'right') dxMove(5); else if (k === 'a') this.open(); else if (k === 'sel') this.openSearch(); else if (k === 'filter') this.filter();
@@ -974,7 +997,6 @@ function createStart(env) {
     click(x, y, area) {
       if (area !== 'top') return; const sc = HUD().screen; x -= sc.x; y -= sc.y;
       if (DX.stage === 'list') {
-        if (x >= 3 && x < 67 && y >= 129 && y < 142) return this.openSearch();
         if (x >= DG.l && x < DG.l + DG.lw && y >= DG.ly && y < DG.ly + DG.rows * DG.rh) { const i = DX.top + Math.floor((y - DG.ly) / DG.rh); if (i < DX.list.length) { if (i === DX.idx) this.open(); else { DX.idx = i; lookTo(0, 0); dxPreload(); } } }
       } else if (DX.stage === 'info') {
         if (y >= 17 && y < 30) for (let i = 0; i < 5; i++) { const t = DXTABS[i]; if (x >= t[1] && x < t[1] + t[2]) { DX.tab = i; if (i === 4) DX.stage = 'list'; else if (i === 2) { const e = dxEntry(); if (e) cryPlay(dbOf(e.species)); } } }
@@ -1151,6 +1173,7 @@ const StartMenu = {
       save: () => root.SaveSystem, saveData: sv, flags: () => sv().flags || {}, quests: () => sv().quests || {},
       party: () => (Array.isArray(sv().party) ? sv().party.filter(m => m && m.species) : []),
       db: () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null),
+      types: () => (typeof TypeTable !== 'undefined' ? TypeTable : (root.TypeTable || null)),
       glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
       maps: () => root.OverworldMaps, offsets: () => scene.worldOffsets || {}, townMap: () => StartMenu.TOWNMAP,
       mapName: () => scene.currentMapKey, weather: () => (scene.currentMap && scene.currentMap.weather) || '',
