@@ -183,6 +183,7 @@ button.dirty{outline:2px solid #ffd166}
 <div id="tab-ow" hidden>
   <div class="owbox"><h3>1 · Pokédex data</h3>
     <div class="row"><button id="owLdDex">Load PokedexTables.js</button><input type="file" id="owfDex" accept=".js,.txt" hidden><span class="hint" id="owDexSt" style="margin:0">not loaded</span></div>
+    <div class="row"><label class="in"><input type="checkbox" id="owBg" checked> Remove solid background from every captured frame (folder, sheets, uploads)</label></div>
     <div class="hint">Maps species to National Dex numbers (also loaded by <i>Choose project folder</i> or automatically when this page is served from the project). Species list comes from PokemonDatabase.js; if that is not loaded the Pokédex species are used.</div></div>
   <div class="owbox"><h3>2 · OW sprite folder</h3>
     <div class="row"><button class="pri" id="owFolder">Choose OW sprite folder</button><input type="file" id="owfFolder" webkitdirectory multiple hidden>
@@ -836,6 +837,18 @@ const OW={src:new Map(),off:0,rules:[],manual:{},sel:null,dex:null,sheet:null,ou
 const mk=(w,h)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);return c};
 const fsz=c=>({w:c.width/2,h:c.height/4});
 const srcSize=s=>fsz(s.n||s.s);
+function stripBg(c){ // per frame: if the corners share one opaque colour, flood-remove it from the edges inward
+  if(!document.getElementById('owBg').checked)return c;
+  const W=c.width,H=c.height,fw=Math.floor(W/2),fh=Math.floor(H/4),ctx=c.getContext('2d'),img=ctx.getImageData(0,0,W,H),d=img.data,T=10;
+  const same=(i,r,g2,b)=>Math.abs(d[i]-r)<=T&&Math.abs(d[i+1]-g2)<=T&&Math.abs(d[i+2]-b)<=T&&d[i+3]>200;
+  for(let fr=0;fr<4;fr++)for(let fc=0;fc<2;fc++){
+    const x0=fc*fw,y0=fr*fh,cs=[[x0,y0],[x0+fw-1,y0],[x0,y0+fh-1],[x0+fw-1,y0+fh-1]].map(([x,y])=>(y*W+x)*4).filter(i=>d[i+3]>200);
+    let key=null;for(const i of cs){if(cs.filter(j=>Math.abs(d[j]-d[i])<=T&&Math.abs(d[j+1]-d[i+1])<=T&&Math.abs(d[j+2]-d[i+2])<=T).length>=2){key=[d[i],d[i+1],d[i+2]];break}}
+    if(!key)continue;
+    const seen=new Uint8Array(fw*fh),st=[];const push=(x,y)=>{if(x<0||y<0||x>=fw||y>=fh)return;const k=y*fw+x;if(seen[k])return;const i=((y0+y)*W+x0+x)*4;if(!same(i,key[0],key[1],key[2]))return;seen[k]=1;st.push(x,y)};
+    for(let x=0;x<fw;x++){push(x,0);push(x,fh-1)}for(let y=0;y<fh;y++){push(0,y);push(fw-1,y)}
+    while(st.length){const y=st.pop(),x=st.pop();d[((y0+y)*W+x0+x)*4+3]=0;push(x+1,y);push(x-1,y);push(x,y+1);push(x,y-1)}}
+  ctx.putImageData(img,0,0);return c}
 const pad3=n=>String(n).padStart(3,'0');
 
 // ------------------------------------------------ dex data
@@ -866,7 +879,7 @@ const srcObj=k=>{const n=srcFor(k);return n>0&&OW.src.get(n)||null};
 const FILE_RE=/^(\d+)(s?)\.png$/i;
 async function blockFromFolderFile(f){
   const bmp=await createImageBitmap(f),fw=Math.floor(bmp.width/4),fh=Math.floor(bmp.height/4);
-  const c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,fw,0,2*fw,4*fh,0,0,2*fw,4*fh);bmp.close&&bmp.close();return c}
+  const c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,fw,0,2*fw,4*fh,0,0,2*fw,4*fh);bmp.close&&bmp.close();return stripBg(c)}
 g('owFolder').onclick=()=>g('owfFolder').click();
 g('owfFolder').onchange=async e=>{const fs=[...e.target.files];e.target.value='';await importFolder(fs)};
 async function importFolder(fs){
@@ -911,7 +924,7 @@ function cellBlock(S){ // slot -> block canvas (2 cols x 4 rows of frames) or nu
   if(S.L==='A'){const mp=g('owShR').value==='DULR'?[0,2,3,1]:[0,1,2,3];for(let r=0;r<4;r++)ctx.drawImage(sc,x,y+mp[r]*fh,2*fw,fh,0,r*fh,2*fw,fh)}
   else{ctx.drawImage(sc,x,y,2*fw,fh,0,0,2*fw,fh);ctx.drawImage(sc,x+2*fw,y,2*fw,fh,0,fh,2*fw,fh);
        ctx.drawImage(sc,x,y+fh,2*fw,fh,0,2*fh,2*fw,fh);ctx.drawImage(sc,x+2*fw,y+fh,2*fw,fh,0,3*fh,2*fw,fh)}
-  const d=ctx.getImageData(0,0,b.width,b.height).data;for(let j=3;j<d.length;j+=4)if(d[j])return b;return null}
+  const d=ctx.getImageData(0,0,b.width,b.height).data;for(let j=3;j<d.length;j+=4)if(d[j])return stripBg(b);return null}
 function sheetUpdate(){
   if(!OW.sheet)return;const G=sheetGeom(),S=G.rows>0?slots(G):[],ov=parseOv();
   g('owShStartName').textContent=OW.dex&&OW.dex.names[G.start]?'= '+OW.dex.names[G.start]:'';
@@ -922,9 +935,9 @@ function sheetUpdate(){
   for(const t of S){c.strokeStyle=ov.has(t.dex)?'rgba(90,200,255,.9)':'rgba(255,80,80,.7)';c.strokeRect(t.x*sc+.5,t.y*sc+.5,t.cw*sc-1,t.ch*sc-1);c.fillStyle='#ffd166';c.fillText(t.dex,t.x*sc+2,t.y*sc+10)}}
 for(const id of['owShN','owShL','owShAuto','owShW','owShH','owShStart','owShOv'])g(id).addEventListener('input',sheetUpdate);
 g('owShAuto').addEventListener('change',sheetUpdate);
-const SNAPIDS=['owShN','owShL','owShAuto','owShW','owShH','owShStart','owShOv','owShR'];
+const SNAPIDS=['owShN','owShL','owShAuto','owShW','owShH','owShStart','owShOv','owShR'],KEEPTYPED=['owShStart'];
 function useSnap(){if(!OW.snap||g('owShKind').value!=='s'||!g('owShSame').checked)return;
-  for(const id of SNAPIDS){const e=g(id);if(e.type==='checkbox')e.checked=OW.snap[id];else e.value=OW.snap[id]}}
+  for(const id of SNAPIDS){if(KEEPTYPED.includes(id))continue;const e=g(id);if(e.type==='checkbox')e.checked=OW.snap[id];else e.value=OW.snap[id]}g('owShAuto').checked=false}
 g('owShKind').addEventListener('change',()=>{useSnap();sheetUpdate()});g('owShSame').addEventListener('change',()=>{useSnap();sheetUpdate()});
 g('owShApply').onclick=()=>{
   if(!OW.sheet)return;useSnap();const G=sheetGeom();if(G.rows<1)return msg('Frame size is larger than the sheet.');
@@ -978,7 +991,7 @@ function renderDetail(){
    <button id="owDauto">Auto</button><button id="owDnone">No sprite</button>
    <button id="owDshM">Shift this &amp; following −1</button><button id="owDshP">Shift this &amp; following +1</button></div>
    <div class="row"><b>Upload for this Pokémon</b><select id="owUf"><option value="A">4×4 file (columns 2-3 are used)</option><option value="B">2 columns × 4 rows, already trimmed</option></select>
-   <button id="owUn">Regular…</button><button id="owUs">Shiny…</button><button id="owUb">Both…</button><input type="file" id="owUfile" accept="image/*" multiple hidden></div>
+   <button id="owUn">Regular…</button><button id="owUs">Shiny…</button><button id="owUb">Both…</button><span id="owUst" class="hint" style="margin:0"></span><input type="file" id="owUfile" accept="image/*" multiple hidden></div>
    <div class="hint" style="margin:0 0 6px">Both = two files (the one named ...s / ...shiny is the shiny one) or one image with regular in the left 2 columns and shiny in the right 2 columns (4×4 frames). Replaces the sprite for every Pokémon sharing this sprite number.</div>
    <div class="hint" style="margin:2px 0 8px">Scroll the mouse wheel over the preview to step through the available sprites.</div>`;
   const cv=document.createElement('canvas');cv.className='owprev';wrap.append(cv);
@@ -998,18 +1011,18 @@ function renderDetail(){
   const up=m=>{upMode=m;g('owUfile').click()};g('owUn').onclick=()=>up('n');g('owUs').onclick=()=>up('s');g('owUb').onclick=()=>up('b');
   g('owUfile').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(!fs.length)return;
     try{const fmt=g('owUf').value;
-      const cut=async f=>{const bmp=await createImageBitmap(f);if(fmt==='A'){const fw=Math.floor(bmp.width/4),fh=Math.floor(bmp.height/4),c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,fw,0,2*fw,4*fh,0,0,2*fw,4*fh);return c}
-        const c=mk(bmp.width,bmp.height);c.getContext('2d').drawImage(bmp,0,0);return c};
+      const cut=async f=>{const bmp=await createImageBitmap(f);if(fmt==='A'){const fw=Math.floor(bmp.width/4),fh=Math.floor(bmp.height/4),c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,fw,0,2*fw,4*fh,0,0,2*fw,4*fh);return stripBg(c)}
+        const c=mk(bmp.width,bmp.height);c.getContext('2d').drawImage(bmp,0,0);return stripBg(c)};
       let nb=null,sb=null;
       if(upMode==='n')nb=await cut(fs[0]);else if(upMode==='s')sb=await cut(fs[0]);
       else if(fs.length>=2){const isS=f=>/(s|shiny)\.[a-z]+$/i.test(f.name);let a=fs.find(f=>!isS(f)),b=fs.find(isS);
         if(!a||!b){const o=[...fs].sort((x,y)=>x.name<y.name?-1:1);a=o[0];b=o[1]}nb=await cut(a);sb=await cut(b)}
       else{const bmp=await createImageBitmap(fs[0]),fw=Math.floor(bmp.width/4),fh=Math.floor(bmp.height/4);
-        const part=x=>{const c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,x,0,2*fw,4*fh,0,0,2*fw,4*fh);return c};nb=part(0);sb=part(2*fw)}
+        const part=x=>{const c=mk(2*fw,4*fh);c.getContext('2d').drawImage(bmp,x,0,2*fw,4*fh,0,0,2*fw,4*fh);return stripBg(c)};nb=part(0);sb=part(2*fw)}
       let n=srcFor(k);if(!(n>0)){n=dexOf(k)||1;while(OW.src.has(n)&&n===0)n++}
       let o=OW.src.get(n);if(!o){o={n:null,s:null,label:'upload '+pad3(n)};OW.src.set(n,o)}
       if(nb)o.n=nb;if(sb)o.s=sb;if(autoSrc(k)!==n)OW.manual[k]=n;
-      msg(`${nb&&sb?'Regular + shiny':nb?'Regular':'Shiny'} sprite set for ${nameOf(k)} (sprite #${n}).`);refresh()}catch(err){msg('Could not read the image: '+err.message)}};
+      const t=`${nb&&sb?'Regular + shiny':nb?'Regular':'Shiny'} sprite set for ${nameOf(k)} (sprite #${n}).`;msg(t);refresh();const u=g('owUst');if(u)u.textContent='✔ '+t}catch(err){msg('Could not read the image: '+err.message);const u=g('owUst');if(u)u.textContent='✖ '+err.message}};
   g('owD-').onclick=()=>stepSrc(k,-1);g('owD+').onclick=()=>stepSrc(k,1);
   g('owDn').onchange=e=>{const v=+e.target.value|0;if(v>0)OW.manual[k]=v;else OW.manual[k]=0;refresh()};
   g('owDauto').onclick=()=>{delete OW.manual[k];refresh()};g('owDnone').onclick=()=>{OW.manual[k]=0;refresh()};
