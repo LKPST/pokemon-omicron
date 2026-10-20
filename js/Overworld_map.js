@@ -61,6 +61,17 @@ window.OverworldMaps = {
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
+      },
+      "NPC_3": {
+        "eventType": "NPC",
+        "xPos": 19,
+        "yPos": 16,
+        "owID": "Portia",
+        "script": "giveitem",
+        "movementType": "MOVEMENT_TYPE_PATROL_UP_DOWN",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": ""
       }
     },
     "wildData": {
