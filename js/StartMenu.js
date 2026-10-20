@@ -766,89 +766,223 @@ function createStart(env) {
     }, click() {},
   };
 
-  // ===================================================================== ROTOMDEX (Pokedex)
+  // ===================================================================== POKéDEX (RotomDex screen: list / info tabs / search)
   const DXM = [['national', 'NATIONAL'], ['regional', 'REGIONAL'], ['alpha', 'A TO Z'], ['weight', 'WEIGHT'], ['height', 'HEIGHT'], ['type', 'TYPE']];
-  const DX = { mode: 0, seenOnly: false, shiny: false, list: [], idx: 0, top: 0, stage: 'list', dirty: true };
+  const DXMODE = ['NUMBER', 'REGION', 'A TO Z', 'WEIGHT', 'HEIGHT', 'TYPE'];
+  const DXT = ['ANY', 'NORMAL', 'FIRE', 'WATER', 'ELECTRIC', 'GRASS', 'ICE', 'FIGHTING', 'POISON', 'GROUND', 'FLYING', 'PSYCHIC', 'BUG', 'ROCK', 'GHOST', 'DRAGON', 'DARK', 'STEEL', 'FAIRY'];
+  const DXTABS = [['INFO', 4, 38], ['AREA', 44, 38], ['CRY', 84, 32], ['SIZE', 118, 36], ['CANCEL', 156, 56]];
+  const DX = { mode: 0, seenOnly: false, shiny: false, list: [], idx: 0, top: 0, stage: 'list', dirty: true, tab: 0, dpage: 0, f: { name: 0, t1: 0, t2: 0, show: 0 }, pm: 0, row: 0, cryUntil: 0, hold: 0 };
+  TX.green = ['#1d9a62', '#d4f1e1']; TX.dkgreen = ['#14463c', '#9fd4bf'];
   const DEXAPI = () => (typeof window !== 'undefined' && window.Dex) || null;
   const shinyUnlocked = () => { const f = (env.shinyFlag && env.shinyFlag()) || 'FLAG_SHINY_DEX'; return !!flagsOf()[f]; };
   const isSeen = n => { const D = DEXAPI(); return !!D && (DX.shiny ? !!(D.shiny && D.shiny(n)) : D.seen(n)); };
   const isGot = n => { const D = DEXAPI(); return !!D && (DX.shiny ? !!(D.shiny && D.shiny(n)) : D.caught(n)); };
+  const typesOf = d => [String(d.type1 || '').replace(/^TYPE_/, ''), String(d.type2 || '').replace(/^TYPE_/, '')];
+  const okMode = i => { const D = DEXAPI(); return !!D && (DXM[i][0] === 'national' || !!(window.DexOrders && window.DexOrders[DXM[i][0]])); };
+  const showOpts = () => (shinyUnlocked() ? ['ALL', 'SEEN', 'OWN', 'SHINY'] : ['ALL', 'SEEN', 'OWN']);
   function dxBuild(keep) {
     const D = DEXAPI(); if (!D) { DX.list = []; return; }
-    const cur = keep && DX.list[DX.idx]; let ord = D.order(DXM[DX.mode][0]);
-    if (DX.seenOnly) ord = ord.filter(n => isSeen(n)); DX.list = ord; DX.idx = cur ? Math.max(0, ord.indexOf(cur)) : 0; DX.top = 0; DX.dirty = false;
+    const cur = keep && DX.list[DX.idx], F = DX.f; let ord = D.order(DXM[DX.mode][0]);
+    if (F.show === 1) ord = ord.filter(n => isSeen(n)); else if (F.show >= 2) ord = ord.filter(n => isGot(n));
+    if (F.name || F.t1 || F.t2) ord = ord.filter(n => {
+      if (!isSeen(n)) return false; const e = D.entry(n); if (!e) return false;
+      if (F.name && String(e.name || '').charAt(0).toUpperCase() !== String.fromCharCode(64 + F.name)) return false;
+      if (F.t1 || F.t2) { const t = typesOf(dbOf(e.species)); if (F.t1 && t.indexOf(DXT[F.t1]) < 0) return false; if (F.t2 && t.indexOf(DXT[F.t2]) < 0) return false; }
+      return true;
+    });
+    DX.list = ord; DX.idx = cur ? Math.max(0, ord.indexOf(cur)) : 0; DX.top = 0; DX.dirty = false;
   }
   const dxEntry = () => { const D = DEXAPI(); return D && DX.list[DX.idx] ? D.entry(DX.list[DX.idx]) : null; };
   function dxPreload() {      // load the pictures around the cursor ahead of time so scrolling never waits
     const D = DEXAPI(); if (!D) return; for (let i = DX.idx - 4; i <= DX.idx + 16; i++) { const n = DX.list[i]; if (n == null) continue; const e = D.entry(n); if (!e) continue; const d = dbOf(e.species); getImg(d.iconSprite); if (Math.abs(i - DX.idx) <= 3) getImg(d.battleSprite); }
     const nn = noneSprite(); if (nn) getImg(nn);
   }
-  function dxMove(d) { if (!DX.list.length) return; DX.idx = clamp(DX.idx + d, 0, DX.list.length - 1); lookTo(0, d > 0 ? .8 : -.8); dxPreload(); }
+  function dxMove(d) { if (!DX.list.length) return; DX.idx = clamp(DX.idx + d, 0, DX.list.length - 1); DX.dpage = 0; lookTo(0, d > 0 ? .8 : -.8); dxPreload(); }
   const fmtH = d => (d / 10).toFixed(1) + 'm', fmtW = h => (h / 10).toFixed(1) + 'kg';
   const dexCounts = () => { const D = DEXAPI(); if (!D) return { seen: 0, caught: 0, total: 0 }; const cn = D.counts(); return DX.shiny ? { seen: cn.shiny || 0, caught: cn.shiny || 0, total: cn.total } : cn; };
   function lockIcon(c, x, y) { c.fillStyle = '#8a93ab'; c.fillRect(x + 2, y, 6, 1); c.fillRect(x + 1, y + 1, 1, 4); c.fillRect(x + 8, y + 1, 1, 4); c.fillStyle = '#ffd23c'; c.fillRect(x, y + 5, 10, 8); c.fillStyle = '#7a5a0c'; c.fillRect(x + 4, y + 7, 2, 3); }
+
+  // ---- drawing helpers for this screen (everything is drawn inside the 218x144 RotomDex screen, origin = its top-left corner)
+  const DG = { l: 72, lw: 143, ly: 32, rows: 5, rh: 22, cx: 35, cy: 76 };
+  const dpanel = (c, x, y, w, h, fill, line, r = 3) => { rr(c, x, y, w, h, r, line || '#0f3a32'); rr(c, x + 1, y + 1, w - 2, h - 2, Math.max(1, r - 1), fill || '#eaf4ee'); };
+  function dgBg(c, w, h) {
+    grad(c, 0, 0, w, h, '#86d6b6', '#3a9a82'); const off = (S.t * 7) % 22;
+    c.fillStyle = 'rgba(255,255,255,.10)'; for (let k = -8; k < 14; k++) { const x0 = k * 22 + off; c.beginPath(); c.moveTo(x0 + 8, 0); c.lineTo(x0 + 15, 0); c.lineTo(x0 + 15 - h * .6, h); c.lineTo(x0 + 8 - h * .6, h); c.closePath(); c.fill(); }
+  }
+  function dgArrow(c, x, cy, dir, col) { c.fillStyle = col; for (let d = -3; d <= 3; d++) { const w = 4 - Math.abs(d); c.fillRect(dir < 0 ? x + 4 - w : x, cy + d, w, 1); } }
+  function dgTop(c, w, cn) {
+    grad(c, 0, 0, w, 14, '#2a7a68', '#164c42'); rect(c, 0, 14, w, 1, '#0b2a24');
+    dpanel(c, 3, 1, 56, 12, '#e6f5ee', '#0b2a24', 3); T(c, 'POKéDEX', 3 + Math.round((56 - tw('POKéDEX')) / 2), 3, 'dkgreen');
+    const cnt = DX.shiny ? 'OWN ' + cn.caught : 'SEEN ' + cn.seen + ' OWN ' + cn.caught, cw = tw(cnt) + 10; dpanel(c, 63, 1, cw, 12, '#e6f5ee', '#0b2a24', 3); T(c, cnt, 68, 3, 'dkgreen');
+    const d = new Date(), ck = two(d.getHours()) + ':' + two(d.getMinutes()), kw = tw(ck) + 10; dpanel(c, w - kw - 3, 1, kw, 12, '#e6f5ee', '#0b2a24', 3); T(c, ck, w - kw + 2, 3, 'dkgreen');
+  }
+  function dgCircle(c, e, seen, got, d) {
+    const x = DG.cx, y = DX.stage === 'info' ? 70 : DG.cy; ell(c, x, y, 30, 30, '#0b241f'); ell(c, x, y, 28, 28, '#d6efe2'); ell(c, x, y, 22, 22, '#c4e6d4'); c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, 25.5, 0, 6.3); c.stroke();
+    c.save(); c.beginPath(); c.arc(x, y, 28, 0, 6.3); c.clip();
+    if (e) {
+      const path = seen ? d.battleSprite : noneSprite(), f = path ? battleFrame(path, DX.shiny && seen) : null, bob = Math.round(Math.sin(S.t * 3) * 1);
+      if (f) drawBattle(c, f, x - 25, y - 25 + bob, 50, 50); else if (!seen) T(c, '?', x - 3, y - 4, 'mute'); else T(c, 'NO IMAGE', x - 22, y - 4, 'mute');
+      if (!seen) drawIcon(c, d.iconSprite, x - 12, y - 12, 24, true);
+    }
+    c.restore(); if (e && got) { if (DX.shiny) T(c, '*', x - 27, y - 28, 'gold'); else ball(c, x - 28, y - 28, 'poke', 1); }
+  }
+  function dgList(c, D) {
+    const L = DG; if (DX.idx < DX.top) DX.top = DX.idx; if (DX.idx >= DX.top + L.rows) DX.top = DX.idx - L.rows + 1; DX.top = clamp(DX.top, 0, Math.max(0, DX.list.length - L.rows));
+    // header: red pill  "<dex>  <mode>"
+    rr(c, L.l, 17, L.lw, 13, 4, '#5a0e14'); rr(c, L.l + 1, 18, L.lw - 2, 11, 3, '#d23a46'); rr(c, L.l + 1, 18, L.lw - 2, 5, 3, '#e8606a');
+    T(c, DX.shiny ? 'SHINY DEX' : (DXM[DX.mode][0] === 'regional' ? 'REGIONAL DEX' : 'NATIONAL DEX'), L.l + 6, 20, 'white'); TR(c, DXMODE[DX.mode], L.l + L.lw - 6, 20, 'white');
+    dpanel(c, L.l, L.ly - 1, L.lw, L.rows * L.rh + 2, '#eaf4ee', '#0f3a32', 3);
+    for (let r = 0; r < L.rows; r++) {
+      const i = DX.top + r, n = DX.list[i]; if (n == null) break; const y = L.ly + r * L.rh, sel = i === DX.idx, en = D.entry(n), sn = isSeen(n), cg = isGot(n), dd = dbOf(en.species);
+      if (!sel && r < L.rows - 1) rect(c, L.l + 4, y + L.rh - 1, L.lw - 14, 1, '#c3d8cd');
+      if (sel) { rr(c, L.l + 2, y + 1, L.lw - 10, L.rh - 1, 4, '#ffffff'); rr(c, L.l + 3, y + 2, L.lw - 12, L.rh - 3, 3, '#1f8a58'); rr(c, L.l + 3, y + 2, L.lw - 12, 9, 3, '#4cc986'); }
+      const tc = sel ? 'white' : 'dark'; T(c, 'No' + String(n).padStart(n > 999 ? 4 : 3, '0'), L.l + 6, y + 7, sel ? 'white' : 'mute');
+      if (cg) { if (DX.shiny) T(c, '*', L.l + 40, y + 7, 'gold'); else ball(c, L.l + 40, y + 7, 'poke', 1); }
+      drawIcon(c, dd.iconSprite, L.l + 51, y + 1, 20, !sn); T(c, sn ? en.name.toUpperCase().slice(0, 11) : '-----------', L.l + 74, y + 7, sn ? tc : (sel ? 'white' : 'mute'));
+    }
+    const tot = Math.max(1, DX.list.length - L.rows), sbH = L.rows * L.rh - 4, sx = L.l + L.lw - 6; rect(c, sx, L.ly + 1, 3, sbH, '#c3d8cd'); rect(c, sx, L.ly + 1 + Math.round((sbH - 14) * DX.top / tot), 3, 14, '#1f8a58');
+    if (!DX.list.length) T(c, 'Nothing to show.', L.l + 10, L.ly + 40, 'mute');
+  }
+  function dgInfoTabs(c) {
+    DXTABS.forEach(([lab, x, w], i) => {
+      const on = i === DX.tab, cancel = i === 4; rr(c, x, 17, w, 13, 4, on ? '#ffffff' : '#0f3a32');
+      rr(c, x + 1, 18, w - 2, 11, 3, cancel ? (on ? '#8a97a2' : '#5a6870') : on ? '#1f8a58' : '#d6efe2'); if (on) rr(c, x + 1, 18, w - 2, 5, 3, cancel ? '#a7b3bc' : '#4cc986');
+      T(c, lab, x + Math.round((w - tw(lab)) / 2), 20, on || cancel ? 'white' : 'dkgreen');
+    });
+  }
+  function areaLines(e) {
+    const maps = window.OverworldMaps || {}, out = [], nm = String(e.name || '').toLowerCase();
+    for (const [mk, m] of Object.entries(maps)) {
+      if (!m.wildData) continue; const parts = [];
+      for (const slot of ['morning', 'afternoon', 'night', 'dawn']) { const w = (m.wildData[slot] || []).find(q => q && String(q.pokemonName || '').toLowerCase() === nm); if (w) parts.push(slot.slice(0, 3).toUpperCase() + ' ' + w.appearanceRate + '%'); }
+      if (parts.length) out.push([String(mk).toUpperCase().slice(0, 14), parts.join('  ')]);
+    }
+    return out;
+  }
+  function dgInfo(c, D, e, seen, got, d) {
+    dgInfoTabs(c); const X = DG.l;
+    if (DX.tab === 1) {       // AREA
+      dpanel(c, X, 32, DG.lw, 110, '#eaf4ee'); T(c, 'WHERE TO FIND IT', X + 6, 36, 'green');
+      if (!seen) T(c, 'Nothing is known yet.', X + 6, 54, 'mute'); else { const ls = areaLines(e); if (!ls.length) wrapText('No wild habitat is recorded for this Pokémon.', DG.lw - 12).slice(0, 4).forEach((l, i) => T(c, l, X + 6, 54 + i * 11, 'mute')); ls.slice(0, 7).forEach(([m, s], i) => { T(c, m, X + 6, 52 + i * 14, 'dark'); T(c, s, X + 6, 52 + i * 14 + 7, 'mute'); }); }
+    } else if (DX.tab === 2) { // CRY
+      dpanel(c, X, 32, DG.lw, 110, '#eaf4ee'); T(c, 'CRY', X + 6, 36, 'green'); const playing = S.t < DX.cryUntil;
+      for (let k = 0; k < 12; k++) { const h = playing ? 4 + Math.abs(Math.sin(S.t * 14 + k * 1.3)) * 22 : 3; rect(c, X + 14 + k * 9, 92 - h / 2, 6, Math.max(2, h), playing ? '#1f8a58' : '#a9c9ba'); }
+      T(c, got ? (d.cry ? 'A: play the cry' : 'No cry file set for it') : 'Catch it to hear it', X + 6, 124, 'mute');
+    } else if (DX.tab === 3) { // SIZE
+      dpanel(c, X, 32, DG.lw, 110, '#eaf4ee'); T(c, 'SIZE', X + 6, 36, 'green');
+      if (!got) T(c, 'HT ???    WT ???', X + 6, 54, 'mute'); else {
+        const ground = 128, ref = 17, top = Math.max(e.height, ref), px = Math.min(5.5, 74 / top);
+        rect(c, X + 6, ground + 1, DG.lw - 12, 1, '#7aa595');
+        const pe = trainerSpritePath(), pf = pe ? battleFrame(pe, false) : null, ph = Math.max(10, Math.round(ref * px)), mh = Math.max(6, Math.round(e.height * px)), mf = d.battleSprite ? battleFrame(d.battleSprite, DX.shiny) : null;
+        if (pf) drawBattle(c, pf, X + 14, ground - ph, 40, ph); else rect(c, X + 28, ground - ph, 10, ph, '#9ab8aa');
+        if (mf) drawBattle(c, mf, X + 70, ground - mh, 64, mh); else rect(c, X + 90, ground - mh, 24, mh, '#9ab8aa');
+        T(c, 'YOU', X + 24, 130, 'mute'); T(c, fmtH(e.height) + '  ' + fmtW(e.weight), X + 74, 132, 'dark');
+      }
+    } else {                  // INFO
+      dpanel(c, X, 32, DG.lw, 66, '#eaf4ee'); T(c, 'No' + String(e.num).padStart(e.num > 999 ? 4 : 3, '0'), X + 6, 36, 'mute'); T(c, seen ? e.name.toUpperCase() : '??????????', X + 42, 36, 'dark');
+      T(c, got ? String(e.category).toUpperCase() + ' POKéMON' : '', X + 6, 49, 'green');
+      T(c, 'HT', X + 6, 63, 'mute'); T(c, got ? fmtH(e.height) : '???', X + 22, 63, 'dark'); T(c, 'WT', X + 68, 63, 'mute'); T(c, got ? fmtW(e.weight) : '???', X + 84, 63, 'dark');
+      if (seen) { const t = [d.type1, d.type2].filter((q, i, a) => q && q !== 'TYPE_NONE' && a.indexOf(q) === i); badges(c, t, X + 6, 78); }
+      dpanel(c, 4, 100, 210, 42, '#eaf4ee');
+      const txt = got ? (D.text(e.num) || 'No Pokédex text installed yet.') : (seen ? 'Catch this Pokémon to learn more about it.' : 'Nothing is known about this Pokémon.'), ls = wrapText(txt, 196), pages = Math.max(1, Math.ceil(ls.length / 3));
+      DX.dpage = clamp(DX.dpage, 0, pages - 1); ls.slice(DX.dpage * 3, DX.dpage * 3 + 3).forEach((l, i) => T(c, l, 10, 105 + i * 12, got ? 'dark' : 'mute'));
+      if (pages > 1) { const by = 134 + Math.round(Math.abs(Math.sin(S.t * 5))); c.fillStyle = '#1f8a58'; for (let k = 0; k < 4; k++) c.fillRect(203 + k, by + k, 7 - 2 * k, 1); T(c, (DX.dpage + 1) + '/' + pages, 186, 131, 'mute'); }
+    }
+  }
+  const SRROWS = ['NAME', 'TYPE 1', 'TYPE 2', 'ORDER', 'SHOW'];
+  const srVal = i => i === 0 ? (DX.f.name ? String.fromCharCode(64 + DX.f.name) : 'ANY') : i === 1 ? DXT[DX.f.t1] : i === 2 ? DXT[DX.f.t2] : i === 3 ? DXMODE[DX.pm] : showOpts()[Math.min(DX.f.show, showOpts().length - 1)];
+  const SRBTN = [['SEARCH', 4, 66, '#d23a46', '#e8606a'], ['RESET', 76, 66, '#3b6fd0', '#6a98ec'], ['CANCEL', 148, 66, '#5a6870', '#8a97a2']];
+  function dgSearch(c) {
+    dpanel(c, 4, 18, 210, 94, '#eaf4ee');
+    for (let i = 0; i < 5; i++) {
+      const y = 21 + i * 18, on = DX.row === i; if (on) { rr(c, 6, y, 206, 17, 4, '#ffffff'); rr(c, 7, y + 1, 204, 15, 3, '#1f8a58'); rr(c, 7, y + 1, 204, 7, 3, '#4cc986'); }
+      T(c, SRROWS[i], 14, y + 5, on ? 'white' : 'dkgreen'); const v = srVal(i), vx = 150 - Math.round(tw(v) / 2);
+      T(c, v, vx, y + 5, on ? 'white' : 'dark'); dgArrow(c, 108, y + 8, -1, on ? '#ffffff' : '#1f8a58'); dgArrow(c, 198, y + 8, 1, on ? '#ffffff' : '#1f8a58');
+      if (i < 4 && !on) rect(c, 10, y + 17, 198, 1, '#c3d8cd');
+    }
+    SRBTN.forEach(([lab, x, w, col, hi], i) => { const on = DX.row === 5 + i; rr(c, x - 1, 117, w + 2, 22, 5, on ? '#ffffff' : '#0f3a32'); rr(c, x, 118, w, 20, 4, col); rr(c, x, 118, w, 8, 4, hi); T(c, lab, x + Math.round((w - tw(lab)) / 2), 124, 'white'); });
+  }
+  function srChange(i, dir) {
+    const F = DX.f;
+    if (i === 0) F.name = (F.name + dir + 27) % 27; else if (i === 1) F.t1 = (F.t1 + dir + DXT.length) % DXT.length; else if (i === 2) F.t2 = (F.t2 + dir + DXT.length) % DXT.length;
+    else if (i === 3) { let k = DX.pm; for (let n = 0; n < DXM.length; n++) { k = (k + dir + DXM.length) % DXM.length; if (okMode(k)) break; } DX.pm = k; }
+    else if (i === 4) { const n = showOpts().length; F.show = (F.show + dir + n) % n; }
+  }
+  function srApply() { DX.mode = DX.pm; DX.shiny = showOpts()[DX.f.show] === 'SHINY'; DX.seenOnly = DX.f.show === 1; dxBuild(false); DX.stage = 'list'; dxPreload(); }
+  function srReset() { DX.f = { name: 0, t1: 0, t2: 0, show: 0 }; DX.pm = 0; }
+  function cryPlay(d) { if (!d || !d.cry) return; try { const a = new Audio(d.cry); a.volume = .7; a.play().catch(() => { }); DX.cryUntil = S.t + 1.0; } catch (er) { /* no audio */ } }
+
   SCREENS.dex = {
-    enter() { if (DX.dirty || !DX.list.length) dxBuild(false); DX.stage = 'list'; queueAllIcons(); pumpIcons(400); dxPreload(); },
+    enter() { if (DX.dirty || !DX.list.length) dxBuild(false); DX.stage = 'list'; DX.pm = DX.mode; queueAllIcons(); pumpIcons(400); dxPreload(); },
     top(c) {
-      const D = DEXAPI(), sc = rotomFrame(c), H = HUD().dex, cn = dexCounts();
-      grad(c, sc.x, sc.y, sc.w, sc.h, '#e8f4ff', '#b8d4f0'); c.save(); c.beginPath(); c.rect(sc.x, sc.y, sc.w, sc.h); c.clip();
-      const off = (S.t * 6) % 12; c.fillStyle = 'rgba(80,140,220,.10)'; for (let k = -6; k < 24; k++) c.fillRect(sc.x + k * 12 + off, sc.y, 5, sc.h);
-      rect(c, sc.x, sc.y, sc.w, H.header.h, DX.shiny ? '#a8780c' : '#d8483a'); rect(c, sc.x, sc.y + H.header.h, sc.w, 1, '#4a0c10');
-      T(c, (DX.shiny ? 'SHINY DEX  ' : 'ROTOMDEX  ') + (DX.stage === 'entry' ? 'DATA' : DXM[DX.mode][1]), sc.x + 5, sc.y + 3, 'white'); TR(c, (DX.shiny ? 'OWN ' + cn.caught : 'SEEN ' + cn.seen + '  OWN ' + cn.caught), sc.x + sc.w - 5, sc.y + 3, 'gold');
-      if (!D) { T(c, 'PokedexTables.js is not loaded.', sc.x + 8, sc.y + 40, 'dark'); c.restore(); return; }
+      const D = DEXAPI(), sc = rotomFrame(c), cn = dexCounts();
+      c.save(); c.translate(sc.x, sc.y); c.beginPath(); c.rect(0, 0, sc.w, sc.h); c.clip();
+      dgBg(c, sc.w, sc.h); dgTop(c, sc.w, cn);
+      if (!D) { T(c, 'PokedexTables.js is not loaded.', 8, 40, 'dark'); c.restore(); return; }
       const e = dxEntry(), num = e && e.num, seen = !!num && isSeen(num), got = !!num && isGot(num), d = e ? dbOf(e.species) : {};
-      // picture box
-      const B = H.box, bx = sc.x + B.x, by = sc.y + B.y; rr(c, bx, by, B.w, B.h, 4, '#143058'); rr(c, bx + 1, by + 1, B.w - 2, B.h - 2, 3, DX.shiny ? '#4a3a78' : '#1f4a82'); const fl = (S.t * 30) % 160; rect(c, bx + 1 + fl - 20, by + 1, 8, B.h - 2, 'rgba(255,255,255,.07)');
-      const bob = Math.round(Math.sin(S.t * 3) * 1);
-      if (e) {
-        const path = seen ? d.battleSprite : noneSprite(), f = path ? battleFrame(path, DX.shiny && seen) : null;
-        if (f) drawBattle(c, f, bx + 3, by + 3 + bob, B.w - 6, B.h - 6); else if (!seen) T(c, '?', bx + B.w / 2 - 3, by + B.h / 2 - 4, 'mute'); else T(c, 'NO IMAGE', bx + 20, by + B.h / 2 - 4, 'mute');
-        if (!seen) { const ip = H.iconUnseen; drawIcon(c, d.iconSprite, bx + ip.x, by + ip.y, H.iconSize.s, true); }
-        if (got && !DX.shiny) ball(c, bx + H.ball.x, by + H.ball.y, 'poke', 1); if (got && DX.shiny) T(c, '*', bx + H.ball.x, by + H.ball.y - 1, 'gold');
-      }
-      const N = H.nameBox, nx = sc.x + N.x, ny = sc.y + N.y; rr(c, nx, ny, N.w, N.h, 3, '#143058');
-      if (e) { T(c, seen ? e.name.toUpperCase().slice(0, 12) : '?????', nx + H.name.x, ny + H.name.y, 'white'); T(c, 'No.' + String(e.num).padStart(4, '0'), nx + H.num.x, ny + H.num.y, 'gold'); }
+      if (DX.stage === 'search') { dgSearch(c); c.restore(); return; }
+      dgCircle(c, e, seen, got, d);
       if (DX.stage === 'list') {
-        const R = { x: sc.x + H.list.x, y: sc.y + H.list.y, w: H.list.w, rows: H.list.rows, h: H.list.h }; if (DX.idx < DX.top) DX.top = DX.idx; if (DX.idx >= DX.top + R.rows) DX.top = DX.idx - R.rows + 1; DX.top = clamp(DX.top, 0, Math.max(0, DX.list.length - R.rows));
-        rr(c, R.x - 1, R.y - 1, R.w + 2, R.rows * R.h + 2, 3, '#143058');
-        for (let r = 0; r < R.rows; r++) {
-          const i = DX.top + r, n = DX.list[i]; if (n == null) break; const y = R.y + r * R.h, sel = i === DX.idx; const en = D.entry(n), sn = isSeen(n), cg = isGot(n);
-          rect(c, R.x, y, R.w - 6, R.h - 1, sel ? '#ffd23c' : (r % 2 ? '#fdfeff' : '#e6f0fa'));
-          if (sel) tri(c, R.x - 1 + Math.round(Math.abs(Math.sin(S.t * 6)) * 2), y + 6, 3, '#d8483a');
-          T(c, String(n).padStart(4, '0'), R.x + 6, y + 2, sel ? 'dark' : 'mute'); T(c, sn ? en.name.toUpperCase().slice(0, 11) : '-----------', R.x + 34, y + 2, sel ? 'dark' : (sn ? 'dark' : 'mute'));
-          if (cg) { if (DX.shiny) T(c, '*', R.x + R.w - 17, y + 2, sel ? 'dark' : 'gold'); else ball(c, R.x + R.w - 18, y + 2, 'poke', 1); }
-        }
-        const tot = Math.max(1, DX.list.length - R.rows), sbH = R.rows * R.h; rect(c, R.x + R.w - 4, R.y, 3, sbH, '#0c2040'); rect(c, R.x + R.w - 4, R.y + Math.round((sbH - 14) * DX.top / tot), 3, 14, '#ffd23c');
-        if (!DX.list.length) T(c, 'Nothing to show.', R.x + 8, R.y + 20, 'white');
-      } else if (e) {
-        const X = sc.x + H.title.x; T(c, seen ? e.name.toUpperCase() : '??????????', X, sc.y + H.title.y, 'dark'); T(c, got ? String(e.category).toUpperCase() + ' POKéMON' : '', sc.x + H.cat.x, sc.y + H.cat.y, 'red');
-        T(c, 'HT', sc.x + H.stats.x, sc.y + H.stats.y, 'mute'); T(c, got ? fmtH(e.height) : '???', sc.x + H.stats.x + 20, sc.y + H.stats.y, 'dark'); T(c, 'WT', sc.x + H.stats.x + 62, sc.y + H.stats.y, 'mute'); T(c, got ? fmtW(e.weight) : '???', sc.x + H.stats.x + 82, sc.y + H.stats.y, 'dark');
-        const txt = got ? (D.text(e.num) || 'No Pokédex text installed yet.') : (seen ? 'Catch this Pokémon to learn more about it.' : 'Nothing is known about this Pokémon.');
-        wrapText(txt, H.desc.w).slice(0, H.desc.lines).forEach((l, i) => T(c, l, sc.x + H.desc.x, sc.y + H.desc.y + i * H.desc.pitch, got ? 'dark' : 'mute'));
-        T(c, got ? (DX.shiny ? 'SHINY OWNED' : 'REGISTERED') : (seen ? 'SEEN' : 'UNKNOWN'), sc.x + H.status.x, sc.y + H.status.y, got ? 'red' : 'mute');
-      }
+        dpanel(c, 3, 108, 64, 19, '#e6f5ee', '#0b2a24', 3); T(c, 'SEEN', 7, 110, 'dkgreen'); TR(c, String(cn.seen), 63, 110, 'dark'); T(c, 'OWN', 7, 118, 'dkgreen'); TR(c, String(cn.caught), 63, 118, 'dark');
+        rr(c, 3, 129, 64, 13, 4, '#5a0e14'); rr(c, 4, 130, 62, 11, 3, '#d23a46'); rr(c, 4, 130, 62, 5, 3, '#e8606a'); T(c, 'SEARCH', 3 + Math.round((64 - tw('SEARCH')) / 2), 132, 'white');
+        dgList(c, D);
+      } else if (e) dgInfo(c, D, e, seen, got, d);
       c.restore();
     },
     bot(c) {
       botGeneric(c, '', cc => {
         const D = DEXAPI();
         if (DX.stage === 'list') {
-          btn(cc, 10, 22, 108, 22, DXM[DX.mode][1], () => SCREENS.dex.order(), '#7a1c28'); btn(cc, 122, 22, 108, 22, DX.seenOnly ? 'SEEN ONLY' : 'SHOW ALL', () => SCREENS.dex.filter(), '#7a1c28');
+          btn(cc, 10, 22, 108, 22, 'SEARCH', () => SCREENS.dex.openSearch(), '#7a1c28'); btn(cc, 122, 22, 108, 22, 'INFO', () => SCREENS.dex.open(), '#2c5a3a');
           btn(cc, 10, 50, 50, 22, '-10', () => dxMove(-10), '#2e3548'); btn(cc, 64, 50, 50, 22, '-1', () => dxMove(-1), '#2e3548'); btn(cc, 118, 50, 50, 22, '+1', () => dxMove(1), '#2e3548'); btn(cc, 172, 50, 58, 22, '+10', () => dxMove(10), '#2e3548');
-          btn(cc, 10, 78, 108, 22, 'ENTRY', () => SCREENS.dex.open(), '#2c5a3a'); { const un = shinyUnlocked(); btn(cc, 122, 78, 108, 22, un ? (DX.shiny ? 'NORMAL DEX' : 'SHINY DEX') : 'SHINY DEX', () => SCREENS.dex.toggleShiny(), un ? '#7a5a0c' : '#2a2e3e'); if (!un) lockIcon(cc, 213, 83); }
-        } else { btn(cc, 10, 28, 70, 24, 'PREV', () => dxMove(-1), '#2e3548'); btn(cc, 90, 28, 70, 24, 'NEXT', () => dxMove(1), '#2e3548'); T(cc, (DX.idx + 1) + ' / ' + DX.list.length, 12, 62, 'mute'); }
+          btn(cc, 10, 78, 108, 22, DX.seenOnly ? 'SEEN ONLY' : 'SHOW ALL', () => SCREENS.dex.filter(), '#2e3548'); { const un = shinyUnlocked(); btn(cc, 122, 78, 108, 22, un ? (DX.shiny ? 'NORMAL DEX' : 'SHINY DEX') : 'SHINY DEX', () => SCREENS.dex.toggleShiny(), un ? '#7a5a0c' : '#2a2e3e'); if (!un) lockIcon(cc, 213, 83); }
+        } else if (DX.stage === 'search') {
+          btn(cc, 10, 22, 70, 24, 'SEARCH', () => srApply(), '#7a1c28'); btn(cc, 85, 22, 70, 24, 'RESET', () => srReset(), '#2c4a7a'); btn(cc, 160, 22, 70, 24, 'CANCEL', () => { DX.stage = 'list'; }, '#2e3548');
+          btn(cc, 10, 52, 108, 22, '< PREV ROW', () => { DX.row = (DX.row + 7) % 8; }, '#2e3548'); btn(cc, 122, 52, 108, 22, 'NEXT ROW >', () => { DX.row = (DX.row + 1) % 8; }, '#2e3548');
+          btn(cc, 10, 80, 50, 22, '<', () => srChange(Math.min(DX.row, 4), -1), '#2e3548'); btn(cc, 64, 80, 50, 22, '>', () => srChange(Math.min(DX.row, 4), 1), '#2e3548');
+        } else {
+          btn(cc, 10, 22, 70, 24, 'PREV', () => dxMove(-1), '#2e3548'); btn(cc, 90, 22, 70, 24, 'NEXT', () => dxMove(1), '#2e3548'); btn(cc, 170, 22, 60, 24, 'LIST', () => { DX.stage = 'list'; }, '#4a2030');
+          DXTABS.slice(0, 4).forEach(([lab], i) => btn(cc, 10 + i * 56, 52, 52, 22, lab, () => { DX.tab = i; }, '#2c5a3a', DX.tab === i));
+          if (DX.tab === 2) btn(cc, 10, 80, 108, 22, 'PLAY CRY', () => { const e2 = dxEntry(); if (e2) cryPlay(dbOf(e2.species)); }, '#7a5a0c'); T(cc, (DX.idx + 1) + ' / ' + DX.list.length, 126, 86, 'mute');
+        }
         if (D) { const cn = dexCounts(); const w = 100, p = cn.total ? cn.caught / cn.total : 0; T(cc, (DX.shiny ? 'SHINIES ' : 'COMPLETION ') + cn.caught + '/' + cn.total, 12, BH - 38, 'mute'); rect(cc, 12, BH - 25, w, 7, '#0a0c12'); rect(cc, 13, BH - 24, Math.max(p > 0 ? 1 : 0, Math.round((w - 2) * p)), 5, DX.shiny ? '#f0c040' : '#ffd23c'); }
       });
     },
-    order() { DX.mode = (DX.mode + 1) % DXM.length; if (!(DEXAPI() && window.DexOrders && (DXM[DX.mode][0] === 'national' || window.DexOrders[DXM[DX.mode][0]]))) DX.mode = 0; dxBuild(true); dxPreload(); },
-    filter() { DX.seenOnly = !DX.seenOnly; dxBuild(true); dxPreload(); },
-    toggleShiny() { if (!shinyUnlocked()) return; DX.shiny = !DX.shiny; dxBuild(true); dxPreload(); },
-    open() { if (!dxEntry()) return; DX.stage = 'entry'; lookTo(0, 0); const e = dxEntry(); if (e && isGot(e.num)) S.happy = S.t + .7; },
+    filter() { DX.f.show = DX.f.show === 1 ? 0 : 1; DX.seenOnly = DX.f.show === 1; dxBuild(true); dxPreload(); },
+    toggleShiny() { if (!shinyUnlocked()) return; DX.shiny = !DX.shiny; DX.f.show = DX.shiny ? 3 : 0; DX.seenOnly = false; dxBuild(true); dxPreload(); },
+    order() { this.openSearch(); },
+    openSearch() { DX.pm = DX.mode; DX.row = 0; DX.stage = 'search'; lookTo(0, 0); },
+    open() { if (!dxEntry()) return; DX.stage = 'info'; DX.tab = 0; DX.dpage = 0; lookTo(0, 0); const e = dxEntry(); if (e && isGot(e.num)) S.happy = S.t + .7; },
     press(k) {
-      if (DX.stage === 'entry') { if (k === 'b' || k === 'a') { DX.stage = 'list'; return; } if (k === 'up' || k === 'left') dxMove(-1); else if (k === 'down' || k === 'right') dxMove(1); return; }
-      if (k === 'b') return back(); if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1); else if (k === 'left') dxMove(-7); else if (k === 'right') dxMove(7); else if (k === 'a') this.open(); else if (k === 'sel') this.order(); else if (k === 'filter') this.filter(); else if (k === 'shiny') this.toggleShiny();
+      if (DX.stage === 'search') {
+        if (k === 'b') { DX.stage = 'list'; return; }
+        if (k === 'up') { DX.row = DX.row >= 5 ? 4 : (DX.row + 4) % 5; }
+        else if (k === 'down') { DX.row = DX.row === 4 ? 5 : DX.row >= 5 ? 0 : DX.row + 1; }
+        else if (k === 'left') { if (DX.row >= 5) DX.row = 5 + (DX.row - 5 + 2) % 3; else srChange(DX.row, -1); }
+        else if (k === 'right') { if (DX.row >= 5) DX.row = 5 + (DX.row - 5 + 1) % 3; else srChange(DX.row, 1); }
+        else if (k === 'a') { if (DX.row === 5) srApply(); else if (DX.row === 6) srReset(); else if (DX.row === 7) DX.stage = 'list'; else srChange(DX.row, 1); }
+        return;
+      }
+      if (DX.stage === 'info') {
+        if (k === 'b') { DX.stage = 'list'; return; }
+        if (k === 'left') DX.tab = (DX.tab + 4) % 5; else if (k === 'right') DX.tab = (DX.tab + 1) % 5; else if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1);
+        else if (k === 'a') { const e = dxEntry(); if (DX.tab === 4) DX.stage = 'list'; else if (DX.tab === 2 && e) cryPlay(dbOf(e.species)); else if (DX.tab === 0) DX.dpage++; }
+        return;
+      }
+      if (k === 'b') return back(); if (k === 'up') dxMove(-1); else if (k === 'down') dxMove(1); else if (k === 'left') dxMove(-5); else if (k === 'right') dxMove(5); else if (k === 'a') this.open(); else if (k === 'sel') this.openSearch(); else if (k === 'filter') this.filter();
     },
-    click(x, y, area) { if (area !== 'top' || DX.stage !== 'list') return; const sc = HUD().screen, L = HUD().dex.list, rx = sc.x + L.x, ry = sc.y + L.y; if (x >= rx && x < rx + L.w && y >= ry && y < ry + L.rows * L.h) { const i = DX.top + Math.floor((y - ry) / L.h); if (i < DX.list.length) { if (i === DX.idx) this.open(); else { DX.idx = i; lookTo(0, 0); dxPreload(); } } } },
+    click(x, y, area) {
+      if (area !== 'top') return; const sc = HUD().screen; x -= sc.x; y -= sc.y;
+      if (DX.stage === 'list') {
+        if (x >= 3 && x < 67 && y >= 129 && y < 142) return this.openSearch();
+        if (x >= DG.l && x < DG.l + DG.lw && y >= DG.ly && y < DG.ly + DG.rows * DG.rh) { const i = DX.top + Math.floor((y - DG.ly) / DG.rh); if (i < DX.list.length) { if (i === DX.idx) this.open(); else { DX.idx = i; lookTo(0, 0); dxPreload(); } } }
+      } else if (DX.stage === 'info') {
+        if (y >= 17 && y < 30) for (let i = 0; i < 5; i++) { const t = DXTABS[i]; if (x >= t[1] && x < t[1] + t[2]) { DX.tab = i; if (i === 4) DX.stage = 'list'; else if (i === 2) { const e = dxEntry(); if (e) cryPlay(dbOf(e.species)); } } }
+      } else if (DX.stage === 'search') {
+        if (y >= 117 && y < 139) SRBTN.forEach(([, bx, bw], i) => { if (x >= bx && x < bx + bw) { DX.row = 5 + i; this.press('a'); } });
+        else if (y >= 21 && y < 111) { const i = Math.floor((y - 21) / 18); if (i >= 0 && i < 5) { DX.row = i; srChange(i, x < 150 ? -1 : 1); } }
+      }
+    },
   };
 
   // ===================================================================== the core api
