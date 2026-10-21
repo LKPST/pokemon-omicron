@@ -255,6 +255,7 @@ function createStart(env) {
   }
   // ===================================================================== START MENU (bottom screen) + sub screens (top screen)
   const BW = 240, TH = 160; let BH = (env.bottomH && env.bottomH()) || 148;
+  const SINGLE = !!(env.single && env.single());   // landscape: ONE main screen. The menu is a floating hex ring; every sub screen is drawn on the main screen.
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const ease = { out: p => 1 - Math.pow(1 - clamp(p), 3), back: p => { p = clamp(p); const c = 2.70158; return 1 + c * Math.pow(p - 1, 3) + 1.70158 * Math.pow(p - 1, 2); }, io: p => { p = clamp(p); return p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; } };
   TX.gold = ['#ffd23c', '#5a4210']; TX.cream = ['#f4e9d8', '#7a3a30']; TX.navy = ['#1b2338', '#aab4d0']; TX.rwhite = ['#ffffff', '#8a1820']; TX.grey = ['#8a93ab', '#222838'];
@@ -408,6 +409,62 @@ function createStart(env) {
     if (x >= cb.x - 4 && y >= cb.y - 4 && x <= cb.x + cb.w + 4 && y <= cb.y + cb.h + 4) return requestClose();
     if (y >= BH - 18) { if (x < BW / 2 - 20 && S.page > 0) return changePage(-1); if (x > BW / 2 + 20 && x < BW - 32 && S.page < PAGES.length - 1) return changePage(1); return; }
     const pg = PAGES[S.page]; for (let i = 0; i < pg.length; i++) { const r = tileRect(i); if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { if (S.sel === i) activate(pg[i]); else { S.sel = i; activate(pg[i]); } return; } }
+  }
+
+
+  // ------------------------------------------------------------ LANDSCAPE: the floating hex menu (drawn on the main screen over the live, dimmed overworld)
+  const HEXR = 17;
+  const HEXES = [['pokemon', 120, 36], ['dex', 161, 58], ['bag', 161, 102], ['save', 120, 124], ['options', 79, 102], ['card', 79, 58], ['map', 38, 80], ['log', 202, 80]];
+  S.hsel = 0;
+  function hexPath(c, cx, cy, R) { c.beginPath(); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3, x = cx + R * Math.cos(a), y = cy + R * 0.866 * Math.sin(a); if (i) c.lineTo(x, y); else c.moveTo(x, y); } c.closePath(); }
+  function chamfer(c, x, y, w, h, k) { c.beginPath(); c.moveTo(x + k, y); c.lineTo(x + w - k, y); c.lineTo(x + w, y + k); c.lineTo(x + w, y + h - k); c.lineTo(x + w - k, y + h); c.lineTo(x + k, y + h); c.lineTo(x, y + h - k); c.lineTo(x, y + k); c.closePath(); }
+  const defOf = id => { for (const pg of PAGES) for (const d of pg) if (d[0] === id) return d; return [id, id.toUpperCase(), '#888']; };
+  function hexNeighbor(k) {
+    const cur = HEXES[S.hsel]; let best = -1, bs = 1e9; const dir = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[k]; if (!dir) return S.hsel;
+    HEXES.forEach((h, i) => { if (i === S.hsel) return; const dx = h[1] - cur[1], dy = h[2] - cur[2], along = dx * dir[0] + dy * dir[1]; if (along <= 2) return; const across = Math.abs(dx * dir[1] + dy * dir[0]); const sc = Math.hypot(dx, dy) + across * 1.6; if (sc < bs) { bs = sc; best = i; } });
+    return best < 0 ? S.hsel : best;
+  }
+  function pressHex(k) {
+    if (S.pageAnim) return;
+    if (k === 'b') return requestClose();
+    if (k === 'a') return activate(defOf(HEXES[S.hsel][0]));
+    if (k === 'left' || k === 'right' || k === 'up' || k === 'down') S.hsel = hexNeighbor(k);
+  }
+  function clickHex(x, y) {
+    for (let i = 0; i < HEXES.length; i++) { const h = HEXES[i]; if (Math.hypot(x - h[1], (y - h[2]) * 1.15) <= HEXR + 3) { S.hsel = i; return activate(defOf(h[0])); } }
+    if (x > BW - 28 && y < 16) return requestClose();
+  }
+  const prettyMap = m => String(m || '').replace(/^MAP_/, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toUpperCase();
+  function renderHex(c) {
+    const p = S.closing ? 1 - clamp(S.closeT / .25) : 1, t = S.t;
+    // vignette (the live overworld shows through the middle)
+    const vg = c.createRadialGradient(120, 80, 40, 120, 80, 160); vg.addColorStop(0, 'rgba(6,8,16,0)'); vg.addColorStop(1, 'rgba(6,8,16,.62)'); c.globalAlpha = p; c.fillStyle = vg; c.fillRect(0, 0, BW, TH); c.globalAlpha = 1;
+    // map name, top left
+    const mp = prettyMap(env.mapName && env.mapName()); const ax = clamp(S.since / .3);
+    c.save(); c.globalAlpha = ax * p; c.translate(Math.round((1 - ease.out(ax)) * -40), 0); c.fillStyle = 'rgba(8,10,18,.72)'; chamfer(c, 4, 4, Math.min(112, tw(mp) + 16), 15, 4); c.fill(); c.strokeStyle = 'rgba(255,255,255,.28)'; c.lineWidth = 1; c.stroke(); T(c, mp.slice(0, 20), 12, 7, 'white'); c.restore();
+    // clock, top right
+    { const d = now(), ck = two(d.getHours()) + ':' + two(d.getMinutes()); c.save(); c.globalAlpha = ax * p; c.fillStyle = 'rgba(8,10,18,.72)'; chamfer(c, BW - 46, 4, 42, 15, 4); c.fill(); c.strokeStyle = 'rgba(255,255,255,.28)'; c.stroke(); T(c, ck, BW - 46 + Math.round((42 - tw(ck)) / 2), 7, 'white'); c.restore(); }
+    // the hexes
+    HEXES.forEach((h, i) => {
+      const a = S.closing ? p : clamp((S.since - i * .045) / .32); if (a <= 0) return; const sel = i === S.hsel && S.scr === 'menu', sc = ease.back(a) * (sel ? 1.12 + Math.sin(t * 6) * .025 : 1), def = defOf(h[0]), col = def[2];
+      c.save(); c.translate(h[1], h[2]); c.scale(sc, sc); c.globalAlpha = clamp(a * 1.5);
+      if (sel) { c.shadowColor = col; c.shadowBlur = 10; }
+      hexPath(c, 0, 0, HEXR); c.fillStyle = sel ? 'rgba(34,40,62,.96)' : 'rgba(14,17,28,.84)'; c.fill(); c.shadowBlur = 0;
+      const g = c.createLinearGradient(0, -HEXR, 0, HEXR); g.addColorStop(0, sel ? 'rgba(255,255,255,.20)' : 'rgba(255,255,255,.09)'); g.addColorStop(.5, 'rgba(255,255,255,0)'); hexPath(c, 0, 0, HEXR); c.fillStyle = g; c.fill();
+      hexPath(c, 0, 0, HEXR); c.lineWidth = sel ? 2 : 1; c.strokeStyle = sel ? '#ffe27a' : 'rgba(210,220,255,.42)'; c.stroke();
+      hexPath(c, 0, 0, HEXR - 3); c.lineWidth = 1; c.strokeStyle = sel ? col : 'rgba(255,255,255,.08)'; c.stroke();
+      c.restore();
+      icon(c, h[0], Math.round(h[1]), Math.round(h[2]), t + i, sel);
+      if (def[0] === 'save' && SS() && SS().dirty) { c.fillStyle = '#ffd23c'; c.fillRect(h[1] + 9, h[2] - 14, 4, 4); }
+    });
+    // selected label, bottom centre
+    if (S.scr === 'menu' && !S.closing) { const d = defOf(HEXES[S.hsel][0]); let lab = d[0] === 'card' ? ((saveData().player && saveData().player.name) || 'PLAYER') : d[1]; lab = String(lab).toUpperCase(); const w = tw(lab) + 18, x = Math.round(120 - w / 2); c.fillStyle = 'rgba(8,10,18,.8)'; chamfer(c, x, 143, w, 14, 4); c.fill(); c.strokeStyle = '#ffe27a'; c.lineWidth = 1; c.stroke(); T(c, lab, x + 9, 146, 'gold'); }
+    // side panels: party (bottom left) and time played (bottom right)
+    { const pa = clamp((S.since - .25) / .3) * p; if (pa > 0) {
+        c.save(); c.globalAlpha = pa; const pt = party(); c.fillStyle = 'rgba(8,10,18,.72)'; chamfer(c, 4, 112, 60, 44, 6); c.fill(); c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 1; c.stroke();
+        for (let i = 0; i < 6; i++) { const m = pt[i], cx = 9 + (i % 3) * 18, cy = 116 + Math.floor(i / 3) * 19; if (!m) { rect(c, cx + 5, cy + 7, 6, 2, 'rgba(255,255,255,.12)'); continue; } const ip = dbOf(m.species).iconSprite; if (!drawIcon(c, ip, cx, cy, 16, false)) ball(c, cx + 8, cy + 8, 'poke', 1); const hp = clamp((m.HP != null ? m.HP : 1) / Math.max(1, m.maxHP || 1)); rect(c, cx + 1, cy + 15, 14, 2, '#0a0c12'); rect(c, cx + 1, cy + 15, Math.max(0, Math.round(14 * hp)), 2, hp > .5 ? '#46d27a' : hp > .2 ? '#e8c838' : '#e0443c'); }
+        const inf = SS() ? SS().info() : {}; c.fillStyle = 'rgba(8,10,18,.72)'; chamfer(c, BW - 64, 126, 60, 30, 6); c.fill(); c.strokeStyle = 'rgba(255,255,255,.25)'; c.stroke(); T(c, 'PLAYED', BW - 58, 130, 'mute'); T(c, fmtTime(inf.playTime || 0), BW - 58, 142, 'white');
+        c.restore(); } }
   }
 
   // ------------------------------------------------------------ HUD layout (everything the RotomDex draws is placed from here; hud_editor.html edits it)
@@ -615,6 +672,10 @@ function createStart(env) {
         if (SV.stage === 'ask') { btn(cc, 30, 70, 84, 34, 'YES', () => SCREENS.save.yes(), '#2c5a3a', SV.i === 0); btn(cc, 126, 70, 84, 34, 'NO', () => back(), '#5a2c2c', SV.i === 1); }
         if (SV.stage === 'done') btn(cc, 76, 70, 88, 34, 'OK', () => back(), '#2e3548', true);
       });
+    },
+    over(c) {
+      if (SV.stage === 'ask') { btn(c, 172, 110, 54, 17, 'YES', () => SCREENS.save.yes(), '#2c5a3a', SV.i === 0); btn(c, 172, 130, 54, 17, 'NO', () => back(), '#5a2c2c', SV.i === 1); }
+      if (SV.stage === 'done') S.hit.push({ x: 0, y: 0, w: BW, h: TH, f: () => back() });
     },
     yes() { if (SV.stage !== 'ask') return; SV.stage = 'saving'; SV.t = 0; },
     tick(dt) { SV.t += dt; if (SV.stage === 'saving' && SV.t > 1.1) { SV.ok = SS() ? SS().save(env.scene && env.scene()) : false; SV.stage = 'done'; SV.t = 0; } },
@@ -1019,13 +1080,13 @@ function createStart(env) {
   function enterMenu(o) { S.open = true; S.closing = false; S.since = 0; S.scr = 'menu'; S.sub = null; S.page = 0; S.sel = (o && o.select) || 0; S.pageAnim = null; S.child = false; S.t = S.t || 0; S.nextBlink = S.t + 2; S.hit = []; }
   function press(k) {
     if (!S.open || S.child || S.closing) return;
-    if (S.scr === 'menu') return pressMenu(k);
+    if (S.scr === 'menu') return SINGLE ? pressHex(k) : pressMenu(k);
     if (S.sub && S.sub.press) S.sub.press(k);
   }
   function click(x, y, area) {
     if (!S.open || S.child || S.closing) return;
-    if (S.scr === 'menu') { if (area === 'bot') clickMenu(x, y); return; }
-    if (area === 'bot') { for (let i = S.hit.length - 1; i >= 0; i--) { const h = S.hit[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.f(); return; } } }
+    if (S.scr === 'menu') { if (SINGLE) { if (area === 'top') clickHex(x, y); } else if (area === 'bot') clickMenu(x, y); return; }
+    if (area === 'bot' || SINGLE) { for (let i = S.hit.length - 1; i >= 0; i--) { const h = S.hit[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { h.f(); return; } } }
     if (S.sub && S.sub.click) S.sub.click(x, y, area);
   }
   function update(dt) {
@@ -1038,7 +1099,11 @@ function createStart(env) {
     c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, BH);
     if (S.scr === 'menu' || !S.sub) { renderMenu(c); if (S.child) { c.fillStyle = 'rgba(6,8,14,.66)'; c.fillRect(0, 13, BW, BH - 13); const pg = PAGES[S.page], def = pg[S.sel]; if (def) { drawTile(c, S.sel, def, true, 0, 1); c.fillStyle = 'rgba(255,255,255,.0)'; } const msg = 'OPEN ON THE UPPER SCREEN'; T(c, msg, Math.round(120 - tw(msg) / 2), BH - 13, 'white'); } } else S.sub.bot(c);
   }
-  function renderTop(c) { c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, TH); if (S.scr !== 'menu' && S.sub) S.sub.top(c); }
+  function renderTop(c) {
+    c.imageSmoothingEnabled = false; c.clearRect(0, 0, BW, TH);
+    if (SINGLE) { S.hit = []; if (S.scr === 'menu' || !S.sub) renderHex(c); else { S.sub.top(c); if (S.sub.over) S.sub.over(c); } return; }
+    if (S.scr !== 'menu' && S.sub) S.sub.top(c);
+  }
   function start(o) {
     o = o || {}; S.exited = false; enterMenu(o); SCREENS_RESET(); trainerPre(); queueAllIcons();
     const keys = []; for (const pg of PAGES) pg.forEach(d => keys.push(d[0]));
@@ -1054,7 +1119,7 @@ function createStart(env) {
   function pumpIcons(n) { while (n-- > 0 && ICONQ.length) getImg(ICONQ.shift()); }
   function preload() { trainerPre(); queueAllIcons(); }
   function status() { return { scr: S.scr, page: S.page, sel: S.sel, closing: S.closing, child: S.child, dexList: DX.list.length, warnings: [...warnings] }; }
-  return { icon, preload, renderIdle, setExit: p => { S.exitK = p; }, bg: (c, w, h, t) => menuBg(c, w, h, t), HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => S.scr !== 'menu' && !!S.sub, requestClose };
+  return { icon, preload, renderIdle, setExit: p => { S.exitK = p; }, bg: (c, w, h, t) => menuBg(c, w, h, t), HUD, HUD_DEF, S, W: BW, H: BH, TH, press, click, update, render: renderBottom, renderTop, start, initFont, status, SCREENS, DX, TM, openScreen, topActive: () => SINGLE ? !S.child : (S.scr !== 'menu' && !!S.sub), single: SINGLE, requestClose };
 }
 root.StartMenuCore = createStart;
 })(window);
@@ -1084,7 +1149,7 @@ const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 
 const KB = 'startmenu_bottom', KT = 'startmenu_top', KD = 'startmenu_dock';
 const slog = (...a) => { if (root.StartMenu && root.StartMenu.LOG) console.log('[SM]', ...a); };
 const StartMenu = {
-  active: false, IDLE: true, DIM: 0.6, LOG: true, SHINYFLAG: 'FLAG_SHINY_DEX', UNKNOWN_SPRITE: '', TRAINER: { male: 'graphics/trainer_front_sprites/player_male.png', female: 'graphics/trainer_front_sprites/player_female.png' }, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
+  active: false, IDLE: true, DIM: 0.6, DIM_SINGLE: 0.38, LOG: true, SHINYFLAG: 'FLAG_SHINY_DEX', UNKNOWN_SPRITE: '', TRAINER: { male: 'graphics/trainer_front_sprites/player_male.png', female: 'graphics/trainer_front_sprites/player_female.png' }, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
   isOpen() { return this.active; },
   debug() { const sc = this.scene; const o = { active: this.active, hasCore: !!this.core, core: this.core && this.core.status(), lowerCamera: !!(sc && sc._menuCam), scene: sc && { scriptRunning: sc.scriptRunning, isLocked: sc.isLocked, isMoving: sc.isMoving } }; console.log('[SM] state', o); return o; },
   toggle(scene) { slog('toggle(), active=' + this.active); if (this.active) { if (this.core) this.core.press('b'); return; } this.open(scene); },
@@ -1121,14 +1186,14 @@ const StartMenu = {
       this.tb = scene.textures.createCanvas(KB, core.W, core.H); this.tt = scene.textures.createCanvas(KT, core.W, core.TH);
       try { this.tb.setFilter(Phaser.Textures.FilterMode.NEAREST); this.tt.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ }
       this.cb = this.tb.getContext ? this.tb.getContext() : this.tb.context; this.ct = this.tt.getContext ? this.tt.getContext() : this.tt.context;
-      const g = this.geo; this._cam(scene, g); this.ib = this._lower(scene, g, 0, 0, KB);
+      const g = this.geo; if (!core.single) { this._cam(scene, g); this.ib = this._lower(scene, g, 0, 0, KB); } else { this.ib = null; }
       this.dim = scene.add.rectangle(g.scr.x, g.scr.y, g.scr.w, g.scr.h, 0x000000, 1).setOrigin(0, 0).setScrollFactor(0).setDepth(8980).setAlpha(0);
       this.it = scene.add.image(g.scr.x, g.scr.y, KT).setOrigin(0, 0).setScale(g.s).setScrollFactor(0).setDepth(8990).setVisible(false);
       try { if (scene._menuCam) scene._menuCam.ignore(this.it); } catch (e) { /* old Phaser */ }
-      slog('images made: bottom at y=' + this.ib.y + ' top visible=' + this.it.visible + ' lower camera=' + !!scene._menuCam + (scene._menuCam ? ' viewport ' + [scene._menuCam.x, scene._menuCam.y, scene._menuCam.width, scene._menuCam.height].join(',') + ' scrollY ' + scene._menuCam.scrollY : ''));
+      slog('images made: bottom at y=' + (this.ib ? this.ib.y : 'none (single screen)') + ' top visible=' + this.it.visible + ' lower camera=' + !!scene._menuCam + (scene._menuCam ? ' viewport ' + [scene._menuCam.x, scene._menuCam.y, scene._menuCam.width, scene._menuCam.height].join(',') + ' scrollY ' + scene._menuCam.scrollY : ''));
       let frames = 0, bad = false;
       this.upd = (time, delta) => { if (bad) return; try { frames++; if (frames === 1 || frames === 60) slog('frame ' + frames + ' ok, screen=' + core.S.scr + ' open=' + core.S.open + ' child=' + core.S.child); this._frame(time, delta, core); } catch (err) { bad = true; console.error('[SM] ERROR while drawing the menu (the menu is closed):', err); this.close(); } };
-      this._frame = (time, delta, core) => { const dt = Math.min(.05, delta / 1000); core.update(dt); if (!this.active) return; core.render(this.cb); this.tb.refresh(); const ta = core.topActive(); this.it.setVisible(ta); { const want = (ta || core.S.child || core.S.closing) ? 0 : StartMenu.DIM; const al = this.dim.alpha + (want - this.dim.alpha) * .25; this.dim.setAlpha(Math.abs(al - want) < .01 ? want : al); } if (ta) { core.renderTop(this.ct); this.tt.refresh(); } };
+      this._frame = (time, delta, core) => { const dt = Math.min(.05, delta / 1000); core.update(dt); if (!this.active) return; if (!core.single) { core.render(this.cb); this.tb.refresh(); } const ta = core.topActive(); this.it.setVisible(ta); { const want = core.single ? ((core.S.scr === 'menu' && !core.S.child) ? StartMenu.DIM_SINGLE * (core.S.closing ? 0 : 1) : 0) : ((ta || core.S.child || core.S.closing) ? 0 : StartMenu.DIM); const al = this.dim.alpha + (want - this.dim.alpha) * .25; this.dim.setAlpha(Math.abs(al - want) < .01 ? want : al); } if (ta) { core.renderTop(this.ct); this.tt.refresh(); } };
       scene.events.on('update', this.upd);
     }).catch(e => { console.error('[StartMenu] could not start:', e); this.close(); });
     this.kd = e => {
@@ -1140,7 +1205,7 @@ const StartMenu = {
     };
     window.addEventListener('keydown', this.kd, true);
     this.pd = p => { if (!this.active || !core.S) return; const g = this.geo; slog('click at ' + Math.round(p.x) + ',' + Math.round(p.y)); if (performance.now() - this.openedAt < 200) return; const x = (p.x - g.scr.x) / g.s;
-      if (p.y >= g.y0) core.click(x, (p.y - g.y0) / g.s, 'bot'); else if (p.y >= g.scr.y && p.y < g.scr.y + g.scr.h) core.click(x, (p.y - g.scr.y) / g.s, 'top'); };
+      if (core.single) { if (p.y >= g.scr.y && p.y < g.scr.y + g.scr.h) core.click(x, (p.y - g.scr.y) / g.s, 'top'); } else if (p.y >= g.y0) core.click(x, (p.y - g.y0) / g.s, 'bot'); else if (p.y >= g.scr.y && p.y < g.scr.y + g.scr.h) core.click(x, (p.y - g.scr.y) / g.s, 'top'); };
     scene.input.on('pointerdown', this.pd);
     this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
     return true;
@@ -1161,7 +1226,7 @@ const StartMenu = {
   // ----- the idle lower screen: animated background, place, weather, time, battery, your first Pokémon and its mood, "PRESS START"
   attach(scene) {
     slog('attach() called, IDLE=' + this.IDLE); if (!scene || !scene.add) return; const self = this; this.applyOptions(scene, root.SaveSystem && root.SaveSystem.options());
-    const g = this._geom(scene); this._cam(scene, g); let img = null, tex = null, ctx = null, acc = 0, ready = false, idle = null;
+    const g = this._geom(scene); const SGL = !!(root.PMLayout && root.PMLayout.landscape); if (SGL) this.IDLE = false; else this._cam(scene, g); let img = null, tex = null, ctx = null, acc = 0, ready = false, idle = null;
     const sv = () => (root.GameStateManager && root.GameStateManager.saveData) || {};
     idle = root.StartMenuCore(this._env(scene, g)); this._idle = idle; idle.S.t = this.bgT || 0; idle.initFont().then(() => { idle.preload(); ready = true; slog('idle screen ready'); }).catch(e => console.error('[SM] idle screen font:', e));
     const draw = (time, delta) => {
@@ -1181,7 +1246,7 @@ const StartMenu = {
   _env(scene, geo) {
     const gs = root.GameStateManager, sv = () => (gs && gs.saveData) || {};
     return {
-      urlFor: p => p, bottomH: () => geo.bh, scene: () => scene, logName: () => StartMenu.LOGNAME, shinyFlag: () => StartMenu.SHINYFLAG, trainerSprite: male => StartMenu.TRAINER[male ? 'male' : 'female'], unknownSprite: () => StartMenu.UNKNOWN_SPRITE,
+      urlFor: p => p, single: () => !!(root.PMLayout && root.PMLayout.landscape), bottomH: () => geo.bh, scene: () => scene, logName: () => StartMenu.LOGNAME, shinyFlag: () => StartMenu.SHINYFLAG, trainerSprite: male => StartMenu.TRAINER[male ? 'male' : 'female'], unknownSprite: () => StartMenu.UNKNOWN_SPRITE,
       save: () => root.SaveSystem, saveData: sv, flags: () => sv().flags || {}, quests: () => sv().quests || {},
       party: () => (Array.isArray(sv().party) ? sv().party.filter(m => m && m.species) : []),
       db: () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null),
