@@ -665,6 +665,7 @@ class OverworldScene extends Phaser.Scene {
     if (window.OWFollower) window.OWFollower.attach(this);   // [FOLLOWER] the first party Pokémon walks behind the player
 
     this.cursors = this.input.keyboard.createCursorKeys();
+    { const K = Phaser.Input.Keyboard.KeyCodes, kk = c => this.input.keyboard.addKey(c, false); this.wasd = { up: kk(K.W), left: kk(K.A), down: kk(K.S), right: kk(K.D) }; }   // W A S D walk too (no key capture, so typing still works)
     this.followKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);   // SPACE = talk to the follower Pokémon
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);   // the interact / talk key is Z (the variable keeps its old name)
     // [SUMMARY] Enter opens the party / summary screen (js/PokemonSummary.js)
@@ -692,7 +693,6 @@ class OverworldScene extends Phaser.Scene {
     });
 
     this.showMapBanner();                       // [BANNER]
-    { const lb = window.GameStateManager && window.GameStateManager.lastBattle; if (lb && lb.evolutions && lb.evolutions.length) { this.isLocked = true; if (window.OWUI) window.OWUI.busy = true; } }   // [EVOLVE] lock the map right away
     if (window.OWUI && window.OWUI.runEvolutions) this.time.delayedCall(900, () => window.OWUI.runEvolutions(this));   // [EVOLVE] Pokémon that reached their level in the last battle
     if (window.OWWarm) window.OWWarm.start();   // [SPEED] warm the menu / party pictures in the background
 
@@ -1684,7 +1684,7 @@ class OverworldScene extends Phaser.Scene {
       } catch (e) { /* ignore */ }
     }
     const menu = (window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen());
-    const legit = menu || this.scriptRunning || this.warping || (window.BattleTransition && window.BattleTransition.busy) || (window.OWWild && window.OWWild.busy) || (window.OWUI && window.OWUI.busy);
+    const legit = menu || this.scriptRunning || this.warping || (window.BattleTransition && window.BattleTransition.busy) || (window.OWWild && window.OWWild.busy);
     const stuckMoving = this.isMoving && this.player && this.tweens.getTweensOf(this.player).length === 0;
     if (!legit && (this.isLocked || stuckMoving)) {
       this._lockedMs = (this._lockedMs || 0) + delta;
@@ -1754,16 +1754,16 @@ class OverworldScene extends Phaser.Scene {
     let dy = 0;
     let newDir = this.player.direction;
 
-    if (this.cursors.left.isDown) {
+    if (this.cursors.left.isDown || (this.wasd && this.wasd.left.isDown)) {
       dx = -1;
       newDir = 'left';
-    } else if (this.cursors.right.isDown) {
+    } else if (this.cursors.right.isDown || (this.wasd && this.wasd.right.isDown)) {
       dx = 1;
       newDir = 'right';
-    } else if (this.cursors.up.isDown) {
+    } else if (this.cursors.up.isDown || (this.wasd && this.wasd.up.isDown)) {
       dy = -1;
       newDir = 'up';
-    } else if (this.cursors.down.isDown) {
+    } else if (this.cursors.down.isDown || (this.wasd && this.wasd.down.isDown)) {
       dy = 1;
       newDir = 'down';
     }
