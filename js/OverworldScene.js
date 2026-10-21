@@ -652,12 +652,18 @@ class OverworldScene extends Phaser.Scene {
     this.updateMapMusic(this.currentMapKey);
 
     this.renderUnifiedWorld();
+    // [SAVE] the first time this scene starts after the page loaded: stand where the save was made, looking the same way
+    if (!this._spawnFromSave) {
+      this._spawnFromSave = true;
+      const sp = window.SaveSystem && window.SaveSystem.savedPos && window.SaveSystem.savedPos();
+      if (sp && (!sp.map || sp.map === this.currentMapKey)) { this.playerGridX = sp.x; this.playerGridY = sp.y; if (['up', 'down', 'left', 'right'].includes(sp.dir)) this.lastDir = sp.dir; console.log('[SAVE] spawning at the saved position', sp); }
+    }
     this.spawnAllEvents();
     this.spawnPlayer();
     if (window.OWFollower) window.OWFollower.attach(this);   // [FOLLOWER] the first party Pokémon walks behind the player
 
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);   // the interact / talk key is Z (the variable keeps its old name)
     // [SUMMARY] Enter opens the party / summary screen (js/PokemonSummary.js)
     this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     this.bagKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);   // [BAG] B opens the bag (js/BagMenu.js)
