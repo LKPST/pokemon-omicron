@@ -564,6 +564,7 @@ class OverworldScene extends Phaser.Scene {
     this.camMoved = false;
     this.playerDest = null;
     this._musicLoading = {};
+    this.isLocked = false; this._lockedMs = 0;   // a scene that is started again must never keep the lock of the last run
   }
 
   preload() {
@@ -1669,7 +1670,29 @@ class OverworldScene extends Phaser.Scene {
     for (const t of this.animTiles) t.img.setFrame(t.base + (step % t.count));
   }
 
+  // [GUARD] Safety net for the "I can't move after a battle" freeze. It does two things:
+  //  1. a keyboard capture listener (battle / bag / summary / start menu all use one) that was left behind by a screen that is not open any more
+  //     swallows every key for the whole game (the mouse still works): such listeners are removed every second
+  //  2. isLocked / isMoving stuck at true for 3 s while nothing is running (no script, warp, battle transition, wild bump or menu): reset, with a warning
+  inputGuard(time, delta) {
+    if (!this._guardAt || time - this._guardAt > 1000) {
+      this._guardAt = time;
+      try {
+        const bs = this.scene.get('BattleScene'); if (bs && bs.kd && !this.scene.isActive('BattleScene')) window.removeEventListener('keydown', bs.kd, true);
+        for (const o of [window.BagMenu, window.PokemonSummary, window.StartMenu]) if (o && o.kd && !o.active) window.removeEventListener('keydown', o.kd, true);
+      } catch (e) { /* ignore */ }
+    }
+    const menu = (window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen());
+    const legit = menu || this.scriptRunning || this.warping || (window.BattleTransition && window.BattleTransition.busy) || (window.OWWild && window.OWWild.busy);
+    const stuckMoving = this.isMoving && this.player && this.tweens.getTweensOf(this.player).length === 0;
+    if (!legit && (this.isLocked || stuckMoving)) {
+      this._lockedMs = (this._lockedMs || 0) + delta;
+      if (this._lockedMs > 3000) { console.warn('[INPUT] the overworld was locked for 3 s with nothing running (isLocked=' + this.isLocked + ', isMoving=' + this.isMoving + '): unlocking'); this.isLocked = false; this.isMoving = false; this.playerDest = null; this._lockedMs = 0; }
+    } else this._lockedMs = 0;
+  }
+
   update(time, delta) {
+    this.inputGuard(time, delta);
     if (this.weather) this.weather.update(delta);
     this.tickTileAnim(delta);
     if (window.OWFollower) window.OWFollower.update(this, time, delta);   // [FOLLOWER]
