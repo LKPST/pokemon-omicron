@@ -712,7 +712,8 @@ function createBattle(env) {
   const dbOf = () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null);
   const gl = () => (env.glyphs ? env.glyphs() : null);
   function openParty(ctx) {
-    const PSC = root.PokemonSummaryCore; if (!PSC) return false;
+    const PSC = root.PokemonSummaryCore; if (!PSC) { console.warn('[BS] party screen: PokemonSummary.js is not loaded (or is the old version without PokemonSummaryCore) -> using the OLD built-in party list. Load js/PokemonSummary.js before the battle starts.'); return false; }
+    console.log('[BS] party screen: opening the Start-Menu style screen (ctx=' + ctx + ')');
     const P = S.b.sides[0], forced = ctx === 'forced' || ctx === 'pivot';
     try {
       const core = PSC({
@@ -737,7 +738,8 @@ function createBattle(env) {
     } catch (e) { console.warn('[BS] could not open the party screen, using the built-in list:', e); S.ov = null; return false; }
   }
   function openBag() {
-    const BMC = root.BagMenuCore; if (!BMC) return false;
+    const BMC = root.BagMenuCore; if (!BMC) { console.warn('[BS] bag screen: BagMenu.js is not loaded (or is the old version without BagMenuCore) -> using the OLD built-in bag list. Load js/BagMenu.js before the battle starts.'); return false; }
+    console.log('[BS] bag screen: opening the Start-Menu style screen');
     const P = S.b.sides[0], tabs = {};
     const find = k => S.bag.find(x => x.item === k);
     try {
@@ -790,7 +792,7 @@ function createBattle(env) {
     { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode;
       const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else { S.stripT = (S.stripT || 0) + dt; if (S.stripT > 1.5) S.stripPlayed = true; } }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
-    if (S.ov && S.ov.ready) S.ov.core.update(dt);
+    if (S.ov && S.ov.ready) { S.ov.t = (S.ov.t || 0) + dt; S.ov.core.update(dt); }
     tickFx(dt); for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
     if (S.fadeDir) { S.fade = clamp(S.fade + S.fadeDir * dt * 1.5); if ((S.fadeDir < 0 && S.fade <= 0) || (S.fadeDir > 0 && S.fade >= 1)) { S.fadeDir = 0; const f = S.onFade; S.onFade = null; if (f) f(); } }
     if (!S.b) return;
@@ -1034,7 +1036,6 @@ function createBattle(env) {
     levelBoxView(c);
     msgBox(c);   // always visible, whatever menu is open
     if (S.mode === 'intro') introOverlay(c);
-    if (S.ov && S.ov.ready) { const oc = OVC.getContext('2d'); oc.imageSmoothingEnabled = false; oc.clearRect(0, 0, 240, 160); S.ov.core.render(oc); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, 0, W, H); }   // the Start-Menu style party / bag screen
   }
 
   // ================================================== drawing: BOTTOM surface (messages + menus)
@@ -1221,6 +1222,10 @@ function createBattle(env) {
   }
   function drawBottom(c) {
     drawBottomBg(c);
+    if (S.ov && S.ov.ready) {   // the Start-Menu style party / bag screen fills the LOWER screen (it slides up when it opens)
+      const oc = OVC.getContext('2d'); oc.imageSmoothingEnabled = false; oc.clearRect(0, 0, 240, 160); S.ov.core.render(oc);
+      const p = clamp((S.ov.t || 0) / .28), e = 1 - Math.pow(1 - p, 3); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, Math.round((1 - e) * H), W, H); return;
+    }
     const k = S.botIn || 0; if (k <= 0.001 || !S.botMode) return;
     const real = S.mode, m = S.botMode, bk = x => { x = clamp(x); const t = x - 1; return 1 + t * t * (2.2 * t + 1.2); };   // ease-out-back: a small overshoot
     const out = real !== m && !HUDM.includes(real);   // sliding out while the battle goes on
@@ -1469,6 +1474,7 @@ BattleScene.WEATHER_MAP = { rain: 'rain', thunderstorm: 'rain', sunny: 'sun', dr
 BattleScene.LAYOUT = null;                               // {topH, gap}; default: split the canvas height in two
 BattleScene.PLAYER_BACK = { MALE: 'graphics/trainer_back_sprites/gTrainerBackPic_Brendan.png', FEMALE: 'graphics/trainer_back_sprites/gTrainerBackPic_May.png' };
 window.BattleScene = BattleScene;
+try { setTimeout(() => console.log('[BS] BattleScene.js build: party/bag screens v1 | PokemonSummaryCore: ' + !!window.PokemonSummaryCore + ' | BagMenuCore: ' + !!window.BagMenuCore + ' | BattleTransition: ' + !!window.BattleTransition), 0); } catch (e) { /* no console */ }
 
 // ---------------------------------------------------------------------------
 // helpers
