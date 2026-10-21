@@ -245,12 +245,12 @@ function createBattle(env) {
     lines: [], pages: [], page: 0, shown: 0, textWait: 0, typed: false,
     sides: [mkSide(), mkSide()], weather: null, terrain: null,
     cmd: 0, mv: 0, pty: 0, bagSel: 0, bagTop: 0, ctx: 'switch', yn: 0, learn: null, partyMsg: '', mvMsg: '', bagMsg: '',
-    bag: [], bgKind: 'grass', result: null, ballFx: null, particles: [], levelBox: null, introT: 0,
+    bag: [], bgKind: 'grass', result: null, ballFx: null, fxPath: 'graphics/poke_ball/gPokeBallEffects.png', emit: [], fxl: [], flashA: 0, particles: [], levelBox: null, introT: 0,
     tr: { me: { path: '', vis: false, ox: 130, frame: 0 }, foe: { path: '', vis: false, ox: -130, frame: 0 } },
     ball: { path: 'graphics/poke_ball/gInterfaceGfx_PokeBall.png', fw: 16, fh: 16 }, sparkle: { path: 'graphics/poke_ball/Sparkle.png', fw: 32, fh: 32, frames: 6 },
     hit: {}, editMode: false, introIcon: 'graphics/battle_scene/pokeball_icon_battle_start.png', nudged: [{ x: 0, y: 0 }, { x: 0, y: 0 }], focus: 0,
   };
-  function mkSide() { return { vis: false, name: '', species: '', level: 1, hp: 1, maxhp: 1, dhp: 1, status: null, shiny: false, gender: '', idx: 0, ox: 0, oy: 0, dx: 0, dy: 0, alpha: 1, scale: 1, blink: 0, exp: 0, hpFrom: 0, hpTo: 0 }; }
+  function mkSide() { return { vis: false, name: '', species: '', level: 1, hp: 1, maxhp: 1, dhp: 1, status: null, shiny: false, gender: '', idx: 0, ox: 0, oy: 0, dx: 0, dy: 0, alpha: 1, scale: 1, blink: 0, exp: 0, hpFrom: 0, hpTo: 0, tint: 0 }; }
   const side = i => S.sides[i];
   let FLASH = .45, SLIDE = 1.15;   // intro lengths (seconds); BattleScene.CONFIG.intro overrides
   // layout of the TOP surface (GBA pixels)
@@ -328,7 +328,9 @@ function createBattle(env) {
     S.hit[front ? 'foeMon' : 'allyMon'] = { x: dx, y: dy, w: dw, h: dh };
     c.save(); c.imageSmoothingEnabled = false; c.globalAlpha = clamp(sd.alpha);
     if (sd.blink > 0 && Math.floor(S.t * 16) % 2 === 0) c.globalAlpha *= 0.15;
-    c.drawImage(keyBg(e.img), fr * fw, 0, fw, fh, dx, dy, dw, dh); c.restore();
+    let src = keyBg(e.img), sxx = fr * fw;
+    if (sd.tint > 0.01) { const tc = mk(fw, fh), tx = tc.getContext('2d'); tx.imageSmoothingEnabled = false; tx.drawImage(src, sxx, 0, fw, fh, 0, 0, fw, fh); tx.globalCompositeOperation = 'source-atop'; tx.globalAlpha = clamp(sd.tint); tx.fillStyle = '#ffa8f8'; tx.fillRect(0, 0, fw, fh); src = tc; sxx = 0; }   // the pink silhouette of a Pokémon going into / out of its ball
+    c.drawImage(src, sxx, 0, fw, fh, dx, dy, dw, dh); c.restore();
   }
   function drawTrainer(c, tr, cx, bottom, scale, back) {
     if (!tr.vis || !tr.path) return; const e = loaded(tr.path); if (!e) return;
@@ -338,12 +340,37 @@ function createBattle(env) {
     const tx = Math.round(cx + tr.ox - dw / 2), ty = Math.round(bottom - dh + feetPad(img, sx, sy, fw, fh) * scale); S.hit[back ? 'allyTrainer' : 'foeTrainer'] = { x: tx, y: ty, w: dw, h: dh };
     c.imageSmoothingEnabled = false; c.drawImage(img, sx, sy, fw, fh, tx, ty, dw, dh);
   }
-  function drawBallSprite(c, x, y, rot, scale) {
+  function drawBallSprite(c, x, y, rot, scale, frame) {
     const e = loaded(S.ball.path);
     if (!e) { ball(c, Math.round(x - 9), Math.round(y - 9), 'poke', 2); return; }
     const img = keyBg(e.img), fw = S.ball.fw, fh = S.ball.fh;
-    c.save(); c.imageSmoothingEnabled = false; c.translate(Math.round(x), Math.round(y)); c.rotate(rot || 0); c.drawImage(img, 0, 0, fw, fh, -fw * scale / 2, -fh * scale / 2, fw * scale, fh * scale); c.restore();
+    c.save(); c.imageSmoothingEnabled = false; c.translate(Math.round(x), Math.round(y)); c.rotate(rot || 0); const nf = Math.max(1, Math.floor(img.height / fh)), fy = Math.min(nf - 1, frame | 0) * fh; c.drawImage(img, 0, fy, fw, fh, -fw * scale / 2, -fh * scale / 2, fw * scale, fh * scale); c.restore();
   }
+  // ---- Poké Ball effects (gPokeBallEffects.png, 8x8 frames: 0 "\\" line, 1 "|" line, 2 "-" line, 3 star).
+  // Lines fly out of the ball when it opens (the Pokémon absorbed, a catch that failed, a Pokémon sent out); the star frame is the catch jump.
+  function fxImg() { const e = getImg(S.fxPath); return e && e.ok ? keyedIcon(e.img, S.fxPath) : null; }
+  function burst(x, y, n) { S.emit.push({ x, y, t: 0, n: n || 16, k: 0 }); S.flashA = 1; }
+  function tickFx(dt) {
+    S.flashA = Math.max(0, S.flashA - dt / .4);
+    for (const em of S.emit) {
+      em.t += dt; const want = Math.min(em.n, 5 + Math.floor(em.t / .35 * em.n));
+      while (em.k < want) { em.k++; const a = Math.random() * 6.2832, r = 2 + Math.random() * 10, v = 40 + Math.random() * 60; S.fxl.push({ x: em.x + Math.cos(a) * r, y: em.y + Math.sin(a) * r * .8, dx: Math.cos(a), dy: Math.sin(a), v, t: 0, life: .16 + Math.random() * .16 }); }
+    }
+    S.emit = S.emit.filter(e => e.t < .5);
+    for (const l of S.fxl) { l.t += dt; l.x += l.dx * l.v * dt; l.y += l.dy * l.v * dt; }
+    S.fxl = S.fxl.filter(l => l.t < l.life);
+  }
+  function drawFx(c) {
+    if (!S.fxl.length) return; const img = fxImg(); if (!img) return;
+    c.save(); c.imageSmoothingEnabled = false;
+    for (const l of S.fxl) {
+      const ax = Math.abs(l.dx), ay = Math.abs(l.dy), fr = ax > 2.2 * ay ? 2 : ay > 2.2 * ax ? 1 : 0;
+      c.globalAlpha = l.t > l.life * .6 ? 1 - (l.t - l.life * .6) / (l.life * .4) : 1;
+      c.save(); c.translate(Math.round(l.x), Math.round(l.y)); if (fr === 0 && l.dx * l.dy < 0) c.scale(-1, 1); c.drawImage(img, fr * 8, 0, 8, 8, -4, -4, 8, 8); c.restore();
+    }
+    c.restore();
+  }
+  function fxStar(c, x, y) { const img = fxImg(); if (!img) { star(c, Math.round(x - 2), Math.round(y - 2)); return; } c.save(); c.imageSmoothingEnabled = false; c.drawImage(img, 24, 0, 8, 8, Math.round(x - 4), Math.round(y - 4), 8, 8); c.restore(); }
   function drawSparkle(c, x, y, t) {
     const sp = S.sparkle, e = loaded(sp.path), idx = Math.floor(t * 20);
     if (e) {
@@ -428,6 +455,20 @@ function createBattle(env) {
   // ================================================== starting a battle
   // o: { kind:'wild'|'trainer', trainerName, player:[save mons], foe:[{species,level,...}], bag, bg, seed, money, onEnd,
   //      foeTrainerSprite, playerTrainerSprite, ballSheet:{path,fw,fh}, sparkleSheet, introIcon, skipIntro }
+  // logger: for every Pokémon in the battle, the species key, the data found for it, the sprite path chosen and whether the file loaded
+  function spriteReport(tag) {
+    try {
+      const b = S.b; if (!b) return [];
+      const rows = [];
+      b.sides.forEach((sd, si) => (sd.party || []).forEach((m, i) => {
+        const d = spData(m.species), path = spritePath(m.species), e = path ? imgs.get(path) : null;
+        rows.push({ side: si ? 'foe' : 'ally', slot: i, species: m.species, hasData: !!(d && Object.keys(d).length), dataKeys: d ? Object.keys(d).slice(0, 12).join(',') : '', battleSprite: d.battleSprite || '', frontSprite: d.frontSprite || '', path: path, url: path ? urlFor(path) : '', loaded: e ? (e.ok ? 'ok' : e.fail ? 'FAILED' : 'loading') : (path ? 'not requested' : 'NO PATH') });
+      }));
+      console.groupCollapsed('[BS] sprite report (' + (tag || '') + ')');
+      console.table(rows); console.groupEnd();
+      return rows;
+    } catch (er) { try { console.warn('[BS] sprite report failed', er); } catch (e2) { /* no console */ } return []; }
+  }
   function start(o) {
     o = o || {};
     const E = BE(); if (!E) throw new Error('BattleEngine.js is not loaded (load it before BattleScene.js)');
@@ -435,14 +476,15 @@ function createBattle(env) {
     const foe = (o.foe || []).map(f => (f && f.species && f.moves && (f.HP != null || f.maxHP != null || f.Attack != null)) ? f : E.makeMon({ db: ee.db, moves: ee.moves, learn: ee.learn }, f.species || f.key, f.level || 5, Object.assign({}, f.opts || f, f.isShiny != null ? { shiny: f.isShiny ? 1 : 0 } : (f.shiny != null ? { shiny: f.shiny ? 1 : 0 } : {}), f.ivs === 31 ? { maxIV: true, ivs: undefined } : {})));
     S.b = E.create(Object.assign({}, ee, { kind: o.kind || 'wild', trainerName: o.trainerName || 'Trainer', ai: o.ai, items: o.items, player: o.player || [], foe, seed: o.seed, money: o.money, noExp: o.noExp, expMultiplier: o.expMultiplier, weather: o.weather,
       fishing: o.fishing, surfing: o.surfing, mapType: o.mapType, night: o.night, noCatching: o.noCatching, catchRateBonus: o.catchRateBonus, criticalCapture: o.criticalCapture, catchingCharm: o.catchingCharm, catchDifficulty: o.catchDifficulty, alwaysCatchable: o.alwaysCatchable }));
+    { const sb = S.b; spriteReport('start'); setTimeout(() => { if (S.b === sb) spriteReport('after load'); }, 1500); }
     S.onEnd = o.onEnd || env.onEnd || null; S.bgKind = o.bg || 'grass'; S.mapWeather = o.weather || null; S.mapFx = !!o.weather; S.bag = normBag(o.bag != null ? o.bag : (env.bag && env.bag()));
-    S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null;
+    S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null; S.emit = []; S.fxl = []; S.flashA = 0;
     S.fade = 1; S.fadeDir = -1; S.done = false; S.editMode = false; S.finished = null; S.onFade = null; S.noAuto = false; S.nudged = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
     const skip = !!o.skipIntro;
     S.tr = { me: { path: o.playerTrainerSprite || '', vis: !skip && !!o.playerTrainerSprite, ox: skip ? 0 : 130, frame: 0 }, foe: { path: o.foeTrainerSprite || '', vis: !skip && S.b.kind === 'trainer' && !!o.foeTrainerSprite, ox: skip ? 0 : -130, frame: 0 } };
-    if (o.ballSheet) S.ball = Object.assign({}, S.ball, o.ballSheet); if (o.sparkleSheet) S.sparkle = Object.assign({}, S.sparkle, o.sparkleSheet); if (o.introIcon) S.introIcon = o.introIcon;
+    if (o.ballSheet) S.ball = Object.assign({}, S.ball, o.ballSheet); if (o.fxSheet) S.fxPath = o.fxSheet; if (o.introIcon) S.introIcon = o.introIcon;
     for (const m of [...S.b.sides[0].party, ...S.b.sides[1].party]) { getImg(spritePath(m.species)); getImg(iconPath(m.species)); }
-    for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.introIcon, ...SPARKS]) if (p) getImg(p);
+    for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.fxPath, S.introIcon, ...SPARKS]) if (p) getImg(p);
     S.introT = 0; S.stripPlayed = false; S.stripT = 0; S.introTextSet = false; S.preShown = null; S.mode = skip ? 'play' : 'intro'; S.q = S.b.start().slice(); if (skip) S.fadeDir = -1;
     // wild battle: the wild Pokémon slides in from the left WHILE the player's trainer slides in (like the original), not after it
     S.introFoe = null;
@@ -577,9 +619,9 @@ function createBattle(env) {
     }
     c.ballPos = null;
     if (t >= t0 && t < popT) { const q = (t - t0) / fl, a = ally ? arc(hasTr ? 44 : 20, ALLY.bottom - (hasTr ? 38 : 46), tx, ty, q, 34) : arc(hasTr ? 200 : 232, hasTr ? 30 : 20, tx, ty, q, 22); c.ballPos = { x: a.x, y: a.y, rot: (ally ? 1 : -1) * q * 12 }; }
-    if (t >= popT) { sd.alpha = 1; sd.scale = Math.max(.1, backOut(clamp((t - popT) / .35))); c.spT = t - popT; if (!c.cried) { c.cried = true; cry(ev.species); } } else sd.alpha = 0;
+    if (t >= popT) { if (!c.burst) { c.burst = true; burst(tx, ty - 4, 16); } c.open = { x: tx, y: ty }; sd.tint = 1 - clamp((t - popT) / .5); sd.alpha = 1; sd.scale = Math.max(.1, backOut(clamp((t - popT) / .3))); c.spT = t - popT; if (!c.cried) { c.cried = true; cry(ev.species); } } else sd.alpha = 0;
     sd.ox = 0;
-    if (p >= 1) { sd.alpha = 1; sd.scale = 1; if (tr.vis && hasTr) tr.vis = false; }
+    if (p >= 1) { sd.alpha = 1; sd.scale = 1; sd.tint = 0; if (tr.vis && hasTr) tr.vis = false; }
   }
 
   // ------------------------------------------------ catching
@@ -596,6 +638,9 @@ function createBattle(env) {
     const f = S.ballFx; if (!f) return; f.t = c.t; const F = side(1), sh = f.shakes;
     const tThrow = BT.throw, tAbs = tThrow + BT.absorb, tDrop = tAbs + BT.drop, tShake0 = tDrop + BT.pause, tShake = BT.tShake(sh);
     if (f.blocked) { if (c.t > .6) f.t = .6 - (c.t - .6); return; }
+    if (c.t >= tThrow && !f.bAbs) { f.bAbs = true; burst(FOE.cx, FOE.bottom - 24, 16); }
+    F.tint = c.t < tThrow ? 0 : c.t < tShake ? 1 : f.caught ? 1 : 1 - clamp((c.t - tShake) / .5);
+    if (c.t >= tShake && !f.caught && !f.bRel) { f.bRel = true; burst(FOE.cx, FOE.platY - 4, 16); }
     if (c.t < tThrow + .17) F.scale = 1; else if (c.t < tAbs - .2) F.scale = 1 - ease(clamp((c.t - tThrow - .17) / .33)); else if (c.t < tShake) F.scale = 0; else if (!f.caught) F.scale = ease(clamp((c.t - tShake) / .3));
     if (f.caught && c.t >= tShake) F.scale = 0;
     f.tThrow = tThrow; f.tAbs = tAbs; f.tDrop = tDrop; f.tShake0 = tShake0; f.tShake = tShake;
@@ -630,8 +675,12 @@ function createBattle(env) {
       x = tx; y = gy; const k = t - f.tShake0;
       if (k > 0 && k < f.shakes * BT.shake) { const ph = (k % BT.shake) / BT.shake; if (ph < .55) { const s = Math.sin(ph / .55 * Math.PI * 2); x += Math.round(s * 3); rot = s * 25; } } }
     else { x = tx; y = gy; }
-    if (f.caught && t >= f.tShake) { ballSprite(c, item, x, y, 0, 0, f.kind); star(c, Math.round(x - 14 + Math.sin(t * 20) * 2), Math.round(y - 20)); star(c, Math.round(x + 10), Math.round(y - 16 + Math.cos(t * 17) * 2)); star(c, Math.round(x - 2), Math.round(y - 26)); return; }
-    if (t >= f.tShake) return;
+    if (f.caught && t >= f.tShake) {   // caught: the ball sits closed and two stars hop out to its left and right
+      ballSprite(c, item, x, y, 0, 0, f.kind);
+      const k = t - f.tShake, p = clamp(k / .45);
+      for (const sg of [-1, 1]) { const hop = k < .45 ? Math.sin(p * Math.PI) * 14 : Math.abs(Math.sin((k - .45) * 7)) * 3; fxStar(c, x + sg * (5 + 9 * ease(p)), y - 8 - hop); }
+      return; }
+    if (t >= f.tShake) { if (!f.caught && t < f.tShake + .16) ballSprite(c, item, x, y, t < f.tShake + .08 ? 2 : 1, 0, f.kind); return; }
     ballSprite(c, item, x, y, fr, rot, f.kind);
   }
 
@@ -674,7 +723,7 @@ function createBattle(env) {
     { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode;
       const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else { S.stripT = (S.stripT || 0) + dt; if (S.stripT > 1.5) S.stripPlayed = true; } }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
-    for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
+    tickFx(dt); for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
     if (S.fadeDir) { S.fade = clamp(S.fade + S.fadeDir * dt * 1.5); if ((S.fadeDir < 0 && S.fade <= 0) || (S.fadeDir > 0 && S.fade >= 1)) { S.fadeDir = 0; const f = S.onFade; S.onFade = null; if (f) f(); } }
     if (!S.b) return;
     if (S.mode === 'intro') {
@@ -700,10 +749,10 @@ function createBattle(env) {
   function finishCur() {
     const ev = S.cur.ev;
     if (ev.t === 'anim' && ev.side != null) { side(ev.side).ox = 0; side(ev.side).oy = 0; }
-    if (ev.t === 'ball') { S.ballFx = null; const F = side(1); if (!ev.caught) F.scale = 1; }
+    if (ev.t === 'ball') { S.ballFx = null; const F = side(1); F.tint = 0; if (!ev.caught) F.scale = 1; }
     if (ev.t === 'hp' && ev.side != null && !ev.bench) { const sd = side(ev.side); if (ev.idx == null || ev.idx === sd.idx) { sd.dhp = ev.to; sd.hp = ev.to; } }
     if (ev.t === 'levelup' && ev.active) { const M = S.b.sides[0].party[ev.idx]; if (M) side(0).exp = expFrac(M.exp, M.growth, ev.level); }   // leftover exp after the level-up
-    if (ev.t === 'switchin') { const sd = side(ev.side); sd.ox = 0; sd.alpha = 1; sd.scale = 1; if (ev.side === 0 && S.tr.me.vis && S.cur.style === 'throw' && S.cur.hasTr) S.tr.me.vis = false; if (ev.side === 1 && S.cur.style === 'throwFoe') S.tr.foe.vis = false; }
+    if (ev.t === 'switchin') { const sd = side(ev.side); sd.tint = 0; sd.ox = 0; sd.alpha = 1; sd.scale = 1; if (ev.side === 0 && S.tr.me.vis && S.cur.style === 'throw' && S.cur.hasTr) S.tr.me.vis = false; if (ev.side === 1 && S.cur.style === 'throwFoe') S.tr.foe.vis = false; }
     S.cur = null;
   }
 
@@ -901,15 +950,16 @@ function createBattle(env) {
   function drawTop(c) {
     if (S.mode === 'intro' && drawIntroTop(c)) return;
     drawBg(c);
+    if (S.flashA > 0) { c.fillStyle = 'rgba(255,255,255,' + (S.flashA * .85).toFixed(3) + ')'; c.fillRect(0, 0, W, H); }
     drawTrainer(c, S.tr.foe, FOE.trX, FOE.trBottom, FOE.trScale, false);
     drawMon(c, side(1), true, FOE.cx, FOE.bottom, FOE.fit, FOE.scale || undefined);
     drawMon(c, side(0), false, ALLY.cx, ALLY.bottom, ALLY.fit, ALLY.scale || undefined);
     drawTrainer(c, S.tr.me, ALLY.trX, ALLY.trBottom, ALLY.trScale, true);
-    drawWeather(c); drawParticles(c); drawBallFx(c);
+    drawWeather(c); drawParticles(c); drawBallFx(c); drawFx(c);
     if (S.cur && S.cur.ev.t === 'switchin') {
       const cu = S.cur, sd = side(cu.ev.side), cx = (cu.ev.side === 0 ? ALLY.cx : FOE.cx) + sd.dx, cy = (cu.ev.side === 0 ? ALLY.bottom - 30 : FOE.bottom - 26) + sd.dy;
       if (cu.ballPos) drawBallSprite(c, cu.ballPos.x, cu.ballPos.y, cu.ballPos.rot, CF.ball);
-      if (cu.spT != null) drawSparkle(c, cx, cy, cu.spT);
+      if (cu.open && cu.spT != null && cu.spT < .16) drawBallSprite(c, cu.open.x, cu.open.y, 0, CF.ball, cu.spT < .08 ? 2 : 1);
     }
     infoBox(c, side(1), false); infoBox(c, side(0), true);
     levelBoxView(c);
@@ -1144,7 +1194,7 @@ function createBattle(env) {
       sides: S.sides.map(s => ({ name: s.name, level: s.level, hp: Math.round(s.dhp), maxhp: s.maxhp, status: s.status, vis: s.vis, dx: s.dx, dy: s.dy })), over: S.b && S.b.over, finished: !!S.finished, intro: S.introT };
   }
   function rebuild() { /* images load on demand */ }
-  return { S, opt, W, H, press, click, update, render, start, initFont, status, rebuild, warnings, act, getImg, nudge, layoutPreview, LEG };
+  return { spriteReport, S, opt, W, H, press, click, update, render, start, initFont, status, rebuild, warnings, act, getImg, nudge, layoutPreview, LEG };
 }
 root.BattleSceneCore = createBattle;
 })(window);
@@ -1204,7 +1254,7 @@ class BattleScene extends Phaser.Scene {
       onEnd: res => this.finishBattle(res),
       glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
     });
-    this.core = core;
+    this.core = core; BattleScene._core = core;
 
     // ---- who fights: TrainerTable (looked up by the trainer ID in the script) or the data passed in
     const opp = gsm && gsm.opponentPartyMon1;
@@ -1236,7 +1286,7 @@ class BattleScene extends Phaser.Scene {
           foeTrainerSprite: d.foeTrainerSprite || (tt && tt.frontSprite) || (kind === 'trainer' && spriteId ? `graphics/trainer_front_sprites/${spriteId}.png` : ''),
           playerTrainerSprite: d.playerTrainerSprite || back,
           ballSheet: bt ? { path: bt.spriteSheet, fw: bt.frameWidth || 16, fh: bt.frameHeight || 16 } : undefined,
-          sparkleSheet: bt && bt.particleSheet ? { path: bt.particleSheet, fw: bt.particleFrameSize || 32, fh: bt.particleFrameSize || 32 } : undefined,
+          fxSheet: bt && /Effects/i.test(bt.particleSheet || '') ? bt.particleSheet : undefined,
         });
       } catch (e) { console.error('[BattleScene] could not start the battle:', e); this.finishBattle(null); }
     });
@@ -1337,6 +1387,7 @@ BattleScene.musicEl = () => { if (!BattleScene.MUSIC) return null; if (!BattleSc
 try { BattleScene.musicEl(); } catch (e) { /* no audio */ }   // start downloading now
 // map weather -> battle weather (rain, sun, sand, hail change the rules; fog is only visual). Set BattleScene.USE_MAP_WEATHER = false to ignore the map.
 // catching options (CFRU) - per battle, the battle data can also have: fishing, surfing, mapType ('underwater' | 'underground'), night, noCatching
+BattleScene.debug = function () { const c = BattleScene._core || window.BattleCore; return c && c.spriteReport ? c.spriteReport('manual') : console.warn('[BS] core not found'); };
 BattleScene.CATCH = { criticalCapture: true, catchingCharm: false, catchRateBonus: 0, catchDifficulty: false, alwaysCatchable: false };
 BattleScene.USE_MAP_WEATHER = true;
 BattleScene.WEATHER_MAP = { rain: 'rain', thunderstorm: 'rain', sunny: 'sun', drought: 'sun', snow: 'hail', sandstorm: 'sand', fog: 'fog' };
