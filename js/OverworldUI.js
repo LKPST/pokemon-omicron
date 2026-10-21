@@ -123,7 +123,7 @@
     let x0 = fw, x1 = -1, y0 = fh, y1 = -1;
     try { const d = tc.getImageData(0, 0, fw, fh).data; for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) if (d[(y * fw + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } } catch (e) { x0 = 0; x1 = fw - 1; y0 = 0; y1 = fh - 1; }
     if (x1 < 0) return null;
-    const cw = x1 - x0 + 1, ch = y1 - y0 + 1; let s = Math.min(60 / cw, 60 / ch); s = opts && opts.icon ? Math.min(1, s) : (s >= 2 ? Math.floor(s) : s);   // icons stay at 100%
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1; const MAXP = (opts && opts.max) || 60; let s = Math.min(MAXP / cw, MAXP / ch); s = opts && opts.icon ? Math.min(1, s) : (s >= 2 ? Math.floor(s) : s);   // icons stay at 100%
     const out = mk(Math.max(1, Math.round(cw * s)), Math.max(1, Math.round(ch * s))), oc = out.getContext('2d'); oc.imageSmoothingEnabled = false;
     oc.drawImage(t, x0, y0, cw, ch, 0, 0, out.width, out.height); return out;
   }
@@ -234,6 +234,116 @@
   API.receivePokemon = function (scene, mon, where, done) {
     const note = where === 'pc' ? 'Your party is full: sent to the PC.' : 'Added to your party.';
     return API.receive(scene, { kind: 'pokemon', label: 'NEW POKEMON', mon: { species: mon.species, shiny: !!mon.isShiny, level: mon.level, nickname: mon.nickname }, note }, done);
+  };
+
+
+  // ------------------------------------------------------------------ evolution
+  //   OWUI.evolve(scene, { name, from, to, shiny, canCancel }, done(ok))   the "What? X is evolving!" scene (B cancels). Only plays it.
+  //   OWUI.applyEvolution(mon, 'SPECIES_X')                                changes the save mon (species, stats, ability, Pokédex)
+  //   OWUI.runEvolutions(scene, done)                                      plays + applies every evolution the last battle reported
+  const dbOf = () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : window.PokemonDatabase) || {};
+  const specOf = k => { const db = dbOf(); return db[k] || db[String(k).replace(/_[MF]$/, '')] || {}; };
+  const nameOf = k => specOf(k).name || String(k).replace(/^SPECIES_/, '').toLowerCase().replace(/^./, c => c.toUpperCase());
+  function wrapText(str, sc, maxW) {
+    const lines = []; let cur = '';
+    for (const w of String(str).split(' ')) { const t = cur ? cur + ' ' + w : w; if (cur && textW(t, sc) > maxW) { lines.push(cur); cur = w; } else cur = t; }
+    if (cur) lines.push(cur); return lines;
+  }
+  function drawMsg(font, text) {
+    const W = 448, H = 76, cv = mk(W, H), c = cv.getContext('2d');
+    chamfer(c, 1, 1, W - 2, H - 2, 8); c.fillStyle = 'rgba(8,12,26,0.94)'; c.fill();
+    chamfer(c, 1.5, 1.5, W - 3, H - 3, 8); c.lineWidth = 2; c.strokeStyle = API.accent; c.stroke();
+    wrapText(text, 2, W - 60).slice(0, 2).forEach((l, i) => drawText(c, font, l, 20, 10 + i * 30, 2, '#ffffff'));
+    return cv;
+  }
+  function whiteOf(pic) { const cv = mk(pic.width, pic.height), c = cv.getContext('2d'); c.drawImage(pic, 0, 0); c.globalCompositeOperation = 'source-in'; c.fillStyle = '#ffffff'; c.fillRect(0, 0, cv.width, cv.height); return cv; }
+
+  API.evolve = async function (scene, o, done) {
+    o = o || {}; let finished = false; const fin = ok => { if (finished) return; finished = true; if (done) done(!!ok); };
+    try {
+      if (!scene || !scene.add || !scene.sys || !scene.sys.isActive()) return fin(false);
+      const dF = specOf(o.from), dT = specOf(o.to), shiny = !!o.shiny, name = o.name || nameOf(o.from), toName = nameOf(o.to);
+      const [font, imO, imN] = await Promise.all([new Promise(r => withFont(scene, r)), loadImg(dF.battleSprite || dF.frontSprite), loadImg(dT.battleSprite || dT.frontSprite)]);
+      if (!font || !scene.sys || !scene.sys.isActive()) return fin(false);
+      const pO = pictureOf(imO, { mon: true, shiny, max: 120 }) || fallbackPicture('pokemon'), pN = pictureOf(imN, { mon: true, shiny, max: 120 }) || fallbackPicture('pokemon');
+      const keys = [addTex(scene, pO), addTex(scene, pN), addTex(scene, whiteOf(pO)), addTex(scene, whiteOf(pN))], [kO, kN, kWO, kWN] = keys;
+      const S = (window.OW_TEXT && window.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 }, D = 6200, objs = [], cx = S.x + S.w / 2, base = S.y + 196;
+      const dim = scene.add.rectangle(cx, S.y + S.h / 2, S.w, S.h, 0x070a18, 1).setScrollFactor(0).setDepth(D).setAlpha(0); objs.push(dim);
+      const sp = scene.add.image(cx, base, kO).setOrigin(0.5, 1).setScrollFactor(0).setDepth(D + 1).setAlpha(0); objs.push(sp);
+      const flash = scene.add.rectangle(cx, S.y + S.h / 2, S.w, S.h, 0xffffff, 1).setScrollFactor(0).setDepth(D + 3).setAlpha(0); objs.push(flash);
+      const msg = scene.add.image(S.x + Math.round((S.w - 448) / 2), S.y + S.h - 86, kO).setOrigin(0, 0).setScrollFactor(0).setDepth(D + 2).setAlpha(0); objs.push(msg);
+      const arrow = scene.add.triangle(msg.x + 448 - 24, msg.y + 56, 0, 0, 14, 0, 7, 9, 0xffffff, 0.9).setScrollFactor(0).setDepth(D + 3).setVisible(false); objs.push(arrow);
+      let msgKey = null, waiting = null, cancelled = false, animating = false;
+      const wait = ms => new Promise(r => scene.time.delayedCall(ms, r));
+      const say = (text, needKey) => new Promise(res => {
+        const k = addTex(scene, drawMsg(font, text)); msg.setTexture(k); if (msgKey) dropTex(scene, msgKey); msgKey = k; msg.setAlpha(1);
+        if (!needKey) return res();
+        arrow.setVisible(true); waiting = () => { arrow.setVisible(false); waiting = null; res(); };
+      });
+      const onKey = ev => {
+        if (ev.repeat) return;
+        if (waiting && ['Space', 'Enter', 'KeyZ', 'KeyX'].includes(ev.code)) waiting();
+        else if (animating && o.canCancel !== false && ['KeyX', 'Escape', 'Backspace'].includes(ev.code)) cancelled = true;
+      };
+      const onPtr = () => { if (waiting) waiting(); };
+      scene.input.keyboard.on('keydown', onKey); scene.input.on('pointerdown', onPtr);
+      const cleanup = () => {
+        scene.input.keyboard.off('keydown', onKey); scene.input.off('pointerdown', onPtr);
+        scene.tweens.add({ targets: [dim, sp, msg], alpha: 0, duration: 260, onComplete: () => { objs.forEach(x => { try { x.destroy(); } catch (e) { /* gone */ } }); keys.concat(msgKey ? [msgKey] : []).forEach(k => dropTex(scene, k)); } });
+      };
+      scene.tweens.add({ targets: dim, alpha: 0.94, duration: 300 }); scene.tweens.add({ targets: sp, alpha: 1, duration: 300 }); await wait(340);
+      await say('What? ' + name + ' is evolving!', true);
+      msg.setAlpha(0); animating = true;
+      for (let i = 0; i < 18 && !cancelled; i++) { sp.setTexture(i % 2 ? kWN : kWO); sp.setScale(1 + 0.05 * (i % 2)); await wait(Math.max(70, 330 * Math.pow(0.8, i))); }
+      animating = false;
+      if (cancelled) { sp.setTexture(kO).setScale(1); await say('Huh? ' + name + ' stopped evolving!', true); cleanup(); return fin(false); }
+      sp.setTexture(kN).setScale(1.15); flash.setAlpha(1); scene.tweens.add({ targets: flash, alpha: 0, duration: 700 });
+      scene.tweens.add({ targets: sp, scale: 1, duration: 500, ease: 'Back.easeOut' }); sparkles(scene, cx, base - 60);
+      await wait(800);
+      await say('Congratulations! Your ' + name + ' evolved into ' + toName + '!', true);
+      cleanup(); fin(true);
+    } catch (e) { console.error('[OWUI.evolve]', e); fin(false); }
+  };
+
+  API.applyEvolution = function (mon, to) {
+    if (!mon) return;
+    const sp = specOf(to), old = specOf(mon.species), BE = window.BattleEngine || (typeof BattleEngine !== 'undefined' ? BattleEngine : null);
+    if (sp.name) {
+      if (mon.ability === old.ability1 && sp.ability1) mon.ability = sp.ability1;
+      else if (mon.ability === old.ability2 && sp.ability2 && sp.ability2 !== 'ABILITY_NONE') mon.ability = sp.ability2;
+    }
+    mon.species = to;
+    if (BE && sp.baseHP != null) {
+      const L = mon.level | 0 || 1, nm = BE.natureMods(mon.nature || ''), iv = k => (mon['iv' + k] != null ? mon['iv' + k] : 15), oldMax = mon.maxHP || 0;
+      mon.maxHP = BE.calcHP(sp.baseHP, iv('HP'), 0, L); mon.HP = Math.min(mon.maxHP, Math.max(0, (mon.HP || 0) + Math.max(0, mon.maxHP - oldMax)));
+      mon.Attack = BE.calcStat(sp.baseAttack || 50, iv('Attack'), 0, L, nm.atk); mon.Def = BE.calcStat(sp.baseDefense || 50, iv('Defense'), 0, L, nm.def);
+      mon.spattack = BE.calcStat(sp.baseSpAttack || 50, iv('SpAttack'), 0, L, nm.spa); mon.sdpef = BE.calcStat(sp.baseSpDefense || 50, iv('SpDefense'), 0, L, nm.spd);
+      mon.speed = BE.calcStat(sp.baseSpeed || 50, iv('Speed'), 0, L, nm.spe);
+      if (BE.expForLevel && sp.growthRate) mon.expmax = BE.expForLevel(sp.growthRate, L + 1);
+    }
+    try { if (window.Dex) { window.Dex.catch(to, !!mon.isShiny); if (mon.natdexID != null && window.Dex.num) mon.natdexID = window.Dex.num(to) || mon.natdexID; } } catch (e) { /* no Pokédex */ }
+  };
+
+  // after a battle: evolutions the battle reported (gameStateManager.lastBattle.evolutions), one after the other
+  API.runEvolutions = function (scene, done) {
+    const gsm = window.GameStateManager, lb = gsm && gsm.lastBattle, list = lb && lb.evolutions;
+    if (!list || !list.length) { if (done) done(); return false; }
+    lb.evolutions = [];
+    const party = ((gsm.saveData || {}).party || []).filter(m => m && m.species), seen = new Set(), todo = list.filter(e => !seen.has(e.idx) && seen.add(e.idx));
+    scene.isLocked = true;
+    const next = i => {
+      if (i >= todo.length || !scene.sys || !scene.sys.isActive()) {
+        scene.time.delayedCall(250, () => {
+          const J = Phaser.Input.Keyboard.JustDown; ['spaceKey', 'followKey', 'enterKey', 'bagKey'].forEach(k => { if (scene[k]) J(scene[k]); });
+          scene.isLocked = false; try { if (window.OWFollower) { window.OWFollower.refresh(); } } catch (e) { /* ignore */ } try { window.SaveSystem && window.SaveSystem.touch('party'); } catch (e) { /* ignore */ }
+          if (done) done();
+        }); return;
+      }
+      const e = todo[i], mon = party[e.idx];
+      if (!mon) return next(i + 1);
+      API.evolve(scene, { name: mon.nickname || nameOf(mon.species), from: mon.species, to: e.to, shiny: mon.isShiny }, ok => { if (ok) API.applyEvolution(mon, e.to); next(i + 1); });
+    };
+    next(0); return true;
   };
 
   window.OWUI = API;
