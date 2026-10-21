@@ -17,6 +17,7 @@ window.OverworldMovement = (() => {
     if (p.x === nx && p.y === ny) return false;
     // the tile the player is walking INTO is taken too (set by OverworldScene.movePlayerTo for the whole step)
     const pd = scene.playerDest; if (pd && pd.x === nx && pd.y === ny) return false;
+    if (window.OWFollower && window.OWFollower.occupies && window.OWFollower.occupies(nx, ny)) return false;   // the player's follower Pokémon is there
     // another NPC that is stepping onto it (its source and destination tiles stay reserved for the whole step)
     for (const o of (scene.npcs || [])) { if (o === e) continue; if ((o.dest && o.dest.x === nx && o.dest.y === ny) || (o.src && o.src.x === nx && o.src.y === ny)) return false; }
     if (e.home) {
