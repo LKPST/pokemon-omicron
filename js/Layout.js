@@ -13,7 +13,7 @@
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.55')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 2, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 3, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -76,7 +76,7 @@
     view = document.createElement('div'); view.id = 'pm-view'; gc.parentNode.insertBefore(view, gc); view.appendChild(gc);
     flash = document.createElement('div'); flash.id = 'pm-flash'; view.appendChild(flash);
     toast = document.createElement('div'); toast.id = 'pm-toast'; view.appendChild(toast);
-    if (isTouch) buildControls();
+    if (tq !== '0') buildControls();   // the buttons show on every device in landscape (mouse works too); ?touch=0 hides them
     ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault()));
     if (isTouch) document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
     window.addEventListener('resize', apply); window.addEventListener('orientationchange', () => setTimeout(apply, 250));
