@@ -18,13 +18,13 @@
 //   ctx.getFlag(n) ctx.setFlag(n, bool) ctx.getVar(n) ctx.setVar(n, number)
 //   ctx.jump(label)  ctx.call(scriptName)  ctx.ret()  ctx.stop()  ctx.choice (last yes/no answer)
 // ===========================================================================
-
+ 
 window.OverworldScriptCommands = (() => {
   const A = (n, t, opt, def, h, opts) => ({ n, t, opt: !!opt, def, h, opts });
   const DIRS = ['up', 'down', 'left', 'right'];
   const C = {};
   const def = (name, group, help, args, run, block) => { C[name] = { group, help, args, run, block }; };
-
+ 
   // ------------------------------------------------------------------ control
   def('lock', 'Control', 'Freeze the player and the NPCs (while a script talks)', [], (a, ctx, next) => { ctx.host.lock(true); next(); });
   def('release', 'Control', 'Let the player and the NPCs move again', [], (a, ctx, next) => { ctx.host.lock(false); next(); });
@@ -34,7 +34,7 @@ window.OverworldScriptCommands = (() => {
   def('return', 'Control', 'Go back to the script that used `call` (or end this one)', [], (a, ctx, next) => { ctx.ret(); next(); });
   def('end', 'Control', 'Stop the script here', [], (a, ctx, next) => { ctx.stop(); });
   def('label', 'Control', 'A place to jump to with goto', [A('name', 'label')], (a, ctx, next) => next());
-
+ 
   const cond = (name, help, test) => def(name, 'Control', help, [A('flag', 'flag'), A('label', 'label')], (a, ctx, next) => { if (test(ctx.getFlag(a.flag))) ctx.jump(a.label); next(); });
   cond('goto_if_set', 'Jump if the flag is set', v => v);
   cond('goto_if_unset', 'Jump if the flag is NOT set', v => !v);
@@ -48,20 +48,20 @@ window.OverworldScriptCommands = (() => {
   cmp('goto_if_ne', 'Jump if variable != value', (x, y) => x !== y);
   cmp('goto_if_lt', 'Jump if variable < value', (x, y) => x < y);
   cmp('goto_if_gt', 'Jump if variable > value', (x, y) => x > y);
-
+ 
   // ------------------------------------------------------------------ flags / variables
   def('setflag', 'Flags', 'Set a flag (for example FLAG_GOT_STARTER)', [A('flag', 'flag')], (a, ctx, next) => { ctx.setFlag(a.flag, true); next(); });
   def('clearflag', 'Flags', 'Clear a flag', [A('flag', 'flag')], (a, ctx, next) => { ctx.setFlag(a.flag, false); next(); });
   def('setvar', 'Flags', 'Set a variable to a number', [A('var', 'var'), A('value', 'num', 0, 0)], (a, ctx, next) => { ctx.setVar(a.var, +a.value || 0); next(); });
   def('addvar', 'Flags', 'Add a number to a variable', [A('var', 'var'), A('amount', 'num', 0, 1)], (a, ctx, next) => { ctx.setVar(a.var, ctx.getVar(a.var) + (+a.amount || 0)); next(); });
-
+ 
   // ------------------------------------------------------------------ messages
   def('msgbox.normal', 'Message', 'Show a message. \\n = new line, \\p = new paragraph, $player = player name',
     [A('text', 'text')], (a, ctx, next) => ctx.host.say(a.text, false, () => next()), 'text');
   def('msgbox.yesno', 'Message', 'Ask Yes / No. Then use goto_if_yes / goto_if_no',
     [A('text', 'text')], (a, ctx, next) => ctx.host.say(a.text, true, (yes) => { ctx.choice = !!yes; next(); }), 'text');
   def('faceplayer', 'Message', 'Make the NPC you talked to look at the player', [], (a, ctx, next) => ctx.host.facePlayer(next));
-
+ 
   // ------------------------------------------------------------------ movement
   def('applymovement', 'Movement', 'Move the player, an NPC or an event. Waits until it is finished (unless async)',
     [A('target', 'target', 0, 'npc', 'player, npc (the one you talked to) or an event name like NPC_Portia'), A('async', 'bool', 1, false, 'do not wait, use waitmovement later')],
@@ -74,7 +74,7 @@ window.OverworldScriptCommands = (() => {
     [A('ms', 'num', 1, 800, 'duration')], (a, ctx, next) => ctx.host.resetCamera(a.ms == null || a.ms === '' ? 800 : +a.ms, next));
   def('hideobject', 'Movement', 'Hide an NPC / event for good (until showobject)', [A('target', 'target', 0, 'npc')], (a, ctx, next) => { ctx.host.setHidden(a.target, true); next(); });
   def('showobject', 'Movement', 'Show a hidden NPC / event again', [A('target', 'target')], (a, ctx, next) => { ctx.host.setHidden(a.target, false); next(); });
-
+ 
   // ------------------------------------------------------------------ screen
   def('fadescreen', 'Screen', 'Fade the screen out (to a colour) or back in',
     [A('mode', 'select', 0, 'out', '', ['out', 'in']), A('ms', 'num', 1, 500, 'duration'), A('color', 'select', 1, 'black', '', ['black', 'white'])],
@@ -89,7 +89,7 @@ window.OverworldScriptCommands = (() => {
     [A('map', 'map'), A('x', 'num'), A('y', 'num'), A('facing', 'select', 1, 'down', '', DIRS), A('type', 'select', 1, 'Normal', '', ['Normal', 'Teleport', 'Hole'])],
     (a, ctx, next) => ctx.host.warp(a.map, +a.x || 0, +a.y || 0, a.facing || 'down', a.type || 'Normal', next));
   def('playse', 'Screen', 'Play a sound that is already loaded (its key)', [A('sound', 'text')], (a, ctx, next) => { ctx.host.sound(a.sound); next(); });
-
+ 
   // ------------------------------------------------------------------ pokemon
   def('givepokemon', 'Pokémon', 'Give the player a Pokémon (goes to the PC when the party is full)',
     [A('species', 'text', 0, 'SPECIES_BULBASAUR'), A('level', 'num', 0, 5), A('nickname', 'text', 1, ''), A('nature', 'text', 1, 'NATURE_HARDY'),
@@ -121,14 +121,17 @@ window.OverworldScriptCommands = (() => {
         ribbons: [],
         superTrainingFlags: { hpMedal: false, atkMedal: false, defMedal: false, spatkMedal: false, spdefMedal: false, speedMedal: false },
       };
-      if (window.Dex) window.Dex.catch(speciesKey, a.shiny === true || a.shiny === 'true');   // Pokedex: caught
+      Object.assign(mon, { ivHP: 31, ivAttack: 31, ivDefense: 31, ivSpAttack: 31, ivSpDefense: 31, ivSpeed: 31 });   // the names the battle engine reads
+      try { if (window.Dex) window.Dex.catch(speciesKey, a.shiny === true || a.shiny === 'true'); } catch (e) { console.warn('[givepokemon] Pokedex update failed', e); }   // Pokedex: caught
       const room = !!gs && (!gs.party || gs.party.length < 6 || gs.party.slice(0, 6).some(x => !x));
       if (window.GivePokemonSystem && typeof window.GivePokemonSystem.give === 'function') window.GivePokemonSystem.give(mon);
       else console.warn('[ScriptEngine] GivePokemonSystem not found!');
+      console.log('[givepokemon] party now:', ((gs && gs.party) || []).map(x => x && x.species));
+      try { if (window.OWFollower) window.OWFollower.refresh(); if (window.SaveSystem && window.SaveSystem.touch) window.SaveSystem.touch('party'); } catch (e) { /* ignore */ }
       if (window.OWUI && ctx.scene) return window.OWUI.receivePokemon(ctx.scene, mon, room ? 'party' : 'pc', () => next());   // [UI] picture card (js/OverworldUI.js)
       next();
     });
-
+ 
   def('trainerbattle', 'Pokémon', 'Start a trainer battle',
     [A('trainerID', 'text'), A('matchType', 'select', 1, 'single', '', ['single', 'double']), A('pokemon', 'text', 1, '', 'optional: SPECIES_A:level,SPECIES_B:level (default: the team in TrainerTable)')],
     (a, ctx, next) => {
@@ -145,7 +148,7 @@ window.OverworldScriptCommands = (() => {
       const bd = { name: a.trainerID, trainerID: a.trainerID, matchType: a.matchType || 'single', pokemon };
       if (window.BattleTransition) window.BattleTransition.start(scene, 'BattleScene', bd); else scene.scene.start('BattleScene', bd);   // js/BattleTransition.js: flash + spin-out, then the battle   // no `pokemon` given: BattleScene reads the team from TrainerTable
     });
-
+ 
   // ------------------------------------------------------------------ items (js/ItemSystem.js, tables/ItemTables.js)
   // giveitem / additemtopc / removeitem / removeitemfrompc / checkitem / checkitemfrompc answer in ctx.choice, like msgbox.yesno does:
   // use goto_if_yes / goto_if_no right after them (no: the bag had no room / the player did not have the item).
@@ -193,7 +196,7 @@ window.OverworldScriptCommands = (() => {
     if (ctx.preview || !window.BagMenu) { if (!ctx.preview) console.warn('[ScriptEngine] BagMenu.js is not loaded'); return next(); }
     window.BagMenu.open(ctx.scene, { mode: 'storage', onClose: () => next() });
   });
-
+ 
   // ------------------------------------------------------------------ Aide's Log (quests, start menu page 2)
   const QS = () => window.Quests;
   const noQ = () => { console.warn('[ScriptEngine] StartMenu.js is not loaded (Quests API missing)'); return null; };
@@ -207,7 +210,7 @@ window.OverworldScriptCommands = (() => {
     (a, ctx, next) => { if (ctx.preview) { ctx.choice = true; return next(); } const q = QS() && QS().get(a.id); ctx.choice = !!q && (q.status === (a.status || 'done')); next(); });
   def('openmenu', 'Menu', 'Open the start menu (screen: pokedex / map / log / card / save / options)', [A('screen', 'text', 1, '', 'optional')],
     (a, ctx, next) => { if (ctx.preview || !window.StartMenu) return next(); window.StartMenu.open(ctx.scene, { screen: ({ pokedex: 'dex', rotomdex: 'dex', map: 'map', townmap: 'map', log: 'log', card: 'card', save: 'save', options: 'options', nav: 'nav' })[String(a.screen || '').toLowerCase()], onClose: () => next() }); });
-
+ 
   // ------------------------------------------------------------------ naming screens (js/PokemonSummary.js)
   def('nameplayer', 'Player', "Open the naming screen for the player's name (stored in saveData.player.name)", [A('gender', 'text', 1, '', 'male or female (picture); empty = from the save'), A('max', 'num', 1, 7, 'longest name')],
     (a, ctx, next) => {
@@ -222,6 +225,6 @@ window.OverworldScriptCommands = (() => {
       if (!mon || !window.PokemonSummary || !window.PokemonSummary.nameMon) return next();
       window.PokemonSummary.nameMon(ctx.scene, mon, { onDone: () => next() });
     });
-
+ 
   return C;
 })();
