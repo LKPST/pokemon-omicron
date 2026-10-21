@@ -113,6 +113,11 @@
     F.scene = scene; F.spr = null; F.species = null; F.pts = []; F.last = null; F.trav = 0; F.nextCheck = 0; F.busy = false;
     scene.events.once('shutdown', () => { F.detach(); });
   };
+  // does the follower stand on (or is it walking onto) this world tile? NPCs use it so they never step into it (same as the player's tile)
+  F.occupies = function (tx, ty) {
+    const s = F.spr; if (!s || !s.visible || s.owX === undefined) return false;
+    return Math.abs(s.owX - (16 + tx * 32)) < 31 && Math.abs(s.owY - (16 + ty * 32)) < 31;
+  };
   F.detach = function () { if (F.fx && F.fx.spr) { try { F.fx.spr.destroy(); } catch (_) { } } F.fx = null; dropSprite(); F.pts = []; F.last = null; F.scene = null; };
 
   // call after the party changed (the check also runs by itself twice a second)
