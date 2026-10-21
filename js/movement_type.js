@@ -133,10 +133,27 @@ window.OverworldMovement = (() => {
     MOVEMENT_TYPE_INVISIBLE: () => null,
   };
 
+  // Before an NPC starts its next move: is something about to start a script / warp that involves the player? Then it stays where it is.
+  //  - the player stands next to it and looks at it (one press of Z talks to it), or Z is held while he is next to it
+  //  - the player is in the middle of a step onto a walk-on Script / Warp tile (the script starts when the step ends)
+  function holdFor(e) {
+    const s = e.scene, p = s && s.player; if (!p) return false;
+    const dx = e.x - p.x, dy = e.y - p.y;
+    const near = (Math.abs(dx) <= 40 && Math.abs(dy) <= 10) || (Math.abs(dy) <= 40 && Math.abs(dx) <= 10);
+    if (near) {
+      const d = p.direction, facing = (d === 'right' && dx > 0) || (d === 'left' && dx < 0) || (d === 'down' && dy > 0) || (d === 'up' && dy < 0);
+      if (facing || (s.spaceKey && s.spaceKey.isDown)) return true;
+    }
+    const pd = s.playerDest;
+    if (pd && s.triggers) for (const t of s.triggers) if (t.wx === pd.x && t.wy === pd.y && (t.type === 'Warp' || (t.type === 'Script' && t.config && t.config.script))) return true;
+    return false;
+  }
+
   function tick(e) {
     const t = e.eventConfig && e.eventConfig.movementType, fn = types[t];
     if (!fn || e.busy || !e.scene || e.scene.isLocked || e.scene.scriptRunning || e.texture.frameTotal < 4) return;   // buildings/trees have 1 frame
     if (!e.home) e.home = tileOf(e);
+    if (holdFor(e)) return;   // a script is about to start: do not begin another move
     const a = fn(e);
     if (!a) return;
     e.busy = true;
