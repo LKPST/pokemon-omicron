@@ -174,7 +174,7 @@ function createSummary(env) {
       x.drawImage(im, 0, 0); x.getImageData(0, 0, 1, 1); sheet = c; src = 'latin_short.png';
     } catch (e) { sheet = null; }
     if (!sheet) { sheet = fallbackSheet(); src = 'built-in fallback (latin_short.png not loaded)'; }
-    rawSheet = sheet; fontSrc = src; fontCache.clear(); advCache.clear(); measureFont();
+    rawSheet = sheet; fontSrc = src; fontCache.clear(); advCache.clear(); letAdv.clear(); measureFont();
   }
   const hex4 = h => { h = h.replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16), h.length > 6 ? parseInt(h.substr(6, 2), 16) : 255]; };
   function font(tc, sc) {
@@ -195,12 +195,26 @@ function createSummary(env) {
     if (advCache.has(key)) return advCache.get(key);
     let a = 6; const gl = GLY[key];
     if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 8, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
+      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 16, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
       let mx = -1;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) { const i = (y * 8 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
-      if (mx >= 0) a = clamp(mx + 2, 6, 10);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = (y * 16 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
+      if (mx >= 0) a = clamp(mx + 1, 6, 18);
     }
     advCache.set(key, a); return a;
+  }
+  // proportional advance for letters / punctuation: the width of the drawn pixels + 1 px gap (a fixed 6 px squashed wide letters like m, w, M, W
+  // into their neighbours and left narrow ones (i, l, t) floating apart). Digits stay fixed (6) so numbers line up.
+  const letAdv = new Map();
+  function advLetter(ch) {
+    if (letAdv.has(ch)) return letAdv.get(ch);
+    const gl = GLY[ch]; let a = 6;
+    if (gl && rawSheet) {
+      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 16, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
+      let mx = -1, mn = 8;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = (y * 16 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245) && (d[i] + d[i + 1] + d[i + 2]) / 3 < 110) { mx = Math.max(mx, x); mn = Math.min(mn, x); } }
+      if (mx >= 0) a = clamp(mx + 2, 4, 12);
+    }
+    letAdv.set(ch, a); return a;
   }
   function* glyphs(s) {
     s = String(s); let i = 0;
@@ -209,13 +223,13 @@ function createSummary(env) {
       if (ch === '{') { const j = s.indexOf('}', i); if (j > 0) { const k = TOKENS[s.slice(i + 1, j)]; if (k && GLY[k]) { yield { gl: GLY[k], adv: advOf(k) }; i = j + 1; continue; } } }
       if (ch === '/') { const j = s.indexOf('/', i + 1); if (j > 0) { const tag = s.slice(i, j + 1); if (GLY[tag]) { yield { gl: GLY[tag], adv: advOf(tag) }; i = j + 1; continue; } } }
       if (ch === ' ') { yield { gl: null, adv: 5 }; i++; continue; }
-      yield { gl: GLY[ch] || null, adv: 6 }; i++;
+      yield { gl: GLY[ch] || null, adv: /[0-9]/.test(ch) ? 6 : advLetter(ch) }; i++;
     }
   }
   const tw = s => { let w = 0; for (const g of glyphs(s)) w += g.adv; return w; };
   function T(c, s, x, y, k = 'dark') {
     const f = font(TX[k][0], TX[k][1]); let cx = x;
-    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 8, 16, cx, y - FT.top + opt.nudge, 8, 16); cx += g.adv; }
+    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 16, 16, cx, y - FT.top + opt.nudge, 16, 16); cx += g.adv; }
     return cx;
   }
   const TR = (c, s, xr, y, k) => T(c, s, xr - tw(s), y, k);
