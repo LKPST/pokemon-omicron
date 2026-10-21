@@ -116,13 +116,14 @@
   function pictureOf(im, opts) {
     if (!im) return null;
     const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height; if (!iw || !ih) return null;
-    const n = opts && opts.mon ? (iw / ih >= 3.5 ? 4 : 1) : 1, fw = Math.floor(iw / n), fr = n >= 4 && opts.shiny ? 1 : 0;
+    // battle sheets are 4 frames side by side; icon sheets are 2 frames stacked (frame 0 = the top one)
+    const stacked = opts && opts.icon && ih >= iw * 2, n = opts && opts.mon ? (iw / ih >= 3.5 ? 4 : 1) : 1, fw = Math.floor(iw / n), fr = n >= 4 && opts.shiny ? 1 : 0, fh = stacked ? Math.floor(ih / Math.round(ih / iw)) : ih;
     // trim transparent borders so it is centred
-    const t = mk(fw, ih), tc = t.getContext('2d', { willReadFrequently: true }); tc.drawImage(im, fr * fw, 0, fw, ih, 0, 0, fw, ih);
-    let x0 = fw, x1 = -1, y0 = ih, y1 = -1;
-    try { const d = tc.getImageData(0, 0, fw, ih).data; for (let y = 0; y < ih; y++) for (let x = 0; x < fw; x++) if (d[(y * fw + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } } catch (e) { x0 = 0; x1 = fw - 1; y0 = 0; y1 = ih - 1; }
+    const t = mk(fw, fh), tc = t.getContext('2d', { willReadFrequently: true }); tc.drawImage(im, fr * fw, 0, fw, fh, 0, 0, fw, fh);
+    let x0 = fw, x1 = -1, y0 = fh, y1 = -1;
+    try { const d = tc.getImageData(0, 0, fw, fh).data; for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) if (d[(y * fw + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } } catch (e) { x0 = 0; x1 = fw - 1; y0 = 0; y1 = fh - 1; }
     if (x1 < 0) return null;
-    const cw = x1 - x0 + 1, ch = y1 - y0 + 1; let s = Math.min(60 / cw, 60 / ch); s = s >= 2 ? Math.floor(s) : s;
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1; let s = Math.min(60 / cw, 60 / ch); s = opts && opts.icon ? Math.min(1, s) : (s >= 2 ? Math.floor(s) : s);   // icons stay at 100%
     const out = mk(Math.max(1, Math.round(cw * s)), Math.max(1, Math.round(ch * s))), oc = out.getContext('2d'); oc.imageSmoothingEnabled = false;
     oc.drawImage(t, x0, y0, cw, ch, 0, 0, out.width, out.height); return out;
   }
@@ -185,7 +186,7 @@
     o = o || {}; const fin = () => { if (done) done(); };
     if (!scene || !scene.add) return fin();
     // resolve what the card needs: item data, picture
-    let path = o.sprite || '', name = o.name;
+    let path = o.sprite || '', name = o.name, icon = '';
     if (o.key && window.ItemSystem) {
       const it = window.ItemSystem.info && window.ItemSystem.info(o.key);
       if (!path && it && it.sprite) path = it.sprite;
@@ -193,14 +194,16 @@
       if (!o.note && it && it.pocket) { const pk = { items: 'ITEMS', medicine: 'MEDICINE', pokeballs: 'POKE BALLS', balls: 'POKE BALLS', tms: 'TMs & HMs', berries: 'BERRIES', key: 'KEY ITEMS', keyitems: 'KEY ITEMS', battle: 'BATTLE ITEMS' }[String(it.pocket).toLowerCase()] || String(it.pocket).toUpperCase(); o = Object.assign({}, o, { note: 'In the ' + pk + ' pocket.' }); }
     }
     if (o.mon && o.mon.species) {
-      const db = window.PokemonDatabase, d = db && (db[o.mon.species] || db[String(o.mon.species).replace(/_[MF]$/, '')]) || {};
+      const db = (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : window.PokemonDatabase) || {}, d = db[o.mon.species] || db[String(o.mon.species).replace(/_[MF]$/, '')] || {};
       if (!path) path = d.battleSprite || d.frontSprite || '';
+      icon = d.iconSprite || '';   // used when the big sprite is missing
       if (!name) name = o.mon.nickname || d.name || String(o.mon.species).replace(/^SPECIES_/, '');
       if (!o.mon.types) { const pretty = t => { t = String(t || '').replace(/^TYPE_/, ''); return t && t !== 'NONE' ? t[0] + t.slice(1).toLowerCase() : null; }; o = Object.assign({}, o, { mon: Object.assign({}, o.mon, { types: [pretty(d.type1), d.type2 !== d.type1 ? pretty(d.type2) : null].filter(Boolean) }) }); }
     }
-    const [font, im] = await Promise.all([new Promise(r => withFont(scene, r)), loadImg(path)]);
+    let [font, im] = await Promise.all([new Promise(r => withFont(scene, r)), loadImg(path)]);
+    let isIcon = false; if (!im && icon) { im = await loadImg(icon); isIcon = !!im; }   // no battle sprite: the Pokémon's icon at 100%
     if (!font || !scene.sys || !scene.sys.isActive()) return fin();
-    const pic = pictureOf(im, { mon: !!o.mon, shiny: o.mon && o.mon.shiny }) || fallbackPicture(o.mon ? 'pokemon' : 'item');
+    const pic = pictureOf(im, { mon: !!o.mon && !isIcon, icon: isIcon, shiny: o.mon && o.mon.shiny }) || fallbackPicture(o.mon ? 'pokemon' : 'item');
     const card = drawCard(font, Object.assign({}, o, { name }), pic), kc = addTex(scene, card), kp = addTex(scene, pic);
     const S = (window.OW_TEXT && window.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 };
     const CH = card.height, cx = S.x + Math.round((S.w - 448) / 2), cy = S.y + S.h - CH - 10;
