@@ -110,7 +110,11 @@
     const hidden = p.alpha < 0.5 || p.visible === false;
     if (!hidden) {
       const q = { x: p.x, y: p.y }, l = F.last;
-      if (!l || Math.hypot(q.x - l.x, q.y - l.y) > 96) { F.pts = [q]; F.trav = 0; if (F.spr) F.wasHidden = true; }
+      if (!l || Math.hypot(q.x - l.x, q.y - l.y) > 96) {
+        // start of the path (map load, warp, loading a save): put the follower right behind the player at once, so it does not wait for the first step
+        const dv = ({ up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] })[p.direction] || [0, 1];
+        F.pts = [{ x: q.x - dv[0] * F.distance, y: q.y - dv[1] * F.distance }, q]; F.trav = 0; F.dir = ['up', 'down', 'left', 'right'].includes(p.direction) ? p.direction : F.dir; if (F.spr) F.wasHidden = true;
+      }
       else if (Math.hypot(q.x - l.x, q.y - l.y) >= 0.5) F.pts.push(q);
       F.last = q;
       if (F.pts.length > 400) F.pts.splice(0, F.pts.length - 300);
