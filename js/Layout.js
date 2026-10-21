@@ -13,7 +13,7 @@
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.55')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 2, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -125,6 +125,7 @@
     let s, vx, vy;
     if (portraitPhone) { s = (W - si.l - si.r) / 480; vx = si.l; vy = si.t + 6; }
     else { s = Math.min((H - si.t - si.b) / 320, (W - si.l - si.r) / 480); vx = Math.round((W - 480 * s) / 2); vy = Math.round((H - 320 * s) / 2); }
+    const cap = parseFloat(qs.get('maxscale')) || (isTouch ? 99 : 2); if (!portraitPhone && s > cap) { s = cap; vx = Math.round((W - 480 * s) / 2); vy = Math.round((H - 320 * s) / 2); }
     s = Math.max(.5, s); PM.scale = s;
     const vw = Math.round(480 * s), vh = Math.round(320 * s);
     Object.assign(view.style, { left: vx + 'px', top: vy + 'px', width: vw + 'px', height: vh + 'px' });
