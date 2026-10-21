@@ -692,6 +692,7 @@ class OverworldScene extends Phaser.Scene {
     });
 
     this.showMapBanner();                       // [BANNER]
+    { const lb = window.GameStateManager && window.GameStateManager.lastBattle; if (lb && lb.evolutions && lb.evolutions.length) { this.isLocked = true; if (window.OWUI) window.OWUI.busy = true; } }   // [EVOLVE] lock the map right away
     if (window.OWUI && window.OWUI.runEvolutions) this.time.delayedCall(900, () => window.OWUI.runEvolutions(this));   // [EVOLVE] Pokémon that reached their level in the last battle
     if (window.OWWarm) window.OWWarm.start();   // [SPEED] warm the menu / party pictures in the background
 
@@ -1683,7 +1684,7 @@ class OverworldScene extends Phaser.Scene {
       } catch (e) { /* ignore */ }
     }
     const menu = (window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen());
-    const legit = menu || this.scriptRunning || this.warping || (window.BattleTransition && window.BattleTransition.busy) || (window.OWWild && window.OWWild.busy);
+    const legit = menu || this.scriptRunning || this.warping || (window.BattleTransition && window.BattleTransition.busy) || (window.OWWild && window.OWWild.busy) || (window.OWUI && window.OWUI.busy);
     const stuckMoving = this.isMoving && this.player && this.tweens.getTweensOf(this.player).length === 0;
     if (!legit && (this.isLocked || stuckMoving)) {
       this._lockedMs = (this._lockedMs || 0) + delta;
