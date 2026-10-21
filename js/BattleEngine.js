@@ -28,7 +28,7 @@ const BALL_FALLBACK = (() => { const o = {}; for (const e of 'POKEBALL:10 GREATB
 const NORM = s => String(s == null ? '' : s).toUpperCase().replace(/^(ABILITY|ITEM|MOVE|SPECIES|TYPE|NATURE)_/, '').replace(/[^A-Z0-9]/g, '');
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const imul = Math.imul;
-const SHINY_ODDS = 10;   // TESTING: 1 in 10 (normal: 4096)
+const SHINY_ODDS = 4096;   // TESTING: 1 in 10 (normal: 4096)
 function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = imul(t ^ (t >>> 15), t | 1); t ^= t + imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const prettyKey = k => String(k || '').replace(/^(SPECIES|MOVE|TYPE|ABILITY|ITEM)_/, '').toLowerCase().split('_').map(w => w ? w[0].toUpperCase() + w.slice(1) : '').join(' ');
 const STATS = ['atk', 'def', 'spa', 'spd', 'spe'];
