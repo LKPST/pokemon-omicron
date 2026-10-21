@@ -392,12 +392,18 @@ window.OverworldScriptEngine = (() => {
     if (scene.scriptRunning) return;
     E.load();
     if (!E.getScript(scriptName)) { console.warn(`[ScriptEngine] Script not found: ${scriptName}`); if (onFinish) onFinish(); return; }
-    scene.scriptRunning = true;
+    scene.scriptRunning = true;   // from now on no NPC starts a new move and the player cannot walk
     const run = E.createRunner(E.getScript, {
       scene, host: E.makeHost(scene), preview: false,
       getFlag: E.getFlag, setFlag: E.setFlag, getVar: E.getVar, setVar: E.setVar,
     }, scriptName, onFinish);
-    run.start();
+    // [LOCK] an NPC that is in the middle of a step finishes it first (max 0.7 s), so the script never starts while somebody is still walking
+    const t0 = scene.time ? scene.time.now : 0;
+    const settle = () => {
+      const stepping = (scene.npcs || []).some(n => n && n.dest);
+      if (stepping && scene.time && scene.time.now - t0 < 700) scene.time.delayedCall(30, settle); else run.start();
+    };
+    settle();
   };
 
   return E;
