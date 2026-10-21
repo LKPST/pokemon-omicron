@@ -1,0 +1,33 @@
+{
+  "player": {
+    "name": "Clay",
+    "gender": "MALE",
+    "playerOTID": 54321,
+    "playerSecretID": 12345,
+    "money": 500,
+    "mapID": 1,
+    "x": 320,
+    "y": 240
+  },
+  "party": [
+    {null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "pcStorage": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+  ],
+  "flags": {},
+  "vars": {}
+}
