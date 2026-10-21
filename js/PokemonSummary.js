@@ -319,7 +319,7 @@ function createSummary(env) {
     return { sp, rawSpecies: raw.species, species: sp.name, nick: String(raw.nickname || sp.name).slice(0, 10), dex: raw.natdexID ?? parseInt(sp.id, 10), types: sp.t, lv: L, stats, max: stats[0], hp: clamp(raw.HP ?? stats[0], 0, stats[0]),
       natUp: nat[0], natDown: nat[1], nature: pretty(raw.nature) || 'Hardy', ability: pretty(raw.ability) || sp.abs[0] || '-', gender: g === 'MALE' || g === 'M' ? 'M' : g === 'FEMALE' || g === 'F' ? 'F' : '',
       ball: (env.ballType ? env.ballType(raw.ballId) : BALL_BY_ID[raw.ballId]) || 'poke', item, tera, ot: raw.OTName || 'PLAYER', idno: String(raw.OTID ?? 0).padStart(5, '0'),
-      exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown' };
+      exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown', status: String(raw.status || '').toLowerCase() };
   }
 
   // ------------------------------------------------ state
@@ -334,7 +334,7 @@ function createSummary(env) {
     else { if (!TT.sheet) warnings.add('TypeTable has no sheet path'); for (const m of S.party) for (const ty of [...m.types, m.tera]) if (ty && !(TT.types && TT.types[ty] && TT.types[ty].icon)) warnings.add('no icon rect in TypeTable for ' + ty); }
     S.hpShown = S.party.map((m, i) => keepHp && old[i] !== undefined ? old[i] : 0);
     S.sel = Math.min(S.sel, Math.max(0, S.party.length - 1));
-    if (!keepHp) { S.menu = null; S.swap = -1; S.name = null; S.rowT = 0; S.statP = 0; S.view = 'party'; S.tr = null; S.pg = null; S.page = 0; S.mvMode = false; }
+    if (!keepHp) { S.bmsg = env.battle && env.battle.prompt ? { text: env.battle.prompt, t: 0, dur: 3 } : null; S.menu = null; S.swap = -1; S.name = null; S.rowT = 0; S.statP = 0; S.view = 'party'; S.tr = null; S.pg = null; S.page = 0; S.mvMode = false; }
   }
   function reset() { imgs.clear(); }
 
@@ -414,6 +414,7 @@ function createSummary(env) {
     const f = Math.ceil(w * frac); if (f > 0) rect(c, x, y, f, h, frac > .5 ? '#38c850' : frac > .2 ? '#f0c820' : '#f03838');
   }
 
+  const STATUS_TAG = { psn: ['PSN', '#a040a0'], tox: ['PSN', '#782878'], brn: ['BRN', '#f08030'], par: ['PAR', '#c8a010'], slp: ['SLP', '#6870a0'], frz: ['FRZ', '#58a8c8'] };
   // ------------------------------------------------ PARTY view
   function drawParty(c) {
     for (let i = 0; i < 6; i++) {
@@ -421,11 +422,13 @@ function createSummary(env) {
       if (!m) { pill(c, x, y, 136, 25, 'rgba(110,16,40,.35)'); continue; }
       const sel = i === S.sel, tc = sel ? 'white' : 'dark';
       if (i === S.swap) pill(c, x - 2, y - 1, 140, 29, '#f0a020');
+      else if (env.battle && env.battle.active && env.battle.active() === i) pill(c, x - 2, y - 1, 140, 29, '#48c878');   // the Pokémon that is fighting now
       pill(c, x, y + 1, 136, 25, sel ? '#000000' : '#9aa6cc'); pill(c, x, y, 136, 25, sel ? '#1c1c28' : '#fbfcff');
       ell(c, x + 16, y + 20, 12, 3, sel ? '#3c3e52' : '#cdd3e6');
       drawIcon(c, m, x, y - 8, sel, i);
       const nx = T(c, m.nick, x + 32, y + 3, tc); if (m.shiny) star(c, nx + 2, y + 5);
       genderGlyph(c, m.gender, x + 130, y + 3);
+      if (env.battle) { const st = m.hp <= 0 ? ['FNT', '#d03838'] : STATUS_TAG[m.status]; if (st) { pill(c, x + 100, y + 3, 24, 10, st[1], 3); T(c, st[0], x + 103, y + 3, 'white'); } }
       T(c, '{Lv}' + m.lv, x + 32, y + 14, tc);
       const hs = S.hpShown[i] || 0; const ht = `${Math.round(hs)}/${m.max}`; hpBar(c, x + 62, y + 16, Math.max(16, Math.min(36, 132 - tw(ht) - 4 - 62)), 3, hs / m.max, sel); TR(c, ht, x + 132, y + 14, tc);
     }
@@ -438,6 +441,7 @@ function createSummary(env) {
       const nx = T(c, m.nick, 150, 127, 'dark'); genderGlyph(c, m.gender, nx + 9, 127); TR(c, '{Lv}' + m.lv, 234, 127, 'dark');
       badges(c, m.types, 150, 141);
     }
+    if (S.bmsg && !S.menu) { const l1 = S.bmsg.text, bw = tw(l1) + 20, bx = 238 - bw; pill(c, bx, 21, bw, 15, '#000000'); pill(c, bx, 20, bw, 15, '#fbfcff'); T(c, l1, bx + 10, 22, 'dark'); }
     if (S.swap >= 0 && !S.menu) { const l1 = 'Move to where?', l2 = 'A: OK  B: back', bw = Math.max(tw(l1), tw(l2)) + 20, bx = 238 - bw; pill(c, bx, 127, bw, 27, '#000000'); pill(c, bx, 126, bw, 27, '#fbfcff'); T(c, l1, bx + 7, 129, 'dark'); T(c, l2, bx + 7, 140, 'mute'); }
     drawMenu(c);
   }
@@ -451,12 +455,14 @@ function createSummary(env) {
     M.opts.forEach((o, i) => { const y = R.y + 4 + i * MENU.rh, on = i === M.i; if (on) pill(c, R.x + 4, y, R.w - 8, MENU.rh - 1, '#1c1c28', 5); T(c, o, R.x + 12, y + 1, on ? 'white' : 'dark'); if (on) tri(c, R.x + R.w - 12, y + 7, 3, '#ffffff'); });
   }
   function openMenu() {
+    if (env.battle) { const b = env.battle; S.menu = { i: 0, opts: [b.forced ? 'SEND OUT' : 'SHIFT', 'SUMMARY', 'CANCEL'] }; return; }
     const o = ['SUMMARY']; if (S.party.length > 1 && env.swap) o.push('SWITCH'); if (env.rename) o.push('NICKNAME'); o.push('CANCEL');
     S.menu = { i: 0, opts: o };
   }
   function menuDo(o) {
     S.menu = null;
-    if (o === 'SUMMARY') go('summary');
+    if (o === 'SHIFT' || o === 'SEND OUT') { const r = env.battle.pick(S.sel); if (r) S.bmsg = { text: r, t: 0, dur: 2.6 }; else if (env.onExit) env.onExit(); }
+    else if (o === 'SUMMARY') go('summary');
     else if (o === 'SWITCH') S.swap = S.sel;
     else if (o === 'NICKNAME') { const m = S.party[S.sel]; startName({ mode: 'mon', mi: S.sel, mon: m, title: 'NICKNAME?', max: 10, initial: '', orig: m.nick, gender: m.gender, allowEmpty: true, fromParty: true }); go('name'); }
   }
@@ -469,7 +475,7 @@ function createSummary(env) {
     const n = S.party.length;
     if (S.menu) { const M = S.menu; if (k === 'up') M.i = (M.i + M.opts.length - 1) % M.opts.length; else if (k === 'down') M.i = (M.i + 1) % M.opts.length; else if (k === 'a') menuDo(M.opts[M.i]); else if (k === 'b') S.menu = null; return; }
     if (S.swap >= 0) { if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n); else if (k === 'a') { if (S.sel === S.swap) S.swap = -1; else doSwap(S.swap, S.sel); } else if (k === 'b') S.swap = -1; return; }
-    if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n); else if (k === 'a') openMenu(); else if (k === 'b' && env.onExit) env.onExit();
+    if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n); else if (k === 'a') openMenu(); else if (k === 'b') { if (env.battle && env.battle.forced) S.bmsg = { text: 'You must choose a Pokémon!', t: 0, dur: 2.2 }; else if (env.onExit) env.onExit(); }
   }
 
   // ------------------------------------------------ NAMING view (Pokémon nickname / player name)
@@ -755,6 +761,7 @@ function createSummary(env) {
     else if (S.page === 2 && x >= 100 && y >= 24 && y < 122) { const i = Math.floor((y - 24) / 24); if (i < 4) { S.mvMode = true; S.mv = i; } }
   }
   function update(dt) {
+    if (S.bmsg) { S.bmsg.t += dt; if (S.bmsg.t > S.bmsg.dur) S.bmsg = null; }
     S.t += dt; S.rowT += dt; S.selT += dt; S.statP = Math.min(1, S.statP + dt / .6);
     if (S.tr) { S.tr.p += dt / .3; if (S.tr.p >= 1) { S.view = S.tr.to; S.tr = null; } }
     if (S.pg) { S.pg.p += dt / .22; if (S.pg.p >= 1) S.pg = null; }
