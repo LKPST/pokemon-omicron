@@ -13,7 +13,7 @@
         y: 240
       },
       party: [
-        {null, null, null, null, null, null
+        null, null, null, null, null, null
       ],
       pcStorage: Array.from({ length: 8 }, () => []),
       flags: {},
