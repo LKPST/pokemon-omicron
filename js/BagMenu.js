@@ -419,14 +419,27 @@ function createBag(env) {
       const w = tw(lab); T(c, lab, x + Math.round((34 - w) / 2), ty(3, 16), on ? 'white' : 'mute');
     }
   }
+  // the bag picture in the big box (the left panel): one bag per pocket, drawn here. Put your own art in BagMenu.BAG_ART = { items: 'path.png', balls: ... } (any size, drawn to fit) to replace it.
+  const BAGCOL = { items: ['#3c78d8', '#2a58a8', '#6aa0f0'], balls: ['#d8403c', '#a82a2a', '#f07068'], tms: ['#d89a28', '#a87218', '#f0c860'], berries: ['#d85a90', '#a83a68', '#f088b8'], key: ['#8a5ccc', '#6a3fa8', '#b088f0'] };
+  function drawBagArt(c, pk) {
+    const art = root.BagMenu && root.BagMenu.BAG_ART && root.BagMenu.BAG_ART[pk], im = art && getImg(art);
+    if (im && im.ok) { drawFit(c, im.img, 6, 36, 62, 72, 3); return; }
+    const [m, d, l] = BAGCOL[pk] || BAGCOL.items, cx = 37, bob = Math.round(Math.sin(S.t * 2.2) * 1.5), cy = 76 + bob;
+    ell(c, cx, 106, 20 - Math.abs(bob), 4, 'rgba(0,0,0,.35)');
+    pill(c, cx - 8, cy - 31, 16, 14, '#10131f', 6); pill(c, cx - 6, cy - 29, 12, 10, '#262c44', 5);   // handle
+    pill(c, cx - 22, cy - 18, 44, 44, '#10131f', 10); pill(c, cx - 21, cy - 17, 42, 42, d, 10); pill(c, cx - 21, cy - 17, 42, 36, m, 10);   // body
+    rect(c, cx - 17, cy - 12, 5, 24, l); rect(c, cx - 17, cy - 12, 2, 24, 'rgba(255,255,255,.35)');   // shine
+    pill(c, cx - 22, cy - 6, 44, 14, '#10131f', 6); pill(c, cx - 21, cy - 5, 42, 12, d, 5); pill(c, cx - 21, cy - 5, 42, 8, l, 5);   // flap
+    rect(c, cx - 4, cy - 7, 8, 11, '#10131f'); rect(c, cx - 3, cy - 6, 6, 9, '#f2d45c'); rect(c, cx - 1, cy - 3, 2, 3, '#a8841c');   // buckle
+    if (pk === 'balls') { ball(c, cx - 5, cy + 12, 'poke', 1); } else if (pk === 'berries') { ell(c, cx, cy + 16, 5, 5, '#f8f0f8'); ell(c, cx, cy + 16, 3, 3, m); } else if (pk === 'tms') { ell(c, cx, cy + 16, 6, 6, '#f8f0f8'); ell(c, cx, cy + 16, 2, 2, d); } else if (pk === 'key') { rect(c, cx - 1, cy + 11, 3, 10, '#f8f0f8'); ell(c, cx, cy + 11, 4, 4, '#f8f0f8'); ell(c, cx, cy + 11, 2, 2, d); } else { rect(c, cx - 1, cy + 12, 3, 9, '#f8f0f8'); rect(c, cx - 4, cy + 15, 9, 3, '#f8f0f8'); }
+  }
   function drawRows(c) {
     const L = layout(), R = L.rows, r = rows(), i = curIdx(), top = S.top[i], dark = L.dark, shownSel = S.stage === 'list' || S.stage === 'ctx' || S.stage === 'qty' || S.stage === 'yesno';
     for (let n = 0; n < R.n; n++) {
       const e = r[top + n]; if (!e) break; const y = Math.round(R.y + n * R.pitch), isSel = top + n === S.cur[i];
       if (isSel && shownSel) { rect(c, R.x, y, R.w, R.h, 'rgba(255,214,60,.30)'); tri(c, R.x - 3 + (dark ? 4 : 1), y + R.h / 2, 3, '#ffd23c'); }
-      if (e.cancel) { T(c, inStorage() ? 'CANCEL' : 'CLOSE BAG', S.battle ? L.iconX + 4 : L.nameX, ty(y, R.h), dark ? 'dark' : 'white'); continue; }
-      if (!S.battle) { const im = itemImg(e.key); if (im) drawFit(c, im, L.iconX, y - 1, 14, R.h + 2, 1); }   // (no small picture in front of the name in battle)
-      const nm = nameOf(e.key); T(c, nm, S.battle ? L.iconX + 4 : L.nameX, ty(y, R.h), dark ? 'dark' : 'white');
+      if (e.cancel) { T(c, inStorage() ? 'CANCEL' : 'CLOSE BAG', L.iconX + 4, ty(y, R.h), dark ? 'dark' : 'white'); continue; }
+      const nm = nameOf(e.key); T(c, nm, L.iconX + 4, ty(y, R.h), dark ? 'dark' : 'white');   // (no small picture in front of the name)
       if (!(e.item && e.item.pocket === 'key')) { const n = String(e.count), col = dark ? 'dark' : 'white'; TR(c, n, L.qtyRight, ty(y, R.h), col); TR(c, '×', L.qtyRight - tw(n) - 4, ty(y, R.h), col); }   // the × and the number have a small gap
     }
     // scroll marks
@@ -495,7 +508,7 @@ function createBag(env) {
     if (S.stage === 'party' || S.stage === 'movepick') { drawBase(c); }
     if (!inStorage()) { drawTabs(c); }
     // left panel (bag): big picture of the selected item
-    if (!inStorage()) { const e = sel(); if (e && !e.cancel) { const im = itemImg(e.key); if (im) drawFit(c, im, 8, 44, 58, 58, 3); else if (!s && !S.battle) T(c, 'No ItemTable', 8, 60, 'mute'); } }
+    if (!inStorage()) drawBagArt(c, POCKETS[S.pocket][0]);
     if (inStorage() && S.stage === 'smenu') {
       const o = [['WITHDRAW', 0], ['DEPOSIT', 1], ['TOSS', 2], ['EXIT', 3]];
       o.forEach(([lab, j]) => { const R = layout().rows, y = Math.round(R.y + j * R.pitch); if (j === S.sm) { rect(c, R.x, y, R.w, R.h, 'rgba(255,214,60,.30)'); tri(c, R.x + 1, y + R.h / 2, 3, '#ffd23c'); } T(c, lab, layout().nameX, ty(y, R.h), 'dark'); });
@@ -533,6 +546,7 @@ const KEY = 'bag_screen_canvas';
 const BagMenu = {
   active: false,
   BG: { bag: 'assets/ui/bag_bg.png', storage: 'assets/ui/item_storage_bg.png' },
+  BAG_ART: {},   // optional pictures for the big box, one per pocket: { items: 'graphics/bag/items.png', balls: ..., tms: ..., berries: ..., key: ... }
   isOpen() { return this.active; },
   open(scene, opts) {
     if (this.active || !scene) return false; opts = opts || {};
