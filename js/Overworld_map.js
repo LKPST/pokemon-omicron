@@ -349,9 +349,81 @@ window.OverworldMaps = {
           "appearanceRate": 20
         }
       ],
-      "afternoon": [],
-      "night": [],
-      "dawn": []
+      "afternoon": [{
+          "pokemonName": "Yamper",
+          "levelRange": [7, 10],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Caterpie",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Toxel",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Bulbasaur",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Shinx",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        }],
+      "night": [{
+          "pokemonName": "Yamper",
+          "levelRange": [7, 10],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Caterpie",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Toxel",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Bulbasaur",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Shinx",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        }],
+      "dawn": [{
+          "pokemonName": "Yamper",
+          "levelRange": [7, 10],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Caterpie",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Toxel",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Bulbasaur",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        },
+        {
+          "pokemonName": "Shinx",
+          "levelRange": [5, 7],
+          "appearanceRate": 20
+        }]
     },
     "borderData": {
       "width": 2,
