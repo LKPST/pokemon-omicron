@@ -5,7 +5,7 @@
 // The camera button saves a picture of the MAIN screen only.
 (function () {
   'use strict';
-  const DEFAULT_MODE = 'portrait';          // flipped to 'landscape' once battle / all menus are single-screen
+  const DEFAULT_MODE = 'landscape';       // portrait (the old two-screen layout) stays available with ?layout=portrait
   const qs = new URLSearchParams(location.search);
   const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } } };
   let mode = qs.get('layout'); if (mode === 'landscape' || mode === 'portrait') ls.set('pm_layout', mode); else mode = ls.get('pm_layout', DEFAULT_MODE);
@@ -13,7 +13,7 @@
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 5, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 6, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -22,6 +22,25 @@
       if (o.mode && o.mode !== mode) { ls.set('pm_layout', o.mode); location.reload(); return; }
       apply();
     } };
+  // ---------------------------------------------------------------- audio: phones keep sound locked until a tap. On the first touch / click / key press (and shortly after)
+  // resume the audio context and start whatever music should already be playing (map music, battle music), instead of waiting for the next track.
+  (function () {
+    const kick = () => {
+      const g = window.game; if (!g) return;
+      try { const ctx = g.sound && g.sound.context; if (ctx && ctx.state !== 'running') ctx.resume().catch(() => { /* needs a real tap */ }); } catch (e) { /* ignore */ }
+      let inBattle = false; try { inBattle = g.scene.isActive('BattleScene'); } catch (e) { /* ignore */ }
+      try { const m = window.BattleScene && window.BattleScene._m; if (inBattle && m && m.paused) { const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* ignore */ }); } } catch (e) { /* ignore */ }
+      if (inBattle || (window.BattleTransition && window.BattleTransition.busy)) return;
+      try {
+        const cur = window.currentGlobalMusic;
+        if (cur && cur.manager && !cur.pendingRemove) { if (cur.isPaused) cur.resume(); else if (!cur.isPlaying && !(g.sound && g.sound.locked)) cur.play(); }
+        else if (!cur) { const sc = g.scene.getScene('OverworldScene'); if (sc && g.scene.isActive('OverworldScene') && sc.updateMapMusic) sc.updateMapMusic(sc.currentMapKey); }
+      } catch (e) { /* ignore */ }
+    };
+    PM.kickAudio = kick;
+    ['pointerdown', 'touchend', 'click', 'keydown'].forEach(t => window.addEventListener(t, () => { kick(); setTimeout(kick, 150); setTimeout(kick, 700); }, { capture: true, passive: true }));
+  })();
+
   if (!PM.landscape) return;                // portrait: nothing to do here (TouchControls.js handles the old layout)
 
   // ---------------------------------------------------------------- key sending
