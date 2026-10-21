@@ -1149,7 +1149,7 @@ const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 
 const KB = 'startmenu_bottom', KT = 'startmenu_top', KD = 'startmenu_dock';
 const slog = (...a) => { if (root.StartMenu && root.StartMenu.LOG) console.log('[SM]', ...a); };
 const StartMenu = {
-  active: false, IDLE: true, DIM: 0.6, DIM_SINGLE: 0.38, LOG: true, SHINYFLAG: 'FLAG_SHINY_DEX', UNKNOWN_SPRITE: '', TRAINER: { male: 'graphics/trainer_front_sprites/player_male.png', female: 'graphics/trainer_front_sprites/player_female.png' }, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
+  VERSION: 'hex1', active: false, IDLE: true, DIM: 0.6, DIM_SINGLE: 0.38, LOG: true, SHINYFLAG: 'FLAG_SHINY_DEX', UNKNOWN_SPRITE: '', TRAINER: { male: 'graphics/trainer_front_sprites/player_male.png', female: 'graphics/trainer_front_sprites/player_female.png' }, TOWNMAP: { image: '', pos: {} }, LOGNAME: "AIDE'S LOG",
   isOpen() { return this.active; },
   debug() { const sc = this.scene; const o = { active: this.active, hasCore: !!this.core, core: this.core && this.core.status(), lowerCamera: !!(sc && sc._menuCam), scene: sc && { scriptRunning: sc.scriptRunning, isLocked: sc.isLocked, isMoving: sc.isMoving } }; console.log('[SM] state', o); return o; },
   toggle(scene) { slog('toggle(), active=' + this.active); if (this.active) { if (this.core) this.core.press('b'); return; } this.open(scene); },
