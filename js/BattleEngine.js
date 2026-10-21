@@ -1333,7 +1333,8 @@ function makeMon(env, speciesKey, level, o) {
   const mm = (moves || []).slice(-4).map(k => { const m = getm(k); const key = m ? Object.keys(mt).find(x => mt[x] === m) || k : k; const pp = m ? m.pp : 10; return { moveId: key, currentPP: pp, maxPP: pp }; });
   return { species: speciesKey, nickname: o.nickname || '', level, exp: expForLevel(sp.growthRate, level), expmax: expForLevel(sp.growthRate, level + 1), isShiny: o.shiny != null ? o.shiny : R(4096) === 0, gender,
     HP: maxHP, maxHP, Attack: calcStat(sp.baseAttack || 50, I.Attack, 0, level, nm.atk), Def: calcStat(sp.baseDefense || 50, I.Defense, 0, level, nm.def), spattack: calcStat(sp.baseSpAttack || 50, I.SpAttack, 0, level, nm.spa), sdpef: calcStat(sp.baseSpDefense || 50, I.SpDefense, 0, level, nm.spd), speed: calcStat(sp.baseSpeed || 50, I.Speed, 0, level, nm.spe),
-    ivHP: I.HP, ivAttack: I.Attack, ivDefense: I.Defense, ivSpAttack: I.SpAttack, ivSpDefense: I.SpDefense, ivSpeed: I.Speed, nature: pn, ability, heldItem: o.item || '', moves: mm, OTName: '', OTID: 0, caughtloc: o.loc || '', ballId: 0 }; }
+    ivHP: I.HP, ivAttack: I.Attack, ivDefense: I.Defense, ivSpAttack: I.SpAttack, ivSpDefense: I.SpDefense, ivSpeed: I.Speed, nature: pn, ability, heldItem: o.item || '', moves: mm, OTName: '', OTID: 0, caughtloc: o.loc || '', ballId: 0,
+    teraType: o.teraType || (() => { const tp = [sp.type1, sp.type2].filter(t => t && t !== 'TYPE_NONE'); return tp.length ? tp[R(tp.length)] : 'TYPE_NORMAL'; })() }; }   // like the games: a random one of its own types
 
 const BattleEngine = { version: 1, create: o => new Battle(o), Battle, makeMon, expForLevel, calcStat, calcHP, NORM, prettyKey, natureMods, NATURES };
 root.BattleEngine = BattleEngine; if (typeof module !== 'undefined' && module.exports) module.exports = BattleEngine;
