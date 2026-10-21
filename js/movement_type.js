@@ -15,6 +15,10 @@ window.OverworldMovement = (() => {
     if (!scene.isPassable(nx - Math.round(off.x / TILE), ny - Math.round(off.y / TILE))) return false;
     const p = tileOf(scene.player);
     if (p.x === nx && p.y === ny) return false;
+    // the tile the player is walking INTO is taken too (set by OverworldScene.movePlayerTo for the whole step)
+    const pd = scene.playerDest; if (pd && pd.x === nx && pd.y === ny) return false;
+    // another NPC that is stepping onto it (its source and destination tiles stay reserved for the whole step)
+    for (const o of (scene.npcs || [])) { if (o === e) continue; if ((o.dest && o.dest.x === nx && o.dest.y === ny) || (o.src && o.src.x === nx && o.src.y === ny)) return false; }
     if (e.home) {
       const r = (e.eventConfig && e.eventConfig.wanderRadius) ?? 3;
       if (Math.abs(nx - e.home.x) > r || Math.abs(ny - e.home.y) > r) return false;
@@ -30,10 +34,11 @@ window.OverworldMovement = (() => {
     e.alt = e.alt === 1 ? 2 : 1;
     e.setFrame(frame(dir, e.alt));
     const x0 = e.x, y0 = e.y;
+    const t0 = tileOf(e); e.src = { x: t0.x, y: t0.y }; e.dest = { x: t0.x + dx, y: t0.y + dy };   // reserve both tiles until the step is over
     s.tweens.addCounter({
       from: 0, to: 1, duration: ms,
       onUpdate: t => { const v = t.getValue(); e.x = x0 + dx * TILE * v; e.y = y0 + dy * TILE * v - (hop ? Math.sin(v * Math.PI) * 12 : 0); },
-      onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.setFrame(frame(dir, 0)); done && done(); },
+      onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.setFrame(frame(dir, 0)); done && done(); },
     });
   }
 
