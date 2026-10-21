@@ -397,13 +397,9 @@ window.OverworldScriptEngine = (() => {
       scene, host: E.makeHost(scene), preview: false,
       getFlag: E.getFlag, setFlag: E.setFlag, getVar: E.getVar, setVar: E.setVar,
     }, scriptName, onFinish);
-    // [LOCK] an NPC that is in the middle of a step finishes it first (max 0.7 s), so the script never starts while somebody is still walking
-    const t0 = scene.time ? scene.time.now : 0;
-    const settle = () => {
-      const stepping = (scene.npcs || []).some(n => n && n.dest);
-      if (stepping && scene.time && scene.time.now - t0 < 700) scene.time.delayedCall(30, settle); else run.start();
-    };
-    settle();
+    // [LOCK] NPCs that are in the middle of a normal step stop at once (js/movement_type.js), then the script starts in the same frame
+    if (window.OverworldMovement && window.OverworldMovement.freezeAll) window.OverworldMovement.freezeAll(scene);
+    run.start();
   };
 
   return E;
