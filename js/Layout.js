@@ -10,10 +10,10 @@
   const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } } };
   let mode = qs.get('layout'); if (mode === 'landscape' || mode === 'portrait') ls.set('pm_layout', mode); else mode = ls.get('pm_layout', DEFAULT_MODE);
   if (mode !== 'landscape' && mode !== 'portrait') mode = DEFAULT_MODE;
-  const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.55')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
+  const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 3, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 4, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -42,7 +42,13 @@
   const css = `
   html.pml, html.pml body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: #07080c; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   html.pml body { position: fixed; inset: 0; display: block; }
-  #pm-view { position: absolute; overflow: hidden; background: #000; box-shadow: 0 0 0 1px #1c1f2b, 0 8px 30px rgba(0,0,0,.7); }
+  #pm-bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; image-rendering: pixelated; }
+  #pm-view { position: absolute; z-index: 3; overflow: hidden; background: #000; border-radius: 6px; box-shadow: 0 0 0 5px #0a0c14, 0 0 0 7px rgba(150,170,255,.28), 0 0 38px rgba(90,130,255,.35), 0 10px 40px rgba(0,0,0,.7); }
+  .pm-grip { position: absolute; z-index: 1; overflow: hidden; box-shadow: inset 0 0 50px rgba(0,0,0,.5), 0 0 30px rgba(0,0,0,.6); backdrop-filter: blur(2px); }
+  .pm-grip::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 38%); }
+  .pm-grip::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 10px, rgba(255,255,255,0) 10px 22px); }
+  .pm-grip.l { background: linear-gradient(165deg, rgba(40,205,235,.42), rgba(8,40,78,.72)); border-right: 3px solid rgba(130,235,255,.55); }
+  .pm-grip.r { background: linear-gradient(195deg, rgba(255,92,80,.42), rgba(84,14,30,.72)); border-left: 3px solid rgba(255,160,150,.55); }
   html.pml #game-container { position: absolute; left: 0; top: 0; border: 0; border-radius: 0; box-shadow: none; margin: 0; }
   html.pml canvas { image-rendering: pixelated; }
   #pm-tc { position: absolute; inset: 0; pointer-events: none; z-index: 20; --op: .55; touch-action: none; }
@@ -70,9 +76,27 @@
   document.documentElement.classList.add('pml');
 
   // ---------------------------------------------------------------- DOM
-  let view, tc, flash, toast; const els = {};
+  let view, tc, flash, toast, bg, gripL, gripR; const els = {};
+  // animated background (the same drifting stripes / bubbles / glow as the start menu), drawn small and scaled up
+  function startBg() {
+    const x = bg.getContext('2d'); let t = 0, last = performance.now();
+    const grad = (w, h, a, b) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, a); g.addColorStop(1, b); x.fillStyle = g; x.fillRect(0, 0, w, h); };
+    function draw(now) {
+      const dt = Math.min(.1, (now - last) / 1000); last = now; t += dt;
+      const w = Math.ceil(innerWidth / 4), h = Math.ceil(innerHeight / 4); if (bg.width !== w || bg.height !== h) { bg.width = w; bg.height = h; }
+      grad(w, h, '#161a2a', '#07080e'); x.save();
+      const off = (t * 9) % 36; x.fillStyle = 'rgba(120,140,200,.06)';
+      for (let k = -8; k < w / 18 + 8; k++) { const x0 = k * 36 + off - h; x.beginPath(); x.moveTo(x0, 0); x.lineTo(x0 + 14, 0); x.lineTo(x0 + 14 + h, h); x.lineTo(x0 + h, h); x.closePath(); x.fill(); }
+      for (let i = 0; i < 14; i++) { const sp = 6 + (i * 7) % 9, px = (i * 53 + 17) % w, py = h + 14 - ((t * sp + i * 41) % (h + 28)), r = 4 + (i * 5) % 9, a = .05 + (i % 3) * .015;
+        x.strokeStyle = 'rgba(190,205,255,' + a * 2.2 + ')'; x.lineWidth = 1; x.beginPath(); x.arc(px + Math.sin(t * .7 + i) * 4, py, r, 0, 6.2832); x.stroke(); x.fillStyle = 'rgba(190,205,255,' + a + ')'; x.beginPath(); x.arc(px + Math.sin(t * .7 + i) * 4, py, r - 1, 0, 6.2832); x.fill(); }
+      const gx = w / 2 + Math.sin(t * .4) * w * .3, g = x.createRadialGradient(gx, h * .4, 4, gx, h * .4, w * .6); g.addColorStop(0, 'rgba(80,110,200,.18)'); g.addColorStop(1, 'rgba(80,110,200,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); x.restore();
+    }
+    let acc = 0; const loop = now => { if (now - acc > 45) { acc = now; try { draw(now); } catch (e) { /* ignore */ } } requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+  }
   function build() {
     const gc = document.getElementById('game-container'); if (!gc) return;
+    bg = document.createElement('canvas'); bg.id = 'pm-bg'; document.body.insertBefore(bg, document.body.firstChild); startBg();
+    gripL = document.createElement('div'); gripL.className = 'pm-grip l'; gripR = document.createElement('div'); gripR.className = 'pm-grip r'; document.body.appendChild(gripL); document.body.appendChild(gripR);
     view = document.createElement('div'); view.id = 'pm-view'; gc.parentNode.insertBefore(view, gc); view.appendChild(gc);
     flash = document.createElement('div'); flash.id = 'pm-flash'; view.appendChild(flash);
     toast = document.createElement('div'); toast.id = 'pm-toast'; view.appendChild(toast);
@@ -132,6 +156,9 @@
     const gc = document.getElementById('game-container'); Object.assign(gc.style, { width: vw + 'px', height: Math.round(vw * 620 / 480) + 'px' });
     // let Phaser re-read the parent size and the canvas position (pointer mapping)
     try { if (window.game && window.game.scale) { window.game.scale.refresh(); window.game.scale.updateBounds && window.game.scale.updateBounds(); } } catch (e) { /* ignore */ }
+    { const swap = cfg.hand === 'left', L = swap ? gripR : gripL, Rr = swap ? gripL : gripR; void L; void Rr;
+      if (portraitPhone) { const top = vy + vh + 10, hh = H - top; Object.assign(gripL.style, { left: '0px', top: top + 'px', width: Math.round(W / 2) + 'px', height: hh + 'px', borderRadius: '0 40px 0 0' }); Object.assign(gripR.style, { left: Math.round(W / 2) + 'px', top: top + 'px', width: Math.round(W / 2) + 'px', height: hh + 'px', borderRadius: '40px 0 0 0' }); }
+      else { Object.assign(gripL.style, { left: '0px', top: '0px', width: vx + 'px', height: H + 'px', borderRadius: '0 46px 46px 0' }); Object.assign(gripR.style, { left: (vx + vw) + 'px', top: '0px', width: Math.max(0, W - vx - vw) + 'px', height: H + 'px', borderRadius: '46px 0 0 46px' }); } }
     if (!tc) return;
     tc.style.setProperty('--op', cfg.opacity);
     const u = Math.max(54, Math.min(portraitPhone ? 80 : 70, (portraitPhone ? W * .2 : Math.min(H * .24, (vx + 90)))) ) * cfg.size;
@@ -146,7 +173,7 @@
       padX = si.l + edge; faceX = W - si.r - edge - fW;
     } else {
       yMid = H - bot - padS - Math.round(H * .04);
-      padX = si.l + edge; faceX = W - si.r - edge - fW;
+      padX = si.l + Math.max(edge, (vx - si.l - padS) / 2); faceX = W - si.r - fW - Math.max(edge, (vx - si.r - fW) / 2);
     }
     if (dpadSide === 'right') { const t = padX; padX = W - si.r - edge - padS; faceX = si.l + edge; void t; }
     place(els.pad, padX, yMid, padS, padS); els.pad.style.setProperty('--p', padS + 'px');
