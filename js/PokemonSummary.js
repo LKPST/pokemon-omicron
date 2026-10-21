@@ -239,6 +239,13 @@ function createSummary(env) {
       c.fillStyle = col; c.fillRect(x + px * s, y + py * s, s, s);
     }
   }
+  // the ball the Pokémon was caught in: frame 0 of its sheet in PokeballTables (graphics/poke_ball/gInterfaceGfx_<Name>.png); the drawn ball if there is no sheet
+  function ballIcon(c, m, x, y) {
+    const PT = typeof PokeballTables !== 'undefined' ? PokeballTables : null, d = PT && m.ballId != null ? (PT.get ? PT.get(m.ballId) : PT[m.ballId]) : null, e = d && d.spriteSheet ? getImg(d.spriteSheet) : null;
+    if (e && e.ok) { const fw = d.frameWidth || 16, fh = d.frameHeight || 16; c.imageSmoothingEnabled = false; c.drawImage(keyedIcon(e.img, d.spriteSheet), 0, 0, fw, fh, x, y, fw, fh); return; }
+    if (e && !e.fail) return;   // still loading
+    ball(c, x + 3, y + 3, m.ball, 1);
+  }
   const STAR = ['..#..', '..#..', '#####', '.###.', '##.##'];
   function star(c, x, y) { c.fillStyle = '#f0b820'; STAR.forEach((r, j) => { for (let i = 0; i < 5; i++) if (r[i] === '#') c.fillRect(x + i, y + j, 1, 1); }); }
 
@@ -319,7 +326,7 @@ function createSummary(env) {
     return { sp, rawSpecies: raw.species, species: sp.name, nick: String(raw.nickname || sp.name).slice(0, 10), dex: raw.natdexID ?? parseInt(sp.id, 10), types: sp.t, lv: L, stats, max: stats[0], hp: clamp(raw.HP ?? stats[0], 0, stats[0]),
       natUp: nat[0], natDown: nat[1], nature: pretty(raw.nature) || 'Hardy', ability: pretty(raw.ability) || sp.abs[0] || '-', gender: g === 'MALE' || g === 'M' ? 'M' : g === 'FEMALE' || g === 'F' ? 'F' : '',
       ball: (env.ballType ? env.ballType(raw.ballId) : BALL_BY_ID[raw.ballId]) || 'poke', item, tera, ot: raw.OTName || 'PLAYER', idno: String(raw.OTID ?? 0).padStart(5, '0'),
-      exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown', status: String(raw.status || '').toLowerCase() };
+      exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, ballId: raw.ballId, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown', status: String(raw.status || '').toLowerCase() };
   }
 
   // ------------------------------------------------ state
@@ -667,7 +674,7 @@ function createSummary(env) {
     const pp = clamp(S.selT / .3), sc = pp < 1 ? backOut(pp) : 1, bob = Math.sin(S.t * 3.2) > 0 ? 1 : 0;
     drawSprite(c, m, 49, 100 - bob, 76, 72, Math.max(.2, sc), S.selT < .09 ? .85 : 0);
     const nx = T(c, m.nick, 10, 110, 'dark'); if (m.shiny) star(c, nx + 2, 112); genderGlyph(c, m.gender, 88, 110);
-    T(c, '{Lv}' + m.lv, 10, 124, 'dark'); ball(c, 76, 123, m.ball, 1);
+    T(c, '{Lv}' + m.lv, 10, 124, 'dark'); ballIcon(c, m, 70, 119);
     badges(c, m.types, 8, 141);
     pill(c, 98, 22, 138, 136, '#9aa6cc'); pill(c, 98, 21, 138, 136, '#fafbff', 8);
     c.save(); c.beginPath(); c.rect(100, 23, PW, 132); c.clip();
