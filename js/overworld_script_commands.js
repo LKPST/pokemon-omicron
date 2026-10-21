@@ -122,8 +122,10 @@ window.OverworldScriptCommands = (() => {
         superTrainingFlags: { hpMedal: false, atkMedal: false, defMedal: false, spatkMedal: false, spdefMedal: false, speedMedal: false },
       };
       if (window.Dex) window.Dex.catch(speciesKey, a.shiny === true || a.shiny === 'true');   // Pokedex: caught
+      const room = !!gs && (!gs.party || gs.party.length < 6 || gs.party.slice(0, 6).some(x => !x));
       if (window.GivePokemonSystem && typeof window.GivePokemonSystem.give === 'function') window.GivePokemonSystem.give(mon);
       else console.warn('[ScriptEngine] GivePokemonSystem not found!');
+      if (window.OWUI && ctx.scene) return window.OWUI.receivePokemon(ctx.scene, mon, room ? 'party' : 'pc', () => next());   // [UI] picture card (js/OverworldUI.js)
       next();
     });
 
@@ -160,6 +162,7 @@ window.OverworldScriptCommands = (() => {
       const o = itemOf(a, ctx); if (!o) { ctx.choice = false; return next(); }
       const put = o.sys.add(o.k, o.n), name = o.sys.name(o.k); ctx.choice = put >= o.n;
       if (a.silent === true || a.silent === 'true') return next();
+      if (put && window.OWUI && ctx.scene) return window.OWUI.receive(ctx.scene, { kind: 'item', label: 'OBTAINED', key: o.k, count: put }, () => next());   // [UI] picture card (js/OverworldUI.js)
       ctx.host.say(put ? `$player obtained ${name}${put > 1 ? ' x' + put : ''}!` : `$player has no room for ${name}.`, false, () => next());
     });
   def('additemtopc', 'Items', 'Put an item in the item storage of the PC (silent)', itemArgs, (a, ctx, next) => {
