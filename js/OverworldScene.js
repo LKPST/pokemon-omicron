@@ -665,6 +665,7 @@ class OverworldScene extends Phaser.Scene {
     if (window.OWFollower) window.OWFollower.attach(this);   // [FOLLOWER] the first party Pokémon walks behind the player
 
     this.cursors = this.input.keyboard.createCursorKeys();
+    this.followKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);   // SPACE = talk to the follower Pokémon
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);   // the interact / talk key is Z (the variable keeps its old name)
     // [SUMMARY] Enter opens the party / summary screen (js/PokemonSummary.js)
     this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
@@ -691,6 +692,7 @@ class OverworldScene extends Phaser.Scene {
     });
 
     this.showMapBanner();                       // [BANNER]
+    if (window.OWUI && window.OWUI.runEvolutions) this.time.delayedCall(900, () => window.OWUI.runEvolutions(this));   // [EVOLVE] Pokémon that reached their level in the last battle
     if (window.OWWarm) window.OWWarm.start();   // [SPEED] warm the menu / party pictures in the background
 
     // [NEW] safety net: if the music stopped for any reason, start it again
@@ -1420,7 +1422,7 @@ class OverworldScene extends Phaser.Scene {
   }
 
   tryInteract() {
-    if (!this.npcs || this.npcs.length === 0) { if (window.OWFollower && window.OWFollower.interact) window.OWFollower.interact(this); return; }   // [FOLLOWER] Z next to it = talk to it
+    if (!this.npcs || this.npcs.length === 0) return;
 
     let targetX = Math.round((this.player.x - 16) / 32);
     let targetY = Math.round((this.player.y - 16) / 32);
@@ -1438,8 +1440,6 @@ class OverworldScene extends Phaser.Scene {
       if (window.OverworldScriptEngine) {
         window.OverworldScriptEngine.runScript(this, scriptName);
       }
-    } else if (window.OWFollower && window.OWFollower.interact) {
-      window.OWFollower.interact(this);   // [FOLLOWER] nobody in front of the player: the Pokémon next to him answers
     }
   }
 
@@ -1708,14 +1708,14 @@ class OverworldScene extends Phaser.Scene {
     // [SUMMARY] while the summary screen is open the overworld does nothing (the screen reads the keys itself)
     if ((window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen())) {
       Phaser.Input.Keyboard.JustDown(this.enterKey);
-      Phaser.Input.Keyboard.JustDown(this.spaceKey);
+      Phaser.Input.Keyboard.JustDown(this.spaceKey); if (this.followKey) Phaser.Input.Keyboard.JustDown(this.followKey);
       if (this.bagKey) Phaser.Input.Keyboard.JustDown(this.bagKey);
       return;
     }
 
     // [SCRIPTS] no input while a script runs (and for a moment after, so the button that closed the last message does not start it again)
     if (this.scriptRunning || (this.scriptEndedAt && this.time.now - this.scriptEndedAt < 300)) {
-      Phaser.Input.Keyboard.JustDown(this.spaceKey);
+      Phaser.Input.Keyboard.JustDown(this.spaceKey); if (this.followKey) Phaser.Input.Keyboard.JustDown(this.followKey);
       return;
     }
 
@@ -1738,6 +1738,11 @@ class OverworldScene extends Phaser.Scene {
       return;
     }
 
+    if (this.followKey && Phaser.Input.Keyboard.JustDown(this.followKey)) {   // [FOLLOWER] SPACE next to it = talk to it
+      this.idleMs = 0;
+      if (window.OWFollower && window.OWFollower.interact) window.OWFollower.interact(this);
+      return;
+    }
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.idleMs = 0;
       this.tryInteract();
