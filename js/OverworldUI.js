@@ -381,14 +381,14 @@
   API.runEvolutions = function (scene, done) {
     const gsm = window.GameStateManager, lb = gsm && gsm.lastBattle, list = lb && lb.evolutions;
     if (!list || !list.length) { if (done) done(); return false; }
-    lb.evolutions = [];
+    lb.evolutions = []; API.busy = true;
     const party = ((gsm.saveData || {}).party || []).filter(m => m && m.species), seen = new Set(), todo = list.filter(e => !seen.has(e.idx) && seen.add(e.idx));
     scene.isLocked = true;
     const next = i => {
       if (i >= todo.length || !scene.sys || !scene.sys.isActive()) {
         scene.time.delayedCall(250, () => {
           const J = Phaser.Input.Keyboard.JustDown; ['spaceKey', 'followKey', 'enterKey', 'bagKey'].forEach(k => { if (scene[k]) J(scene[k]); });
-          scene.isLocked = false; try { if (window.OWFollower) { window.OWFollower.refresh(); } } catch (e) { /* ignore */ } try { window.SaveSystem && window.SaveSystem.touch('party'); } catch (e) { /* ignore */ }
+          API.busy = false; scene.isLocked = false; try { if (window.OWFollower) { window.OWFollower.refresh(); } } catch (e) { /* ignore */ } try { window.SaveSystem && window.SaveSystem.touch('party'); } catch (e) { /* ignore */ }
           if (done) done();
         }); return;
       }
