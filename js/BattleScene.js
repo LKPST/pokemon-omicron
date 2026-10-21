@@ -143,7 +143,7 @@ function createBattle(env) {
       x.drawImage(im, 0, 0); x.getImageData(0, 0, 1, 1); sheet = c; src = 'latin_short.png';
     } catch (e) { sheet = null; }
     if (!sheet) { sheet = fallbackSheet(); src = 'built-in fallback (latin_short.png not loaded)'; }
-    rawSheet = sheet; fontSrc = src; fontCache.clear(); advCache.clear(); letAdv.clear(); measureFont();
+    rawSheet = sheet; fontSrc = src; fontCache.clear(); advCache.clear(); measureFont();
   }
   const hex4 = h => { h = h.replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16), h.length > 6 ? parseInt(h.substr(6, 2), 16) : 255]; };
   function font(tc, sc) {
@@ -164,40 +164,27 @@ function createBattle(env) {
     if (advCache.has(key)) return advCache.get(key);
     let a = 6; const gl = GLY[key];
     if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 16, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
+      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 8, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
       let mx = -1;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = (y * 16 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
-      if (mx >= 0) a = clamp(mx + 1, 6, 18);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) { const i = (y * 8 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
+      if (mx >= 0) a = clamp(mx + 2, 6, 10);
     }
     advCache.set(key, a); return a;
   }
-    // proportional advance for letters / punctuation (ink width + 1 px gap): a fixed 6 px squashed wide letters (m, w, M, W) and left narrow ones floating
-  const letAdv = new Map();
-  function advLetter(ch) {
-    if (letAdv.has(ch)) return letAdv.get(ch);
-    const gl = GLY[ch]; let a = 6;
-    if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 16, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
-      let mx = -1;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = (y * 16 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245) && (d[i] + d[i + 1] + d[i + 2]) / 3 < 110) mx = Math.max(mx, x); }
-      if (mx >= 0) a = clamp(mx + 2, 4, 12);
-    }
-    letAdv.set(ch, a); return a;
-  }
-function* glyphs(s) {
+  function* glyphs(s) {
     s = String(s); let i = 0;
     while (i < s.length) {
       const ch = s[i];
       if (ch === '{') { const j = s.indexOf('}', i); if (j > 0) { const k = TOKENS[s.slice(i + 1, j)]; if (k && GLY[k]) { yield { gl: GLY[k], adv: advOf(k) }; i = j + 1; continue; } } }
       if (ch === '/') { const j = s.indexOf('/', i + 1); if (j > 0) { const tag = s.slice(i, j + 1); if (GLY[tag]) { yield { gl: GLY[tag], adv: advOf(tag) }; i = j + 1; continue; } } }
       if (ch === ' ') { yield { gl: null, adv: 5 }; i++; continue; }
-      yield { gl: GLY[ch] || null, adv: /[0-9]/.test(ch) ? 6 : advLetter(ch) }; i++;
+      yield { gl: GLY[ch] || null, adv: 6 }; i++;
     }
   }
   const tw = s => { let w = 0; for (const g of glyphs(s)) w += g.adv; return w; };
   function T(c, s, x, y, k = 'dark') {
     const f = font(TX[k][0], TX[k][1]); let cx = x;
-    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 16, 16, cx, y - FT.top + opt.nudge, 16, 16); cx += g.adv; }
+    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 8, 16, cx, y - FT.top + opt.nudge, 8, 16); cx += g.adv; }
     return cx;
   }
   const TR = (c, s, xr, y, k) => T(c, s, xr - tw(s), y, k);
@@ -433,7 +420,7 @@ function* glyphs(s) {
   const twb = s => tw(s) * 2;
   function Tb(c, s, x, y, k = 'white') {
     const f = font(TX[k][0], TX[k][1]); let cx = x;
-    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 16, 16, cx, y - FT.top * 2 + opt.nudge, 32, 32); cx += g.adv * 2; }
+    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 8, 16, cx, y - FT.top * 2 + opt.nudge, 16, 32); cx += g.adv * 2; }
     return cx;
   }
   const Tc = (c, s, x, w, y, k, big) => { const wd = big ? twb(s) : tw(s); (big ? Tb : T)(c, s, Math.round(x + (w - wd) / 2), y, k); };
@@ -574,7 +561,7 @@ function* glyphs(s) {
         S.cur.dur = clamp((S.cur.f1 - S.cur.f0) * 1.8, .2, 1.4); sd0.exp = S.cur.f0; break; }
       case 'levelup': {
         if (ev.active) { const sd0 = side(0); sd0.level = ev.level; sd0.maxhp = ev.maxhp; sd0.hp = ev.hp; sd0.dhp = ev.hp; sd0.exp = 0; }
-        { const LM = S.b.sides[0].party[ev.idx]; S.levelBox = { level: ev.level, stats: ev.stats || {}, gain: ev.gain || {}, t: 0, name: LM ? LM.name : '' }; } S.cur.dur = -2; break; }
+        S.levelBox = { level: ev.level, stats: ev.stats || {}, gain: ev.gain || {}, t: 0 }; S.cur.dur = -2; break; }
       case 'learned': S.cur.dur = 0; break;
       case 'ball': startBall(ev); break;
       case 'item': S.cur.dur = .2; break;
@@ -732,7 +719,7 @@ function* glyphs(s) {
   function openParty(ctx) {
     const PSC = root.PokemonSummaryCore; if (!PSC) { console.warn('[BS] party screen: PokemonSummary.js is not loaded (or is the old version without PokemonSummaryCore) -> using the OLD built-in party list. Load js/PokemonSummary.js before the battle starts.'); return false; }
     console.log('[BS] party screen: opening the Start-Menu style screen (ctx=' + ctx + ')');
-    const P = S.b.sides[0], forced = ctx === 'forced' || ctx === 'pivot' || ctx === 'set', showForced = ctx !== 'set';
+    const P = S.b.sides[0], forced = ctx === 'forced' || ctx === 'pivot' || ctx === 'set', showForced = ctx === 'forced' || ctx === 'pivot';   // B backs out of a voluntary switch (and out of 'set'); only a fainted / pivoting Pokémon must be replaced
     try {
       const core = PSC({
         urlFor: p => p, db: dbOf, party: liveParty, glyphs: gl, onExit: closeOv,
@@ -1079,6 +1066,76 @@ function* glyphs(s) {
     }
     c.restore();
   }
+
+  // ================================================== LANDSCAPE (one screen): the command / move lists live INSIDE the text box on the right,
+  // the party balls sit on the HP boxes, and the party / bag screens cover the whole screen.
+  const single = () => !!(root.PMLayout && root.PMLayout.landscape);
+  function miniBall(c, cx, cy, st) {
+    const top = st === 'ok' ? '#e83848' : st === 'status' ? '#e8b020' : st === 'faint' ? '#5a5e70' : '#262a3a', bot = st === 'empty' ? '#262a3a' : st === 'faint' ? '#8a8ea0' : '#f6f6fa';
+    ell(c, cx, cy, 5, 5, '#12121c');
+    for (let dy = -4; dy <= 4; dy++) { const w = Math.round(Math.sqrt(16.6 - dy * dy)); c.fillStyle = dy < 0 ? top : bot; c.fillRect(cx - w, cy + dy, w * 2, 1); }
+    c.fillStyle = '#12121c'; c.fillRect(cx - 4, cy, 9, 1); if (st !== 'empty') { c.fillStyle = st === 'faint' ? '#aab' : '#fff'; c.fillRect(cx - 1, cy - 1, 3, 3); c.fillStyle = '#12121c'; c.fillRect(cx, cy, 1, 1); }
+    if (st === 'faint') { c.fillStyle = '#ff5a5a'; c.fillRect(cx - 2, cy - 2, 1, 1); c.fillRect(cx + 2, cy - 2, 1, 1); c.fillRect(cx - 2, cy + 2, 1, 1); c.fillRect(cx + 2, cy + 2, 1, 1); }
+  }
+  function ballStrip(c, party, x, y, rtl) {
+    const n = 6, w = n * 10 + 8, x0 = rtl ? x - w : x;
+    slantRect(c, x0 - 1, y - 1, w + 2, 12, 5, '#12121c'); slantRect(c, x0, y, w, 10, 5, '#3a3e54');
+    for (let i = 0; i < n; i++) { const M = party[i], st = !M ? 'empty' : M.hp <= 0 ? 'faint' : M.status ? 'status' : 'ok'; miniBall(c, x0 + 8 + i * 10, y + 5, st); }
+  }
+  function partyBalls(c) {
+    if (!S.b || S.mode === 'intro') return;
+    const me = S.b.sides[0].party || [], foe = S.b.sides[1].party || [];
+    if (side(0).vis) ballStrip(c, me, ALLY.boxX + ALLY.boxW + 1, ALLY.boxY - 14, true);
+    if (S.b.kind === 'trainer' && side(1).vis) ballStrip(c, foe, FOE.boxX, FOE.boxY + 22, false);
+  }
+  const inR = (r, x, y) => r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  function moveList(c, P, sel, learn) {
+    const m = CF.msg; panel(c, m.x, m.y, m.w, m.h, true); S.hit.mv = [];
+    for (let i = 0; i < 4; i++) {
+      const x = m.x + 16 + (i & 1) * 70, y = m.y + 8 + (i >> 1) * 15, s = P.moves[i]; S.hit.mv.push({ x: x - 10, y: y - 3, w: 70, h: 15 });
+      if (!s) { T(c, '-', x, y, 'mute'); continue; }
+      const mi = mvInfo(s.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled; let nm = mi.name; while (nm.length > 3 && tw(nm) > 62) nm = nm.slice(0, -1);
+      T(c, nm, x, y, dis ? 'mute' : 'dark'); if (sel === i) tri(c, x - 7 + Math.round(Math.sin(S.t * 9)), y + 4, 3, '#d04040');
+    }
+    const px = m.x + 150, pw = m.w - 152; panel(c, px, m.y + 3, pw, m.h - 6, false); const s = P.moves[sel]; if (!s) return;
+    const mi = mvInfo(s.key);
+    if (S.mvMsg && S.mode === 'move') { wrapPx(S.mvMsg, pw - 12).slice(0, 2).forEach((l, i) => T(c, l, px + 6, m.y + 8 + i * 14, 'red')); return; }
+    if (learn) T(c, 'Forget which?', px + 6, m.y + 7, 'red'); else T(c, 'PP', px + 6, m.y + 7, 'dark');
+    TR(c, s.pp + '/' + s.maxpp, px + pw - 6, m.y + (learn ? 21 : 7), s.pp <= Math.floor(s.maxpp / 4) ? 'red' : 'dark');
+    if (!learn) badge(c, mi.type, px + 6, m.y + 22);
+  }
+  function ynBox(c) {
+    const m = CF.msg, x = m.x + 2, y = m.y - 38; panel(c, x, y, 62, 36, false); S.hit.yn = [];
+    ['YES', 'NO'].forEach((t, i) => { const yy = y + 6 + i * 14; S.hit.yn.push({ x, y: yy - 3, w: 62, h: 14 }); T(c, t, x + 22, yy, 'dark'); if (S.yn === i) tri(c, x + 13 + Math.round(Math.sin(S.t * 9)), yy + 4, 3, '#d04040'); });
+  }
+  function singleMsg(c) {
+    const m = CF.msg, md = S.mode; S.hit.cmd = null; S.hit.mv = null; S.hit.yn = null;
+    if (md === 'cmd') {
+      panel(c, m.x, m.y, m.w, m.h, true);
+      wrapPx((S.lines || []).join(' '), 116).slice(0, 2).forEach((l, i) => T(c, l, m.x + 8, m.y + 8 + i * 16, 'dark'));
+      const px = m.x + 130, pw = m.w - 132; panel(c, px, m.y + 3, pw, m.h - 6, false); const lab = ['FIGHT', 'BAG', 'POKéMON', 'RUN']; S.hit.cmd = [];
+      for (let i = 0; i < 4; i++) { const x = px + 14 + (i & 1) * 54, y = m.y + 8 + (i >> 1) * 15; S.hit.cmd.push({ x: x - 10, y: y - 4, w: 54, h: 16 }); T(c, lab[i], x, y, 'dark'); if (S.cmd === i) tri(c, x - 6 + Math.round(Math.sin(S.t * 9)), y + 4, 3, '#d04040'); }
+      return;
+    }
+    if (md === 'move') { moveList(c, S.b.active(0), S.mv, false); return; }
+    if (md === 'learnPick') { const L = S.learn, M = L.mon; moveList(c, M.side != null ? M : S.b.sides[0].party[M.idx] || M, L.slot, true); return; }
+    msgBox(c);
+    if (md === 'setAsk' || md === 'learnAsk') ynBox(c);
+  }
+  function tap(x, y) {
+    if (!S.b || S.fadeDir) return;
+    if (S.ov) { if (S.ov.ready && S.ov.core.click) S.ov.core.click(x, y * 160 / H); return; }
+    const md = S.mode;
+    if (md === 'cmd' && S.hit.cmd) { for (let i = 0; i < 4; i++) if (inR(S.hit.cmd[i], x, y)) { S.cmd = i; press('a'); return; } return; }
+    if ((md === 'move' || md === 'learnPick') && S.hit.mv) { for (let i = 0; i < 4; i++) if (inR(S.hit.mv[i], x, y)) { if (md === 'move') S.mv = i; else S.learn.slot = i; press('a'); return; } return; }
+    if ((md === 'setAsk' || md === 'learnAsk') && S.hit.yn) { for (let i = 0; i < 2; i++) if (inR(S.hit.yn[i], x, y)) { S.yn = i; press('a'); return; } return; }
+    if (md === 'play') press('a');
+  }
+  function drawOvTop(c) {
+    if (!(S.ov && S.ov.ready)) return;
+    const oc = OVC.getContext('2d'); oc.imageSmoothingEnabled = false; oc.clearRect(0, 0, 240, 160); S.ov.core.render(oc);
+    const e = 1 - Math.pow(1 - clamp((S.ov.t || 0) / .28), 3); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, 0, 240, 160, 0, Math.round((1 - e) * H), 240, H);
+  }
   function drawTop(c) {
     if (S.mode === 'intro' && drawIntroTop(c)) return;
     drawBg(c);
@@ -1094,7 +1151,8 @@ function* glyphs(s) {
       if (cu.open && cu.spT != null && cu.spT < .16) drawBallSprite(c, cu.open.x, cu.open.y, 0, CF.ball, cu.spT < .08 ? 2 : 1);
     }
     infoBox(c, side(1), false); infoBox(c, side(0), true);
-    msgBox(c);   // always visible, whatever menu is open
+    levelBoxView(c);
+    if (single()) { partyBalls(c); singleMsg(c); drawOvTop(c); } else msgBox(c);   // always visible, whatever menu is open
     if (S.mode === 'intro') introOverlay(c);
   }
 
@@ -1280,26 +1338,8 @@ function* glyphs(s) {
         const st = M.status && STATUS_LAB[M.status]; if (st && !faint) rect(c, x + 24, y + 4, 6, 6, st[1]); if (faint) faintX(c, x + 23, y + 3); }
     }
   }
-  // level up: the LOWER screen shows the stats like the summary's Skills page and each value counts up to its new number with a green +N
-  function levelBottom(c) {
-    const lb = S.levelBox, t = lb.t, a = clamp(t / .25);
-    c.save(); c.globalAlpha = a; c.translate(0, Math.round((1 - a) * 12));
-    panel(c, 4, 4, 232, 147, true);
-    T(c, lb.name, 14, 11, 'dark'); TR(c, '{Lv}' + lb.level, 228, 11, 'dark'); rect(c, 12, 28, 216, 1, '#b4bad0');
-    const rows = [['hp', 'HP', '#4cc860'], ['atk', 'Attack', '#e85a4c'], ['def', 'Defense', '#e8a43c'], ['spa', 'Sp. Atk', '#4c8ce8'], ['spd', 'Sp. Def', '#58c8b8'], ['spe', 'Speed', '#d868c8']], cap = Math.max(60, 50 + lb.level * 4);
-    rows.forEach(([k, n, col], i) => {
-      const y = 34 + i * 18, to = lb.stats[k] != null ? lb.stats[k] : 0, g = lb.gain[k] || 0, from = to - g, st = .35 + i * .28, p = clamp((t - st) / .5), e = 1 - Math.pow(1 - p, 3), v = Math.round(from + g * e);
-      T(c, n, 14, y, 'dark'); rect(c, 78, y + 3, 96, 5, '#d8dcec');
-      rect(c, 78, y + 3, Math.round(96 * clamp(v / cap)), 5, col); if (g > 0 && p < 1) rect(c, 78 + Math.round(96 * clamp(from / cap)), y + 3, Math.max(1, Math.round(96 * clamp((v - from) / cap))), 5, '#ffffff');
-      TR(c, String(v), 206, y, p > 0 && p < 1 ? 'blue' : 'dark');
-      if (p > 0 && g !== 0) { c.save(); c.globalAlpha = a * clamp(p * 3); T(c, (g > 0 ? '+' : '') + g, 212 - Math.round((1 - clamp(p * 3)) * 6), y, g > 0 ? 'blue' : 'red'); c.restore(); }
-    });
-    T(c, 'A: continue', 14, 134, 'mute');
-    c.restore();
-  }
   function drawBottom(c) {
     drawBottomBg(c);
-    if (S.levelBox && !S.ov) { levelBottom(c); return; }
     if (S.ov && S.ov.ready) {   // the Start-Menu style party / bag screen fills the LOWER screen (it slides up when it opens)
       const oc = OVC.getContext('2d'); oc.imageSmoothingEnabled = false; oc.clearRect(0, 0, 240, 160); S.ov.core.render(oc);
       const p = clamp((S.ov.t || 0) / .28), e = 1 - Math.pow(1 - p, 3); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, Math.round((1 - e) * H), W, H); S.ovLast = S.ov.kind; return;
@@ -1331,7 +1371,7 @@ function* glyphs(s) {
     applyConfig(); S.hit = {}; if (S.editMode && S.b) { placeOffsets(side(0), 0); placeOffsets(side(1), 1); } top.imageSmoothingEnabled = false; top.clearRect(0, 0, W, H);
     if (!S.b) { rect(top, 0, 0, W, H, '#101018'); if (bot) rect(bot, 0, 0, W, H, '#101018'); return; }
     drawTop(top); fadeOverlay(top);
-    if (bot) { bot.imageSmoothingEnabled = false; bot.clearRect(0, 0, W, H); drawBottom(bot); fadeOverlay(bot); }
+    if (bot && !single()) { bot.imageSmoothingEnabled = false; bot.clearRect(0, 0, W, H); drawBottom(bot); fadeOverlay(bot); }
   }
 
   // ---- layout editor support: a frozen scene with everything on screen at once (used by battle_layout_editor.html)
@@ -1357,7 +1397,7 @@ function* glyphs(s) {
       sides: S.sides.map(s => ({ name: s.name, level: s.level, hp: Math.round(s.dhp), maxhp: s.maxhp, status: s.status, vis: s.vis, dx: s.dx, dy: s.dy })), over: S.b && S.b.over, finished: !!S.finished, intro: S.introT };
   }
   function rebuild() { /* images load on demand */ }
-  return { prepareCaught, spriteReport, S, opt, W, H, press, click, update, render, start, initFont, status, rebuild, warnings, act, getImg, nudge, layoutPreview, LEG };
+  return { prepareCaught, spriteReport, S, opt, W, H, press, click, tap, update, render, start, initFont, status, rebuild, warnings, act, getImg, nudge, layoutPreview, LEG };
 }
 root.BattleSceneCore = createBattle;
 })(window);
@@ -1402,9 +1442,10 @@ class BattleScene extends Phaser.Scene {
     const mkTex = key => { if (this.textures.exists(key)) this.textures.remove(key); const t = this.textures.createCanvas(key, 240, 155); try { t.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } return t; };
     this.texTop = mkTex('bs_top'); this.texBot = mkTex('bs_bot');
     this.ctxTop = this.texTop.getContext ? this.texTop.getContext() : this.texTop.context; this.ctxBot = this.texBot.getContext ? this.texBot.getContext() : this.texBot.context;
-    this.add.image(0, 0, 'bs_top').setOrigin(0, 0).setScale(cw / 240, topH / 155).setDepth(1);
-    this.add.image(0, botY, 'bs_bot').setOrigin(0, 0).setScale(cw / 240, (ch - botY) / 155).setDepth(1);
-    if (gap > 0) this.add.rectangle(cw / 2, topH + gap / 2, cw, gap, 0x111111).setDepth(30);
+    const SG = !!(window.PMLayout && window.PMLayout.landscape); this.single = SG;   // landscape: ONE screen, 480 x 320
+    this.add.image(0, 0, 'bs_top').setOrigin(0, 0).setScale(cw / 240, (SG ? 320 : topH) / 155).setDepth(1);
+    if (!SG) { this.add.image(0, botY, 'bs_bot').setOrigin(0, 0).setScale(cw / 240, (ch - botY) / 155).setDepth(1); if (gap > 0) this.add.rectangle(cw / 2, topH + gap / 2, cw, gap, 0x111111).setDepth(30); }
+    else this.input.on('pointerdown', p => { try { core.tap(p.x / (cw / 240), p.y * 155 / 320); } catch (e) { /* ignore */ } });
 
     const audioCache = {};
     const cry = sp => { const db = typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null; let e = db && db[sp]; if (!e && db) { const k = Object.keys(db).find(x => x.toUpperCase().replace(/[^A-Z0-9]/g, '') === String(sp).toUpperCase().replace(/[^A-Z0-9]/g, '')); e = k && db[k]; } if (!e || !e.cry) return; try { const a = audioCache[e.cry] || (audioCache[e.cry] = new Audio(e.cry)); a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => { /* blocked until a key press */ }); } catch (er) { /* no audio */ } };
@@ -1482,7 +1523,7 @@ class BattleScene extends Phaser.Scene {
     if (!this.core || !this.ctxTop) return;
     this.core.update(Math.min(.05, delta / 1000));
     if (!this.ctxTop) return;
-    this.core.render(this.ctxTop, this.ctxBot); this.texTop.refresh(); this.texBot.refresh();
+    this.core.render(this.ctxTop, this.single ? null : this.ctxBot); this.texTop.refresh(); if (!this.single) this.texBot.refresh();
     this.coordEditor();
   }
 
@@ -1509,16 +1550,9 @@ class BattleScene extends Phaser.Scene {
       if (res.result === 'lose') healParty(sv);
       if (gsm) { gsm.lastBattle = res; if (typeof gsm.onBattleEnd === 'function') { try { gsm.onBattleEnd(res.result, res); } catch (e) { console.error('[BattleScene] onBattleEnd threw', e); } } }
     }
-    const proceed = () => {
-      if (typeof d.onEnd === 'function') { try { d.onEnd(res); } catch (e) { console.error('[BattleScene] onEnd threw', e); } }
-      this.teardown();
-      if (!d.onEnd || d.returnScene) this.scene.start(d.returnScene || BattleScene.RETURN_SCENE, d.returnData);
-    };
-    // evolutions play right here (before going back to the map)
-    if (res && res.evolutions && res.evolutions.length && window.OWUI && window.OWUI.runEvolutions) {
-      try { window.removeEventListener('keydown', this.kd, true); } catch (e) { /* ignore */ }   // the battle's key handler would swallow the keys
-      try { window.OWUI.runEvolutions(this, proceed); } catch (e) { console.error('[BattleScene] evolution failed', e); proceed(); }
-    } else proceed();
+    if (typeof d.onEnd === 'function') { try { d.onEnd(res); } catch (e) { console.error('[BattleScene] onEnd threw', e); } }
+    this.teardown();
+    if (!d.onEnd || d.returnScene) this.scene.start(d.returnScene || BattleScene.RETURN_SCENE, d.returnData);
   }
 
   teardown() {
