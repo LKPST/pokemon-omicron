@@ -36,11 +36,17 @@ const SaveSystem = {
       s.savedAt = Date.now();
       const sc = scene || this.scene;
       if (sc && sc.currentMapKey) s.mapID = sc.currentMapKey;
+      if (sc && sc.playerGridX != null) {   // where the player stands and which way he looks (a second copy in its own storage key, in case your loader drops unknown fields)
+        const dir = sc.player && sc.player.direction || s.facing || 'down'; s.pos = { map: s.mapID, x: sc.playerGridX, y: sc.playerGridY, dir }; s.facing = dir;
+        try { localStorage.setItem(KEY + '_pos', JSON.stringify(s.pos)); } catch (e) { /* ignore */ }
+      }
       const json = JSON.stringify(s); localStorage.setItem(KEY, json);
       if (this.ENDPOINT) { try { fetch(this.ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json }).catch(e => { this.lastError = String(e); }); } catch (e) { this.lastError = String(e); } }
       this.dirty = false; this.savedAt = s.savedAt; this.lastError = ''; return true;
     } catch (e) { this.lastError = String(e && e.message || e); console.error('[SaveSystem] could not save:', e); return false; }
   },
+  // the saved position {map, x, y, dir} (null when none): saveData.pos, else its own storage key
+  savedPos() { const sd = sv(); let p = sd && sd.pos; if (!p) { try { p = JSON.parse(localStorage.getItem(KEY + '_pos') || 'null'); } catch (e) { p = null; } } return p && p.x != null && p.y != null ? p : null; },
   info() {
     const s = sv() || {}, p = s.player || {}, dex = root.Dex ? root.Dex.counts() : { seen: 0, caught: 0 };
     let badges = 0; const f = s.flags || {}; for (const k in f) if (/^FLAG_BADGE\d*_GET|^FLAG_BADGE/.test(k) && f[k]) badges++;
@@ -51,7 +57,7 @@ const SaveSystem = {
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(copy, null, 2)], { type: 'application/json' })); a.download = 'save.json';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); return true;
   },
-  reset() { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } },
+  reset() { try { localStorage.removeItem(KEY); localStorage.removeItem(KEY + '_pos'); } catch (e) { /* ignore */ } },
 };
 document.addEventListener('visibilitychange', () => SaveSystem._tick());
 root.SaveSystem = SaveSystem;
