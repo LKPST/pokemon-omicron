@@ -50,6 +50,32 @@
     F.why = 'ok'; return m;
   }
 
+  // ---- the sparkle (graphics/poke_ball/Sparkle.png: 6 frames of 32x32 stacked, 20 fps) that plays on the follower when it appears:
+  // when the game starts / a save is loaded, and when the lead Pokémon changes (party switch). The sheet's background colour (first pixel) is keyed out.
+  const SPARKS = ['graphics/poke_ball/Sparkle.png', 'graphics/poke_ball/sparkle.png'];
+  function sparkSheet() {
+    if (F._spark !== undefined) return F._spark;
+    if (!F._sparkTry) { F._sparkTry = 1; const tryLoad = i => { if (i >= SPARKS.length) { F._spark = null; return; } const im = new Image(); im.onload = () => {
+      try { const w = im.naturalWidth, h = im.naturalHeight, cv = document.createElement('canvas'); cv.width = w; cv.height = h; const x = cv.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0);
+        const id = x.getImageData(0, 0, w, h), d = id.data, r0 = d[0], g0 = d[1], b0 = d[2]; if (d[3] > 0) { for (let k = 0; k < d.length; k += 4) if (Math.abs(d[k] - r0) < 6 && Math.abs(d[k + 1] - g0) < 6 && Math.abs(d[k + 2] - b0) < 6) d[k + 3] = 0; x.putImageData(id, 0, 0); }
+        F._spark = { cv, w, h, n: Math.max(1, Math.round(h / 32)) }; } catch (e) { F._spark = null; } }; im.onerror = () => tryLoad(i + 1); im.src = SPARKS[i]; }; tryLoad(0); }
+    return undefined;   // still loading
+  }
+  function startSpark(scene, s) {
+    const sh = sparkSheet(); if (sh === undefined) return false;   // not loaded yet: try again next frame
+    if (!sh) return true;                                          // no sheet: nothing to play
+    if (!scene.textures.exists('ow_fx_spark')) { const tex = scene.textures.addCanvas('ow_fx_spark', sh.cv); for (let i = 0; i < sh.n; i++) tex.add(i, 0, 0, i * 32, 32, 32); try { tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (_) { } }
+    if (F.fx && F.fx.spr) F.fx.spr.destroy();
+    F.fx = { spr: scene.add.sprite(s.x, s.y, 'ow_fx_spark', 0).setScale(Math.max(2, (s.scaleX || 1) * 1.2)), t0: scene.time.now, n: sh.n };
+    return true;
+  }
+  function tickSpark(scene, s) {
+    const f = F.fx; if (!f) return;
+    const i = Math.floor((scene.time.now - f.t0) / 50);   // 20 fps
+    if (i >= f.n || !s) { f.spr.destroy(); F.fx = null; return; }
+    f.spr.setFrame(i); f.spr.setPosition(s.x, s.y - Math.round(s.displayHeight * 0.45)); f.spr.setDepth(s.depth + 1);
+  }
+
   function dropSprite() {
     if (F.spr) { window.OWSprites.destroy(F.spr); F.spr = null; }
     F.species = null;
@@ -76,6 +102,7 @@
       spr.setOrigin(0.5, 1).setScale(sc).setVisible(false);
       if (F.spr) window.OWSprites.destroy(F.spr);
       F.spr = spr; F.species = m.species; F.shiny = !!m.isShiny; F.wasHidden = true;
+      const sig = m.species + (m.isShiny ? '*' : ''); if (F.lastSpark !== sig) { F.lastSpark = sig; F.wantSpark = true; sparkSheet(); }   // new lead Pokémon (or first start / load): sparkle
       log('follower ready:', m.species, 'frame', e ? e.w + 'x' + e.h : '?', 'scale', sc, '(art ' + content + 'px in a ' + (e ? e.w : '?') + 'px cell) | player at', Math.round(scene.player.x), Math.round(scene.player.y));
     } finally { F.busy = false; }
   }
@@ -86,7 +113,7 @@
     F.scene = scene; F.spr = null; F.species = null; F.pts = []; F.last = null; F.trav = 0; F.nextCheck = 0; F.busy = false;
     scene.events.once('shutdown', () => { F.detach(); });
   };
-  F.detach = function () { dropSprite(); F.pts = []; F.last = null; F.scene = null; };
+  F.detach = function () { if (F.fx && F.fx.spr) { try { F.fx.spr.destroy(); } catch (_) { } } F.fx = null; dropSprite(); F.pts = []; F.last = null; F.scene = null; };
 
   // call after the party changed (the check also runs by itself twice a second)
   // live size change, e.g. OWFollower.setScale(0.6)   (setScale('auto') goes back to the automatic size)
@@ -151,6 +178,8 @@
     const dp = Math.hypot(x - p.x, y - p.y);
     s.setVisible(dp > 6);
     s.setAlpha(1);
+    if (F.wantSpark && s.visible && startSpark(scene, s)) F.wantSpark = false;
+    tickSpark(scene, s);
   };
 
   // ---- talk to it: Z while it stands next to the player (any side). It turns to the player, hops, a heart pops up, a short message.
@@ -175,7 +204,7 @@
     heart(scene, s.x, s.y - 40);
     const m = F.leadMon((window.GameStateManager || {}).saveData) || {};
     const pretty = String(m.species || '').replace(/^SPECIES_/, '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const name = m.nickname || ((window.PokemonDatabase && window.PokemonDatabase[m.species] && window.PokemonDatabase[m.species].name) || pretty || 'Your Pokémon');
+    const DBm = (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : window.PokemonDatabase) || {}, name = m.nickname || ((DBm[m.species] && DBm[m.species].name) || pretty || 'Your Pokémon');
     let text = F.lines[Math.floor(Math.random() * F.lines.length)].replace('{n}', name);
     if (window.OverworldText && window.OverworldText.autoWrap) text = window.OverworldText.autoWrap(text.replace('$player', ((window.GameStateManager || {}).saveData || {}).player ? window.GameStateManager.saveData.player.name || 'Player' : 'Player'));
     scene.isLocked = true;
