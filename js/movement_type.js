@@ -42,24 +42,27 @@ window.OverworldMovement = (() => {
     });
   }
 
-  function inPlace(e, dir, done, cycles = 3) {
-    const seq = [1, 0, 2, 0]; let i = 0;
+  function inPlace(e, dir, done, cycles = 3, scripted = false) {
+    const seq = [1, 0, 2, 0]; let i = 0, over = false;
     e.direction = dir;
-    e.scene.time.addEvent({
+    const ev = e.scene.time.addEvent({
       delay: 120, repeat: cycles * 4 - 1,
       callback: () => {
+        if (over) return;
+        if (!scripted && e.scene.scriptRunning) { over = true; ev.remove(false); e.setFrame(frame(dir, 0)); done && done(); return; }   // a script started: stop the idle animation
         e.setFrame(frame(dir, seq[i++ % 4]));
         if (i >= cycles * 4) { e.setFrame(frame(dir, 0)); done && done(); }
       },
     });
   }
 
-  function spin(e, clockwise, done) {
+  function spin(e, clockwise, done, scripted = false) {
     let i = ORDER.indexOf(e.direction); if (i < 0) i = 0;
     let n = 0;
-    e.scene.time.addEvent({
+    const ev = e.scene.time.addEvent({
       delay: 140, repeat: 3,
       callback: () => {
+        if (!scripted && e.scene.scriptRunning) { ev.remove(false); done && done(); return; }
         i = (i + (clockwise ? 1 : 3)) % 4; e.direction = ORDER[i]; e.setFrame(frame(ORDER[i], 0));
         if (++n === 4 && done) done();
       },
@@ -79,7 +82,7 @@ window.OverworldMovement = (() => {
       else if (k === 'walk') step(e, d, onComplete, 240, false, force);
       else if (k === 'run') step(e, d, onComplete, 120, false, force);
       else if (k === 'jump') step(e, d, onComplete, 300, true, force);
-      else inPlace(e, d, onComplete);
+      else inPlace(e, d, onComplete, 3, force);
       return;
     }
     if (action === 'look_random') return execute(e, 'look_' + pick(Object.keys(DIRS)), onComplete, opts);
@@ -87,8 +90,8 @@ window.OverworldMovement = (() => {
       const dx = s.player.x - e.x, dy = s.player.y - e.y;
       return execute(e, 'look_' + (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')), onComplete, opts);
     }
-    if (action === 'spin_cw') return spin(e, true, onComplete);
-    if (action === 'spin_ccw') return spin(e, false, onComplete);
+    if (action === 'spin_cw') return spin(e, true, onComplete, force);
+    if (action === 'spin_ccw') return spin(e, false, onComplete, force);
     if (action === 'jump_in_place') {
       s.tweens.add({ targets: e, y: e.y - 10, duration: 140, yoyo: true, onComplete: () => onComplete && onComplete() });
       return;
