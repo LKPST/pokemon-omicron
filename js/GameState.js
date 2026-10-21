@@ -478,7 +478,7 @@ function createBattle(env) {
       fishing: o.fishing, surfing: o.surfing, mapType: o.mapType, night: o.night, noCatching: o.noCatching, catchRateBonus: o.catchRateBonus, criticalCapture: o.criticalCapture, catchingCharm: o.catchingCharm, catchDifficulty: o.catchDifficulty, alwaysCatchable: o.alwaysCatchable }));
     { const sb = S.b; spriteReport('start'); setTimeout(() => { if (S.b === sb) spriteReport('after load'); }, 1500); }
     S.onEnd = o.onEnd || env.onEnd || null; S.bgKind = o.bg || 'grass'; S.mapWeather = o.weather || null; S.mapFx = !!o.weather; S.bag = normBag(o.bag != null ? o.bag : (env.bag && env.bag()));
-    S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null; S.emit = []; S.fxl = []; S.flashA = 0; S.ov = null;
+    S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null; S.emit = []; S.fxl = []; S.flashA = 0; S.ov = null; S.catchDone = false; S.catchActive = false;
     S.fade = 1; S.fadeDir = -1; S.done = false; S.editMode = false; S.finished = null; S.onFade = null; S.noAuto = false; S.nudged = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
     const skip = !!o.skipIntro;
     S.tr = { me: { path: o.playerTrainerSprite || '', vis: !skip && !!o.playerTrainerSprite, ox: skip ? 0 : 130, frame: 0 }, foe: { path: o.foeTrainerSprite || '', vis: !skip && S.b.kind === 'trainer' && !!o.foeTrainerSprite, ox: skip ? 0 : -130, frame: 0 } };
@@ -773,8 +773,43 @@ function createBattle(env) {
     } catch (e) { console.warn('[BS] could not open the bag screen, using the built-in list:', e); S.ov = null; return false; }
   }
   function act(a) { S.noAuto = false; play(S.b.turn(a, null)); }
+  // ---- a caught Pokémon: its trainer data, Tera type ..., then the Pokédex page (summary) and the nickname question before the battle ends
+  function prepareCaught(mon) {
+    const pi = (env.playerInfo && env.playerInfo()) || {};
+    if (!mon.OTName) mon.OTName = pi.name || 'Player';
+    if (!mon.OTID) { mon.OTID = pi.id != null && +pi.id ? +pi.id : 54321; mon.OTsecretID = pi.secret != null && +pi.secret ? +pi.secret : 12345; mon.latestOTID = mon.OTID; mon.latestOTName = mon.OTName; }
+    if (!mon.teraType || mon.teraType === 'TYPE_NONE') { const sp = (dbOf() || {})[mon.species] || {}, tp = [sp.type1, sp.type2].filter(x => x && x !== 'TYPE_NONE'); mon.teraType = tp.length ? tp[Math.floor(Math.random() * tp.length)] : 'TYPE_NORMAL'; }
+    if (!mon.caughtloc && pi.map) mon.caughtloc = String(pi.map).toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    if (!mon.markings || typeof mon.markings !== 'object') mon.markings = { circle: false, triangle: false, square: false, heart: false, star: false, diamond: false };
+    if (!Array.isArray(mon.ribbons)) mon.ribbons = [];
+    for (const k of ['cool', 'cute', 'smart', 'tough', 'beauty', 'sheen']) if (mon[k] == null) mon[k] = 0;
+    if (mon.friendship == null) mon.friendship = 70;
+    return mon;
+  }
+  function openCatch() {
+    const PSC = root.PokemonSummaryCore; if (!PSC || !S.b.caught || !S.b.caught.length) return false;
+    const mon = prepareCaught(S.b.caught[S.b.caught.length - 1]);
+    let isNew = true; try { const D = root.Dex; if (D && D.data) { const n = D.num(mon.species); isNew = !(n && D.data().caught[n]); } } catch (e) { /* no dex */ }
+    try { if (root.Dex) root.Dex.catch(mon.species, !!mon.isShiny); } catch (e) { /* no dex */ }   // registered now (the Pokédex shows it at once)
+    S.catchDone = true; S.catchActive = true;
+    const fin = () => { S.catchActive = false; S.ov = null; endBattle(); };
+    try {
+      const core = PSC({
+        urlFor: p => p, db: dbOf, party: () => [mon], glyphs: gl, onExit: fin,
+        types: () => (typeof TypeTable !== 'undefined' ? TypeTable : (root.TypeTable || null)),
+        moves: () => (typeof MoveDatabase !== 'undefined' && MoveDatabase) || (typeof MoveTable !== 'undefined' && MoveTable) || (typeof MoveTables !== 'undefined' && MoveTables) || null,
+        rename: (i, txt) => { mon.nickname = txt || ''; },
+        ivEnabled: () => !!(root.PokemonSummary && root.PokemonSummary.ivEnabled && root.PokemonSummary.ivEnabled()),
+        catchMode: { banner: isNew ? 'Registered in the POKéDEX!' : 'Added to your POKéMON!', done: txt => { if (txt) mon.nickname = txt; fin(); } },
+      });
+      S.ov = { kind: 'catch', core, ready: false };
+      core.initFont().then(() => { if (S.ov && S.ov.core === core) { core.rebuild(false); core.S.sel = 0; S.ov.ready = true; } }).catch(e => { console.warn('[BS] catch screen:', e); fin(); });
+      return true;
+    } catch (e) { console.warn('[BS] could not open the catch screen:', e); S.ov = null; S.catchActive = false; return false; }
+  }
   function endBattle() {
-    if (S.done) return; S.done = true; S.mode = 'end';
+    if (S.done || S.catchActive) return;
+    if ((S.result || (S.b && S.b.result)) === 'caught' && !S.catchDone && openCatch()) return;   // first the Pokédex page + nickname question S.done = true; S.mode = 'end';
     S.fadeDir = 1; S.onFade = () => {
       const b = S.b; let party = null, evo = [];
       try { party = b.commit(); } catch (e) { console.warn('[BattleScene] commit failed', e); }
@@ -844,6 +879,7 @@ function createBattle(env) {
     }
     if (S.mode === 'cmd') {
       if (k === 'left') S.cmd = S.cmd & 2; else if (k === 'right') S.cmd = (S.cmd & 2) | 1; else if (k === 'up') S.cmd &= 1; else if (k === 'down') S.cmd |= 2;
+      else if (k === 'b') S.cmd = 3;   // B jumps the cursor to RUN
       else if (k === 'a') {
         if (S.cmd === 0) {
           const P = S.b.active(0), us = S.b.usable(P);
@@ -1224,7 +1260,11 @@ function createBattle(env) {
     drawBottomBg(c);
     if (S.ov && S.ov.ready) {   // the Start-Menu style party / bag screen fills the LOWER screen (it slides up when it opens)
       const oc = OVC.getContext('2d'); oc.imageSmoothingEnabled = false; oc.clearRect(0, 0, 240, 160); S.ov.core.render(oc);
-      const p = clamp((S.ov.t || 0) / .28), e = 1 - Math.pow(1 - p, 3); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, Math.round((1 - e) * H), W, H); return;
+      const p = clamp((S.ov.t || 0) / .28), e = 1 - Math.pow(1 - p, 3); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, Math.round((1 - e) * H), W, H); S.ovLast = S.ov.kind; return;
+    }
+    if (S.botMode !== 'party' && S.botMode !== 'bag') S.ovLast = null;
+    if (!S.ov && S.ovLast && (S.botMode === 'party' || S.botMode === 'bag')) {   // closing: the same screen slides back down (never the old built-in list)
+      const k = S.botIn || 0; if (k > 0.001) { c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, Math.round((1 - clamp(k)) * H), W, H); } return;
     }
     const k = S.botIn || 0; if (k <= 0.001 || !S.botMode) return;
     const real = S.mode, m = S.botMode, bk = x => { x = clamp(x); const t = x - 1; return 1 + t * t * (2.2 * t + 1.2); };   // ease-out-back: a small overshoot
@@ -1274,7 +1314,7 @@ function createBattle(env) {
       sides: S.sides.map(s => ({ name: s.name, level: s.level, hp: Math.round(s.dhp), maxhp: s.maxhp, status: s.status, vis: s.vis, dx: s.dx, dy: s.dy })), over: S.b && S.b.over, finished: !!S.finished, intro: S.introT };
   }
   function rebuild() { /* images load on demand */ }
-  return { spriteReport, S, opt, W, H, press, click, update, render, start, initFont, status, rebuild, warnings, act, getImg, nudge, layoutPreview, LEG };
+  return { prepareCaught, spriteReport, S, opt, W, H, press, click, update, render, start, initFont, status, rebuild, warnings, act, getImg, nudge, layoutPreview, LEG };
 }
 root.BattleSceneCore = createBattle;
 })(window);
@@ -1331,6 +1371,7 @@ class BattleScene extends Phaser.Scene {
       bag: () => sv.bag || sv.items || sv.inventory || [],
       onItemUsed: (item, ref) => decItem(sv, item, ref),
       onSeen: sp => { if (window.Dex) window.Dex.see(sp); },
+      playerInfo: () => { const p = sv.player || {}; return { name: p.name, id: p.playerOTID, secret: p.playerOTsecretID, map: sv.mapID }; },
       onEnd: res => this.finishBattle(res),
       glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
     });
@@ -1379,6 +1420,7 @@ class BattleScene extends Phaser.Scene {
     const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b' };
     this.openedAt = performance.now();
     this.kd = e => {
+      { const ov = core.S && core.S.ov; if (ov && ov.ready && ov.core.nameKey && ov.core.S.view === 'name' && !ov.core.S.tr && ov.core.nameKey(e)) { e.preventDefault(); e.stopImmediatePropagation(); return; } }   // typing a nickname
       const k = KEYS[e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key]; if (!k) return;
       e.preventDefault(); e.stopImmediatePropagation();
       if (e.repeat && k !== 'up' && k !== 'down' && k !== 'left' && k !== 'right') return;
@@ -1490,6 +1532,7 @@ function decItem(sv, item, ref) {
 }
 function addCaught(sv, mon) {
   mon.OTName = mon.OTName || (sv.player && sv.player.name) || ''; sv.party = sv.party || [];
+  try { if (BattleScene._core && BattleScene._core.prepareCaught) BattleScene._core.prepareCaught(mon); } catch (e) { /* ignore */ }   // trainer ID, Tera type ...
   if (window.Dex) window.Dex.catch(mon.species, !!mon.isShiny);   // Pokedex: caught
   const free = sv.party.findIndex((m, i) => i < 6 && !m);
   if (free >= 0) { sv.party[free] = mon; return; }
