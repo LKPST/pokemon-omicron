@@ -424,10 +424,10 @@ function createBag(env) {
     for (let n = 0; n < R.n; n++) {
       const e = r[top + n]; if (!e) break; const y = Math.round(R.y + n * R.pitch), isSel = top + n === S.cur[i];
       if (isSel && shownSel) { rect(c, R.x, y, R.w, R.h, 'rgba(255,214,60,.30)'); tri(c, R.x - 3 + (dark ? 4 : 1), y + R.h / 2, 3, '#ffd23c'); }
-      if (e.cancel) { T(c, inStorage() ? 'CANCEL' : 'CLOSE BAG', L.nameX, ty(y, R.h), dark ? 'dark' : 'white'); continue; }
-      const im = itemImg(e.key); if (im) drawFit(c, im, L.iconX, y - 1, 14, R.h + 2, 1);
-      const nm = nameOf(e.key); T(c, nm, L.nameX, ty(y, R.h), dark ? 'dark' : 'white');
-      if (!(e.item && e.item.pocket === 'key')) TR(c, '×' + e.count, L.qtyRight, ty(y, R.h), dark ? 'dark' : 'white');
+      if (e.cancel) { T(c, inStorage() ? 'CANCEL' : 'CLOSE BAG', S.battle ? L.iconX + 4 : L.nameX, ty(y, R.h), dark ? 'dark' : 'white'); continue; }
+      if (!S.battle) { const im = itemImg(e.key); if (im) drawFit(c, im, L.iconX, y - 1, 14, R.h + 2, 1); }   // (no small picture in front of the name in battle)
+      const nm = nameOf(e.key); T(c, nm, S.battle ? L.iconX + 4 : L.nameX, ty(y, R.h), dark ? 'dark' : 'white');
+      if (!(e.item && e.item.pocket === 'key')) { const n = String(e.count), col = dark ? 'dark' : 'white'; TR(c, n, L.qtyRight, ty(y, R.h), col); TR(c, '×', L.qtyRight - tw(n) - 4, ty(y, R.h), col); }   // the × and the number have a small gap
     }
     // scroll marks
     if (top > 0) tri(c, R.x + R.w - 8, R.y - 2, 3, '#ffd23c'); if (top + R.n < r.length) tri(c, R.x + R.w - 8, Math.round(R.y + R.n * R.pitch) - 3, 3, '#ffd23c');
