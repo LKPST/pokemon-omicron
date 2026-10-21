@@ -35,10 +35,11 @@ window.OverworldMovement = (() => {
     e.setFrame(frame(dir, e.alt));
     const x0 = e.x, y0 = e.y;
     const t0 = tileOf(e); e.src = { x: t0.x, y: t0.y }; e.dest = { x: t0.x + dx, y: t0.y + dy };   // reserve both tiles until the step is over
-    s.tweens.addCounter({
+    e.stepInfo = { x0, y0, dx, dy, dir, done, force };
+    e.stepTw = s.tweens.addCounter({
       from: 0, to: 1, duration: ms,
       onUpdate: t => { const v = t.getValue(); e.x = x0 + dx * TILE * v; e.y = y0 + dy * TILE * v - (hop ? Math.sin(v * Math.PI) * 12 : 0); },
-      onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.setFrame(frame(dir, 0)); done && done(); },
+      onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(dir, 0)); done && done(); },
     });
   }
 
@@ -142,5 +143,19 @@ window.OverworldMovement = (() => {
     execute(e, a, () => { e.busy = false; });
   }
 
-  return { execute, tick, types, canStep };
+  // A script is about to start (the player talked to somebody / stepped on a script tile): an NPC that is in the middle of a normal step
+  // stops AT ONCE and snaps to the nearer tile, so nobody keeps walking while the script (or the message box) begins.
+  // Scripted movements (applymovement) are never touched.
+  function freeze(e) {
+    const i = e && e.stepInfo; if (!i || i.force || !e.stepTw) return false;
+    let k = 0; try { k = e.stepTw.getValue(); } catch (_) { k = 0.5; }
+    try { e.stepTw.stop(); } catch (_) { }
+    const f = k >= 0.5 ? 1 : 0;
+    e.x = i.x0 + i.dx * TILE * f; e.y = i.y0 + i.dy * TILE * f;
+    e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(i.dir, 0));
+    const d = i.done; d && d(); return true;
+  }
+  function freezeAll(scene) { let n = 0; for (const e of (scene.npcs || [])) if (freeze(e)) n++; return n; }
+
+  return { execute, tick, types, canStep, freeze, freezeAll };
 })();
