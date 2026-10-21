@@ -43,6 +43,25 @@
     return S.bmp;
   }
 
+  // [SPEED] The big sheet (16384x12800 = about 800 MB of pixels) is cut into ~32 small sheets of 32 Pokémon each (graphics/overworld/mons/ow_00.png ...,
+  // made by split_sprites.py, listed in mons/manifest.json - fewer than 100 files, so a GitHub upload works). A Pokémon now needs one small sheet
+  // (~150 KB, a few ms) instead of the whole thing. If the folder / manifest is missing the loader uses the big sheet like before.
+  // Change the folder with OWSprites.dir.
+  const chunks = new Map();   // file -> Promise<ImageBitmap | null>
+  async function getManifest() {
+    if (S.man !== undefined) return S.man;
+    const dir = API.dir || ''; if (!dir) return (S.man = null);
+    try { const r = await fetch(dir + 'manifest.json'); if (!r.ok) throw new Error('HTTP ' + r.status); S.man = (await r.json()).species || null; log('manifest loaded:', Object.keys(S.man || {}).length, 'species'); }
+    catch (err) { S.man = null; warn('no ' + dir + 'manifest.json (' + err.message + ') - using the big sheet (slow). Run split_sprites.py to make it.'); }
+    return S.man;
+  }
+  function getChunk(file) {
+    if (!chunks.has(file)) chunks.set(file, fetch((API.dir || '') + file).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + file); return r.blob(); }).then(b => createImageBitmap(b)).catch(err => { warn('could not load ' + file + ': ' + err.message); chunks.delete(file); return null; }));
+    return chunks.get(file);
+  }
+  let chunkTimer = 0;
+  const dropChunksSoon = () => { clearTimeout(chunkTimer); chunkTimer = setTimeout(() => { chunks.forEach(p => p.then(b => b && b.close && b.close())); chunks.clear(); }, S.holdMs); };
+
   function evict(scene, keep) {
     if (S.ent.size <= S.max) return;
     const idle = [...S.ent.entries()].filter(([sp, e]) => e.refs <= 0 && !(keep && keep.has(sp))).sort((a, b) => a[1].last - b[1].last);
@@ -53,10 +72,10 @@
     }
   }
 
-  function cut(scene, bmp, sp) {
+  function cut(scene, bmp, sp, off) {
     const e = entry(sp), w = e.w, h = e.h, W = 4 * w, H = 4 * h;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
-    const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingEnabled = false; x.drawImage(bmp, e.x, e.y, W, H, 0, 0, W, H);
+    const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingEnabled = false; x.drawImage(bmp, off ? off[0] : e.x, off ? off[1] : e.y, W, H, 0, 0, W, H);   // off = [x, y] of the block inside a small chunk sheet (default: the big sheet)
     const mgr = scene.textures, key = keyOf(sp);
     if (mgr.exists(key)) mgr.remove(key);
     const tex = mgr.addCanvas(key, c);
@@ -86,9 +105,20 @@
       if (!todo.length) return true;
       try {
         if (!table()) throw new Error('tables/OverworldSprites.js is not loaded');
-        const bmp = await getBitmap();
-        log('sheet decoded', bmp.width + 'x' + bmp.height, '- cutting', todo.join(', '));
-        for (const sp of todo) { cut(scene, bmp, sp); if (todo.length > 1) await new Promise(r => requestAnimationFrame ? requestAnimationFrame(() => r()) : setTimeout(r, 16)); }
+        // 1. the small chunk sheets (every needed file is fetched once, all at the same time)
+        const man = await getManifest(), rest = [];
+        if (man) {
+          const groups = new Map();
+          for (const sp of todo) { const m = man[sp]; if (m) { if (!groups.has(m[0])) groups.set(m[0], []); groups.get(m[0]).push([sp, [m[1], m[2]]]); } else rest.push(sp); }
+          await Promise.all([...groups.entries()].map(async ([file, list]) => { const bmp = await getChunk(file); if (!bmp) { list.forEach(([sp]) => rest.push(sp)); return; } for (const [sp, off] of list) cut(scene, bmp, sp, off); }));
+          dropChunksSoon();
+        } else rest.push(...todo);
+        // 2. anything that is not in a chunk: cut it out of the big sheet (slow path, only when the mons folder is missing or the table has new species)
+        if (rest.length) {
+          const bmp = await getBitmap();
+          log('sheet decoded', bmp.width + 'x' + bmp.height, '- cutting', rest.join(', '));
+          for (const sp of rest) { cut(scene, bmp, sp); if (rest.length > 1) await new Promise(r => requestAnimationFrame ? requestAnimationFrame(() => r()) : setTimeout(r, 16)); }
+        }
         evict(scene, new Set(want));   // what was just asked for is never dropped (the cap is soft for one request)
         return true;
       } catch (err) { warn('could not load the overworld sheet: ' + err.message); return false; }
@@ -110,7 +140,7 @@
   function touch(sp) { const e = S.ent.get(sp); if (e) e.last = ++S.tick; }
 
   const API = {
-    log: true,
+    log: true, dir: 'graphics/overworld/mons/',
     get max() { return S.max; }, set max(n) { S.max = Math.max(1, n | 0); },
     ensure,
     ensureNames: (scene, names) => ensure(scene, (names || []).map(nameToKey).filter(Boolean)),
