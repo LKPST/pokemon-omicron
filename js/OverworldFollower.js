@@ -171,15 +171,18 @@
     }
     const moving = mv > 0.05 && !F.wasHidden, step = moving ? Math.floor(F.trav / 12) % 2 : 0;
     window.OWSprites.setFrame(s, F.dir, step, F.shiny);
-    let hop = 0; if (F.hop) { const k = (scene.time.now - F.hop.t0) / F.hop.dur; if (k >= 1) F.hop = null; else hop = Math.abs(Math.sin(k * Math.PI * 2)) * 9; }
+    let hop = 0; if (F.hop) { const k = (scene.time.now - F.hop.t0) / F.hop.dur; if (k >= 1) F.hop = null; else hop = Math.abs(Math.sin(k * Math.PI * (F.hop.n || 2))) * (F.hop.h || 9); }
     s.setPosition(Math.round(x), Math.round(y + F.offsetY - (step ? 1 : 0) - hop));
     s.setDepth(y - 0.5);
     // not drawn while it still sits on the player's own tile right after a warp (it steps out when he moves)
     const dp = Math.hypot(x - p.x, y - p.y);
-    s.setVisible(dp > 6);
+    const shouldShow = dp > 6;
     s.setAlpha(1);
-    if (F.wantSpark && s.visible && startSpark(scene, s)) F.wantSpark = false;
+    // appearing: the sparkle plays first on the spot where the follower stands (it is still hidden), then it shows up with one little hop in place
+    if (F.wantSpark && shouldShow && startSpark(scene, s)) { F.wantSpark = false; F.holding = true; }
+    s.setVisible(F.holding ? false : shouldShow);
     tickSpark(scene, s);
+    if (F.holding && !F.fx) { F.holding = false; s.setVisible(shouldShow); F.hop = { t0: scene.time.now, dur: 380, n: 1, h: 14 }; }
   };
 
   // ---- talk to it: Z while it stands next to the player (any side). It turns to the player, hops, a heart pops up, a short message.
