@@ -562,6 +562,8 @@ class OverworldScene extends Phaser.Scene {
     this.scriptRunning = false;   // [SCRIPTS]
     this.scriptEndedAt = 0;
     this.camMoved = false;
+    this.playerDest = null;
+    this._musicLoading = {};
   }
 
   preload() {
@@ -589,9 +591,8 @@ class OverworldScene extends Phaser.Scene {
 
     if (window.OverworldMaps) {
       for (const [mKey, mapData] of Object.entries(window.OverworldMaps)) {
-        if (mapData.music) {
-          this.load.audio(`map_music_${mapData.music}`, mapData.music);
-        }
+        // [SPEED] the music (a few MB of mp3 that must also be decoded) is no longer loaded here: the map would not appear before it was
+        // downloaded. updateMapMusic() loads the track of the current map AFTER the scene is on screen, and only when a map needs it.
 
         if (mapData.events) {
           for (const [eKey, eventData] of Object.entries(mapData.events)) {
@@ -688,12 +689,24 @@ class OverworldScene extends Phaser.Scene {
       callback: () => this.updateNPCMovement(),
     });
 
+    this.showMapBanner();                       // [BANNER]
+    if (window.OWWarm) window.OWWarm.start();   // [SPEED] warm the menu / party pictures in the background
+
     // [NEW] safety net: if the music stopped for any reason, start it again
     this.time.addEvent({
       delay: 1000,
       loop: true,
       callback: () => this.updateMapMusic(this.currentMapKey),
     });
+  }
+
+  // [BANNER] the map-name banner (js/OverworldUI.js): once per map change, and when the game starts / a save is loaded.
+  // Not shown again when the scene restarts on the same map (coming back from a battle). `banner: false` in a map hides it there.
+  showMapBanner() {
+    const k = this.currentMapKey, m = this.currentMap;
+    if (!window.OWUI || !m || m.banner === false || window._lastBannerMap === k) return;
+    window._lastBannerMap = k;
+    this.time.delayedCall(350, () => { if (this.sys && this.sys.isActive() && this.currentMapKey === k) window.OWUI.banner(this, m.map || k); });
   }
 
   // ===========================================================================
@@ -725,7 +738,18 @@ class OverworldScene extends Phaser.Scene {
     window.currentGlobalMusic = null;
     window.currentGlobalMusicPath = null;
 
-    if (!this.cache.audio.exists(key)) return;
+    if (!this.cache.audio.exists(key)) {
+      // [SPEED] not loaded yet: fetch it in the background, then start it (the scene is already playable)
+      this._musicLoading = this._musicLoading || {};
+      if (!this._musicLoading[key] && this.load) {
+        this._musicLoading[key] = true;
+        this.load.audio(key, path);
+        this.load.once('filecomplete-audio-' + key, () => { this._musicLoading[key] = false; if (this.sys && this.sys.isActive()) this.updateMapMusic(this.currentMapKey); });
+        this.load.once('loaderror', () => { this._musicLoading[key] = false; });
+        if (!this.load.isLoading()) this.load.start();
+      }
+      return;
+    }
 
     this.sound.pauseOnBlur = false;   // keep playing when the tab loses focus
     const snd = this.sound.add(key, { loop: true, volume: 0.5 });
@@ -1284,7 +1308,11 @@ class OverworldScene extends Phaser.Scene {
     const maxX = baseX + Math.floor(fp.w / 2);
     const minY = baseY - (fp.h - 1);
 
-    return worldTX >= minX && worldTX <= maxX && worldTY >= minY && worldTY <= baseY;
+    if (worldTX >= minX && worldTX <= maxX && worldTY >= minY && worldTY <= baseY) return true;
+    // a walking NPC also holds the tile it left and the tile it is walking onto (see movement_type.js), so the player can never share a tile with it
+    if (npc.dest && npc.dest.x === worldTX && npc.dest.y === worldTY) return true;
+    if (npc.src && npc.src.x === worldTX && npc.src.y === worldTY) return true;
+    return false;
   }
 
   isPassable(gridX, gridY) {
@@ -1368,6 +1396,7 @@ class OverworldScene extends Phaser.Scene {
 
     this.walkStep = this.walkStep === 1 ? 2 : 1;
     this.player.setFrame(window.getOverworldFrame(direction, this.walkStep));
+    this.playerDest = { x: Math.round((destX - 16) / 32), y: Math.round((destY - 16) / 32) };   // NPCs treat this tile as taken while the step lasts
 
     this.tweens.add({
       targets: this.player,
@@ -1380,6 +1409,7 @@ class OverworldScene extends Phaser.Scene {
         this.player.setPosition(destX, destY);
         this.player.setFrame(window.getOverworldFrame(direction, 0));
         this.isMoving = false;
+        this.playerDest = null;
 
         this.logCurrentTileDetails(targetX, targetY, this.currentMapKey);
         if (onDone) onDone();
@@ -1389,7 +1419,7 @@ class OverworldScene extends Phaser.Scene {
   }
 
   tryInteract() {
-    if (!this.npcs || this.npcs.length === 0) return;
+    if (!this.npcs || this.npcs.length === 0) { if (window.OWFollower && window.OWFollower.interact) window.OWFollower.interact(this); return; }   // [FOLLOWER] Z next to it = talk to it
 
     let targetX = Math.round((this.player.x - 16) / 32);
     let targetY = Math.round((this.player.y - 16) / 32);
@@ -1407,6 +1437,8 @@ class OverworldScene extends Phaser.Scene {
       if (window.OverworldScriptEngine) {
         window.OverworldScriptEngine.runScript(this, scriptName);
       }
+    } else if (window.OWFollower && window.OWFollower.interact) {
+      window.OWFollower.interact(this);   // [FOLLOWER] nobody in front of the player: the Pokémon next to him answers
     }
   }
 
@@ -1498,6 +1530,7 @@ class OverworldScene extends Phaser.Scene {
 
     this.updateMapMusic(mapKey);
     if (this.weather) this.weather.set(this.currentMap.weather, false, mapKey);
+    this.showMapBanner();
 
     const off = this.getMapWorldOffset(mapKey);
     this.player.setPosition(Math.round(off.x + gx * 32 + 16), Math.round(off.y + gy * 32 + 16));
@@ -1788,6 +1821,7 @@ class OverworldScene extends Phaser.Scene {
     }
 
     this.updateMapMusic(this.currentMapKey);
+    this.showMapBanner();
 
     // Entering a map with different weather fades the old one out and the new one in
     if (this.weather) this.weather.set(this.currentMap.weather, false, this.currentMapKey);
@@ -1798,6 +1832,7 @@ class OverworldScene extends Phaser.Scene {
 
     this.walkStep = this.walkStep === 1 ? 2 : 1;
     this.player.setFrame(window.getOverworldFrame(direction, this.walkStep));
+    this.playerDest = { x: Math.round((destX - 16) / 32), y: Math.round((destY - 16) / 32) };   // NPCs treat this tile as taken while the step lasts
 
     this.tweens.add({
       targets: this.player,
@@ -1807,6 +1842,7 @@ class OverworldScene extends Phaser.Scene {
       onComplete: () => {
         this.player.setFrame(window.getOverworldFrame(direction, 0));
         this.isMoving = false;
+        this.playerDest = null;
         this.handleTriggers();
       }
     });
