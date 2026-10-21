@@ -315,22 +315,24 @@ function createSummary(env) {
     const maxPP = (x && x.maxPP) ?? ppMax ?? 20, cur = (x && x.currentPP) ?? maxPP;
     return { name: String(name).slice(0, 12), type: normType(type), pow, acc, ppMax: maxPP, pp: cur, desc: String(desc || '') };
   }
+  const MARK_KEYS = ['circle', 'triangle', 'square', 'heart', 'star', 'diamond'];   // saveData: markings: { circle, triangle, square, heart, star, diamond }
+  function markList(v) { if (Array.isArray(v)) return MARK_KEYS.map((k, i) => !!v[i]); if (v && typeof v === 'object') return MARK_KEYS.map(k => !!v[k]); return MARK_KEYS.map(() => false); }
   function buildMon(raw) {
     const sp = speciesInfo(raw.species), L = clamp(parseInt(raw.level) || 5, 1, 100), nat = NATURES[pretty(raw.nature) || 'Hardy'] || [0, 0];
-    const iv = [raw.ivhp, raw.ivatk, raw.ivdef, raw.ivspa, raw.ivspd, raw.ivspe].map(v => v ?? 15);
+    const iv = [raw.ivhp ?? raw.ivHP, raw.ivatk ?? raw.ivAttack, raw.ivdef ?? raw.ivDefense, raw.ivspa ?? raw.ivSpAttack, raw.ivspd ?? raw.ivSpDefense, raw.ivspe ?? raw.ivSpeed].map(v => v ?? 15);
     const calc = i => { const b = sp.b[i]; if (i === 0) return Math.floor((2 * b + iv[0]) * L / 100) + L + 10; const v = Math.floor((2 * b + iv[i]) * L / 100) + 5; return Math.floor(v * (nat[0] === i ? 1.1 : nat[1] === i ? .9 : 1)); };
     const stats = [raw.maxHP ?? calc(0), raw.Attack ?? calc(1), raw.Def ?? calc(2), raw.spattack ?? calc(3), (raw.sdpef ?? raw.spdef) ?? calc(4), raw.speed ?? calc(5)];
     const exp = raw.exp ?? L ** 3, expN = raw.expmax ?? (L + 1) ** 3;
     const g = String(raw.gender || '').toUpperCase(), tera = raw.teraType && raw.teraType !== 'TYPE_NONE' ? raw.teraType : '';
     const item = raw.heldItem && raw.heldItem !== 'ITEM_NONE' ? pretty(raw.heldItem) : '';
-    return { sp, rawSpecies: raw.species, species: sp.name, nick: String(raw.nickname || sp.name).slice(0, 10), dex: raw.natdexID ?? parseInt(sp.id, 10), types: sp.t, lv: L, stats, max: stats[0], hp: clamp(raw.HP ?? stats[0], 0, stats[0]),
+    return { sp, rawSpecies: raw.species, species: sp.name, nick: String(raw.nickname || sp.name).slice(0, 10), dex: (root.Dex && root.Dex.num && root.Dex.num(raw.species)) || raw.natdexID || parseInt(sp.id, 10), types: sp.t, lv: L, stats, max: stats[0], hp: clamp(raw.HP ?? stats[0], 0, stats[0]),
       natUp: nat[0], natDown: nat[1], nature: pretty(raw.nature) || 'Hardy', ability: pretty(raw.ability) || sp.abs[0] || '-', gender: g === 'MALE' || g === 'M' ? 'M' : g === 'FEMALE' || g === 'F' ? 'F' : '',
-      ball: (env.ballType ? env.ballType(raw.ballId) : BALL_BY_ID[raw.ballId]) || 'poke', item, tera, ot: raw.OTName || 'PLAYER', idno: String(raw.OTID ?? 0).padStart(5, '0'),
-      exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, ballId: raw.ballId, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown', status: String(raw.status || '').toLowerCase() };
+      ball: (env.ballType ? env.ballType(raw.ballId) : BALL_BY_ID[raw.ballId]) || 'poke', item, tera, ot: raw.OTName || 'PLAYER', idno: String((+raw.OTID || 0) % 100000).padStart(5, '0'),
+      exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, iv, marks: markList(raw.markings), contest: [raw.cool, raw.beauty, raw.cute, raw.smart, raw.tough].map(v => clamp(+v || 0, 0, 255)), sheen: clamp(+raw.sheen || 0, 0, 255), ribbons: Array.isArray(raw.ribbons) ? raw.ribbons.length : (+raw.ribbons || 0), ballId: raw.ballId, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown', status: String(raw.status || '').toLowerCase() };
   }
 
   // ------------------------------------------------ state
-  const S = { view: 'party', sel: 0, page: 0, mv: 0, mvMode: false, t: 0, rowT: 0, selT: 9, statP: 1, hpShown: [], party: [], tr: null, pg: null, menu: null, swap: -1, name: null };
+  const S = { view: 'party', sel: 0, page: 0, mv: 0, mvMode: false, t: 0, rowT: 0, selT: 9, statP: 1, hpShown: [], party: [], tr: null, pg: null, menu: null, swap: -1, name: null, pageT: 9, mvSwap: -1, mk: null, cask: null, iv: false, banner: null };
   function rebuild(keepHp) {
     warnings.clear();
     const old = S.hpShown, raws = (env.party ? env.party() : []).filter(Boolean).slice(0, 6);
@@ -341,7 +343,7 @@ function createSummary(env) {
     else { if (!TT.sheet) warnings.add('TypeTable has no sheet path'); for (const m of S.party) for (const ty of [...m.types, m.tera]) if (ty && !(TT.types && TT.types[ty] && TT.types[ty].icon)) warnings.add('no icon rect in TypeTable for ' + ty); }
     S.hpShown = S.party.map((m, i) => keepHp && old[i] !== undefined ? old[i] : 0);
     S.sel = Math.min(S.sel, Math.max(0, S.party.length - 1));
-    if (!keepHp) { S.bmsg = env.battle && env.battle.prompt ? { text: env.battle.prompt, t: 0, dur: 3 } : null; S.menu = null; S.swap = -1; S.name = null; S.rowT = 0; S.statP = 0; S.view = 'party'; S.tr = null; S.pg = null; S.page = 0; S.mvMode = false; }
+    if (!keepHp) { S.bmsg = env.battle && env.battle.prompt ? { text: env.battle.prompt, t: 0, dur: 3 } : null; S.menu = null; S.swap = -1; S.name = null; S.rowT = 0; S.statP = 0; S.view = env.catchMode ? 'summary' : 'party'; S.tr = null; S.pg = null; S.page = 0; S.mvMode = false; S.banner = env.catchMode ? { text: env.catchMode.banner || 'Registered in the POKéDEX!', t: 0 } : null; }
   }
   function reset() { imgs.clear(); }
 
@@ -522,10 +524,11 @@ function createSummary(env) {
     if (N.mode === 'monraw') { if (env.nameDone) env.nameDone(txt); return; }
     if (env.rename) env.rename(N.mi, txt);
     const m = S.party[N.mi]; if (m) m.nick = txt || m.species;
+    if (env.catchMode) { if (env.catchMode.done) env.catchMode.done(txt || null); return; }
     go('party');
   }
   function nameCancel() {
-    const N = S.name; if (N.mode === 'mon') { go('party'); return; }
+    const N = S.name; if (N.mode === 'mon') { if (env.catchMode) { if (env.catchMode.done) env.catchMode.done(null); return; } go('party'); return; }
     if (N.allowCancel && env.nameDone) env.nameDone(null);
   }
   function namePressCell() {
@@ -647,8 +650,8 @@ function createSummary(env) {
     }
   }
 
-  // ------------------------------------------------ SUMMARY view
-  const PAGE_TITLE = ['POKéMON INFO', 'POKéMON SKILLS', 'KNOWN MOVES'], PW = 134;
+  // ------------------------------------------------ SUMMARY view (dark glass panels over the animated background)
+  const PAGE_TITLE = ['POKéMON INFO', 'POKéMON SKILLS', 'KNOWN MOVES', 'CONTEST DATA'], NPAGES = 4, PW = 134;
   function ring(c, x0, y0, rot, col) {
     const R = 33; c.fillStyle = col;
     for (let dy = -R; dy <= R; dy++) {
@@ -662,62 +665,118 @@ function createSummary(env) {
       if (wi < 0) c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo * 2), 1); else { c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo - wi), 1); c.fillRect(Math.round(x0 + wi), y0 + dy, Math.round(wo - wi), 1); }
     }
   }
+
+  // markings: six little shapes (lit when the Pokémon has the mark)
+  const MARK_PAT = [
+    ['..###..', '.#####.', '#######', '#######', '#######', '.#####.', '..###..'],
+    ['...#...', '..###..', '..###..', '.#####.', '.#####.', '#######', '#######'],
+    ['#######', '#######', '#######', '#######', '#######', '#######', '#######'],
+    ['.##.##.', '#######', '#######', '#######', '.#####.', '..###..', '...#...'],
+    ['...#...', '...#...', '#######', '.#####.', '..###..', '.##.##.', '.#...#.'],
+    ['...#...', '..###..', '.#####.', '#######', '.#####.', '..###..', '...#...'],
+  ], MARK_COL = ['#ff7a7a', '#7ab8ff', '#a8f08a', '#ff9ad0', '#ffe27a', '#c8a0ff'];
+  function markIcon(c, k, x, y, on) {
+    c.fillStyle = on ? MARK_COL[k] : 'rgba(182,192,230,.26)';
+    MARK_PAT[k].forEach((r, j) => { for (let i = 0; i < 7; i++) if (r[i] === '#') c.fillRect(x + i, y + j, 1, 1); });
+    if (on) { c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(x + 2, y + 2, 1, 1); }
+  }
+  const ivOn = () => !!(env.ivEnabled && env.ivEnabled());
+  // a row that fades / slides in a little after the page opens
+  function rv(c, i, fn) { const k = ease(clamp((S.pageT - i * .05) / .22)); if (k <= 0) return; c.save(); c.globalAlpha = k; c.translate(Math.round((1 - k) * 10), 0); fn(); c.restore(); }
+  const CONDS = [['Cool', '#ff6a5a'], ['Beauty', '#6ab0ff'], ['Cute', '#ff8ac8'], ['Smart', '#7fe08a'], ['Tough', '#ffd05a']];
   function drawSummary(c) {
     const m = S.party[S.sel]; if (!m) return;
-    pill(c, 4, 3, 232, 15, '#6a1226'); pill(c, 4, 2, 232, 15, '#1c1c28');
-    const showPage = S.pg && S.pg.p < .5 ? S.pg.from : S.page; T(c, PAGE_TITLE[showPage], 12, 5, 'white');
-    T(c, '/left/', 183, 5, S.page > 0 ? 'white' : 'mute'); T(c, '/right/', 226, 5, S.page < 2 ? 'white' : 'mute');
-    for (let i = 0; i < 3; i++) { const on = i === S.page, pulse = on && Math.sin(S.t * 7) > 0; pill(c, 194 + i * 11, 6, 9, 6, on ? (pulse ? '#ffffff' : '#d8dcff') : '#5a5e7c', 3); }
-    pill(c, 4, 22, 90, 136, '#9aa6cc'); pill(c, 4, 21, 90, 136, '#ffffff', 8);
-    c.save(); c.beginPath(); c.rect(4, 21, 90, 86); c.clip(); pill(c, 4, 21, 90, 136, '#e6ecf9', 8); ring(c, 49, 60, S.t * .3, '#ffffff'); c.restore();
-    ell(c, 49, 100, 26, 4, '#c4cfee');
+    // header
+    chamfer(c, 4, 3, 232, 15, GLASS2, ACC, 3); rect(c, 8, 16, 224, 1, 'rgba(77,227,209,.40)');
+    const showPage = S.pg && S.pg.p < .5 ? S.pg.from : S.page, ban = S.banner && S.banner.t < 3.2 ? S.banner : null;
+    if (ban) { const pulse = .5 + .5 * Math.sin(S.t * 6); T(c, ban.text, 12, 5, pulse > .5 ? 'gold' : 'white'); } else T(c, PAGE_TITLE[showPage], 12, 5, 'white');
+    T(c, '/left/', 164, 5, S.page > 0 ? 'cyan' : 'dim'); T(c, '/right/', 226, 5, S.page < NPAGES - 1 ? 'cyan' : 'dim');
+    for (let i = 0; i < NPAGES; i++) { const on = i === S.page, pulse = on && Math.sin(S.t * 7) > 0; pill(c, 176 + i * 12, 7, 9, 5, on ? (pulse ? '#ffffff' : ACC) : 'rgba(150,160,200,.35)', 2); }
+    // left panel: the Pokémon
+    chamfer(c, 4, 22, 90, 136, GLASS, EDGE, 5); brackets(c, 4, 22, 90, 136, ACC, 8);
+    c.save(); c.beginPath(); c.rect(6, 24, 86, 84); c.clip(); c.globalAlpha = .13; ring(c, 49, 62, S.t * .3, '#ffffff'); c.restore();
+    ell(c, 49, 102, 25, 4, 'rgba(0,0,0,.38)');
     const pp = clamp(S.selT / .3), sc = pp < 1 ? backOut(pp) : 1, bob = Math.sin(S.t * 3.2) > 0 ? 1 : 0;
     drawSprite(c, m, 49, 100 - bob, 76, 72, Math.max(.2, sc), S.selT < .09 ? .85 : 0);
-    const nx = T(c, m.nick, 10, 110, 'dark'); if (m.shiny) star(c, nx + 2, 112); genderGlyph(c, m.gender, 88, 110);
-    T(c, '{Lv}' + m.lv, 10, 124, 'dark'); ballIcon(c, m, 70, 119);
-    badges(c, m.types, 8, 141);
-    pill(c, 98, 22, 138, 136, '#9aa6cc'); pill(c, 98, 21, 138, 136, '#fafbff', 8);
-    c.save(); c.beginPath(); c.rect(100, 23, PW, 132); c.clip();
+    const nx = T(c, m.nick, 10, 110, m.shiny ? 'gold' : 'white'); if (m.shiny) star(c, nx + 2, 112); genderGlyph(c, m.gender, 88, 110);
+    T(c, '{Lv}' + m.lv, 10, 124, 'dim'); ballIcon(c, m, 70, 119);
+    rect(c, 10, 137, 78, 1, 'rgba(77,227,209,.30)');
+    for (let i = 0; i < 6; i++) markIcon(c, i, 12 + i * 13, 143, !!(m.marks && m.marks[i]));
+    // right panel: the pages
+    chamfer(c, 98, 22, 138, 136, GLASS, EDGE, 5); brackets(c, 98, 22, 138, 136, ACC, 8);
+    c.save(); c.beginPath(); c.rect(100, 24, PW, 132); c.clip();
     if (S.pg) {
       const p = ease(clamp(S.pg.p)), d = S.pg.to > S.pg.from ? 1 : -1;
       c.save(); c.translate(Math.round(-d * p * PW), 0); drawPage(c, S.pg.from, m); c.restore();
       c.save(); c.translate(Math.round(d * (1 - p) * PW), 0); drawPage(c, S.pg.to, m); c.restore();
     } else drawPage(c, S.page, m);
     c.restore();
+    if (S.mk) drawMarkEdit(c, m);
+    if (S.cask) drawCatchAsk(c, m);
+  }
+  function drawMarkEdit(c, m) {
+    const k = ease(clamp((S.t - S.mk.t) / .15)), bw = 118, bh = 46, bx = 61, by = Math.round(58 + (1 - k) * 8);
+    c.fillStyle = `rgba(0,0,10,${.45 * k})`; c.fillRect(0, 0, W, H);
+    chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.95)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
+    T(c, 'MARKINGS', bx + Math.round((bw - tw('MARKINGS')) / 2), by + 5, 'cyan');
+    for (let i = 0; i < 6; i++) { const x = bx + 11 + i * 17, y = by + 20, on = i === S.mk.i; if (on) selector(c, x - 4, y - 4, 15, 15, .5 + .5 * Math.sin(S.t * 5)); markIcon(c, i, x, y, !!m.marks[i]); }
+  }
+  function drawCatchAsk(c, m) {
+    const k = ease(clamp((S.t - S.cask.t) / .18)); c.fillStyle = `rgba(0,0,10,${.55 * k})`; c.fillRect(0, 0, W, H);
+    const bw = 190, bh = 62, bx = 25, by = Math.round(48 + (1 - k) * 10);
+    chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.95)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
+    const q = 'Give a nickname to ' + m.species + '?'; T(c, q, bx + Math.round((bw - tw(q)) / 2), by + 9, 'white');
+    ['YES', 'NO'].forEach((lb, i) => { const bxx = bx + 34 + i * 70, on = S.cask.i === i; chamfer(c, bxx, by + 32, 52, 17, on ? 'rgba(77,227,209,.24)' : GLASS2, on ? '#bffcf3' : EDGE, 3); if (on) selector(c, bxx, by + 32, 52, 17, .5 + .5 * Math.sin(S.t * 5)); T(c, lb, bxx + Math.round((52 - tw(lb)) / 2), by + 34, on ? 'white' : 'dim'); });
   }
   function drawPage(c, idx, m) {
-    const x0 = 106, dot = y => { for (let x = 104; x < 230; x += 4) rect(c, x, y, 2, 1, '#c2cae6'); };
+    const x0 = 106, W2 = 122, div = y => { for (let x = 104; x < 232; x += 4) rect(c, x, y, 2, 1, 'rgba(127,243,228,.28)'); }, hint = t => T(c, t, x0, 147, 'dim');
     if (idx === 0) {
-      const rows = [['{No}', String(m.dex).padStart(3, '0')], ['Name', m.species], ['Type'], ['Tera'], ['OT', m.ot], ['{ID}No.', m.idno], ['Item', m.item || 'None']].filter(r => r[0] !== 'Tera' || m.tera);
-      const step = rows.length > 6 ? 13 : 14;
-      rows.forEach((r, i) => {
-        const y = 26 + i * step; T(c, r[0], x0, y, 'mute');
-        if (r[0] === 'Type') badges(c, m.types, x0 + 42, y - 2); else if (r[0] === 'Tera') badges(c, [m.tera], x0 + 42, y - 2); else T(c, r[1], x0 + 42, y, 'dark');
-      });
-      const yd = 26 + rows.length * step + 3; dot(yd);
-      wrapText(`${m.nature} nature. Met at ${m.place}.`, 21).slice(0, 2).forEach((ln, i) => T(c, ln, x0, yd + 5 + i * 13, 'dark'));
+      const rows = [['{No}', String(m.dex).padStart(3, '0'), 'cyan'], ['Name', m.species], ['Type'], ['Tera'], ['OT', m.ot], ['{ID}No.', m.idno], ['Item', m.item || 'None', m.item ? 'white' : 'dim']];
+      rows.forEach((r, i) => rv(c, i, () => {
+        const y = 27 + i * 13; T(c, r[0], x0, y, 'dim');
+        if (r[0] === 'Type') badges(c, m.types, x0 + 42, y - 2);
+        else if (r[0] === 'Tera') { if (m.tera) badges(c, [m.tera], x0 + 42, y - 2); else T(c, '---', x0 + 42, y, 'dim'); }
+        else T(c, r[1], x0 + 42, y, r[2] || 'white');
+      }));
+      rv(c, 7, () => { div(118); wrapText(`${m.nature} nature. Met at ${m.place}.`, 21).slice(0, 2).forEach((ln, i) => T(c, ln, x0, 122 + i * 11, 'white')); });
+      if (!env.battle) rv(c, 8, () => hint('A: marks'));
     } else if (idx === 1) {
-      const names = ['HP', 'Attack', 'Defense', 'Sp.Atk', 'Sp.Def', 'Speed'], cols = ['#4cc860', '#e85a4c', '#e8a43c', '#4c8ce8', '#58c8b8', '#d868c8'], cap = 50 + m.lv * 4;
-      names.forEach((n, i) => {
-        const y = 25 + i * 12; T(c, n, x0, y, i && i === m.natUp ? 'red' : i && i === m.natDown ? 'blue' : 'mute');
-        rect(c, x0 + 44, y + 3, 44, 4, '#d6dcf0'); rect(c, x0 + 44, y + 3, Math.round(44 * clamp(m.stats[i] / cap) * S.statP), 4, cols[i]);
-        TR(c, i === 0 ? `${m.hp}/${m.max}` : String(m.stats[i]), x0 + 124, y, 'dark');
+      const names = ['HP', 'Attack', 'Defense', 'Sp.Atk', 'Sp.Def', 'Speed'], cols = ['#4cc860', '#e85a4c', '#e8a43c', '#4c8ce8', '#58c8b8', '#d868c8'], cap = 50 + m.lv * 4, iv = S.iv && ivOn();
+      names.forEach((n, i) => rv(c, i, () => {
+        const y = 26 + i * 12; T(c, n, x0, y, i && i === m.natUp ? 'red' : i && i === m.natDown ? 'blue' : 'dim');
+        rect(c, x0 + 44, y + 3, 48, 4, 'rgba(255,255,255,.14)'); const f = iv ? m.iv[i] / 31 : clamp(m.stats[i] / cap); rect(c, x0 + 44, y + 3, Math.round(48 * f * S.statP), 4, cols[i]); rect(c, x0 + 44, y + 3, Math.round(48 * f * S.statP), 1, 'rgba(255,255,255,.35)');
+        if (iv) { const v = m.iv[i]; TR(c, String(v), x0 + 124, y, v >= 31 ? 'gold' : v === 0 ? 'blue' : 'white'); T(c, 'IV', x0 + 96, y, 'dim'); }
+        else TR(c, i === 0 ? `${m.hp}/${m.max}` : String(m.stats[i]), x0 + 124, y, 'white');
+      }));
+      rv(c, 6, () => div(99));
+      rv(c, 7, () => { T(c, 'Ability', x0, 103, 'dim'); T(c, m.ability, x0 + 50, 103, 'white'); });
+      rv(c, 8, () => { T(c, 'Exp.', x0, 115, 'dim'); TR(c, String(m.exp), x0 + 124, 115, 'white'); });
+      rv(c, 9, () => { T(c, 'Next Lv.', x0, 127, 'dim'); TR(c, String(Math.max(0, m.expN - m.exp)), x0 + 124, 127, 'white'); });
+      const fr = clamp(m.exp / Math.max(1, m.expN)) * S.statP; rect(c, x0, 140, 124, 4, 'rgba(255,255,255,.14)'); rect(c, x0, 140, Math.round(124 * fr), 4, '#4c8ce8'); rect(c, x0, 140, Math.round(124 * fr), 1, 'rgba(255,255,255,.35)');
+      if (ivOn()) rv(c, 10, () => hint(iv ? 'A: stats' : 'A: IVs'));
+    } else if (idx === 2) {
+      const n = m.moves.length;
+      for (let i = 0; i < 4; i++) rv(c, i, () => {
+        const y = 25 + i * 24, mo = m.moves[i], on = S.mvMode && i === S.mv, sw = S.mvSwap === i;
+        chamfer(c, x0 - 3, y - 1, 128, 22, sw ? 'rgba(255,226,122,.20)' : on ? 'rgba(77,227,209,.18)' : 'rgba(10,18,44,.45)', sw ? '#ffe27a' : on ? '#bffcf3' : 'rgba(77,227,209,.18)', 3);
+        if (on) brackets(c, x0 - 5, y - 3, 132, 26, '#ffffff', 4);
+        if (!mo) { T(c, '-', x0 + 44, y + 6, 'dim'); return; }
+        badge(c, mo.type, x0, y + 4); T(c, mo.name, x0 + 44, y + 1, 'white');
+        T(c, '{PP}', x0 + 44, y + 12, 'dim'); T(c, ` ${mo.pp}/${mo.ppMax}`, x0 + 44 + advOf('PP'), y + 12, mo.pp === 0 ? 'red' : 'white');
+        TR(c, mo.pow ? 'Pwr' + mo.pow : '---', x0 + 120, y + 12, 'dim');
       });
-      dot(100);
-      T(c, 'Ability', x0, 105, 'mute'); T(c, m.ability, x0 + 50, 105, 'dark');
-      T(c, 'Exp.', x0, 118, 'mute'); TR(c, String(m.exp), x0 + 124, 118, 'dark');
-      T(c, 'Next Lv.', x0, 131, 'mute'); TR(c, String(Math.max(0, m.expN - m.exp)), x0 + 124, 131, 'dark');
-      const fr = clamp(m.exp / Math.max(1, m.expN)) * S.statP; rect(c, x0, 145, 124, 4, '#d6dcf0'); rect(c, x0, 145, Math.round(124 * fr), 4, '#4c8ce8');
+      rv(c, 4, () => { const cur = m.moves[S.mv] || m.moves[0]; if (cur) wrapText(cur.desc, 21).slice(0, 2).forEach((ln, i) => T(c, ln, x0, 123 + i * 11, 'white')); });
+      rv(c, 5, () => hint(!S.mvMode ? 'A: edit moves' : S.mvSwap >= 0 ? 'A: swap here  B: back' : (env.battle || n < 2 ? 'B: back' : 'A: pick  B: back')));
     } else {
-      for (let i = 0; i < 4; i++) {
-        const y = 25 + i * 24, mo = m.moves[i], on = S.mvMode && i === S.mv, k = on ? 'white' : 'dark', km = on ? 'white' : 'mute';
-        if (on) pill(c, x0 - 3, y - 1, 128, 22, '#1c1c28', 6); else rect(c, x0, y + 22, 122, 1, '#e0e5f4');
-        if (!mo) { T(c, '-', x0 + 44, y + 6, km); continue; }
-        badge(c, mo.type, x0, y + 4); T(c, mo.name, x0 + 44, y + 1, k);
-        T(c, '{PP}', x0 + 44, y + 12, km); T(c, ` ${mo.pp}/${mo.ppMax}`, x0 + 44 + advOf('PP'), y + 12, k);
-        TR(c, mo.pow ? 'Pwr' + mo.pow : '---', x0 + 122, y + 12, km);
-      }
-      dot(122); const cur = m.moves[S.mv] || m.moves[0]; if (cur) wrapText(cur.desc, 21).slice(0, 2).forEach((ln, i) => T(c, ln, x0, 127 + i * 13, 'dark'));
+      CONDS.forEach(([nm, col], i) => rv(c, i, () => {
+        const y = 27 + i * 14, v = m.contest[i]; T(c, nm, x0, y, 'dim');
+        rect(c, x0 + 44, y + 3, 56, 5, 'rgba(255,255,255,.14)'); rect(c, x0 + 44, y + 3, Math.round(56 * (v / 255) * S.statP), 5, col); rect(c, x0 + 44, y + 3, Math.round(56 * (v / 255) * S.statP), 1, 'rgba(255,255,255,.4)');
+        TR(c, String(v), x0 + 124, y, 'white');
+      }));
+      rv(c, 5, () => { const y = 27 + 5 * 14 + 2; T(c, 'Sheen', x0, y, 'dim'); rect(c, x0 + 44, y + 3, 56, 5, 'rgba(255,255,255,.14)'); rect(c, x0 + 44, y + 3, Math.round(56 * (m.sheen / 255) * S.statP), 5, '#e8e8f8'); TR(c, String(m.sheen), x0 + 124, y, 'white'); });
+      rv(c, 6, () => div(114));
+      rv(c, 7, () => { const best = m.contest.reduce((a, v, i) => v > m.contest[a] ? i : a, 0); T(c, 'Best', x0, 119, 'dim'); if (m.contest[best] > 0) T(c, CONDS[best][0], x0 + 44, 119, 'gold'); else T(c, 'None yet', x0 + 44, 119, 'dim'); });
+      rv(c, 8, () => { T(c, 'Ribbons', x0, 132, 'dim'); TR(c, String(m.ribbons), x0 + 124, 132, m.ribbons ? 'gold' : 'dim'); });
     }
   }
 
@@ -744,32 +803,49 @@ function createSummary(env) {
     if (!opt.cries) return; const m = S.party[S.sel]; if (!m || !m.cry) return;
     try { const u = urlFor(m.cry); if (!u) return; const a = new Audio(u); a.volume = .6; a.play().catch(() => {}); } catch (e) { /* no sound */ }
   }
-  function select(i) { if (i === S.sel) return; S.sel = i; S.selT = 0; S.statP = 0; cry(); }
-  function setPage(p) { p = clamp(p, 0, 2); if (p === S.page) return; S.pg = { from: S.page, to: p, p: 0 }; S.page = p; S.statP = 0; S.mvMode = false; }
-  function go(v) { S.tr = { from: S.view, to: v, p: 0 }; S.mvMode = false; if (v === 'summary') { S.page = 0; S.pg = null; S.statP = 0; S.selT = 0; cry(); } }
+  function select(i) { if (i === S.sel) return; S.sel = i; S.selT = 0; S.statP = 0; S.pageT = 0; S.mvMode = false; S.mvSwap = -1; cry(); }
+  function setPage(p) { p = clamp(p, 0, NPAGES - 1); if (p === S.page) return; S.pg = { from: S.page, to: p, p: 0 }; S.page = p; S.statP = 0; S.pageT = 0; S.mvMode = false; S.mvSwap = -1; }
+  function go(v) { S.tr = { from: S.view, to: v, p: 0 }; S.mvMode = false; if (v === 'summary') { S.page = 0; S.pg = null; S.statP = 0; S.selT = 0; S.pageT = 0; S.mvSwap = -1; cry(); } }
   function press(k) {
     if (S.view === 'name' && !S.tr) { nameKeyPress(k); return; }
     if (S.tr || !S.party.length) { if (k === 'b' && !S.tr && env.onExit) env.onExit(); return; }
     const n = S.party.length;
     if (S.view === 'party') partyPress(k);
     else {
-      if (S.mvMode) { if (k === 'up') S.mv = (S.mv + 3) % 4; else if (k === 'down') S.mv = (S.mv + 1) % 4; else if (k === 'b' || k === 'left') S.mvMode = false; return; }
+      if (S.cask) { if (k === 'left' || k === 'right' || k === 'up' || k === 'down') S.cask.i = 1 - S.cask.i; else if (k === 'a') catchAnswer(S.cask.i === 0); else if (k === 'b') catchAnswer(false); return; }
+      if (S.mk) { const m = S.party[S.sel]; if (k === 'left') S.mk.i = (S.mk.i + 5) % 6; else if (k === 'right') S.mk.i = (S.mk.i + 1) % 6; else if (k === 'a') { m.marks[S.mk.i] = !m.marks[S.mk.i]; try { env.setMarks && env.setMarks(S.sel, m.marks.slice()); } catch (e) { /* host error */ } } else if (k === 'b') S.mk = null; return; }
+      const m = S.party[S.sel];
+      if (S.mvMode) {
+        const nm = Math.max(1, m.moves.length);
+        if (k === 'up') S.mv = (S.mv + nm - 1) % nm; else if (k === 'down') S.mv = (S.mv + 1) % nm;
+        else if (k === 'a') {   // A (Z / Space): pick a move, then pick the place to swap it with
+          if (env.battle || m.moves.length < 2) return;
+          if (S.mvSwap < 0) S.mvSwap = S.mv; else { if (S.mvSwap !== S.mv) { const a = S.mvSwap, b = S.mv; [m.moves[a], m.moves[b]] = [m.moves[b], m.moves[a]]; try { env.swapMoves && env.swapMoves(S.sel, a, b); } catch (e) { /* host error */ } } S.mvSwap = -1; }
+        } else if (k === 'b' || k === 'left') { if (S.mvSwap >= 0) S.mvSwap = -1; else S.mvMode = false; }
+        return;
+      }
       if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n);
       else if (k === 'left') setPage(S.page - 1); else if (k === 'right') setPage(S.page + 1);
-      else if (k === 'a' && S.page === 2) { S.mvMode = true; S.mv = 0; } else if (k === 'b') go('party');
+      else if (k === 'a') { if (S.page === 2) { S.mvMode = true; S.mv = 0; S.mvSwap = -1; } else if (S.page === 0 && !env.battle) S.mk = { i: 0, t: S.t }; else if (S.page === 1 && ivOn()) S.iv = !S.iv; }
+      else if (k === 'b') { if (env.catchMode) S.cask = { i: 0, t: S.t }; else go('party'); }
     }
+  }
+  function catchAnswer(yes) {
+    S.cask = null; const m = S.party[S.sel], C = env.catchMode;
+    if (!yes) { if (C && C.done) C.done(null); return; }
+    startName({ mode: 'mon', mi: S.sel, mon: m, title: 'NICKNAME?', max: 10, initial: '', orig: m.nick, gender: m.gender, allowEmpty: true, fromParty: true }); go('name');
   }
   function click(x, y) {     // x, y in 240x160 screen pixels
     if (S.tr) return;
     if (S.view === 'name') { nameClick(x, y); return; }
     if (S.view === 'party' && S.menu) { const R = menuRect(); if (x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h) { const i = Math.floor((y - R.y - 4) / MENU.rh); if (i >= 0 && i < S.menu.opts.length) { S.menu.i = i; menuDo(S.menu.opts[i]); } } else S.menu = null; return; }
     if (S.view === 'party') { const i = Math.floor((y - 3) / 26); if (x >= 8 && x <= 144 && i >= 0 && i < S.party.length && (y - 3) % 26 < 25) { if (i === S.sel) press('a'); else select(i); } }
-    else if (y < 18) { if (x >= 190) { const i = Math.floor((x - 194) / 11); if (i >= 0 && i < 3) setPage(i); } else press('b'); }
+    else if (y < 18) { if (x >= 172) { const i = Math.floor((x - 176) / 12); if (i >= 0 && i < NPAGES) setPage(i); } else press('b'); }
     else if (S.page === 2 && x >= 100 && y >= 24 && y < 122) { const i = Math.floor((y - 24) / 24); if (i < 4) { S.mvMode = true; S.mv = i; } }
   }
   function update(dt) {
     if (S.bmsg) { S.bmsg.t += dt; if (S.bmsg.t > S.bmsg.dur) S.bmsg = null; }
-    S.t += dt; S.rowT += dt; S.selT += dt; S.statP = Math.min(1, S.statP + dt / .6);
+    S.t += dt; S.rowT += dt; S.pageT += dt; if (S.banner) S.banner.t += dt; S.selT += dt; S.statP = Math.min(1, S.statP + dt / .6);
     if (S.tr) { S.tr.p += dt / .3; if (S.tr.p >= 1) { S.view = S.tr.to; S.tr = null; } }
     if (S.pg) { S.pg.p += dt / .22; if (S.pg.p >= 1) S.pg = null; }
     S.party.forEach((m, i) => { const cur = S.hpShown[i] || 0, d = m.hp - cur, st = Math.max(1, m.max * 7) * dt; S.hpShown[i] = Math.abs(d) <= st ? m.hp : cur + Math.sign(d) * st; });
@@ -800,6 +876,10 @@ function partyArray() { const gs = root.GameStateManager, p = gs && gs.saveData 
 function partyChanged() { try { if (root.SaveSystem && root.SaveSystem.touch) root.SaveSystem.touch('party'); } catch (e) { /* no save system */ } try { if (root.OWFollower) root.OWFollower.refresh(); } catch (e) { /* no follower */ } }
 const PokemonSummary = {
   active: false,
+  // IVs on the SKILLS page: shown (press A on that page to switch between stats and IVs) when this game flag is set, or always when IV_ALWAYS is true.
+  // Set it in a script (setflag FLAG_IV_VIEW) or in saveData.flags.FLAG_IV_VIEW.
+  IVFLAG: 'FLAG_IV_VIEW', IV_ALWAYS: false,
+  ivEnabled() { if (this.IV_ALWAYS) return true; const gs = root.GameStateManager, sv = (gs && gs.saveData) || {}; return !!(sv.flags && sv.flags[this.IVFLAG]); },
   isOpen() { return this.active; },
 
   open(scene, opts = {}) {
@@ -816,6 +896,9 @@ const PokemonSummary = {
       party: () => (nameOnly ? [] : gameParty()),
       swap: (i, j) => { const list = gameParty(), arr = partyArray(); if (!arr || !list[i] || !list[j]) return; const a = arr.indexOf(list[i]), b = arr.indexOf(list[j]); if (a < 0 || b < 0) return; [arr[a], arr[b]] = [arr[b], arr[a]]; partyChanged(); },
       rename: (i, txt) => { const m = gameParty()[i]; if (!m) return; m.nickname = txt; partyChanged(); },
+      swapMoves: (i, a, b) => { const m = gameParty()[i]; if (!m || !m.moves) return; [m.moves[a], m.moves[b]] = [m.moves[b], m.moves[a]]; partyChanged(); },
+      setMarks: (i, marks) => { const m = gameParty()[i]; if (!m) return; const o = {}; ['circle', 'triangle', 'square', 'heart', 'star', 'diamond'].forEach((k, j) => { o[k] = !!marks[j]; }); m.markings = o; partyChanged(); },
+      ivEnabled: () => PokemonSummary.ivEnabled(),
       nameDone: txt => { const nm = opts.name; this.close(); if (nm && nm.mode !== 'player' && nm.raw && txt !== null) { nm.raw.nickname = txt; partyChanged(); } if (nm && nm.onDone) nm.onDone(txt); },
       glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
       onExit: () => this.close(),
