@@ -6,6 +6,7 @@
   const q = new URLSearchParams(location.search).get('touch');
   const isTouch = q === '1' || (q !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
   if (!isTouch) return;
+  if (window.PMLayout && window.PMLayout.landscape) return;   // Layout.js draws the landscape controls
 
   const KEY = {
     up: ['ArrowUp', 'ArrowUp', 38], down: ['ArrowDown', 'ArrowDown', 40], left: ['ArrowLeft', 'ArrowLeft', 37], right: ['ArrowRight', 'ArrowRight', 39],
