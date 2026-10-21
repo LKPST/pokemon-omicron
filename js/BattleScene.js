@@ -1509,9 +1509,16 @@ class BattleScene extends Phaser.Scene {
       if (res.result === 'lose') healParty(sv);
       if (gsm) { gsm.lastBattle = res; if (typeof gsm.onBattleEnd === 'function') { try { gsm.onBattleEnd(res.result, res); } catch (e) { console.error('[BattleScene] onBattleEnd threw', e); } } }
     }
-    if (typeof d.onEnd === 'function') { try { d.onEnd(res); } catch (e) { console.error('[BattleScene] onEnd threw', e); } }
-    this.teardown();
-    if (!d.onEnd || d.returnScene) this.scene.start(d.returnScene || BattleScene.RETURN_SCENE, d.returnData);
+    const proceed = () => {
+      if (typeof d.onEnd === 'function') { try { d.onEnd(res); } catch (e) { console.error('[BattleScene] onEnd threw', e); } }
+      this.teardown();
+      if (!d.onEnd || d.returnScene) this.scene.start(d.returnScene || BattleScene.RETURN_SCENE, d.returnData);
+    };
+    // evolutions play right here (before going back to the map)
+    if (res && res.evolutions && res.evolutions.length && window.OWUI && window.OWUI.runEvolutions) {
+      try { window.removeEventListener('keydown', this.kd, true); } catch (e) { /* ignore */ }   // the battle's key handler would swallow the keys
+      try { window.OWUI.runEvolutions(this, proceed); } catch (e) { console.error('[BattleScene] evolution failed', e); proceed(); }
+    } else proceed();
   }
 
   teardown() {
