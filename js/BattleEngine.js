@@ -28,6 +28,7 @@ const BALL_FALLBACK = (() => { const o = {}; for (const e of 'POKEBALL:10 GREATB
 const NORM = s => String(s == null ? '' : s).toUpperCase().replace(/^(ABILITY|ITEM|MOVE|SPECIES|TYPE|NATURE)_/, '').replace(/[^A-Z0-9]/g, '');
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const imul = Math.imul;
+const SHINY_ODDS = 10;   // TESTING: 1 in 10 (normal: 4096)
 function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = imul(t ^ (t >>> 15), t | 1); t ^= t + imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const prettyKey = k => String(k || '').replace(/^(SPECIES|MOVE|TYPE|ABILITY|ITEM)_/, '').toLowerCase().split('_').map(w => w ? w[0].toUpperCase() + w.slice(1) : '').join(' ');
 const STATS = ['atk', 'def', 'spa', 'spd', 'spe'];
@@ -1094,7 +1095,11 @@ class Battle {
     if (!this.over && this.phase === 'moves') { this.phase = 'end'; this.endTurn(); }
     if (this.learnQueue.length && !this.pending) { const q = this.learnQueue[0]; this.pending = { type: 'learn', mon: q.mon.idx, move: q.move.key, name: q.move.name }; return; }
     if (!this.over && this.phase === 'end') {
-      const F = this.active(1); if (F.hp <= 0) { const nxt = this.sides[1].party.find(m => m.hp > 0); if (nxt) this.sendOut(1, nxt.idx); }
+      const F = this.active(1); if (F.hp <= 0) { const nxt = this.sides[1].party.find(m => m.hp > 0);
+        if (nxt) {
+          const P0 = this.active(0);   // trainer battle: "X is about to send out Y. Will you switch Pokémon?" (only if the player has another Pokémon to send)
+          if (this.kind === 'trainer' && !this.setDone && P0.hp > 0 && this.sides[0].party.some(m => m !== P0 && m.hp > 0)) { this.pending = { type: 'set', next: nxt.name, trainer: this.trainerName }; return; }
+          this.setDone = false; this.sendOut(1, nxt.idx); } }
       const P = this.active(0); if (P.hp <= 0 && !this.over) { if (this.alive(0).length) { this.pending = { type: 'switch', forced: true }; if (this.learnQueue.length) { } return; } }
       this.phase = 'idle'; }
     if (this.learnQueue.length && !this.pending) { const q = this.learnQueue[0]; this.pending = { type: 'learn', mon: q.mon.idx, move: q.move.key, name: q.move.name }; return; }
@@ -1308,6 +1313,8 @@ class Battle {
     this.msg('It won\'t have any effect.'); return false; }
 
   // =================================================================================================== public API for the screen + saving
+  answerSet(yes) { this.events = []; if (!this.pending || this.pending.type !== 'set') return this.events; this.setDone = true; if (yes) { this.pending = { type: 'switch', set: true }; return this.events; } this.pending = null; this.run(); return this.events; }
+  cancelSet() { this.events = []; if (this.pending && this.pending.type === 'switch' && this.pending.set) { this.pending = null; this.run(); } return this.events; }
   switchTo(idx) {
     this.events = []; const P = this.sides[0]; const M = P.party[idx];
     if (!this.pending || this.pending.type !== 'switch' || !M || M.hp <= 0 || idx === P.active && P.party[P.active].hp > 0) return this.events;
@@ -1339,7 +1346,7 @@ function makeMon(env, speciesKey, level, o) {
   let moves = o.moves; if (!moves && env.learn && env.learn.movesAt) moves = env.learn.movesAt(speciesKey, level);
   const mt = env.moves || {}; const getm = k => { if (mt.get) return mt.get(k); return mt[k]; };
   const mm = (moves || []).slice(-4).map(k => { const m = getm(k); const key = m ? Object.keys(mt).find(x => mt[x] === m) || k : k; const pp = m ? m.pp : 10; return { moveId: key, currentPP: pp, maxPP: pp }; });
-  return { species: speciesKey, nickname: o.nickname || '', level, exp: expForLevel(sp.growthRate, level), expmax: expForLevel(sp.growthRate, level + 1), isShiny: o.shiny != null ? o.shiny : R(4096) === 0, gender,
+  return { species: speciesKey, nickname: o.nickname || '', level, exp: expForLevel(sp.growthRate, level), expmax: expForLevel(sp.growthRate, level + 1), isShiny: o.shiny != null ? o.shiny : R(SHINY_ODDS) === 0, gender,
     HP: maxHP, maxHP, Attack: calcStat(sp.baseAttack || 50, I.Attack, 0, level, nm.atk), Def: calcStat(sp.baseDefense || 50, I.Defense, 0, level, nm.def), spattack: calcStat(sp.baseSpAttack || 50, I.SpAttack, 0, level, nm.spa), sdpef: calcStat(sp.baseSpDefense || 50, I.SpDefense, 0, level, nm.spd), speed: calcStat(sp.baseSpeed || 50, I.Speed, 0, level, nm.spe),
     ivHP: I.HP, ivAttack: I.Attack, ivDefense: I.Defense, ivSpAttack: I.SpAttack, ivSpDefense: I.SpDefense, ivSpeed: I.Speed, nature: pn, ability, heldItem: o.item || '', moves: mm, OTName: '', OTID: 0, caughtloc: o.loc || '', ballId: 0,
     teraType: o.teraType || (() => { const tp = [sp.type1, sp.type2].filter(t => t && t !== 'TYPE_NONE'); return tp.length ? tp[R(tp.length)] : 'TYPE_NORMAL'; })() }; }   // like the games: a random one of its own types
