@@ -21,7 +21,7 @@
 (function () {
   'use strict';
   const W = {
-    enabled: true, fit: true, max: 15, log: true, shinyOdds: 10,   /* TESTING: 1 in 10 (normal: 4096) */ fill: 0.25, spawnEvery: 1200, safeRadius: 3, margin: 3, walkMs: 420,
+    enabled: true, fit: true, max: 15, log: true, shinyOdds: 4096,   /* TESTING: 1 in 10 (normal: 4096) */ fill: 0.25, spawnEvery: 1200, safeRadius: 3, margin: 3, walkMs: 420,
     hours: { dawn: [4, 6], morning: [6, 12], afternoon: [12, 18] },
     saved: {}, keepMs: 300000, scene: null, mapKey: null, grass: new Set(), mons: [], loading: 0, nextSpawn: 0, busy: false, why: '', list: [], lastBucket: '', warned: {},
   };
