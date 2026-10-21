@@ -50,8 +50,8 @@ const TOKENS = { Lv: 'Lv', PP: 'PP', ID: 'ID', No: '№' };
 const pretty = s => String(s == null ? '' : s).replace(/^(MOVE|SPECIES|ABILITY|TYPE|ITEM|NATURE|RIBBON)_/, '').toLowerCase().split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 const BALL_BY_ID = { 1: 'poke', 2: 'great', 3: 'ultra', 4: 'master', 5: 'premier' };
 const BALLS = { poke: ['#e83848', '#f8f8f8'], great: ['#3868e0', '#f8f8f8'], ultra: ['#f0c820', '#383848'], premier: ['#f8f8f8', '#f8f8f8'], master: ['#9038c8', '#f8f8f8'] };
-const TYPE_COL = { Normal: '#a8a878', Fire: '#f08030', Water: '#6890f0', Electric: '#f0c820', Grass: '#78c850', Ice: '#98d8d8', Fighting: '#c03028', Poison: '#a040a0', Ground: '#d8b858', Flying: '#a890f0', Psychic: '#f85888', Bug: '#a8b820', Rock: '#b8a038', Ghost: '#705898', Dragon: '#7038f8', Dark: '#705848', Steel: '#a8a8c0', Fairy: '#ee99ac', Stellar: '#58b8c8', Mana: '#705898'};
-const TLAB = { Normal: 'NORMAL', Fire: 'FIRE', Water: 'WATER', Electric: 'ELECT', Grass: 'GRASS', Ice: 'ICE', Fighting: 'FIGHT', Poison: 'POISON', Ground: 'GROUND', Flying: 'FLYING', Psychic: 'PSYCH', Bug: 'BUG', Rock: 'ROCK', Ghost: 'GHOST', Dragon: 'DRAGON', Dark: 'DARK', Steel: 'STEEL', Fairy: 'FAIRY', Stellar: 'STELLR', Mana: 'MANA' };
+const TYPE_COL = { Normal: '#a8a878', Fire: '#f08030', Water: '#6890f0', Electric: '#f0c820', Grass: '#78c850', Ice: '#98d8d8', Fighting: '#c03028', Poison: '#a040a0', Ground: '#d8b858', Flying: '#a890f0', Psychic: '#f85888', Bug: '#a8b820', Rock: '#b8a038', Ghost: '#705898', Dragon: '#7038f8', Dark: '#705848', Steel: '#a8a8c0', Fairy: '#ee99ac', Stellar: '#58b8c8' };
+const TLAB = { Normal: 'NORMAL', Fire: 'FIRE', Water: 'WATER', Electric: 'ELECT', Grass: 'GRASS', Ice: 'ICE', Fighting: 'FIGHT', Poison: 'POISON', Ground: 'GROUND', Flying: 'FLYING', Psychic: 'PSYCH', Bug: 'BUG', Rock: 'ROCK', Ghost: 'GHOST', Dragon: 'DRAGON', Dark: 'DARK', Steel: 'STEEL', Fairy: 'FAIRY', Stellar: 'STELLR' };
 
 function createBag(env) {
   const warnings = new Set();
@@ -261,7 +261,11 @@ function createBag(env) {
   const dbOf = sp => { const d = env.db && env.db(); return (d && (d[sp] || d[String(sp).replace(/_[MF]$/, '')])) || {}; };
 
   function bgImg(kind) { const p = env.bgPaths && env.bgPaths()[kind]; const e = p && getImg(p); return e && e.ok ? e.img : null; }
-  function itemImg(k) { const it = sys() && sys().info(k), p = it && it.sprite; if (!p) return null; const e = getImg(p); return e && e.ok ? keyedIcon(e.img, p) : null; }
+  const cropCache = new Map();
+  function itemImg(k) {
+    const sp = env.itemSprite && env.itemSprite(k);   // battle: {path, fw, fh} = a sheet whose first frame is the picture (the Poké Ball sheets)
+    if (sp && sp.path) { const e = getImg(sp.path); if (!e || !e.ok) return null; let cv = cropCache.get(sp.path); if (!cv) { const ks = keyedIcon(e.img, sp.path), fw = sp.fw || 16, fh = sp.fh || 16; cv = mk(fw, fh); cv.getContext('2d').drawImage(ks, 0, 0, fw, fh, 0, 0, fw, fh); cropCache.set(sp.path, cv); } return cv; }
+    const it = sys() && sys().info(k), p = it && it.sprite; if (!p) return null; const e = getImg(p); return e && e.ok ? keyedIcon(e.img, p) : null; }
   function drawFit(c, im, x, y, bw, bh, maxScale) {
     if (!im) return false; const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height; let s = Math.min(bw / iw, bh / ih); if (maxScale) s = Math.min(s, maxScale); if (s >= 1) s = Math.floor(s);
     const w = Math.max(1, Math.round(iw * s)), h = Math.max(1, Math.round(ih * s)); c.imageSmoothingEnabled = false; c.drawImage(im, 0, 0, iw, ih, Math.round(x + (bw - w) / 2), Math.round(y + (bh - h) / 2), w, h); return true;
@@ -278,6 +282,7 @@ function createBag(env) {
   const layout = () => LAY[inStorage() ? 'storage' : 'bag'];
   const curIdx = () => (inStorage() ? 5 : S.pocket);
   function rows() {
+    if (S.battle) return S.battle.entries(POCKETS[S.pocket][0]).concat([{ cancel: true }]);
     const s = sys(); if (!s) return [{ cancel: true }];
     const list = inStorage() ? s.list(S.src) : s.list('bag', POCKETS[S.pocket][0]);
     return list.concat([{ cancel: true }]);
@@ -291,6 +296,7 @@ function createBag(env) {
   function openCtx() {
     const it = sel(); if (!it || it.cancel) { if (inStorage()) { S.stage = 'smenu'; return; } return exitAll(); }
     const s = sys(), opts = [];
+    if (S.battle) { S.menu = { opts: [['USE', 'use'], ['CANCEL', 'cancel']], i: 0, key: it.key }; S.stage = 'ctx'; return; }
     if (S.mode === 'bag') {
       opts.push(['USE', 'use']); if (s.canHold(it.key)) opts.push(['GIVE', 'give']);
       if (!(it.item && it.item.pocket === 'key')) opts.push(['TOSS', 'toss']); opts.push(['CANCEL', 'cancel']);
@@ -301,7 +307,7 @@ function createBag(env) {
       S.qty = { n: 1, max: it.count, key: it.key, what: S.act }; S.stage = 'qty';
     }
   }
-  function nameOf(k) { return sys() ? sys().name(k) : String(k); }
+  function nameOf(k) { if (S.battle && S.battle.name) { const n = S.battle.name(k); if (n) return n; } return sys() ? sys().name(k) : pretty(k); }
   function afterQty() {
     const q = S.qty, s = sys(), nm = nameOf(q.key);
     if (q.what === 'toss') { S.menu = { opts: [['YES', 'y'], ['NO', 'n']], i: 1, key: q.key, ask: true }; S.stage = 'yesno'; return; }
@@ -366,6 +372,7 @@ function createBag(env) {
         const it = sel(); if (v === 'cancel') S.stage = 'list';
         else if (v === 'toss') { S.qty = { n: 1, max: it.count, key: it.key, what: 'toss' }; S.stage = 'qty'; }
         else if (v === 'give') pickMon('give');
+        else if (v === 'use' && S.battle) { const u = S.battle.canUse(it.key); if (!u.ok) say(u.msg || "It can't be used now."); else if (u.target) pickMon('use'); else { S.battle.use(it.key, null); exitAll(); } }
         else if (v === 'use') { const u = s.useInfo(it.key); if (!u.usable) say(u.why || "This can't be used here yet."); else pickMon('use'); }
       }
       return;
@@ -378,7 +385,7 @@ function createBag(env) {
     if (st === 'party') {
       const n = party().length; if (!n) { S.stage = 'list'; return; }
       if (k === 'b') { S.stage = 'list'; return; }
-      if (k === 'a') { useOnPicked(); return; }
+      if (k === 'a') { if (S.battle) { const r = S.battle.use(S.pick.key, S.pc); if (r) say(r, () => { S.stage = 'party'; }); else exitAll(); return; } useOnPicked(); return; }
       let c = S.pc; const col = c % 2, row = Math.floor(c / 2);
       if (k === 'left') c = col ? c - 1 : c; else if (k === 'right') c = col === 0 && c + 1 < n ? c + 1 : c; else if (k === 'up') c = row > 0 ? c - 2 : c; else if (k === 'down') c = c + 2 < n ? c + 2 : c;
       S.pc = c; return;
@@ -488,7 +495,7 @@ function createBag(env) {
     if (S.stage === 'party' || S.stage === 'movepick') { drawBase(c); }
     if (!inStorage()) { drawTabs(c); }
     // left panel (bag): big picture of the selected item
-    if (!inStorage()) { const e = sel(); if (e && !e.cancel) { const im = itemImg(e.key); if (im) drawFit(c, im, 8, 44, 58, 58, 3); else if (!s) T(c, 'No ItemTable', 8, 60, 'mute'); } }
+    if (!inStorage()) { const e = sel(); if (e && !e.cancel) { const im = itemImg(e.key); if (im) drawFit(c, im, 8, 44, 58, 58, 3); else if (!s && !S.battle) T(c, 'No ItemTable', 8, 60, 'mute'); } }
     if (inStorage() && S.stage === 'smenu') {
       const o = [['WITHDRAW', 0], ['DEPOSIT', 1], ['TOSS', 2], ['EXIT', 3]];
       o.forEach(([lab, j]) => { const R = layout().rows, y = Math.round(R.y + j * R.pitch); if (j === S.sm) { rect(c, R.x, y, R.w, R.h, 'rgba(255,214,60,.30)'); tri(c, R.x + 1, y + R.h / 2, 3, '#ffd23c'); } T(c, lab, layout().nameX, ty(y, R.h), 'dark'); });
@@ -503,11 +510,11 @@ function createBag(env) {
   }
   function update(dt) { S.t += dt; }
   function start(o) {
-    o = o || {}; S.mode = o.mode === 'storage' ? 'storage' : 'bag'; S.stage = S.mode === 'storage' ? 'smenu' : 'list'; S.closed = false; S.pocket = 0; S.cur = [0, 0, 0, 0, 0, 0]; S.top = [0, 0, 0, 0, 0, 0]; S.sm = 0; S.src = 'pc'; S.act = 'withdraw'; S.menu = null; S.msgQ = []; S.after = null;
-    if (!sys()) console.warn('[BagMenu] ItemSystem.js is not loaded');
+    o = o || {}; S.battle = o.battle || null; S.mode = o.mode === 'storage' ? 'storage' : 'bag'; S.stage = S.mode === 'storage' ? 'smenu' : 'list'; S.closed = false; S.pocket = 0; S.cur = [0, 0, 0, 0, 0, 0]; S.top = [0, 0, 0, 0, 0, 0]; S.sm = 0; S.src = 'pc'; S.act = 'withdraw'; S.menu = null; S.msgQ = []; S.after = null;
+    if (S.battle) { /* items come from the battle */ } else if (!sys()) console.warn('[BagMenu] ItemSystem.js is not loaded');
     else if (!sys().info('ITEM_POTION')) console.warn('[BagMenu] tables/ItemTables.js is not loaded');
     const d = env.db && env.db(); if (d) for (const m of party()) { const p = dbOf(m && m.species).iconSprite; if (p) getImg(p); }
-    const sy = sys(); if (sy) { for (const e of sy.list('bag').concat(sy.list('pc'))) { const p = e.item && e.item.sprite; if (p) getImg(p); } }
+    const sy = S.battle ? null : sys(); if (sy) { for (const e of sy.list('bag').concat(sy.list('pc'))) { const p = e.item && e.item.sprite; if (p) getImg(p); } }
     for (const k of ['bag', 'storage']) { const p = env.bgPaths && env.bgPaths()[k]; if (p) getImg(p); }
   }
   function status() { return { mode: S.mode, stage: S.stage, pocket: POCKETS[S.pocket][0], sel: (sel() || {}).key, rows: rows().length, bgBag: !!bgImg('bag'), bgStorage: !!bgImg('storage'), warnings: [...warnings] }; }
@@ -525,7 +532,7 @@ const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 
 const KEY = 'bag_screen_canvas';
 const BagMenu = {
   active: false,
-  BG: { bag: 'graphics/ui/NB_BG.png', storage: 'graphics/ui/Item_Storage.png' },
+  BG: { bag: 'assets/ui/bag_bg.png', storage: 'assets/ui/item_storage_bg.png' },
   isOpen() { return this.active; },
   open(scene, opts) {
     if (this.active || !scene) return false; opts = opts || {};
