@@ -741,20 +741,20 @@ function createBattle(env) {
     const BMC = root.BagMenuCore; if (!BMC) { console.warn('[BS] bag screen: BagMenu.js is not loaded (or is the old version without BagMenuCore) -> using the OLD built-in bag list. Load js/BagMenu.js before the battle starts.'); return false; }
     console.log('[BS] bag screen: opening the Start-Menu style screen');
     const P = S.b.sides[0], tabs = {};
-    const find = k => S.bag.find(x => x.item === k);
+    const itemKey = k => { const I = root.ItemSystem; if (!I || !I.info) return k; const u = String(k).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, ''); for (const c of [k, u, 'ITEM_' + u, u.replace(/^ITEM_/, '')]) if (c && I.info(c)) return c; return k; };   // the key ItemTables.js uses (for the picture and the text)
+    const find = k => S.bag.find(x => x.item === k || itemKey(x.item) === k);
     try {
       const core = BMC({
         urlFor: p => p, sys: () => root.ItemSystem, bgPaths: () => (root.BagMenu && root.BagMenu.BG) || {}, party: liveParty, db: dbOf, types: () => null, glyphs: gl, onExit: closeOv,
         moveName: id => String(id).replace(/^MOVE_/, '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-        itemSprite: key => { if (!isBall(key)) return null; const d = ballDef(key); return d && d.spriteSheet ? { path: d.spriteSheet, fw: d.frameWidth || 16, fh: d.frameHeight || 16 } : null; },
       });
       S.ov = { kind: 'bag', core, ready: false };
       core.initFont().then(() => {
         if (!(S.ov && S.ov.core === core)) return;
         core.start({ mode: 'bag', battle: {
           entries: pocket => S.bag.filter(it => (isBall(it.item) ? 'balls' : 'items') === pocket).map(it => {
-            const inf = root.ItemSystem && root.ItemSystem.info && root.ItemSystem.info(it.item);
-            return { key: it.item, count: it.count, item: { pocket: isBall(it.item) ? 'balls' : 'items', description: (inf && inf.description) || (isBall(it.item) ? 'A ball for catching wild Pokémon.' : 'Restores a Pokémon in battle.'), sprite: inf && inf.sprite } };
+            const inf = root.ItemSystem && root.ItemSystem.info && root.ItemSystem.info(itemKey(it.item));
+            return { key: itemKey(it.item), count: it.count, item: { pocket: isBall(it.item) ? 'balls' : 'items', description: (inf && inf.description) || (isBall(it.item) ? 'A ball for catching wild Pokémon.' : 'Restores a Pokémon in battle.'), sprite: inf && inf.sprite } };
           }),
           name: k => { const it = find(k); return it && it.name ? it.name : null; },
           canUse: k => { const it = find(k); if (!it) return { ok: false, msg: 'There is none left.' }; return isBall(k) ? { ok: true } : { ok: true, target: true }; },
