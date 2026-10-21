@@ -478,7 +478,7 @@ function createBattle(env) {
       fishing: o.fishing, surfing: o.surfing, mapType: o.mapType, night: o.night, noCatching: o.noCatching, catchRateBonus: o.catchRateBonus, criticalCapture: o.criticalCapture, catchingCharm: o.catchingCharm, catchDifficulty: o.catchDifficulty, alwaysCatchable: o.alwaysCatchable }));
     { const sb = S.b; spriteReport('start'); setTimeout(() => { if (S.b === sb) spriteReport('after load'); }, 1500); }
     S.onEnd = o.onEnd || env.onEnd || null; S.bgKind = o.bg || 'grass'; S.mapWeather = o.weather || null; S.mapFx = !!o.weather; S.bag = normBag(o.bag != null ? o.bag : (env.bag && env.bag()));
-    S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null; S.emit = []; S.fxl = []; S.flashA = 0;
+    S.sides = [mkSide(), mkSide()]; S.q = []; S.cur = null; S.lines = []; S.pages = []; S.result = null; S.t = 0; S.weather = S.mapWeather; S.terrain = null; S.particles = []; S.ballFx = null; S.levelBox = null; S.emit = []; S.fxl = []; S.flashA = 0; S.ov = null;
     S.fade = 1; S.fadeDir = -1; S.done = false; S.editMode = false; S.finished = null; S.onFade = null; S.noAuto = false; S.nudged = [{ x: 0, y: 0 }, { x: 0, y: 0 }];
     const skip = !!o.skipIntro;
     S.tr = { me: { path: o.playerTrainerSprite || '', vis: !skip && !!o.playerTrainerSprite, ox: skip ? 0 : 130, frame: 0 }, foe: { path: o.foeTrainerSprite || '', vis: !skip && S.b.kind === 'trainer' && !!o.foeTrainerSprite, ox: skip ? 0 : -130, frame: 0 } };
@@ -693,7 +693,7 @@ function createBattle(env) {
       if (P && (P.v.charging || P.v.lock || P.v.recharge)) { act({ type: 'move', slot: 0 }); return; }
       S.mode = 'cmd'; S.cmd = 0; setText('What will ' + P.name + ' do?', true); return;
     }
-    if (pe.type === 'switch') { S.ctx = pe.pivot ? 'pivot' : 'forced'; S.mode = 'party'; S.pty = firstOk(); S.partyMsg = pe.pivot ? 'Choose a Pokémon to switch in.' : 'Choose a Pokémon to send out.'; return; }
+    if (pe.type === 'switch') { S.ctx = pe.pivot ? 'pivot' : 'forced'; S.mode = 'party'; S.pty = firstOk(); S.partyMsg = pe.pivot ? 'Choose a Pokémon to switch in.' : 'Choose a Pokémon to send out.'; openParty(S.ctx); return; }
     if (pe.type === 'learn') {
       const M = b.sides[0].party[pe.mon]; S.learn = { mon: M, name: pe.name, key: pe.move, slot: 0 };
       setText(M.name + ' wants to learn ' + pe.name + '. Forget a move to make room?', true); S.mode = 'learnAsk'; S.yn = 0; return;
@@ -703,6 +703,73 @@ function createBattle(env) {
   }
   const firstOk = () => { const P = S.b.sides[0]; for (let i = 0; i < P.party.length; i++) if (P.party[i].hp > 0 && i !== P.active) return i; return P.active; };
   function play(evs) { S.q = (evs || []).slice(); S.mode = 'play'; S.cur = null; }
+  // ================================================== Start-Menu style screens: the party (PokemonSummary.js) and the bag (BagMenu.js) drawn over the TOP screen
+  // The same screens as the Start Menu, in a battle mode: the party picks who goes in, the bag picks an item (and the Pokémon it is used on).
+  // If PokemonSummary.js / BagMenu.js are not loaded, the old built-in lower-screen lists are used.
+  const OVC = mk(240, 160);
+  function liveParty() { return S.b.sides[0].party.map(m => Object.assign({}, m.src || {}, { species: (m.src && m.src.species) || m.species, nickname: m.name, level: m.level, HP: m.hp, maxHP: m.maxhp, status: m.status || '', isShiny: !!m.shiny })); }
+  function closeOv() { S.ov = null; if (S.mode === 'party' || S.mode === 'bag') S.mode = 'cmd'; }
+  const dbOf = () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null);
+  const gl = () => (env.glyphs ? env.glyphs() : null);
+  function openParty(ctx) {
+    const PSC = root.PokemonSummaryCore; if (!PSC) return false;
+    const P = S.b.sides[0], forced = ctx === 'forced' || ctx === 'pivot';
+    try {
+      const core = PSC({
+        urlFor: p => p, db: dbOf, party: liveParty, glyphs: gl, onExit: closeOv,
+        types: () => (typeof TypeTable !== 'undefined' ? TypeTable : (root.TypeTable || null)),
+        moves: () => (typeof MoveDatabase !== 'undefined' && MoveDatabase) || (typeof MoveTable !== 'undefined' && MoveTable) || (typeof MoveTables !== 'undefined' && MoveTables) || null,
+        battle: {
+          forced, prompt: S.partyMsg, active: () => P.active,
+          pick: i => {   // null = done (the battle goes on), else the message to show
+            const M = P.party[i]; if (!M) return 'There is no Pokémon there!';
+            if (M.hp <= 0) return M.name + ' has no energy left to battle!';
+            if (i === P.active && ctx !== 'forced') return M.name + ' is already in battle!';
+            if (forced) { S.mode = 'play'; S.noAuto = false; play(S.b.switchTo(i)); return null; }
+            if (!S.b.canSwitch(0)) return "There's no switching out!";
+            act({ type: 'switch', to: i }); return null;
+          },
+        },
+      });
+      core.opt.cries = false; S.ov = { kind: 'party', core, ready: false };
+      core.initFont().then(() => { if (S.ov && S.ov.core === core) { core.rebuild(false); core.S.sel = clamp(S.pty | 0, 0, Math.max(0, core.S.party.length - 1)); S.ov.ready = true; } }).catch(e => { console.warn('[BS] party screen:', e); S.ov = null; });
+      return true;
+    } catch (e) { console.warn('[BS] could not open the party screen, using the built-in list:', e); S.ov = null; return false; }
+  }
+  function openBag() {
+    const BMC = root.BagMenuCore; if (!BMC) return false;
+    const P = S.b.sides[0], tabs = {};
+    const find = k => S.bag.find(x => x.item === k);
+    try {
+      const core = BMC({
+        urlFor: p => p, sys: () => root.ItemSystem, bgPaths: () => (root.BagMenu && root.BagMenu.BG) || {}, party: liveParty, db: dbOf, types: () => null, glyphs: gl, onExit: closeOv,
+        moveName: id => String(id).replace(/^MOVE_/, '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        itemSprite: key => { if (!isBall(key)) return null; const d = ballDef(key); return d && d.spriteSheet ? { path: d.spriteSheet, fw: d.frameWidth || 16, fh: d.frameHeight || 16 } : null; },
+      });
+      S.ov = { kind: 'bag', core, ready: false };
+      core.initFont().then(() => {
+        if (!(S.ov && S.ov.core === core)) return;
+        core.start({ mode: 'bag', battle: {
+          entries: pocket => S.bag.filter(it => (isBall(it.item) ? 'balls' : 'items') === pocket).map(it => {
+            const inf = root.ItemSystem && root.ItemSystem.info && root.ItemSystem.info(it.item);
+            return { key: it.item, count: it.count, item: { pocket: isBall(it.item) ? 'balls' : 'items', description: (inf && inf.description) || (isBall(it.item) ? 'A ball for catching wild Pokémon.' : 'Restores a Pokémon in battle.'), sprite: inf && inf.sprite } };
+          }),
+          name: k => { const it = find(k); return it && it.name ? it.name : null; },
+          canUse: k => { const it = find(k); if (!it) return { ok: false, msg: 'There is none left.' }; return isBall(k) ? { ok: true } : { ok: true, target: true }; },
+          use: (k, target) => {
+            const it = find(k); if (!it) return 'There is none left.';
+            if (isBall(k)) { useBagEntry(it); S.mode = 'play'; act({ type: 'ball', ball: it.item }); return null; }
+            const M = P.party[target]; if (!M) return 'There is no Pokémon there!';
+            if (!itemWorks(it.item, M)) return "It won't have any effect.";
+            useBagEntry(it); S.mode = 'play'; act({ type: 'item', item: it.item, target }); return null;
+          },
+        } });
+        core.S.pocket = S.bag.some(it => isBall(it.item)) && !S.bag.some(it => !isBall(it.item)) ? 1 : 0;
+        S.ov.ready = true;
+      }).catch(e => { console.warn('[BS] bag screen:', e); S.ov = null; });
+      return true;
+    } catch (e) { console.warn('[BS] could not open the bag screen, using the built-in list:', e); S.ov = null; return false; }
+  }
   function act(a) { S.noAuto = false; play(S.b.turn(a, null)); }
   function endBattle() {
     if (S.done) return; S.done = true; S.mode = 'end';
@@ -723,6 +790,7 @@ function createBattle(env) {
     { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode;
       const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else { S.stripT = (S.stripT || 0) + dt; if (S.stripT > 1.5) S.stripPlayed = true; } }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
+    if (S.ov && S.ov.ready) S.ov.core.update(dt);
     tickFx(dt); for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
     if (S.fadeDir) { S.fade = clamp(S.fade + S.fadeDir * dt * 1.5); if ((S.fadeDir < 0 && S.fade <= 0) || (S.fadeDir > 0 && S.fade >= 1)) { S.fadeDir = 0; const f = S.onFade; S.onFade = null; if (f) f(); } }
     if (!S.b) return;
@@ -759,6 +827,7 @@ function createBattle(env) {
   // ================================================== input
   function press(k) {
     if (!S.b || S.fadeDir) return;
+    if (S.ov) { if (S.ov.ready) S.ov.core.press(k); return; }
     if (S.mode === 'intro') { return; }
     if (S.mode === 'play') {
       const c = S.cur;
@@ -778,8 +847,8 @@ function createBattle(env) {
           const P = S.b.active(0), us = S.b.usable(P);
           if (us.struggle) { act({ type: 'move', slot: 'struggle' }); return; }
           S.mode = 'move'; S.mv = Math.min(S.mv, P.moves.length - 1); S.mvMsg = '';
-        } else if (S.cmd === 1) { S.mode = 'bag'; S.bagSel = Math.min(S.bagSel, Math.max(0, S.bag.length - 1)); S.bagMsg = ''; }
-        else if (S.cmd === 2) { S.ctx = 'switch'; S.mode = 'party'; S.pty = S.b.sides[0].active; S.partyMsg = 'Choose a Pokémon.'; }
+        } else if (S.cmd === 1) { S.mode = 'bag'; S.bagSel = Math.min(S.bagSel, Math.max(0, S.bag.length - 1)); S.bagMsg = ''; openBag(); }
+        else if (S.cmd === 2) { S.ctx = 'switch'; S.mode = 'party'; S.pty = S.b.sides[0].active; S.partyMsg = 'Choose a Pokémon.'; openParty('switch'); }
         else act({ type: 'run' });
       }
       return;
@@ -965,6 +1034,7 @@ function createBattle(env) {
     levelBoxView(c);
     msgBox(c);   // always visible, whatever menu is open
     if (S.mode === 'intro') introOverlay(c);
+    if (S.ov && S.ov.ready) { const oc = OVC.getContext('2d'); oc.imageSmoothingEnabled = false; oc.clearRect(0, 0, 240, 160); S.ov.core.render(oc); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, 0, W, H); }   // the Start-Menu style party / bag screen
   }
 
   // ================================================== drawing: BOTTOM surface (messages + menus)
@@ -1031,7 +1101,11 @@ function createBattle(env) {
       if (e === 0) TR(c, 'No effect', 228, 28, 'mute'); else if (e > 1) TR(c, 'Super effective!', 228, 28, 'red'); else if (e < 1) TR(c, 'Not very effective', 228, 28, 'blue');
     }
   }
+  function ovHint(c, title, msg) {   // the lower screen while the party / bag is open on the upper screen
+    panel(c, 14, 40, 212, 66, false); T(c, title, 120 - Math.round(tw(title) / 2), 50, 'dark'); const l = msg || ''; T(c, l, 120 - Math.round(tw(l) / 2), 68, 'mute'); const h = 'A: select    B: back'; T(c, h, 120 - Math.round(tw(h) / 2), 86, 'mute');
+  }
   function partyBottom(c) {
+    if (S.ov) { ovHint(c, 'POKéMON', S.partyMsg || 'Choose a Pokémon.'); return; }
     const P = S.b.sides[0];
     for (let i = 0; i < 6; i++) {
       const x = 4 + (i & 1) * 118, y = 4 + (i >> 1) * 45, sel = S.pty === i, M = P.party[i];
@@ -1056,6 +1130,7 @@ function createBattle(env) {
     rect(c, 0, 140, W, 15, '#161a28'); T(c, S.partyMsg || '', 6, 143, 'white');
   }
   function bagBottom(c) {
+    if (S.ov) { ovHint(c, 'BAG', 'Choose an item on the upper screen.'); return; }
     panel(c, 4, 4, 232, 132, false);
     T(c, 'BAG', 12, 10, 'dark'); TR(c, 'A: use   B: back', 228, 10, 'mute'); rect(c, 10, 24, 220, 1, '#b0b6cc');
     const vis = 5;
