@@ -602,6 +602,7 @@ class Battle {
     const foe = this.active(1 - side); if (side === 0 && foe) foe.fought.add(idx); if (side === 1) { const p = this.active(0); if (p) M.fought.add(p.idx); }
     // everybody who faces the new mon counts as a participant
     if (side === 1) for (const m of this.sides[0].party) { if (m === this.active(0)) M.fought.add(m.idx); }
+    if (o.defer && this._deferred) { this._deferred.push(M); return true; }   // battle start: the entry abilities wait until BOTH Pokémon are on the field (see start())
     this.switchInEffects(M); if (M.hp <= 0) this.handleFaint(M); this.checkSwitchChain();
     return true; }
   checkSwitchChain() { }
@@ -1050,7 +1051,14 @@ class Battle {
     if (this.weather.map) this.msg({ rain: 'It is raining.', sun: 'The sunlight is strong.', sand: 'A sandstorm is raging.', hail: 'It is snowing.' }[this.weather.type]);
     if (this.kind === 'trainer') this.msg(this.introText || (this.trainerName + ' would like to battle!'));
     const F = this.sides[1].party[this.sides[1].active], P = this.sides[0].party[this.sides[0].active];
-    this.sendOut(1, F.idx); this.sendOut(0, P.idx); this.learnQueue = []; return this.events; }
+    // Both Pokémon are sent out FIRST; only then do Intimidate, weather / terrain abilities, hazards ... trigger (fastest first), so the screen
+    // never shows an ability animation while the other side's Pokémon is still being thrown out.
+    this._deferred = [];
+    this.sendOut(1, F.idx, { defer: true }); this.sendOut(0, P.idx, { defer: true });
+    const wait = this._deferred; this._deferred = null;
+    wait.sort((a, b) => (this.effSpeed(b) - this.effSpeed(a)) || (a.side - b.side));
+    for (const M of wait) { if (M.hp <= 0) continue; this.switchInEffects(M); if (M.hp <= 0) this.handleFaint(M); }
+    this.checkSwitchChain(); this.learnQueue = []; return this.events; }
   canSwitch(side) { const M = this.active(side); if (M.v.trap > 0 || M.v.trapped || M.v.ingrain) return false; if (M.item === 'SHEDSHELL') return true; const f = this.active(1 - side); if (f && f.hp > 0 && ((f.ability === 'SHADOWTAG' && M.ability !== 'SHADOWTAG') || (f.ability === 'ARENATRAP' && this.grounded(M)) || (f.ability === 'MAGNETPULL' && this.isType(M, 'TYPE_STEEL')))) return false; return true; }
   actionPriority(M, a) {
     switch (a.type) { case 'switch': return 7; case 'run': case 'ball': case 'item': return 8; }
