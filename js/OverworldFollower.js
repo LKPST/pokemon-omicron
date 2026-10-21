@@ -144,12 +144,44 @@
     }
     const moving = mv > 0.05 && !F.wasHidden, step = moving ? Math.floor(F.trav / 12) % 2 : 0;
     window.OWSprites.setFrame(s, F.dir, step, F.shiny);
-    s.setPosition(Math.round(x), Math.round(y + F.offsetY - (step ? 1 : 0)));
+    let hop = 0; if (F.hop) { const k = (scene.time.now - F.hop.t0) / F.hop.dur; if (k >= 1) F.hop = null; else hop = Math.abs(Math.sin(k * Math.PI * 2)) * 9; }
+    s.setPosition(Math.round(x), Math.round(y + F.offsetY - (step ? 1 : 0) - hop));
     s.setDepth(y - 0.5);
     // not drawn while it still sits on the player's own tile right after a warp (it steps out when he moves)
     const dp = Math.hypot(x - p.x, y - p.y);
     s.setVisible(dp > 6);
     s.setAlpha(1);
+  };
+
+  // ---- talk to it: Z while it stands next to the player (any side). It turns to the player, hops, a heart pops up, a short message.
+  F.lines = ['{n} looks happy!', '{n} is looking at $player.', '{n} is walking in step with $player.', '{n} wants to play!', '{n} cried out cheerfully!', '{n} is full of energy.'];
+  function heart(scene, x, y) {
+    if (!scene.textures.exists('ow_heart')) {
+      const rows = ['.XX.XX.', 'XHXXXXX', 'XXXXXXX', '.XXXXX.', '..XXX..', '...X...'], cv = document.createElement('canvas'); cv.width = 7; cv.height = 6;
+      const c = cv.getContext('2d'); rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch === '.') return; c.fillStyle = ch === 'H' ? '#ffd0d4' : '#e8484f'; c.fillRect(i, j, 1, 1); }));
+      scene.textures.addCanvas('ow_heart', cv);
+    }
+    const im = scene.add.image(x, y, 'ow_heart').setScale(3).setDepth(5000);
+    scene.tweens.add({ targets: im, y: y - 26, alpha: 0, duration: 1000, ease: 'Sine.easeOut', onComplete: () => im.destroy() });
+    scene.tweens.add({ targets: im, scale: 4, duration: 220, yoyo: true });
+  }
+  F.interact = function (scene) {
+    const s = F.spr, p = scene.player; if (!s || !p || !s.visible || scene.isLocked || scene.scriptRunning) return false;
+    const fx = s.owX === undefined ? s.x : s.owX, fy = s.owY === undefined ? s.y : s.owY, dx = fx - p.x, dy = fy - p.y;
+    if (Math.hypot(dx, dy) > 44) return false;   // not next to the player
+    const toF = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'), back = { up: 'down', down: 'up', left: 'right', right: 'left' }[toF];
+    p.direction = toF; p.setFrame(window.getOverworldFrame(toF, 0));
+    F.dir = back; window.OWSprites.setFrame(s, back, 0, F.shiny); F.hop = { t0: scene.time.now, dur: 420 };
+    heart(scene, s.x, s.y - 40);
+    const m = F.leadMon((window.GameStateManager || {}).saveData) || {};
+    const pretty = String(m.species || '').replace(/^SPECIES_/, '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const name = m.nickname || ((window.PokemonDatabase && window.PokemonDatabase[m.species] && window.PokemonDatabase[m.species].name) || pretty || 'Your Pokémon');
+    let text = F.lines[Math.floor(Math.random() * F.lines.length)].replace('{n}', name);
+    if (window.OverworldText && window.OverworldText.autoWrap) text = window.OverworldText.autoWrap(text.replace('$player', ((window.GameStateManager || {}).saveData || {}).player ? window.GameStateManager.saveData.player.name || 'Player' : 'Player'));
+    scene.isLocked = true;
+    const done = () => { scene.isLocked = false; scene.scriptEndedAt = scene.time.now; };
+    if (window.OverworldTextbox) window.OverworldTextbox.show(scene, text, done); else scene.time.delayedCall(900, done);
+    return true;
   };
 
   // OWFollower.debug() in the console prints the whole state
