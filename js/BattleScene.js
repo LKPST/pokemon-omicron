@@ -143,7 +143,7 @@ function createBattle(env) {
       x.drawImage(im, 0, 0); x.getImageData(0, 0, 1, 1); sheet = c; src = 'latin_short.png';
     } catch (e) { sheet = null; }
     if (!sheet) { sheet = fallbackSheet(); src = 'built-in fallback (latin_short.png not loaded)'; }
-    rawSheet = sheet; fontSrc = src; fontCache.clear(); advCache.clear(); measureFont();
+    rawSheet = sheet; fontSrc = src; fontCache.clear(); advCache.clear(); letAdv.clear(); measureFont();
   }
   const hex4 = h => { h = h.replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16), h.length > 6 ? parseInt(h.substr(6, 2), 16) : 255]; };
   function font(tc, sc) {
@@ -164,27 +164,40 @@ function createBattle(env) {
     if (advCache.has(key)) return advCache.get(key);
     let a = 6; const gl = GLY[key];
     if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 8, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
+      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 16, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
       let mx = -1;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) { const i = (y * 8 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
-      if (mx >= 0) a = clamp(mx + 2, 6, 10);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = (y * 16 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
+      if (mx >= 0) a = clamp(mx + 1, 6, 18);
     }
     advCache.set(key, a); return a;
   }
-  function* glyphs(s) {
+    // proportional advance for letters / punctuation (ink width + 1 px gap): a fixed 6 px squashed wide letters (m, w, M, W) and left narrow ones floating
+  const letAdv = new Map();
+  function advLetter(ch) {
+    if (letAdv.has(ch)) return letAdv.get(ch);
+    const gl = GLY[ch]; let a = 6;
+    if (gl && rawSheet) {
+      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 16, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
+      let mx = -1;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = (y * 16 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245) && (d[i] + d[i + 1] + d[i + 2]) / 3 < 110) mx = Math.max(mx, x); }
+      if (mx >= 0) a = clamp(mx + 2, 4, 12);
+    }
+    letAdv.set(ch, a); return a;
+  }
+function* glyphs(s) {
     s = String(s); let i = 0;
     while (i < s.length) {
       const ch = s[i];
       if (ch === '{') { const j = s.indexOf('}', i); if (j > 0) { const k = TOKENS[s.slice(i + 1, j)]; if (k && GLY[k]) { yield { gl: GLY[k], adv: advOf(k) }; i = j + 1; continue; } } }
       if (ch === '/') { const j = s.indexOf('/', i + 1); if (j > 0) { const tag = s.slice(i, j + 1); if (GLY[tag]) { yield { gl: GLY[tag], adv: advOf(tag) }; i = j + 1; continue; } } }
       if (ch === ' ') { yield { gl: null, adv: 5 }; i++; continue; }
-      yield { gl: GLY[ch] || null, adv: 6 }; i++;
+      yield { gl: GLY[ch] || null, adv: /[0-9]/.test(ch) ? 6 : advLetter(ch) }; i++;
     }
   }
   const tw = s => { let w = 0; for (const g of glyphs(s)) w += g.adv; return w; };
   function T(c, s, x, y, k = 'dark') {
     const f = font(TX[k][0], TX[k][1]); let cx = x;
-    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 8, 16, cx, y - FT.top + opt.nudge, 8, 16); cx += g.adv; }
+    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 16, 16, cx, y - FT.top + opt.nudge, 16, 16); cx += g.adv; }
     return cx;
   }
   const TR = (c, s, xr, y, k) => T(c, s, xr - tw(s), y, k);
@@ -420,7 +433,7 @@ function createBattle(env) {
   const twb = s => tw(s) * 2;
   function Tb(c, s, x, y, k = 'white') {
     const f = font(TX[k][0], TX[k][1]); let cx = x;
-    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 8, 16, cx, y - FT.top * 2 + opt.nudge, 16, 32); cx += g.adv * 2; }
+    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 16, 16, cx, y - FT.top * 2 + opt.nudge, 32, 32); cx += g.adv * 2; }
     return cx;
   }
   const Tc = (c, s, x, w, y, k, big) => { const wd = big ? twb(s) : tw(s); (big ? Tb : T)(c, s, Math.round(x + (w - wd) / 2), y, k); };
@@ -561,7 +574,7 @@ function createBattle(env) {
         S.cur.dur = clamp((S.cur.f1 - S.cur.f0) * 1.8, .2, 1.4); sd0.exp = S.cur.f0; break; }
       case 'levelup': {
         if (ev.active) { const sd0 = side(0); sd0.level = ev.level; sd0.maxhp = ev.maxhp; sd0.hp = ev.hp; sd0.dhp = ev.hp; sd0.exp = 0; }
-        S.levelBox = { level: ev.level, stats: ev.stats || {}, gain: ev.gain || {}, t: 0 }; S.cur.dur = -2; break; }
+        { const LM = S.b.sides[0].party[ev.idx]; S.levelBox = { level: ev.level, stats: ev.stats || {}, gain: ev.gain || {}, t: 0, name: LM ? LM.name : '' }; } S.cur.dur = -2; break; }
       case 'learned': S.cur.dur = 0; break;
       case 'ball': startBall(ev); break;
       case 'item': S.cur.dur = .2; break;
@@ -1081,7 +1094,6 @@ function createBattle(env) {
       if (cu.open && cu.spT != null && cu.spT < .16) drawBallSprite(c, cu.open.x, cu.open.y, 0, CF.ball, cu.spT < .08 ? 2 : 1);
     }
     infoBox(c, side(1), false); infoBox(c, side(0), true);
-    levelBoxView(c);
     msgBox(c);   // always visible, whatever menu is open
     if (S.mode === 'intro') introOverlay(c);
   }
@@ -1268,8 +1280,26 @@ function createBattle(env) {
         const st = M.status && STATUS_LAB[M.status]; if (st && !faint) rect(c, x + 24, y + 4, 6, 6, st[1]); if (faint) faintX(c, x + 23, y + 3); }
     }
   }
+  // level up: the LOWER screen shows the stats like the summary's Skills page and each value counts up to its new number with a green +N
+  function levelBottom(c) {
+    const lb = S.levelBox, t = lb.t, a = clamp(t / .25);
+    c.save(); c.globalAlpha = a; c.translate(0, Math.round((1 - a) * 12));
+    panel(c, 4, 4, 232, 147, true);
+    T(c, lb.name, 14, 11, 'dark'); TR(c, '{Lv}' + lb.level, 228, 11, 'dark'); rect(c, 12, 28, 216, 1, '#b4bad0');
+    const rows = [['hp', 'HP', '#4cc860'], ['atk', 'Attack', '#e85a4c'], ['def', 'Defense', '#e8a43c'], ['spa', 'Sp. Atk', '#4c8ce8'], ['spd', 'Sp. Def', '#58c8b8'], ['spe', 'Speed', '#d868c8']], cap = Math.max(60, 50 + lb.level * 4);
+    rows.forEach(([k, n, col], i) => {
+      const y = 34 + i * 18, to = lb.stats[k] != null ? lb.stats[k] : 0, g = lb.gain[k] || 0, from = to - g, st = .35 + i * .28, p = clamp((t - st) / .5), e = 1 - Math.pow(1 - p, 3), v = Math.round(from + g * e);
+      T(c, n, 14, y, 'dark'); rect(c, 78, y + 3, 96, 5, '#d8dcec');
+      rect(c, 78, y + 3, Math.round(96 * clamp(v / cap)), 5, col); if (g > 0 && p < 1) rect(c, 78 + Math.round(96 * clamp(from / cap)), y + 3, Math.max(1, Math.round(96 * clamp((v - from) / cap))), 5, '#ffffff');
+      TR(c, String(v), 206, y, p > 0 && p < 1 ? 'blue' : 'dark');
+      if (p > 0 && g !== 0) { c.save(); c.globalAlpha = a * clamp(p * 3); T(c, (g > 0 ? '+' : '') + g, 212 - Math.round((1 - clamp(p * 3)) * 6), y, g > 0 ? 'blue' : 'red'); c.restore(); }
+    });
+    T(c, 'A: continue', 14, 134, 'mute');
+    c.restore();
+  }
   function drawBottom(c) {
     drawBottomBg(c);
+    if (S.levelBox && !S.ov) { levelBottom(c); return; }
     if (S.ov && S.ov.ready) {   // the Start-Menu style party / bag screen fills the LOWER screen (it slides up when it opens)
       const oc = OVC.getContext('2d'); oc.imageSmoothingEnabled = false; oc.clearRect(0, 0, 240, 160); S.ov.core.render(oc);
       const p = clamp((S.ov.t || 0) / .28), e = 1 - Math.pow(1 - p, 3); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, Math.round((1 - e) * H), W, H); S.ovLast = S.ov.kind; return;
