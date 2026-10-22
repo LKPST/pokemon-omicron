@@ -13,7 +13,7 @@
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 10, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 11, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -94,7 +94,7 @@
   #pm-bh .bw.sel { transform: scale(1.07); filter: drop-shadow(0 0 7px rgba(255,255,255,.95)) drop-shadow(0 3px 3px rgba(0,0,0,.5)); z-index: 2; }
   #pm-bh svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   #pm-bh .tx { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 900 var(--fs) / 1 system-ui, -apple-system, sans-serif; letter-spacing: .01em; -webkit-text-stroke: calc(var(--fs) * .22) #1b1f2e; paint-order: stroke fill; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
-  #pm-bh .L .tx { padding-right: 24%; } #pm-bh .R .tx { padding-left: 24%; }
+  #pm-bh .L .tx { padding: 0 24% 0 16%; } #pm-bh .R .tx { padding: 0 16% 0 24%; }
   #pm-bh .ar { position: absolute; top: 50%; width: calc(var(--fs) * 1.5); height: auto; margin-top: calc(var(--fs) * -.75); image-rendering: pixelated; display: none; }
   #pm-bh .sel .ar { display: block; }
   #pm-bh .L .ar { left: 9%; } #pm-bh .R .ar { right: 9%; transform: scaleX(-1); }
@@ -188,7 +188,7 @@
   }
   function buildBattleHud() {
     const root = document.createElement('div'); root.id = 'pm-bh'; document.body.appendChild(root); BH.root = root;
-    const lab = ['FIGHT', 'BAG', 'POK\u00e9MON', 'RUN'];
+    const lab = ['FIGHT', 'BAG', 'PARTY', 'RUN'];
     lab.forEach((t, i) => {
       const w = document.createElement('div'); w.className = 'bw c' + i + (i === 0 || i === 3 ? ' R' : ' L');
       w.innerHTML = hexSvg(i) + '<div class="tx">' + t + '</div><img class="ar" src="graphics/battle_scene/battle_arrow.png" alt="" onerror="this.parentNode.classList.add(\'noar\')">';
