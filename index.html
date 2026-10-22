@@ -69,6 +69,7 @@
       "js/config.js",
       "tables/global.js"
       ];
+      files = files.filter(function (f, i) { return files.indexOf(f) === i; });   // a file listed twice would be declared twice
       window.__PM_LOADING = true;
       function plain(i) {   // fallback: ordinary script tags, one after another
         if (i >= files.length) { window.__PM_LOADING = false; if (window.boot) window.boot(); return; }
@@ -78,7 +79,7 @@
       if (!window.fetch || location.protocol === 'file:') { plain(0); return; }
       Promise.all(files.map(function (f) { return fetch(f, { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error(f + ' -> HTTP ' + r.status); return r.text(); }); }))
         .then(function (texts) {
-          texts.forEach(function (t, i) { var s = document.createElement('script'); s.text = t + '\n//# sourceURL=' + files[i]; document.head.appendChild(s); });
+          texts.forEach(function (t, i) { try { var s = document.createElement('script'); s.text = t + '\n//# sourceURL=' + files[i]; document.head.appendChild(s); } catch (e) { console.error('[loader] ' + files[i] + ' failed to run:', e); } });
           window.__PM_LOADING = false; if (window.boot) window.boot();
         })
         .catch(function (e) { console.warn('[loader] fetch failed, using plain script tags:', e); plain(0); });
