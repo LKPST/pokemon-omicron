@@ -439,14 +439,22 @@ function createSummary(env) {
 
   const STATUS_TAG = { psn: ['PSN', '#a040a0'], tox: ['PSN', '#782878'], brn: ['BRN', '#f08030'], par: ['PAR', '#c8a010'], slp: ['SLP', '#6870a0'], frz: ['FRZ', '#58a8c8'] };
   // ------------------------------------------------ PARTY view
+  // the border of the selected row is the Pokémon's type colour (two types = two colours, split down the middle)
+  const BORDER_COL = { normal: '#b0b090', fire: '#f08030', water: '#4a86f0', electric: '#f8d020', grass: '#48c840', ice: '#6ad8e8', fighting: '#d03828', poison: '#b048c0', ground: '#d8b048', flying: '#98a8f8', psychic: '#b050e0', bug: '#a8c020', rock: '#c0a838', ghost: '#7a58b0', dragon: '#6a38f0', dark: '#7a6050', steel: '#a8b8d0', fairy: '#f090c0', stellar: '#40d0c0' };
+  const borderCols = types => { const out = []; for (const t of (types || []).slice(0, 2)) { const k = String(t || '').replace(/^TYPE_/i, '').toLowerCase(); if (BORDER_COL[k] && !out.includes(BORDER_COL[k])) out.push(BORDER_COL[k]); } return out.length ? out : ['#d8dcec']; };
+  function typeBorder(c, x, y, w, h, types) {
+    const cols = borderCols(types); pill(c, x, y, w, h, cols[0]);
+    if (cols[1]) { c.save(); c.beginPath(); c.rect(x + Math.round(w / 2), y - 2, w, h + 4); c.clip(); pill(c, x, y, w, h, cols[1]); c.restore(); }
+  }
   function drawParty(c) {
     for (let i = 0; i < 6; i++) {
       const m = S.party[i], sl = ease(clamp((S.rowT - i * .06) / .35)), x = 8 + Math.round(-(1 - sl) * 150), y = 3 + i * 26;
       if (!m) { pill(c, x, y, 136, 25, 'rgba(110,16,40,.35)'); continue; }
       const sel = i === S.sel, tc = sel ? 'white' : 'dark';
-      if (i === S.swap) pill(c, x - 2, y - 1, 140, 29, '#f0a020');
+      if (sel) typeBorder(c, x - 2, y - 1, 140, 29, m.types);
+      else if (i === S.swap) pill(c, x - 2, y - 1, 140, 29, '#f0a020');
       else if (env.battle && env.battle.active && env.battle.active() === i) pill(c, x - 2, y - 1, 140, 29, '#48c878');   // the Pokémon that is fighting now
-      pill(c, x, y + 1, 136, 25, sel ? '#000000' : '#9aa6cc'); pill(c, x, y, 136, 25, sel ? '#1c1c28' : '#fbfcff');
+      if (!sel) pill(c, x, y + 1, 136, 25, '#9aa6cc'); pill(c, x, y, 136, 25, sel ? '#1c1c28' : '#fbfcff');
       ell(c, x + 16, y + 20, 12, 3, sel ? '#3c3e52' : '#cdd3e6');
       drawIcon(c, m, x, y - 8, sel, i);
       const nx = T(c, m.nick, x + 32, y + 3, tc); if (m.shiny) star(c, nx + 2, y + 5);
@@ -461,10 +469,16 @@ function createSummary(env) {
     if (m) {
       ell(c, 196, 118, 30, 5, '#c4cfee'); const pp = clamp(S.selT / .3), sc = pp < 1 ? backOut(pp) : 1, bob = Math.sin(S.t * 3.2) > 0 ? 1 : 0;
       drawSprite(c, m, 196, 118 - bob, 92, 80, Math.max(.2, sc), S.selT < .09 ? .85 : 0);
-      const nx = T(c, m.nick, 150, 127, 'dark'); genderGlyph(c, m.gender, nx + 9, 127); TR(c, '{Lv}' + m.lv, 234, 127, 'dark');
-      badges(c, m.types, 150, 141);
     }
-    if (S.bmsg && !S.menu) { const l1 = S.bmsg.text, bw = tw(l1) + 20, bx = 238 - bw; pill(c, bx, 21, bw, 15, '#000000'); pill(c, bx, 20, bw, 15, '#fbfcff'); T(c, l1, bx + 10, 22, 'dark'); }
+    // under the sprite: the prompt ("Choose a Pokémon.") or the last message (name, level and type are in the rows already)
+    if (!S.menu && S.swap < 0) {
+      const txt = S.bmsg ? S.bmsg.text : (env.battle && env.battle.prompt) || '';
+      if (txt) {
+        const words = String(txt).split(' '), ls = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (tw(t) > 84 && cur) { ls.push(cur); cur = w; } else cur = t; } if (cur) ls.push(cur);
+        const L = ls.slice(0, 2), bw = Math.max(...L.map(tw)) + 16, bx = Math.round(196 - bw / 2), bh = L.length * 12 + 6, by = 154 - bh;
+        pill(c, bx, by + 1, bw, bh, '#000000'); pill(c, bx, by, bw, bh, '#fbfcff'); L.forEach((l, i) => T(c, l, bx + 8, by + 3 + i * 12, S.bmsg && !(env.battle && S.bmsg.text === env.battle.prompt) ? 'red' : 'dark'));
+      }
+    }
     if (S.swap >= 0 && !S.menu) { const l1 = 'Move to where?', l2 = 'A: OK  B: back', bw = Math.max(tw(l1), tw(l2)) + 20, bx = 238 - bw; pill(c, bx, 127, bw, 27, '#000000'); pill(c, bx, 126, bw, 27, '#fbfcff'); T(c, l1, bx + 7, 129, 'dark'); T(c, l2, bx + 7, 140, 'mute'); }
     drawMenu(c);
   }
