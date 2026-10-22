@@ -1147,6 +1147,13 @@ function createBattle(env) {
   }
   const EFF_BORDER = { super: '#f5c518', resist: '#e23b3b', none: '#8a2a2a', neutral: '#b4bacb' };
   // the type picture, with its own outline so it does not look like part of the row
+  // small text: the same glyphs drawn at a fraction of the size (PP details)
+  function Ts(c, str, x, y, k, sc) {
+    const f = font(TX[k][0], TX[k][1]); let cx = x;
+    for (const g of glyphs(str)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 8, 16, Math.round(cx), Math.round(y - FT.top * sc + opt.nudge * sc), 8 * sc, 16 * sc); cx += g.adv * sc; }
+    return cx;
+  }
+  const twS = (str, sc) => tw(str) * sc;
   function typeChip(c, key, x, y, dim) {
     const TT = env.types && env.types(), te = TT && TT.types && TT.types[key], H = 10, src = te && te.icon && TT.sheet ? typeSheet(TT) : null;
     if (src) { const w = Math.round(te.icon.w * H / te.icon.h); pill(c, x - 1, y - 1, w + 2, H + 2, '#ffffff', 4); pill(c, x, y, w, H, '#14161e', 3); c.imageSmoothingEnabled = false; c.drawImage(src, te.icon.x, te.icon.y, te.icon.w, te.icon.h, x, y, w, H); if (dim) { c.fillStyle = 'rgba(40,44,60,.55)'; c.fillRect(x, y, w, H); } return w + 2; }
@@ -1155,6 +1162,7 @@ function createBattle(env) {
   }
   const ARROW = 'graphics/battle_scene/battle_arrow.png', INFOI = 'graphics/battle_scene/info_icon.png';
   function pngAt(path, c, x, y, flip) { const e = getImg(path); if (!e || !e.ok) return false; c.imageSmoothingEnabled = false; if (flip) { c.save(); c.translate(x + 16, y); c.scale(-1, 1); c.drawImage(e.img, 0, 0, 16, 16); c.restore(); } else c.drawImage(e.img, x, y, 16, 16); return true; }
+  function typeChipW(key) { const TT = env.types && env.types(), te = TT && TT.types && TT.types[key]; if (te && te.icon && TT.sheet && typeSheet(TT)) return Math.round(te.icon.w * 10 / te.icon.h) + 2; const nm = typeLabel(key), lab = (te && te.short ? te.short : TLAB[nm] || nm.toUpperCase().slice(0, 6)).toUpperCase(); return tw(lab) + 8; }
   function infoDot(c, x, y) { if (pngAt(INFOI, c, x, y)) return; const cx = x + 8, cy = y + 8; ell(c, cx, cy, 6, 6, '#16305e'); ell(c, cx, cy, 5, 5, '#58a4ff'); rect(c, cx - 1, cy - 4, 2, 2, '#ffffff'); rect(c, cx - 1, cy - 1, 2, 5, '#ffffff'); }
   function infoDotOld(c, cx, cy) { ell(c, cx, cy, 5, 5, '#16305e'); ell(c, cx, cy, 4, 4, '#58a4ff'); rect(c, cx, cy - 3, 2, 2, '#ffffff'); rect(c, cx, cy, 2, 4, '#ffffff'); }
   function moveDesc(mi) {
@@ -1186,8 +1194,9 @@ function createBattle(env) {
       c.fillStyle = 'rgba(255,255,255,0.09)'; for (let k = 0; k < w - 14; k += 12) for (let r = 0; r < h - 6; r++) { const px = x + 6 + k + (h - 6 - r); if (px < x + w - 7) c.fillRect(px, y + 3 + r, 4, 1); }
       ico.push([x - 7, y - 8]);
       const fg = on ? (lum(tcol) > 170 ? 'dark' : 'white') : (dis ? 'mute' : 'white');
-      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 22) nm = nm.slice(0, -1); T(c, nm, x + 15, y + 1, fg);
-      const cw = typeChip(c, mi.type, x + 10, y + 11, dis); T(c, 'PP ' + s0.pp + '/' + s0.maxpp, x + 10 + cw + 4, y + 10, s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg);
+      const cwid = typeChipW(mi.type); typeChip(c, mi.type, x + w - cwid - 7, y + 3, dis);
+      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 16 - cwid - 14) nm = nm.slice(0, -1); T(c, nm, x + 16, y + 7, fg);
+      const pp = 'PP ' + s0.pp + '/' + s0.maxpp; Ts(c, pp, x + w - 8 - twS(pp, .5), y + 15, s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg, .5);
       if (on) { const ax = x - 17 + Math.round(Math.sin(S.t * 9)); if (!pngAt(ARROW, c, ax, y + 4)) tri(c, ax + 8, y + 12, 4, '#ff5a5a'); }
     }
     for (const q of ico) infoDot(c, q[0], q[1]);
