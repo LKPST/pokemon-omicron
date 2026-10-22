@@ -1153,7 +1153,10 @@ function createBattle(env) {
     const nm = typeLabel(key), lab = (te && te.short ? te.short : TLAB[nm] || nm.toUpperCase().slice(0, 6)).toUpperCase(), w = tw(lab) + 6, col = TYPE_COLOR(key);
     pill(c, x - 1, y - 1, w + 2, H + 2, '#ffffff', 4); pill(c, x, y, w, H, col, 3); T(c, lab, x + 3, y - 1, lum(col) > 165 ? 'dark' : 'badge'); return w + 2;
   }
-  function infoDot(c, cx, cy) { ell(c, cx, cy, 5, 5, '#16305e'); ell(c, cx, cy, 4, 4, '#58a4ff'); rect(c, cx, cy - 3, 2, 2, '#ffffff'); rect(c, cx, cy, 2, 4, '#ffffff'); }
+  const ARROW = 'graphics/battle_scene/battle_arrow.png', INFOI = 'graphics/battle_scene/info_icon.png';
+  function pngAt(path, c, x, y, flip) { const e = getImg(path); if (!e || !e.ok) return false; c.imageSmoothingEnabled = false; if (flip) { c.save(); c.translate(x + 16, y); c.scale(-1, 1); c.drawImage(e.img, 0, 0, 16, 16); c.restore(); } else c.drawImage(e.img, x, y, 16, 16); return true; }
+  function infoDot(c, x, y) { if (pngAt(INFOI, c, x, y)) return; const cx = x + 8, cy = y + 8; ell(c, cx, cy, 6, 6, '#16305e'); ell(c, cx, cy, 5, 5, '#58a4ff'); rect(c, cx - 1, cy - 4, 2, 2, '#ffffff'); rect(c, cx - 1, cy - 1, 2, 5, '#ffffff'); }
+  function infoDotOld(c, cx, cy) { ell(c, cx, cy, 5, 5, '#16305e'); ell(c, cx, cy, 4, 4, '#58a4ff'); rect(c, cx, cy - 3, 2, 2, '#ffffff'); rect(c, cx, cy, 2, 4, '#ffffff'); }
   function moveDesc(mi) {
     const m = mi.mv; if (!m) return '';
     if (m.description) return m.description;
@@ -1172,21 +1175,22 @@ function createBattle(env) {
   // Fight: the screen darkens and the four moves stack on the right; the border shows the matchup (gold = super effective, red = not very, grey = normal)
   function moveList(c, P, sel, learn) {
     c.fillStyle = 'rgba(4,6,16,0.62)'; c.fillRect(0, 0, W, H); S.hit.mv = []; S.hit.mvi = [];
-    const x0 = 100, w = 136, h = 24;
+    const x0 = 102, w = 134, h = 23, ico = [];
     for (let i = 0; i < 4; i++) {
-      const on = sel === i, y = 5 + i * 26, x = x0 + (on ? -3 : 0), s0 = P.moves[i]; S.hit.mv.push({ x: x0 - 4, y: y - 1, w: w + 8, h: h + 2 }); S.hit.mvi.push({ x: x + 2, y: y + 2, w: 16, h: h - 4 });
+      const on = sel === i, y = 10 + i * 25, x = x0 + (on ? -3 : 0), s0 = P.moves[i]; S.hit.mv.push({ x: x0 - 4, y: y - 1, w: w + 8, h: h + 2 }); S.hit.mvi.push({ x: x - 7, y: y - 8, w: 18, h: 18 });
       if (!s0) { pill(c, x0, y, w, h, 'rgba(40,44,60,.5)', 7); continue; }
       const mi = mvInfo(s0.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled, tcol = dis ? '#6b7080' : TYPE_COLOR(mi.type), ek = learn ? 'neutral' : effKind(P, mi);
       const base = on ? tcol : mixHex(tcol, 52, .62), bc = EFF_BORDER[ek];
       pill(c, x, y + 2, w, h, '#05070f', 7); if (on) pill(c, x - 1, y - 1, w + 2, h + 2, '#ffffff', 8); pill(c, x, y, w, h, bc, 7); pill(c, x + 2, y + 2, w - 4, h - 4, base, 5);
       rect(c, x + 5, y + 2, w - 10, 6, lighten(base, on ? .26 : .12)); rect(c, x + 5, y + h - 5, w - 10, 3, darken(base, .18));
       c.fillStyle = 'rgba(255,255,255,0.09)'; for (let k = 0; k < w - 14; k += 12) for (let r = 0; r < h - 6; r++) { const px = x + 6 + k + (h - 6 - r); if (px < x + w - 7) c.fillRect(px, y + 3 + r, 4, 1); }
-      infoDot(c, x + 11, y + 12);
+      ico.push([x - 7, y - 8]);
       const fg = on ? (lum(tcol) > 170 ? 'dark' : 'white') : (dis ? 'mute' : 'white');
-      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 28) nm = nm.slice(0, -1); T(c, nm, x + 21, y + 2, fg);
-      const cw = typeChip(c, mi.type, x + 22, y + 13, dis); T(c, 'PP ' + s0.pp + '/' + s0.maxpp, x + 22 + cw + 4, y + 12, s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg);
-      if (on) tri(c, x - 8 + Math.round(Math.sin(S.t * 9)), y + 12, 4, '#ff5a5a');
+      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 22) nm = nm.slice(0, -1); T(c, nm, x + 15, y + 1, fg);
+      const cw = typeChip(c, mi.type, x + 10, y + 11, dis); T(c, 'PP ' + s0.pp + '/' + s0.maxpp, x + 10 + cw + 4, y + 10, s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg);
+      if (on) { const ax = x - 17 + Math.round(Math.sin(S.t * 9)); if (!pngAt(ARROW, c, ax, y + 4)) tri(c, ax + 8, y + 12, 4, '#ff5a5a'); }
     }
+    for (const q of ico) infoDot(c, q[0], q[1]);
     const sp = P.moves[sel], smi = sp && mvInfo(sp.key); if (S.mvInfo && sp) moveInfoPanel(c, smi, sp);
     const m = CF.msg; gbaBox(c, m.x, m.y, m.w, m.h);
     if (S.mvInfo && sp) { const ls = wrapPx(moveDesc(smi) || 'No description.', m.w - 24).slice(0, 3), sp2 = ls.length > 2 ? 11 : 15; ls.forEach((l, i) => T(c, l, m.x + 10, m.y + (ls.length > 2 ? 6 : 9) + i * sp2, 'white')); return; }
