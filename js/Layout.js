@@ -13,7 +13,7 @@
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 11, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 12, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -90,8 +90,12 @@
   #pm-tc .pill.on { background: #26a8a0; color: #05161a; }
   #pm-tc .cam svg { width: 56%; height: 56%; }
   #pm-bh { position: fixed; inset: 0; z-index: 2; pointer-events: none; display: none; }
+  #pm-bh .bw { --tx: 0%; --sc: 1; transform: translateX(var(--tx)) scale(var(--sc)); transition: transform .34s cubic-bezier(.2,1.25,.4,1), filter .1s, visibility 0s .4s; visibility: hidden; pointer-events: none; }
+  #pm-bh.on .bw { visibility: visible; pointer-events: auto; transition-delay: 0s; }
+  #pm-bh:not(.on) .L { --tx: -135%; } #pm-bh:not(.on) .R { --tx: 135%; }
+  #pm-bh.on .c2, #pm-bh.on .c0 { transition-delay: .03s; } #pm-bh.on .c1, #pm-bh.on .c3 { transition-delay: .09s; }
   #pm-bh .bw { position: absolute; pointer-events: auto; -webkit-tap-highlight-color: transparent; touch-action: none; transition: transform .1s, filter .1s; filter: drop-shadow(0 3px 3px rgba(0,0,0,.5)); }
-  #pm-bh .bw.sel { transform: scale(1.07); filter: drop-shadow(0 0 7px rgba(255,255,255,.95)) drop-shadow(0 3px 3px rgba(0,0,0,.5)); z-index: 2; }
+  #pm-bh .bw.sel { --sc: 1.07; filter: drop-shadow(0 0 7px rgba(255,255,255,.95)) drop-shadow(0 3px 3px rgba(0,0,0,.5)); z-index: 2; }
   #pm-bh svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   #pm-bh .tx { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 900 var(--fs) / 1 system-ui, -apple-system, sans-serif; letter-spacing: .01em; -webkit-text-stroke: calc(var(--fs) * .22) #1b1f2e; paint-order: stroke fill; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
   #pm-bh .L .tx { padding: 0 24% 0 16%; } #pm-bh .R .tx { padding: 0 16% 0 24%; }
@@ -197,7 +201,7 @@
     });
     setInterval(() => {
       const st = window.PMBattle && window.PMBattle.state && window.PMBattle.state(), on = !!(st && st.on && st.mode === 'cmd' && PM.landscape && BH.geo);
-      root.style.display = on ? 'block' : 'none'; if (!on) return;
+      root.style.display = BH.geo && PM.landscape ? 'block' : 'none'; root.classList.toggle('on', on); if (!on) return;
       BH.els.forEach((w, i) => w.classList.toggle('sel', st.cmd === i));
     }, 70);
   }
