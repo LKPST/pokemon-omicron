@@ -468,7 +468,7 @@ function assign(){let ch=$('ft_char').value;if(!ch)return;ch=ch.replace(/\s+$/,'
   const adv=$('ft_adv').value===''?null:Math.max(1,Math.min(16,+$('ft_adv').value));const w=+$('ft_w').value;G[ch]={c:fc.c,r:fc.r};if(adv!=null)G[ch].adv=adv;if(w>1)G[ch].w=w;
   $('ft_char').value='';fontUI();status(was?`"${ch}" moved here from c${was.c} r${was.r}.`:`"${ch}" assigned to c${fc.c} r${fc.r}.`)}
 $('ft_adv').onchange=()=>{const cs=cellChars(fc.c,fc.r),v=$('ft_adv').value===''?null:Math.max(1,Math.min(16,+$('ft_adv').value));for(const k of cs){if(v==null)delete G[k].adv;else G[k].adv=v}fontUI()};
-$('ft_w').onchange=()=>{const w=+$('ft_w').value;for(const k of cellChars(fc.c,fc.r)){if(w>1)G[k].w=w;else delete G[k].w}fontUI()};
+$('ft_w').onchange=()=>{const w=+$('ft_w').value,cs=cellChars(fc.c,fc.r),noAdv=cs.some(k=>G[k].adv==null);for(const k of cs){if(w>1)G[k].w=w;else delete G[k].w}fontUI();if(w>1&&noAdv)$('ft_auto').click()};   // wide glyph without an advance: measure one
 $('ft_auto').onclick=()=>{const it=fontItem();if(!it)return;const W=+$('ft_w').value*8,d=it.c.getContext('2d').getImageData(fc.c*8,fc.r*16,W,16).data,r0=it.c.getContext('2d').getImageData(0,0,1,1).data;let mx=-1;const g0=r0[1],b0=r0[2];const rr=r0[0];
   for(let y=0;y<16;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;if(d[i+3]&&!(d[i]===rr&&d[i+1]===g0&&d[i+2]===b0)&&!(d[i]>=245&&d[i+1]>=245&&d[i+2]>=245))mx=Math.max(mx,x)}
   $('ft_adv').value=mx<0?6:Math.max(6,Math.min(W+2,mx+2));$('ft_adv').onchange()};
