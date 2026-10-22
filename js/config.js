@@ -42,6 +42,8 @@ if (existingSave) {
     width: 480,
     height: 620,
     parent: 'game-container',
+    pixelArt: true,                       // nearest-neighbour scaling: tiles, fonts and sprites stay sharp (no blur)
+    render: { pixelArt: true, antialias: false, roundPixels: true },
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
@@ -50,6 +52,10 @@ if (existingSave) {
   };
   
   window.game = new Phaser.Game(config);
+  // every texture (also the ones built from a canvas: tiles, fonts, the text box) is drawn with the NEAREST filter, like the NPC sprites
+  const crisp = key => { try { const t = window.game.textures.get(key); if (t && t.setFilter) t.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* ignore */ } };
+  window.game.textures.on('addtexture', crisp);
+  window.game.textures.getTextureKeys().forEach(crisp);
 }
 
 // start when the page has loaded; if the 'load' event is slow (a hung request, the debug console ...) start anyway after 1.5 s. Runs only once.
