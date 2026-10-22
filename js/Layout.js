@@ -99,6 +99,7 @@
   function fire(type, name) {
     const [key, code, kc] = KEY[name], e = new KeyboardEvent(type, { key, code, bubbles: true, cancelable: true, repeat: false });
     Object.defineProperty(e, 'keyCode', { get: () => kc }); Object.defineProperty(e, 'which', { get: () => kc });
+    Object.defineProperty(e, 'pmPad', { value: name });   // which on-screen button sent it (the name screen must not TYPE the letter of a pad button)
     window.dispatchEvent(e);
   }
   const DBG = /[?&]debug=1/.test(location.search);
