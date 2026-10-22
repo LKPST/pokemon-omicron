@@ -13,55 +13,76 @@
     <div id="game-container"></div>
 
     <!-- 2. Load Tables & Master Data First -->
-    <script src="tables/TrainerTables.js"></script>
-    <script src="tables/PokemonDatabase.js"></script>
-    <script src="tables/PokeballTables.js"></script>
 
     <!-- 3. Load Global State Manager & Animation Logic -->
-    <script src="js/GameStateManagerClass.js"></script>
-    <script src="js/ThrowPokeBallAnim.js"></script>
 
     <!-- 4. Utils -->
-    <script src="js/utils/EmeraldFont.js"></script>
-    <script src="js/ow_table.js"></script>
-    <script src="js/Overworld_map.js"></script>
-    <script src="js/movement_type.js"></script>
-    <script src="js/overworld_script_engine.js"></script>
-    <script src="js/OverworldScene.js"></script>
-    <script src="js/BaseScene.js"></script>
-    <script src="js/givepokemon.js"></script>
-    <script src="tables/tiles.js"></script>
-    <script src="js/overworld_script_commands.js"></script>
-    <script src="js/overworld_scripts.js"></script>
-    <script src="js/overworld_textbox.js"></script>
-    <script src="js/OverworldUI.js"></script>
-    <script src="js/AssetWarmup.js"></script>
-    <script src="tables/TypeTables.js"></script>
-    <script src="tables/MoveTables.js"></script>
-    <script src="tables/LearnsetTables.js"></script>
-    <script src="tables/EvolutionTables.js"></script>
-    <script src="js/BattleEngine.js"></script>
-    <script src="js/TrainerTables.js"></script>
-    <script src="js/ItemSystem.js"></script>
-    <script src="js/ItemTables.js"></script>
-    <script src="tables/PokedexTables.js"></script>
-    <script src="js/SaveSystem.js"></script>
-    <script src="js/StartMenu.js"></script>
-    <script src="tables/OverworldSprites.js"></script>
-    <script src="js/OverworldSpriteLoader.js"></script>
-     <script src="js/OverworldFollower.js"></script>
-    <script src="js/OverworldWild.js"></script>
-    <script src="js/BattleTransition.js"></script>
 
     <!-- Battle UI: PokemonSummary + BagMenu must load BEFORE BattleScene -->
-    <script src="js/PokemonSummary.js"></script>
-    <script src="js/BagMenu.js"></script>
-    <script src="js/BattleScene.js"></script>
 
     <!-- 5. Main Game Scenes, Config & Boot -->
-    <script src="js/Layout.js"></script>
-    <script src="js/TouchControls.js"></script>
-    <script src="js/config.js"></script>
-    <script src="tables/global.js"></script>
+      <!-- Local scripts are fetched with cache:'no-cache' (the server answers 304 when nothing changed), so an upload shows up on the NEXT reload - no ?v= needed.
+         If fetch is not possible (file://, offline), the normal <script src> loading is used. -->
+    <script>
+    (function () {
+      var files = [
+      "tables/TrainerTables.js",
+      "tables/PokemonDatabase.js",
+      "tables/PokeballTables.js",
+      "js/GameStateManagerClass.js",
+      "js/ThrowPokeBallAnim.js",
+      "js/utils/EmeraldFont.js",
+      "js/ow_table.js",
+      "js/Overworld_map.js",
+      "js/movement_type.js",
+      "js/overworld_script_engine.js",
+      "js/OverworldScene.js",
+      "js/BaseScene.js",
+      "js/givepokemon.js",
+      "tables/tiles.js",
+      "js/overworld_script_commands.js",
+      "js/overworld_scripts.js",
+      "js/overworld_textbox.js",
+      "js/OverworldUI.js",
+      "js/AssetWarmup.js",
+      "tables/TypeTables.js",
+      "tables/MoveTables.js",
+      "tables/LearnsetTables.js",
+      "tables/EvolutionTables.js",
+      "js/BattleEngine.js",
+      "js/TrainerTables.js",
+      "js/ItemSystem.js",
+      "js/ItemTables.js",
+      "tables/PokedexTables.js",
+      "js/SaveSystem.js",
+      "js/StartMenu.js",
+      "tables/OverworldSprites.js",
+      "js/OverworldSpriteLoader.js",
+      "js/OverworldFollower.js",
+      "js/OverworldWild.js",
+      "js/BattleTransition.js",
+      "js/PokemonSummary.js",
+      "js/BagMenu.js",
+      "js/BattleScene.js",
+      "js/Layout.js",
+      "js/TouchControls.js",
+      "js/config.js",
+      "tables/global.js"
+      ];
+      window.__PM_LOADING = true;
+      function plain(i) {   // fallback: ordinary script tags, one after another
+        if (i >= files.length) { window.__PM_LOADING = false; if (window.boot) window.boot(); return; }
+        var s = document.createElement('script'); s.src = files[i] + '?t=' + Date.now(); s.async = false;
+        s.onload = s.onerror = function () { plain(i + 1); }; document.head.appendChild(s);
+      }
+      if (!window.fetch || location.protocol === 'file:') { plain(0); return; }
+      Promise.all(files.map(function (f) { return fetch(f, { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error(f + ' -> HTTP ' + r.status); return r.text(); }); }))
+        .then(function (texts) {
+          texts.forEach(function (t, i) { var s = document.createElement('script'); s.text = t + '\n//# sourceURL=' + files[i]; document.head.appendChild(s); });
+          window.__PM_LOADING = false; if (window.boot) window.boot();
+        })
+        .catch(function (e) { console.warn('[loader] fetch failed, using plain script tags:', e); plain(0); });
+    })();
+    </script>
   </body>
 </html>
