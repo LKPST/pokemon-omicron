@@ -13,7 +13,7 @@
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 7, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 8, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -89,6 +89,16 @@
   #pm-tc .pill { border-radius: 999px; color: #eef1ff; font: 700 calc(var(--u) * .26) / 1 system-ui, sans-serif; background: rgba(40,43,60,.9); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px rgba(255,255,255,.2); }
   #pm-tc .pill.on { background: #26a8a0; color: #05161a; }
   #pm-tc .cam svg { width: 56%; height: 56%; }
+  #pm-bh { position: fixed; inset: 0; z-index: 21; pointer-events: none; display: none; }
+  #pm-bh .bw { position: absolute; pointer-events: auto; filter: drop-shadow(0 4px 5px rgba(0,0,0,.55)); transition: transform .12s, filter .12s; -webkit-tap-highlight-color: transparent; touch-action: none; }
+  #pm-bh .bw.sel { transform: scale(1.07); filter: drop-shadow(0 0 9px rgba(255,255,255,.9)) drop-shadow(0 4px 5px rgba(0,0,0,.55)); }
+  #pm-bh .bo, #pm-bh .bi { position: absolute; clip-path: polygon(11% 0, 89% 0, 100% 50%, 89% 100%, 11% 100%, 0 50%); }
+  #pm-bh .bo { inset: 0; background: rgba(20,24,40,.9); } #pm-bh .bw.sel .bo { background: #fff; }
+  #pm-bh .bi { inset: 3px; display: flex; align-items: center; justify-content: center; color: #fff; font: 800 var(--fs) / 1 system-ui, sans-serif; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+  #pm-bh .bi::before { content: ""; position: absolute; inset: 0 0 52% 0; background: linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,0)); }
+  #pm-bh .bw.sel .bi::after { content: "\\25B6"; position: absolute; left: 7%; color: #ff4a4a; font-size: .8em; text-shadow: none; }
+  #pm-bh .c0 .bi { background: linear-gradient(160deg, #ff7a44, #c4261a); } #pm-bh .c1 .bi { background: linear-gradient(160deg, #f6d040, #b58410); color: #fffbe6; }
+  #pm-bh .c2 .bi { background: linear-gradient(160deg, #46d874, #178a3c); } #pm-bh .c3 .bi { background: linear-gradient(160deg, #44cdee, #1a74b8); }
   #pm-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; transition: opacity .35s; }
   #pm-toast { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); background: rgba(10,12,20,.88); color: #fff; font: 600 13px system-ui, sans-serif; padding: 7px 14px; border-radius: 999px; z-index: 31; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
   `;
@@ -120,6 +130,7 @@
     view = document.createElement('div'); view.id = 'pm-view'; gc.parentNode.insertBefore(view, gc); view.appendChild(gc);
     flash = document.createElement('div'); flash.id = 'pm-flash'; view.appendChild(flash);
     toast = document.createElement('div'); toast.id = 'pm-toast'; view.appendChild(toast);
+    buildBattleHud();
     if (tq !== '0') buildControls();   // the buttons show on every device in landscape (mouse works too); ?touch=0 hides them
     ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault()));
     if (isTouch) document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
@@ -155,6 +166,33 @@
     els.minus = g('mn'); btn(els.minus, 'pill', '&minus;', 'minus'); els.minus.style.pointerEvents = 'none';
     els.plus = g('pl'); btn(els.plus, 'pill', '+', 'plus'); els.plus.style.pointerEvents = 'none';
     els.cam = g('cam'); btn(els.cam, 'pill cam', '<svg viewBox="0 0 24 24" fill="none" stroke="#eef1ff" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>', 'shot'); els.cam.style.pointerEvents = 'none';
+  }
+
+  // ---------------------------------------------------------------- battle command buttons (outside the main screen)
+  // POKéMON + BAG on the left, FIGHT + RUN on the right; shown only while a battle asks "What will X do?"
+  const BH = { geo: null, els: [] };
+  function buildBattleHud() {
+    const root = document.createElement('div'); root.id = 'pm-bh'; document.body.appendChild(root); BH.root = root;
+    const lab = ['FIGHT', 'BAG', 'POK\u00e9MON', 'RUN'];
+    lab.forEach((t, i) => {
+      const w = document.createElement('div'); w.className = 'bw c' + i; w.innerHTML = '<div class="bo"></div><div class="bi">' + t + '</div>'; root.appendChild(w); BH.els[i] = w;
+      w.addEventListener('pointerdown', e => { e.preventDefault(); try { if (window.PMBattle) window.PMBattle.choose(i); } catch (x) { /* ignore */ } });
+    });
+    setInterval(() => {
+      const st = window.PMBattle && window.PMBattle.state && window.PMBattle.state(), on = !!(st && st.on && st.mode === 'cmd' && PM.landscape && BH.geo);
+      root.style.display = on ? 'block' : 'none'; if (!on) return;
+      BH.els.forEach((w, i) => w.classList.toggle('sel', st.cmd === i));
+    }, 70);
+  }
+  function placeBattleHud(zx0, zx1, rx0, rx1, y0, y1) {
+    if (!BH.root) return; const zh = y1 - y0, lw = zx1 - zx0, rw = rx1 - rx0;
+    BH.geo = (zh >= 70 && lw >= 56 && rw >= 56) ? 1 : null; if (!BH.geo) return;
+    const put = (el, x, y, w, h) => { Object.assign(el.style, { left: Math.round(x) + 'px', top: Math.round(y) + 'px', width: Math.round(w) + 'px', height: Math.round(h) + 'px' }); el.style.setProperty('--fs', Math.max(10, Math.min(22, h * .27)) + 'px'); };
+    const gap = 8, lh = Math.min(64, (zh - gap) / 2), lwid = Math.min(190, lw);
+    const lx = zx0 + (lw - lwid) / 2, ly = y0 + (zh - (lh * 2 + gap)) / 2;
+    put(BH.els[2], lx, ly, lwid, lh); put(BH.els[1], lx, ly + lh + gap, lwid, lh);
+    const fh = Math.min(120, (zh - gap) * .6), rh = Math.min(64, zh - gap - fh), rwid = Math.min(210, rw), ry0 = y0 + (zh - (fh + rh + gap)) / 2, rx = rx0 + (rw - rwid) / 2;
+    put(BH.els[0], rx, ry0, rwid, fh); put(BH.els[3], rx + rwid * .1, ry0 + fh + gap, rwid * .8, rh);
   }
 
   // ---------------------------------------------------------------- layout maths
@@ -207,6 +245,9 @@
     const setPill = (el, x, y, w, h) => { place(el, x, y, w, h); const p = el.firstChild; p.style.cssText = 'position:absolute;inset:0;pointer-events:auto'; };
     if (portraitPhone) { const py = vy + vh + 14; setPill(els.minus, W / 2 - pw * 1.5 - 12, py, pw, ph); setPill(els.cam, W / 2 - pw / 2, py, pw, ph); setPill(els.plus, W / 2 + pw / 2 + 12, py, pw, ph); }
     else { const tl = dpadSide === 'left'; setPill(els.minus, tl ? padCx : faceCx, topRow, pw, ph); setPill(els.plus, tl ? faceCx : padCx, topRow, pw, ph); setPill(els.cam, tl ? faceCx : padCx, topRow + ph + 8, pw, ph); }
+    { const yTop = (portraitPhone ? vy + vh + 14 + ph + 10 : topRow + ph * 2 + 24), yBot = yMid - 8;
+      if (portraitPhone) placeBattleHud(si.l + 6, W / 2 - 6, W / 2 + 6, W - si.r - 6, yTop, yBot);
+      else placeBattleHud(si.l + 8, vx - 8, vx + vw + 8, W - si.r - 8, yTop, yBot); }
     // the d-pad / face groups keep their own hit areas
   }
 
