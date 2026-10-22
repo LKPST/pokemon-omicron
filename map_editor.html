@@ -18,6 +18,8 @@ window.__ready=(async()=>{
     window.__loadReport.push({name:names[0],path:ok?mem[names[0]]:null});
     if(!ok){window.__missing.push(names[0]);delete mem[names[0]]}}
   try{localStorage.edPaths=JSON.stringify(mem)}catch(e){}
+  // the shared font map (tags /m/ /f/, wide glyphs, advances) - optional, the text preview falls back to the built-in table without it
+  if(typeof EmeraldFont==='undefined'){const c=['js/utils/EmeraldFont.js','utils/EmeraldFont.js','../js/utils/EmeraldFont.js'];for(const d of foundDirs)c.unshift(d+'utils/EmeraldFont.js');for(const p of [...new Set(c)])if(await tryLoad(p)&&typeof EmeraldFont!=='undefined')break}
 })();
 </script>
 <style>
@@ -544,8 +546,8 @@ function getFont(){if(fontCv)return fontCv;const i=img('graphics/fonts/latin_sho
   x.putImageData(d,0,0);return fontCv=c}
 // draws one line; chars starting beyond maxPx are tinted red. Returns nothing
 function drawLineTo(x,line,px,py,sc,maxPx){const f=getFont();let cx=px,w=0;
-  for(const ch of line){const g=OverworldText.glyphs[ch],adv=OverworldText.charWidth(ch);
-    if(g&&f)x.drawImage(f,g.c*8,g.r*16,8,16,cx,py,8*sc,16*sc);
+  for(const t of OverworldText.tokens(line)){const ch=t.ch,g=t.gl,adv=t.adv;
+    if(g&&f)x.drawImage(f,g.c*8,g.r*16,8*t.w,16,cx,py,8*t.w*sc,16*sc);
     else if(ch!==' '){x.fillStyle='#fff';x.font=`${12*sc}px monospace`;x.fillText(g?ch:'?',cx,py+12*sc)}
     w+=adv;if(maxPx!=null&&w>maxPx){x.fillStyle='rgba(255,40,40,.6)';x.fillRect(cx,py,adv*sc,16*sc)}
     cx+=adv*sc}}
