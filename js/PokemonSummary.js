@@ -585,6 +585,13 @@ function createSummary(env) {
   function nameKey(e) {      // raw keyboard: letters are typed, Backspace deletes, Enter = OK, Esc = cancel (Space presses the highlighted key)
     if (S.view !== 'name' || S.tr || !S.name) return false;
     const k = e.key, N = S.name;
+    if (e.pmPad) {   // an on-screen button: it is a controller (A = press the highlighted key, B = delete, X / + = OK, Y = next keyboard page), never a typed letter
+      const p = e.pmPad;
+      if (p === 'a' || p === 'b') { nameKeyPress(p); return true; }
+      if (p === 'x' || p === 'plus') { if (N.ask) nameConfirm(); else nameAsk(); return true; }
+      if (p === 'y') { if (!N.ask) N.page = (N.page + 1) % 3; return true; }
+      return p === 'minus';   // the arrows go through the normal path
+    }
     if (N.ask) { if (k === 'Enter') { nameConfirm(); } else if (k === 'Escape' || k === 'Backspace' || k === 'n' || k === 'N') N.ask = null; else if (k === 'y' || k === 'Y') nameConfirm(); else if (k === 'ArrowLeft' || k === 'ArrowRight') N.ask.i = 1 - N.ask.i; else return false; return true; }
     if (k.length === 1 && k !== ' ' && (/[A-Za-z0-9.,!?'&\-]/.test(k) || GLY[k])) { typeChar(k); return true; }
     if (k === 'Backspace') { backChar(); return true; }
