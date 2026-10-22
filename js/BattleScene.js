@@ -158,7 +158,7 @@ function createBattle(env) {
     }
     x.putImageData(id, 0, 0); fontCache.set(key, c); return c;
   }
-  const TX = { dark: ['#2a2a3a', '#b4bad0'], white: ['#ffffff', '#5a5e7c'], mute: ['#6a7396', '#cdd3e6'], blue: ['#2f64e0', '#a9bdf2'], red: ['#e0344f', '#f2aab8'], badge: ['#ffffff', '#00000070'], ink: ['#383840', '#d8d0b0'] };
+  const TX = { dark: ['#2a2a3a', '#b4bad0'], white: ['#ffffff', '#5a5e7c'], mute: ['#6a7396', '#cdd3e6'], blue: ['#2f64e0', '#a9bdf2'], red: ['#e0344f', '#f2aab8'], badge: ['#ffffff', '#00000070'], ink: ['#383840', '#d8d0b0'], green: ['#5ce878', '#14301c'] };
   // advance of a glyph: 6 px like EmeraldFont, a little more for the wide bitmap glyphs (Lv, PP, ID, arrows ...)
   function advOf(key) {
     if (advCache.has(key)) return advCache.get(key);
@@ -1060,12 +1060,18 @@ function createBattle(env) {
   }
   function tri2(c, x, y, up, col) { c.fillStyle = col; for (let i = 0; i < 5; i++) { const w = up ? 1 + i * 2 : 9 - i * 2; c.fillRect(x - (w >> 1), y + i, w, 1); } }
   function levelBoxView(c) {
-    const lb = S.levelBox; if (!lb) return; S.hit.levelBox = { x: CF.levelBox.x, y: CF.levelBox.y, w: 90, h: 76 };
-    c.save(); c.translate(CF.levelBox.x - 148, CF.levelBox.y - 26);
-    panel(c, 148, 26, 90, 76, false);
-    const names = [['hp', 'HP'], ['atk', 'Attack'], ['def', 'Defense'], ['spa', 'Sp. Atk'], ['spd', 'Sp. Def'], ['spe', 'Speed']];
-    T(c, '{Lv}' + lb.level, 156, 31, 'dark');
-    names.forEach(([k, n], i) => { const y = 45 + i * 9; T(c, n, 156, y, 'dark'); const v = lb.stats[k]; if (v != null) TR(c, String(v), 230, y, 'dark'); });
+    const lb = S.levelBox; if (!lb) return;
+    const x = 128, y = 6, w = 108, h = 98, e = 1 - Math.pow(1 - clamp((lb.t || 0) / .26), 3), dx = Math.round((1 - e) * 130);
+    S.hit.levelBox = { x: x + dx, y, w, h };
+    c.save(); c.translate(dx, 0);
+    pill(c, x, y + 2, w, h, '#05070f', 8); pill(c, x, y, w, h, '#8e9ac8', 8); pill(c, x + 1, y + 1, w - 2, h - 2, '#141a36', 7);
+    pill(c, x + 5, y + 5, w - 10, 14, '#2a3470', 6); T(c, 'LEVEL UP!', x + 11, y + 6, 'white'); TR(c, '{Lv}' + lb.level, x + w - 11, y + 6, 'white');
+    const rows = [['hp', 'HP'], ['atk', 'Attack'], ['def', 'Defense'], ['spa', 'Sp. Atk'], ['spd', 'Sp. Def'], ['spe', 'Speed']];
+    rows.forEach(([k, n], i) => {
+      const yy = y + 24 + i * 12, v = lb.stats[k], g = lb.gain && lb.gain[k];
+      T(c, n, x + 9, yy, 'mute'); if (g > 0) TR(c, '+' + g, x + w - 38, yy, 'green'); if (v != null) TR(c, String(v), x + w - 9, yy, 'white');
+      if (i < 5) rect(c, x + 7, yy + 11, w - 14, 1, 'rgba(255,255,255,.1)');
+    });
     c.restore();
   }
   // battle intro (like the overworld transition before it): black for a moment, then the arena opens from a bar in the middle of the screen,
