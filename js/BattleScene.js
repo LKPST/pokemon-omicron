@@ -907,7 +907,9 @@ function createBattle(env) {
       const P = S.b.active(0), n = P.moves.length;
       if (k === 'b') { S.mode = 'cmd'; S.mvInfo = false; return; }
       if (k === 'y') { S.mvInfo = !S.mvInfo; return; }
-      if (single()) { if (k === 'up') S.mv = (S.mv + n - 1) % n; else if (k === 'down') S.mv = (S.mv + 1) % n; }   // the landscape move list is one column
+      if (single() && k === 'up') S.mv = (S.mv + n - 1) % n;   // the landscape move list is one column
+      else if (single() && k === 'down') S.mv = (S.mv + 1) % n;
+      else if (single() && (k === 'left' || k === 'right')) { /* nothing */ }
       else if (k === 'left') { if (S.mv % 2 === 1) S.mv--; } else if (k === 'right') { if (S.mv % 2 === 0 && S.mv + 1 < n) S.mv++; }
       else if (k === 'up') { if (S.mv >= 2) S.mv -= 2; } else if (k === 'down') { if (S.mv + 2 < n) S.mv += 2; }
       else if (k === 'a') {
@@ -965,7 +967,9 @@ function createBattle(env) {
     if (S.mode === 'learnPick') {
       const n = S.learn.mon.moves.length;
       if (k === 'y') { S.mvInfo = !S.mvInfo; return; }
-      if (single()) { if (k === 'up') S.learn.slot = (S.learn.slot + n - 1) % n; else if (k === 'down') S.learn.slot = (S.learn.slot + 1) % n; }
+      if (single() && k === 'up') S.learn.slot = (S.learn.slot + n - 1) % n;
+      else if (single() && k === 'down') S.learn.slot = (S.learn.slot + 1) % n;
+      else if (single() && (k === 'left' || k === 'right')) { /* nothing */ }
       else if (k === 'left') { if (S.learn.slot % 2 === 1) S.learn.slot--; } else if (k === 'right') { if (S.learn.slot % 2 === 0 && S.learn.slot + 1 < n) S.learn.slot++; }
       else if (k === 'up') { if (S.learn.slot >= 2) S.learn.slot -= 2; } else if (k === 'down') { if (S.learn.slot + 2 < n) S.learn.slot += 2; }
       else if (k === 'b') { S.mode = 'learnAsk'; S.yn = 1; }
@@ -1566,7 +1570,7 @@ if (typeof window.removeSpriteBackground !== 'function') {
 // ---------------------------------------------------------------------------
 // the Phaser scene
 // ---------------------------------------------------------------------------
-class BattleScene extends Phaser.Scene {
+window.BattleScene = class BattleScene extends Phaser.Scene {   // assigned (not declared) so loading this file twice can never throw "already declared"
   constructor() { super('BattleScene'); }
   init(data) { this.battleData = data || {}; this.finishedOnce = false; }
 
@@ -1707,7 +1711,7 @@ class BattleScene extends Phaser.Scene {
     // in use makes WebGL throw "Cannot read properties of null (reading 'isGLTexture')". create() replaces them on the next battle.
     this.ctxTop = this.ctxBot = this.ctxOv = null;
   }
-}
+};
 // ---------------------------------------------------------------------------
 // LAYOUT / SCALE  -  edit these numbers, change them live in the browser console while a battle is open, or (easiest) use
 // battle_layout_editor.html, which drags everything around and writes this block back into this file for you.
