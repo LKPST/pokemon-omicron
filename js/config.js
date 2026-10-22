@@ -52,6 +52,8 @@ if (existingSave) {
   window.game = new Phaser.Game(config);
 }
 
-window.onload = () => {
-  startGame();
-};
+// start when the page has loaded; if the 'load' event is slow (a hung request, the debug console ...) start anyway after 1.5 s. Runs only once.
+let booted = false;
+function boot() { if (booted || window.__PM_LOADING) return; booted = true; console.log('[AppBoot] starting'); startGame(); }
+window.addEventListener('load', boot);
+setTimeout(() => { if (document.readyState !== 'loading') boot(); }, 1500);
