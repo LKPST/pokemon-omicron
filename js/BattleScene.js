@@ -158,7 +158,7 @@ function createBattle(env) {
     }
     x.putImageData(id, 0, 0); fontCache.set(key, c); return c;
   }
-  const TX = { dark: ['#2a2a3a', '#b4bad0'], white: ['#ffffff', '#5a5e7c'], mute: ['#6a7396', '#cdd3e6'], blue: ['#2f64e0', '#a9bdf2'], red: ['#e0344f', '#f2aab8'], badge: ['#ffffff', '#00000070'] };
+  const TX = { dark: ['#2a2a3a', '#b4bad0'], white: ['#ffffff', '#5a5e7c'], mute: ['#6a7396', '#cdd3e6'], blue: ['#2f64e0', '#a9bdf2'], red: ['#e0344f', '#f2aab8'], badge: ['#ffffff', '#00000070'], ink: ['#383840', '#d8d0b0'] };
   // advance of a glyph: 6 px like EmeraldFont, a little more for the wide bitmap glyphs (Lv, PP, ID, arrows ...)
   function advOf(key) {
     if (advCache.has(key)) return advCache.get(key);
@@ -485,7 +485,7 @@ function createBattle(env) {
     if (o.ballSheet) S.ball = Object.assign({}, S.ball, o.ballSheet); if (o.fxSheet) S.fxPath = o.fxSheet; if (o.introIcon) S.introIcon = o.introIcon;
     for (const m of [...S.b.sides[0].party, ...S.b.sides[1].party]) { getImg(spritePath(m.species)); getImg(iconPath(m.species)); }
     for (const p of [S.tr.me.path, S.tr.foe.path, S.ball.path, S.sparkle.path, S.fxPath, S.introIcon, ...SPARKS]) if (p) getImg(p);
-    S.introT = 0; S.stripPlayed = false; S.stripT = 0; S.introTextSet = false; S.preShown = null; S.mode = skip ? 'play' : 'intro'; S.q = S.b.start().slice(); if (skip) S.fadeDir = -1;
+    S.rows = [0, 1].map(() => ({ t: 0, out: skip ? 1 : -1, done: !!skip })); S.introT = 0; S.stripPlayed = false; S.stripT = 0; S.introTextSet = false; S.preShown = null; S.mode = skip ? 'play' : 'intro'; S.q = S.b.start().slice(); if (skip) S.fadeDir = -1;
     // wild battle: the wild Pokémon slides in from the left WHILE the player's trainer slides in (like the original), not after it
     S.introFoe = null;
     if (!skip && S.b.kind === 'wild') {
@@ -831,6 +831,7 @@ function createBattle(env) {
     S.lowT = (S.lowT || 0) + dt; if (window.StartMenu && window.StartMenu.tickBg) window.StartMenu.tickBg(dt);
     { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode;
       const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else { S.stripT = (S.stripT || 0) + dt; if (S.stripT > 1.5) S.stripPlayed = true; } }
+    if (S.rows && S.mode !== 'intro') for (let i = 0; i < 2; i++) { const R = S.rows[i]; if (R.done) continue; R.t += dt; if (R.out < 0 && side(i).vis && R.t > 1.7) R.out = 0; if (R.out >= 0) { R.out += dt; if (R.out > .5) R.done = true; } }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
     if (S.ov && S.ov.ready) { S.ov.t = (S.ov.t || 0) + dt; S.ov.core.update(dt); }
     tickFx(dt); for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
@@ -1005,6 +1006,7 @@ function createBattle(env) {
   function infoBox(c, sd, isPlayer) {
     if (!sd.vis || !sd.species || sd.alpha <= 0) return;
     if (S.mode === 'intro' && !isPlayer && S.introFoe) return;   // the wild Pokémon's box appears when it has finished sliding in
+    if (single()) return infoBoxGba(c, sd, isPlayer);
     const H = isPlayer ? ALLY : FOE, x = H.boxX, y = H.boxY, w = H.boxW, bh = isPlayer ? 10 : 8, by = y + 11, slant = 6;
     S.hit[isPlayer ? 'allyBox' : 'foeBox'] = { x, y, w, h: 11 + bh + (isPlayer ? 5 : 1) };
     const nm = sd.name.length > 10 ? sd.name.slice(0, 10) : sd.name, nx = T(c, nm, x + 1, y - 1, 'dark');
@@ -1070,12 +1072,57 @@ function createBattle(env) {
   // ================================================== LANDSCAPE (one screen): the command / move lists live INSIDE the text box on the right,
   // the party balls sit on the HP boxes, and the party / bag screens cover the whole screen.
   const single = () => !!(root.PMLayout && root.PMLayout.landscape);
-  function miniBall(c, cx, cy, st) {
-    const top = st === 'ok' ? '#e83848' : st === 'status' ? '#e8b020' : st === 'faint' ? '#5a5e70' : '#262a3a', bot = st === 'empty' ? '#262a3a' : st === 'faint' ? '#8a8ea0' : '#f6f6fa';
-    ell(c, cx, cy, 5, 5, '#12121c');
-    for (let dy = -4; dy <= 4; dy++) { const w = Math.round(Math.sqrt(16.6 - dy * dy)); c.fillStyle = dy < 0 ? top : bot; c.fillRect(cx - w, cy + dy, w * 2, 1); }
-    c.fillStyle = '#12121c'; c.fillRect(cx - 4, cy, 9, 1); if (st !== 'empty') { c.fillStyle = st === 'faint' ? '#aab' : '#fff'; c.fillRect(cx - 1, cy - 1, 3, 3); c.fillStyle = '#12121c'; c.fillRect(cx, cy, 1, 1); }
-    if (st === 'faint') { c.fillStyle = '#ff5a5a'; c.fillRect(cx - 2, cy - 2, 1, 1); c.fillRect(cx + 2, cy - 2, 1, 1); c.fillRect(cx - 2, cy + 2, 1, 1); c.fillRect(cx + 2, cy + 2, 1, 1); }
+
+  // ---- landscape: GBA-style cream HP boxes, gold-framed text box with white inset panels, plain pokéball rows
+  const GB = { foe: { x: 6, y: 8, w: 112, h: 26 }, ally: { x: 118, y: 70, w: 118, h: 38 } };
+  function creamBox(c, x, y, w, h) {
+    pill(c, x, y, w, h, '#3c4c5c', 5); pill(c, x + 1, y + 1, w - 2, h - 2, '#f8f4dc', 4); rect(c, x + 3, y + h - 3, w - 6, 1, '#dcd4ac');
+  }
+  function gbaBox(c, x, y, w, h) {
+    pill(c, x, y, w, h, '#8a6a22', 5); pill(c, x + 1, y + 1, w - 2, h - 2, '#f0d070', 5); pill(c, x + 2, y + 2, w - 4, h - 4, '#3a2e18', 4); pill(c, x + 3, y + 3, w - 6, h - 6, '#2a4872', 3); rect(c, x + 5, y + 3, w - 10, 1, '#4a6a98');
+  }
+  function whiteInset(c, x, y, w, h) { pill(c, x, y, w, h, '#4a5668', 4); pill(c, x + 1, y + 1, w - 2, h - 2, '#ffffff', 3); }
+  function infoBoxGba(c, sd, isPlayer) {
+    const g = isPlayer ? GB.ally : GB.foe, x = g.x, y = g.y, w = g.w, h = g.h;
+    S.hit[isPlayer ? 'allyBox' : 'foeBox'] = { x, y, w, h };
+    creamBox(c, x, y, w, h);
+    let nm = sd.name; while (nm.length > 3 && tw(nm) > w - 52) nm = nm.slice(0, -1); const nx = T(c, nm, x + 7, y + 3, 'ink');
+    if (sd.gender) T(c, sd.gender[0] === 'M' ? '♂' : sd.gender[0] === 'F' ? '♀' : '', nx + 1, y + 3, sd.gender[0] === 'M' ? 'blue' : 'red');
+    TR(c, '{Lv}' + sd.level, x + w - 7, y + 3, 'ink');
+    const yr = y + 13, st = sd.status && STATUS_LAB[sd.status];
+    pill(c, x + 6, yr, 19, 9, st ? st[1] : '#3c4c5c', 4);
+    if (st) T(c, st[0], x + 8, yr, st[2] === 'dark' ? 'dark' : 'badge'); else T(c, 'HP', x + 8, yr, 'white');
+    const bx = x + 28, bw = w - 28 - 8, frac = clamp(sd.dhp / Math.max(1, sd.maxhp)), f = Math.ceil((bw - 2) * frac);
+    pill(c, bx, yr + 1, bw, 7, '#3c4c5c', 3); rect(c, bx + 1, yr + 2, bw - 2, 5, '#6a7078');
+    if (f > 0) { const col = frac > .5 ? '#38d050' : frac > .2 ? '#f0c820' : '#f03838'; rect(c, bx + 1, yr + 2, f, 5, col); rect(c, bx + 1, yr + 2, f, 1, 'rgba(255,255,255,0.5)'); rect(c, bx + 1, yr + 6, f, 1, 'rgba(0,0,0,0.2)'); }
+    if (isPlayer) {
+      TR(c, Math.max(0, Math.round(sd.dhp)) + '/ ' + sd.maxhp, x + w - 8, y + 22, 'ink');
+      const ey = y + h - 7;
+      pill(c, bx, ey, bw, 5, '#3c4c5c', 2); rect(c, bx + 1, ey + 1, bw - 2, 3, '#6a7078');
+      const ef = Math.ceil((bw - 2) * clamp(sd.exp)); if (ef > 0) { rect(c, bx + 1, ey + 1, ef, 3, '#34b4f4'); rect(c, bx + 1, ey + 1, ef, 1, 'rgba(255,255,255,0.5)'); }
+    }
+  }
+  const easeOut = p => 1 - Math.pow(1 - clamp(p), 3);
+  // a row of pokéballs on a thin line: pop in one by one (ap = seconds since it appeared), slide away (out = seconds since the send-out)
+  function ballRow(c, party, x, y, rtl, ap, out) {
+    const n = 6, sp = 9, w = n * sp + 8, x0 = rtl ? x - w : x, off = out > 0 ? (rtl ? 1 : -1) * easeOut(out / .38) * (w + 30) : 0, lx = x0 + off;
+    const lw = Math.round(w * easeOut(ap / .25)); if (lw <= 0) return;
+    const lx2 = rtl ? lx + w - lw : lx;
+    rect(c, lx2, y + 8, lw, 2, '#2a2e3a'); rect(c, lx2, y + 8, lw, 1, '#6a7088');
+    for (let i = 0; i < n; i++) {
+      const tt = ap - .1 - i * .09; if (tt <= 0) continue;
+      const r = Math.round(tt < .1 ? 4.8 * tt / .1 : tt < .18 ? 4.8 - .8 * (tt - .1) / .08 : 4); if (r < 1) continue;
+      const M = party[i], stt = !M ? 'empty' : M.hp <= 0 ? 'faint' : M.status ? 'status' : 'ok';
+      miniBall(c, Math.round(lx + 7 + i * sp), y + 3, stt, r);
+    }
+  }
+  function miniBall(c, cx, cy, st, R) {
+    const r = R || 5, top = st === 'ok' ? '#e83848' : st === 'status' ? '#e8b020' : st === 'faint' ? '#5a5e70' : '#262a3a', bot = st === 'empty' ? '#262a3a' : st === 'faint' ? '#8a8ea0' : '#f6f6fa';
+    ell(c, cx, cy, r, r, '#12121c'); const q = (r - .4) * (r - .4);
+    for (let dy = -(r - 1); dy <= r - 1; dy++) { const w = Math.round(Math.sqrt(Math.max(0, q - dy * dy))); c.fillStyle = dy < 0 ? top : bot; c.fillRect(cx - w, cy + dy, w * 2, 1); }
+    c.fillStyle = '#12121c'; c.fillRect(cx - r + 1, cy, r * 2 - 1, 1);
+    if (r >= 4 && st !== 'empty') { c.fillStyle = st === 'faint' ? '#aab' : '#fff'; c.fillRect(cx - 1, cy - 1, 3, 3); c.fillStyle = '#12121c'; c.fillRect(cx, cy, 1, 1); }
+    if (st === 'faint' && r >= 5) { c.fillStyle = '#ff5a5a'; c.fillRect(cx - 2, cy - 2, 1, 1); c.fillRect(cx + 2, cy - 2, 1, 1); c.fillRect(cx - 2, cy + 2, 1, 1); c.fillRect(cx + 2, cy + 2, 1, 1); }
   }
   function ballStrip(c, party, x, y, rtl) {
     const n = 6, w = n * 10 + 8, x0 = rtl ? x - w : x;
@@ -1083,27 +1130,36 @@ function createBattle(env) {
     for (let i = 0; i < n; i++) { const M = party[i], st = !M ? 'empty' : M.hp <= 0 ? 'faint' : M.status ? 'status' : 'ok'; miniBall(c, x0 + 8 + i * 10, y + 5, st); }
   }
   function partyBalls(c) {
-    if (!S.b || S.mode === 'intro') return;
-    const me = S.b.sides[0].party || [], foe = S.b.sides[1].party || [];
-    if (side(0).vis) ballStrip(c, me, ALLY.boxX + ALLY.boxW + 1, ALLY.boxY - 14, true);
-    if (S.b.kind === 'trainer' && side(1).vis) ballStrip(c, foe, FOE.boxX, FOE.boxY + 22, false);
+    if (!S.b || !S.rows) return;
+    const me = S.b.sides[0].party || [], foe = S.b.sides[1].party || [], tr = S.b.kind === 'trainer';
+    const R0 = S.rows[0], R1 = S.rows[1];
+    if (S.mode !== 'intro') {
+      if (!R0.done) ballRow(c, me, 236, 96, true, R0.t, R0.out);
+      if (tr && !R1.done) ballRow(c, foe, 4, 20, false, R1.t, R1.out);
+    }
+    if (R0.done && side(0).vis && sdAlive(0)) ballRow(c, me, GB.ally.x + GB.ally.w - 1, GB.ally.y - 12, true, 99, 0);
+    if (tr && R1.done && side(1).vis && sdAlive(1)) ballRow(c, foe, GB.foe.x, GB.foe.y + GB.foe.h + 1, false, 99, 0);
   }
+  const sdAlive = i => side(i).alpha > 0;
   const inR = (r, x, y) => r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
   const lum = h => { const r = rgbOf(h); return (r[0] * .3 + r[1] * .59 + r[2] * .11); };
   function moveList(c, P, sel, learn) {
-    const m = CF.msg; panel(c, m.x, m.y, m.w, m.h, true); S.hit.mv = [];
+    const m = CF.msg; gbaBox(c, m.x, m.y, m.w, m.h); S.hit.mv = [];
+    const lx = m.x + 4, ly = m.y + 4, lw = 146, lh = m.h - 8; whiteInset(c, lx, ly, lw, lh);
     for (let i = 0; i < 4; i++) {
-      const x = m.x + 6 + (i & 1) * 73, y = m.y + 3 + (i >> 1) * 19, w = 70, h = 16, s = P.moves[i]; S.hit.mv.push({ x, y, w, h: 19 });
-      if (!s) { pill(c, x, y, w, h, '#2a2e42', 9); continue; }
-      const mi = mvInfo(s.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled, col = dis ? '#6b7080' : TYPE_COLOR(mi.type), off = btn(c, x, y, w, h, col, sel === i);
-      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 12) nm = nm.slice(0, -1); Tc(c, nm, x, w, y + 3 + off, lum(col) > 150 ? 'dark' : 'white', false);
+      const cx = lx + (i & 1) * 70, ry = ly + 6 + (i >> 1) * 15, s0 = P.moves[i], mw = (i & 1) ? 62 : 56; S.hit.mv.push({ x: cx, y: ly + (i >> 1) * 18, w: 72, h: 18 });
+      if (sel === i) tri(c, cx + 5 + Math.round(Math.sin(S.t * 9)), ry + 4, 3, '#383840');
+      if (!s0) { T(c, '-', cx + 13, ry, 'mute'); continue; }
+      const mi = mvInfo(s0.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled;
+      let nm = mi.name; while (nm.length > 3 && tw(nm) > mw) nm = nm.slice(0, -1); T(c, nm, cx + 12, ry, dis ? 'mute' : 'ink');
     }
-    const px = m.x + 158, pw = m.w - 162, py = m.y + 4, ph = m.h - 8; pill(c, px, py + 1, pw, ph, '#0e1020', 7); pill(c, px, py, pw, ph, '#242a44', 7); const s = P.moves[sel]; if (!s) return;
-    const mi = mvInfo(s.key);
-    if (S.mvMsg && S.mode === 'move') { wrapPx(S.mvMsg, pw - 12).slice(0, 3).forEach((l, i) => T(c, l, px + 6, py + 3 + i * 11, 'red')); return; }
-    if (learn) { T(c, 'Forget which?', px + 6, py + 4, 'red'); TR(c, s.pp + '/' + s.maxpp, px + pw - 6, py + 18, 'white'); return; }
-    T(c, 'PP', px + 6, py + 4, 'white'); TR(c, s.pp + '/' + s.maxpp, px + pw - 6, py + 4, s.pp <= Math.floor(s.maxpp / 4) ? 'red' : 'white');
-    badge(c, mi.type, px + 6, py + 19);
+    const rx = lx + lw + 3, rw = m.x + m.w - 4 - rx, ry = ly; whiteInset(c, rx, ry, rw, lh); const s0 = P.moves[sel]; if (!s0) return;
+    const mi = mvInfo(s0.key);
+    if (S.mvMsg && S.mode === 'move') { wrapPx(S.mvMsg, rw - 10).slice(0, 3).forEach((l, i) => T(c, l, rx + 5, ry + 4 + i * 10, 'red')); return; }
+    T(c, 'PP', rx + 6, ry + 5, 'ink'); TR(c, s0.pp + '/' + s0.maxpp, rx + rw - 6, ry + 5, s0.pp <= Math.floor(s0.maxpp / 4) ? 'red' : 'ink');
+    if (learn) { T(c, 'FORGET?', rx + 6, ry + 20, 'red'); return; }
+    const tn = pretty(mi.type).toUpperCase().slice(0, 8), tcol = TYPE_COLOR(mi.type);
+    pill(c, rx + 6, ry + 19, rw - 12, 11, tcol, 4); Tc(c, tn, rx + 6, rw - 12, ry + 19, lum(tcol) > 150 ? 'dark' : 'white', false);
   }
   function ynBox(c) {
     const m = CF.msg, x = m.x + 2, y = m.y - 38; panel(c, x, y, 62, 36, false); S.hit.yn = [];
@@ -1112,12 +1168,13 @@ function createBattle(env) {
   function singleMsg(c) {
     const m = CF.msg, md = S.mode; S.hit.cmd = null; S.hit.mv = null; S.hit.yn = null;
     if (md === 'cmd') {
-      panel(c, m.x, m.y, m.w, m.h, true);
-      wrapPx((S.lines || []).join(' '), 104).slice(0, 2).forEach((l, i) => T(c, l, m.x + 8, m.y + 8 + i * 16, 'dark'));
-      const lab = ['FIGHT', 'BAG', 'POKéMON', 'RUN'], col = ['#d9381e', '#2196f3', '#9c27b0', '#e6a800']; S.hit.cmd = [];
+      gbaBox(c, m.x, m.y, m.w, m.h);
+      wrapPx((S.lines || []).join(' '), 104).slice(0, 2).forEach((l, i) => T(c, l, m.x + 10, m.y + 9 + i * 15, 'white'));
+      const ix = m.x + m.w - 108, iy = m.y + 4, iw = 104, ih = m.h - 8, lab = ['FIGHT', 'BAG', 'POKéMON', 'RUN']; whiteInset(c, ix, iy, iw, ih); S.hit.cmd = [];
       for (let i = 0; i < 4; i++) {
-        const x = m.x + 118 + (i & 1) * 56, y = m.y + 3 + (i >> 1) * 19, w = 53, h = 16; S.hit.cmd.push({ x, y, w, h: 19 });
-        const off = btn(c, x, y, w, h, col[i], S.cmd === i); Tc(c, lab[i], x, w, y + 3 + off, i === 3 ? 'dark' : 'white', false);
+        const cx = ix + (i & 1) * 52, ry = iy + 6 + (i >> 1) * 14; S.hit.cmd.push({ x: cx, y: iy + (i >> 1) * 17, w: 52, h: 17 });
+        if (S.cmd === i) tri(c, cx + 5 + Math.round(Math.sin(S.t * 9)), ry + 4, 3, '#383840');
+        T(c, lab[i], cx + 12, ry, 'ink');
       }
       return;
     }
@@ -1182,10 +1239,10 @@ function createBattle(env) {
   function msgBox(c, y, h) {
     const m = CF.msg; y = y == null ? m.y : y; h = h == null ? m.h : h;
     S.hit.msg = { x: m.x, y, w: m.w, h };
-    panel(c, m.x, y, m.w, h, true);
+    const sg = single(); if (sg) gbaBox(c, m.x, y, m.w, h); else panel(c, m.x, y, m.w, h, true);
     const ls = S.lines; let rem = Math.floor(S.shown);
-    for (let i = 0; i < ls.length; i++) { const t = ls[i].slice(0, Math.max(0, rem)); rem -= ls[i].length; T(c, t, m.x + 8, y + 8 + i * 16, 'dark'); }
-    if (S.mode === 'play' && S.cur && S.cur.ev.t === 'msg' && S.typed && S.textWait > .25 && Math.floor(S.t * 4) % 2 === 0 && S.page < S.pages.length - 1) tri(c, m.x + m.w - 10, y + h - 8, 3, '#d04040');
+    for (let i = 0; i < ls.length; i++) { const t = ls[i].slice(0, Math.max(0, rem)); rem -= ls[i].length; T(c, t, m.x + (sg ? 10 : 8), y + (sg ? 9 : 8) + i * (sg ? 15 : 16), sg ? 'white' : 'dark'); }
+    if (S.mode === 'play' && S.cur && S.cur.ev.t === 'msg' && S.typed && S.textWait > .25 && Math.floor(S.t * 4) % 2 === 0 && S.page < S.pages.length - 1) tri(c, m.x + m.w - 12, y + h - 9, 3, single() ? '#ff7a7a' : '#d04040');
   }
   function btn(c, x, y, w, h, col, sel) {
     const off = sel ? Math.round(Math.sin(S.t * 8)) : 0;
