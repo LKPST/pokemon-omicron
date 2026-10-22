@@ -884,14 +884,17 @@ function createBattle(env) {
       return;
     }
     if (S.mode === 'cmd') {
-      if (k === 'left') S.cmd = S.cmd & 2; else if (k === 'right') S.cmd = (S.cmd & 2) | 1; else if (k === 'up') S.cmd &= 1; else if (k === 'down') S.cmd |= 2;
+      if (single() && (k === 'left' || k === 'right')) S.cmd ^= 2;   // landscape: POKéMON / BAG are the left column, FIGHT / RUN the right one (the hex buttons beside the screen)
+      else if (single() && (k === 'up' || k === 'down')) S.cmd ^= 3;
+      else if (k === 'left') S.cmd = S.cmd & 2; else if (k === 'right') S.cmd = (S.cmd & 2) | 1; else if (k === 'up') S.cmd &= 1; else if (k === 'down') S.cmd |= 2;
       else if (k === 'b') S.cmd = 3;   // B jumps the cursor to RUN
+      else if (k === 'y') { /* nothing */ }
       else if (k === 'a') {
         S.lastCmd = S.cmd; S.lastCmdMon = S.b.active(0);   // remember the choice: after a failed ball the cursor stays on BAG next turn
         if (S.cmd === 0) {
           const P = S.b.active(0), us = S.b.usable(P);
           if (us.struggle) { act({ type: 'move', slot: 'struggle' }); return; }
-          S.mode = 'move'; S.mv = Math.min(S.mv, P.moves.length - 1); S.mvMsg = '';
+          S.mode = 'move'; S.mvInfo = false; S.mv = Math.min(S.mv, P.moves.length - 1); S.mvMsg = '';
         } else if (S.cmd === 1) { S.mode = 'bag'; S.bagSel = Math.min(S.bagSel, Math.max(0, S.bag.length - 1)); S.bagMsg = ''; openBag(); }
         else if (S.cmd === 2) { S.ctx = 'switch'; S.mode = 'party'; S.pty = S.b.sides[0].active; S.partyMsg = 'Choose a Pokémon.'; openParty('switch'); }
         else act({ type: 'run' });
@@ -900,7 +903,8 @@ function createBattle(env) {
     }
     if (S.mode === 'move') {
       const P = S.b.active(0), n = P.moves.length;
-      if (k === 'b') { S.mode = 'cmd'; return; }
+      if (k === 'b') { S.mode = 'cmd'; S.mvInfo = false; return; }
+      if (k === 'y') { S.mvInfo = !S.mvInfo; return; }
       if (k === 'left') { if (S.mv % 2 === 1) S.mv--; } else if (k === 'right') { if (S.mv % 2 === 0 && S.mv + 1 < n) S.mv++; }
       else if (k === 'up') { if (S.mv >= 2) S.mv -= 2; } else if (k === 'down') { if (S.mv + 2 < n) S.mv += 2; }
       else if (k === 'a') {
@@ -957,6 +961,7 @@ function createBattle(env) {
     }
     if (S.mode === 'learnPick') {
       const n = S.learn.mon.moves.length;
+      if (k === 'y') { S.mvInfo = !S.mvInfo; return; }
       if (k === 'left') { if (S.learn.slot % 2 === 1) S.learn.slot--; } else if (k === 'right') { if (S.learn.slot % 2 === 0 && S.learn.slot + 1 < n) S.learn.slot++; }
       else if (k === 'up') { if (S.learn.slot >= 2) S.learn.slot -= 2; } else if (k === 'down') { if (S.learn.slot + 2 < n) S.learn.slot += 2; }
       else if (k === 'b') { S.mode = 'learnAsk'; S.yn = 1; }
@@ -1105,24 +1110,23 @@ function createBattle(env) {
   const easeOut = p => 1 - Math.pow(1 - clamp(p), 3);
   // a row of pokéballs on a thin line: pop in one by one (ap = seconds since it appeared), slide away (out = seconds since the send-out)
   function ballRow(c, party, x, y, rtl, ap, out) {
-    const n = 6, sp = 7, w = n * sp + 6, x0 = rtl ? x - w : x, off = out > 0 ? (rtl ? 1 : -1) * easeOut(out / .38) * (w + 40) : 0, lx = x0 + off;
+    const n = 6, sp = 10, w = n * sp + 4, x0 = rtl ? x - w : x, off = out > 0 ? (rtl ? 1 : -1) * easeOut(out / .38) * (w + 40) : 0, lx = x0 + off;
     const lw = Math.round(w * easeOut(ap / .25)); if (lw <= 0) return;
     const lx2 = rtl ? lx + w - lw : lx;
-    rect(c, Math.round(lx2), y + 5, lw, 1, '#2a2e3a');
+    rect(c, Math.round(lx2), y + 7, lw, 1, '#2a2e3a');
     for (let i = 0; i < n; i++) {
       const tt = ap - .1 - i * .09; if (tt <= 0) continue;
-      const r = Math.round(tt < .1 ? 3 * tt / .1 : tt < .18 ? 3 - (tt - .1) / .08 : 2); if (r < 1) continue;
+      const r = Math.round(tt < .1 ? 5 * tt / .1 : tt < .18 ? 5 - (tt - .1) / .08 : 4); if (r < 1) continue;
       const M = party[i], stt = !M ? 'empty' : M.hp <= 0 ? 'faint' : M.status ? 'status' : 'ok';
-      miniBall(c, Math.round(lx + 5 + i * sp), y + 2, stt, r);
+      miniBall(c, Math.round(lx + 6 + i * sp), y + 2, stt, r);
     }
   }
   function miniBall(c, cx, cy, st, R) {
-    const r = R || 5, top = st === 'ok' ? '#e83848' : st === 'status' ? '#e8b020' : st === 'faint' ? '#5a5e70' : '#262a3a', bot = st === 'empty' ? '#262a3a' : st === 'faint' ? '#8a8ea0' : '#f6f6fa';
-    ell(c, cx, cy, r, r, '#12121c'); const q = (r - .4) * (r - .4);
-    for (let dy = -(r - 1); dy <= r - 1; dy++) { const w = Math.round(Math.sqrt(Math.max(0, q - dy * dy))); c.fillStyle = dy < 0 ? top : bot; c.fillRect(cx - w, cy + dy, w * 2, 1); }
-    c.fillStyle = '#12121c'; c.fillRect(cx - r + 1, cy, r * 2 - 1, 1);
-    if (r >= 4 && st !== 'empty') { c.fillStyle = st === 'faint' ? '#aab' : '#fff'; c.fillRect(cx - 1, cy - 1, 3, 3); c.fillStyle = '#12121c'; c.fillRect(cx, cy, 1, 1); }
-    if (st === 'faint' && r >= 5) { c.fillStyle = '#ff5a5a'; c.fillRect(cx - 2, cy - 2, 1, 1); c.fillRect(cx + 2, cy - 2, 1, 1); c.fillRect(cx - 2, cy + 2, 1, 1); c.fillRect(cx + 2, cy + 2, 1, 1); }
+    const r = R || 4, top = st === 'ok' ? '#e83030' : st === 'status' ? '#e8b020' : st === 'faint' ? '#7a7e8e' : '#3a3e50', bot = st === 'empty' ? '#3a3e50' : st === 'faint' ? '#a8acb8' : '#ffffff', bd = '#22242e';
+    for (let iy = -r; iy < r; iy++) for (let ix = -r; ix < r; ix++) {
+      const d = Math.hypot(ix + .5, iy + .5); if (d > r) continue;
+      c.fillStyle = d > r - 1 || iy === 0 ? bd : iy < 0 ? top : bot; c.fillRect(cx + ix, cy + iy, 1, 1);
+    }
   }
   function ballStrip(c, party, x, y, rtl) {
     const n = 6, w = n * 10 + 8, x0 = rtl ? x - w : x;
@@ -1138,29 +1142,57 @@ function createBattle(env) {
   const sdAlive = i => side(i).alpha > 0;
   const inR = (r, x, y) => r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
   const lum = h => { const r = rgbOf(h); return (r[0] * .3 + r[1] * .59 + r[2] * .11); };
-  function effLabel(P, mi) {
-    try { if (!(mi.power > 0)) return null; const F = S.b.active(1); if (!F) return null; const e = S.b.typeMult(mi.type, F, P, mi.mv); return e === 0 ? ['No effect', '#ff9a9a'] : e > 1 ? ['Super effective', '#ffe45a'] : e < 1 ? ['Not very effective', '#ffb4b4'] : ['Effective', '#e8ecf8']; } catch (e) { return null; }
+  function effKind(P, mi) {
+    try { if (!(mi.power > 0)) return 'neutral'; const F = S.b.active(1); if (!F) return 'neutral'; const e = S.b.typeMult(mi.type, F, P, mi.mv); return e === 0 ? 'none' : e > 1 ? 'super' : e < 1 ? 'resist' : 'neutral'; } catch (e) { return 'neutral'; }
   }
-  // Fight: the screen darkens and the four moves stack on the right (name, type, PP, how effective it is)
+  const EFF_BORDER = { super: '#f5c518', resist: '#e23b3b', none: '#8a2a2a', neutral: '#b4bacb' };
+  // the type picture, with its own outline so it does not look like part of the row
+  function typeChip(c, key, x, y, dim) {
+    const TT = env.types && env.types(), te = TT && TT.types && TT.types[key], H = 10, src = te && te.icon && TT.sheet ? typeSheet(TT) : null;
+    if (src) { const w = Math.round(te.icon.w * H / te.icon.h); pill(c, x - 1, y - 1, w + 2, H + 2, '#ffffff', 4); pill(c, x, y, w, H, '#14161e', 3); c.imageSmoothingEnabled = false; c.drawImage(src, te.icon.x, te.icon.y, te.icon.w, te.icon.h, x, y, w, H); if (dim) { c.fillStyle = 'rgba(40,44,60,.55)'; c.fillRect(x, y, w, H); } return w + 2; }
+    const nm = typeLabel(key), lab = (te && te.short ? te.short : TLAB[nm] || nm.toUpperCase().slice(0, 6)).toUpperCase(), w = tw(lab) + 6, col = TYPE_COLOR(key);
+    pill(c, x - 1, y - 1, w + 2, H + 2, '#ffffff', 4); pill(c, x, y, w, H, col, 3); T(c, lab, x + 3, y - 1, lum(col) > 165 ? 'dark' : 'badge'); return w + 2;
+  }
+  function infoDot(c, cx, cy) { ell(c, cx, cy, 5, 5, '#16305e'); ell(c, cx, cy, 4, 4, '#58a4ff'); rect(c, cx, cy - 3, 2, 2, '#ffffff'); rect(c, cx, cy, 2, 4, '#ffffff'); }
+  function moveDesc(mi) {
+    const m = mi.mv; if (!m) return '';
+    if (m.description) return m.description;
+    const fl = m.flags || [], bits = ['A ' + pretty(m.split || 'status').toLowerCase() + ' ' + pretty(m.type).toLowerCase() + '-type move.'];
+    if (m.effect && m.effect !== 'HIT') bits.push(pretty(m.effect) + '.'); if (fl.includes('contact')) bits.push('Makes contact.'); if (m.priority) bits.push('Priority ' + (m.priority > 0 ? '+' : '') + m.priority + '.');
+    return bits.join(' ');
+  }
+  function moveInfoPanel(c, mi, s0) {
+    const x = 4, y = 6, w = 90, h = 98; pill(c, x, y + 2, w, h, '#05070f', 8); pill(c, x, y, w, h, '#8e9ac8', 8); pill(c, x + 1, y + 1, w - 2, h - 2, '#141a36', 7);
+    let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 14) nm = nm.slice(0, -1); T(c, nm, x + 7, y + 5, 'white'); typeChip(c, mi.type, x + 7, y + 18);
+    const cat = pretty(mi.split || 'STATUS'), cc = /phys/i.test(cat) ? '#e0602a' : /spec/i.test(cat) ? '#3a78e0' : '#7c8298';
+    pill(c, x + 7 + 38, y + 18, w - 52, 10, cc, 4); Tc(c, cat.toUpperCase().slice(0, 4), x + 45, w - 52, y + 17, 'white', false);
+    const rows = [['Power', mi.power > 0 ? String(mi.power) : '-'], ['Accuracy', mi.acc > 0 ? String(mi.acc) : '-'], ['PP', s0.pp + '/' + s0.maxpp], ['Priority', mi.mv && mi.mv.priority ? String(mi.mv.priority) : '0']];
+    rows.forEach((r, i) => { const yy = y + 36 + i * 14; T(c, r[0], x + 7, yy, 'mute'); TR(c, r[1], x + w - 8, yy, 'white'); if (i < 3) rect(c, x + 6, yy + 11, w - 12, 1, 'rgba(255,255,255,.1)'); });
+  }
+  // Fight: the screen darkens and the four moves stack on the right; the border shows the matchup (gold = super effective, red = not very, grey = normal)
   function moveList(c, P, sel, learn) {
-    c.fillStyle = 'rgba(4,6,16,0.62)'; c.fillRect(0, 0, W, H); S.hit.mv = [];
-    const x0 = 40, w = 196, h = 24;
+    c.fillStyle = 'rgba(4,6,16,0.62)'; c.fillRect(0, 0, W, H); S.hit.mv = []; S.hit.mvi = [];
+    const x0 = 100, w = 136, h = 24;
     for (let i = 0; i < 4; i++) {
-      const y = 5 + i * 26, s0 = P.moves[i]; S.hit.mv.push({ x: x0, y: y - 1, w, h: h + 2 });
-      if (!s0) { pill(c, x0, y, w, h, 'rgba(40,44,60,.55)', 8); T(c, '-', x0 + 10, y + 8, 'mute'); continue; }
-      const mi = mvInfo(s0.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled, on = sel === i, tcol = dis ? '#6b7080' : TYPE_COLOR(mi.type);
-      const base = on ? tcol : '#3b3f4e', fg = on ? (lum(tcol) > 165 ? 'dark' : 'white') : (dis ? 'mute' : 'white');
-      pill(c, x0, y + 2, w, h, '#0a0c14', 9); pill(c, x0, y, w, h, on ? '#ffffff' : '#7a8098', 9); pill(c, x0 + 1, y + 1, w - 2, h - 2, base, 8);
-      if (on) { rect(c, x0 + 8, y + 2, w - 16, 1, 'rgba(255,255,255,.45)'); tri(c, x0 - 8 + Math.round(Math.sin(S.t * 9)), y + 12, 4, '#ff5a5a'); }
-      let nm = mi.name; while (nm.length > 3 && tw(nm) > 84) nm = nm.slice(0, -1); T(c, nm, x0 + 9, y + 2, fg);
-      const lab = learn ? null : effLabel(P, mi); if (lab) TR(c, lab[0], x0 + w - 8, y + 2, on ? (lab[0] === 'Super effective' ? 'dark' : fg) : 'white');
-      const tn = pretty(mi.type).toUpperCase().slice(0, 7), pw = tw(tn) + 8, pc = TYPE_COLOR(mi.type);
-      pill(c, x0 + 9, y + 13, pw, 9, dis ? '#6b7080' : pc, 4); Tc(c, tn, x0 + 9, pw, y + 13, lum(pc) > 165 && !dis ? 'dark' : 'white', false);
-      T(c, 'PP ' + s0.pp + '/' + s0.maxpp, x0 + 9 + pw + 6, y + 12, s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg);
+      const on = sel === i, y = 5 + i * 26, x = x0 + (on ? -3 : 0), s0 = P.moves[i]; S.hit.mv.push({ x: x0 - 4, y: y - 1, w: w + 8, h: h + 2 }); S.hit.mvi.push({ x: x + 2, y: y + 2, w: 16, h: h - 4 });
+      if (!s0) { pill(c, x0, y, w, h, 'rgba(40,44,60,.5)', 7); continue; }
+      const mi = mvInfo(s0.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled, tcol = dis ? '#6b7080' : TYPE_COLOR(mi.type), ek = learn ? 'neutral' : effKind(P, mi);
+      const base = on ? tcol : mixHex(tcol, 52, .62), bc = EFF_BORDER[ek];
+      pill(c, x, y + 2, w, h, '#05070f', 7); if (on) pill(c, x - 1, y - 1, w + 2, h + 2, '#ffffff', 8); pill(c, x, y, w, h, bc, 7); pill(c, x + 2, y + 2, w - 4, h - 4, base, 5);
+      rect(c, x + 5, y + 2, w - 10, 6, lighten(base, on ? .26 : .12)); rect(c, x + 5, y + h - 5, w - 10, 3, darken(base, .18));
+      c.fillStyle = 'rgba(255,255,255,0.09)'; for (let k = 0; k < w - 14; k += 12) for (let r = 0; r < h - 6; r++) { const px = x + 6 + k + (h - 6 - r); if (px < x + w - 7) c.fillRect(px, y + 3 + r, 4, 1); }
+      infoDot(c, x + 11, y + 12);
+      const fg = on ? (lum(tcol) > 170 ? 'dark' : 'white') : (dis ? 'mute' : 'white');
+      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 28) nm = nm.slice(0, -1); T(c, nm, x + 21, y + 2, fg);
+      const cw = typeChip(c, mi.type, x + 22, y + 13, dis); T(c, 'PP ' + s0.pp + '/' + s0.maxpp, x + 22 + cw + 4, y + 12, s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg);
+      if (on) tri(c, x - 8 + Math.round(Math.sin(S.t * 9)), y + 12, 4, '#ff5a5a');
     }
+    const sp = P.moves[sel], smi = sp && mvInfo(sp.key); if (S.mvInfo && sp) moveInfoPanel(c, smi, sp);
     const m = CF.msg; gbaBox(c, m.x, m.y, m.w, m.h);
+    if (S.mvInfo && sp) { const ls = wrapPx(moveDesc(smi) || 'No description.', m.w - 24).slice(0, 3), sp2 = ls.length > 2 ? 11 : 15; ls.forEach((l, i) => T(c, l, m.x + 10, m.y + (ls.length > 2 ? 6 : 9) + i * sp2, 'white')); return; }
     const txt = S.mvMsg && S.mode === 'move' ? S.mvMsg : learn ? 'Forget which move?' : 'Choose a move.';
     wrapPx(txt, m.w - 24).slice(0, 2).forEach((l, i) => T(c, l, m.x + 10, m.y + 9 + i * 15, S.mvMsg && S.mode === 'move' ? 'red' : 'white'));
+    TR(c, 'Y: move info', m.x + m.w - 9, m.y + m.h - 13, 'mute');
   }
   function ynBox(c) {
     const m = CF.msg, x = m.x + 2, y = m.y - 38; panel(c, x, y, 62, 36, false); S.hit.yn = [];
@@ -1183,7 +1215,7 @@ function createBattle(env) {
     if (S.ov) { if (S.ov.ready && S.ov.core.click) S.ov.core.click(x, y * 160 / H); return; }
     const md = S.mode;
     if (md === 'cmd' && S.hit.cmd) { for (let i = 0; i < 4; i++) if (inR(S.hit.cmd[i], x, y)) { S.cmd = i; press('a'); return; } return; }
-    if ((md === 'move' || md === 'learnPick') && S.hit.mv) { for (let i = 0; i < 4; i++) if (inR(S.hit.mv[i], x, y)) { if (md === 'move') S.mv = i; else S.learn.slot = i; press('a'); return; } return; }
+    if ((md === 'move' || md === 'learnPick') && S.hit.mv) { for (let i = 0; i < 4; i++) if (inR(S.hit.mv[i], x, y)) { if (S.hit.mvi && inR(S.hit.mvi[i], x, y)) { if (md === 'move') S.mv = i; else S.learn.slot = i; S.mvInfo = !S.mvInfo; return; } if (md === 'move') S.mv = i; else S.learn.slot = i; press('a'); return; } return; }
     if ((md === 'setAsk' || md === 'learnAsk') && S.hit.yn) { for (let i = 0; i < 2; i++) if (inR(S.hit.yn[i], x, y)) { S.yn = i; press('a'); return; } return; }
     if (md === 'play') press('a');
   }
@@ -1567,7 +1599,7 @@ class BattleScene extends Phaser.Scene {
     try { const m = BattleScene.musicEl(); if (m) { m.loop = true; m.volume = 0.5; m.currentTime = 0; BattleScene.musicOn = true; const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a key press */ }); this.battleMusic = m; } } catch (e) { /* no audio */ }
 
     // ---- input
-    const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b' };
+    const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', z: 'a', Enter: 'a', ' ': (window.PMLayout && window.PMLayout.landscape) ? 'y' : 'a', y: 'y', x: 'b', Escape: 'b', Backspace: 'b' };
     this.openedAt = performance.now();
     this.kd = e => {
       { const ov = core.S && core.S.ov; if (ov && ov.ready && ov.core.nameKey && ov.core.S.view === 'name' && !ov.core.S.tr && ov.core.nameKey(e)) { e.preventDefault(); e.stopImmediatePropagation(); return; } }   // typing a nickname
