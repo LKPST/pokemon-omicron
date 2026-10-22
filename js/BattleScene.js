@@ -1170,7 +1170,7 @@ function createBattle(env) {
   const twS = (str, sc) => tw(str) * sc;
   function typeChip(c, key, x, y, dim) {
     const TT = env.types && env.types(), te = TT && TT.types && TT.types[key], H = 10, src = te && te.icon && TT.sheet ? typeSheet(TT) : null;
-    if (src) { const w = Math.round(te.icon.w * H / te.icon.h); pill(c, x - 1, y - 1, w + 2, H + 2, '#ffffff', 4); pill(c, x, y, w, H, '#14161e', 3); c.imageSmoothingEnabled = false; c.drawImage(src, te.icon.x, te.icon.y, te.icon.w, te.icon.h, x, y, w, H); if (dim) { c.fillStyle = 'rgba(40,44,60,.55)'; c.fillRect(x, y, w, H); } return w + 2; }
+    if (src) { const w = Math.round(te.icon.w * H / te.icon.h); pill(c, x - 1, y - 1, w + 2, H + 2, '#ffffff', 3); c.imageSmoothingEnabled = false; c.drawImage(src, te.icon.x, te.icon.y, te.icon.w, te.icon.h, x, y, w, H); if (dim) { c.fillStyle = 'rgba(40,44,60,.55)'; c.fillRect(x, y, w, H); } return w + 2; }
     const nm = typeLabel(key), lab = (te && te.short ? te.short : TLAB[nm] || nm.toUpperCase().slice(0, 6)).toUpperCase(), w = tw(lab) + 6, col = TYPE_COLOR(key);
     pill(c, x - 1, y - 1, w + 2, H + 2, '#ffffff', 4); pill(c, x, y, w, H, col, 3); T(c, lab, x + 3, y - 1, lum(col) > 165 ? 'dark' : 'badge'); return w + 2;
   }
@@ -1208,9 +1208,8 @@ function createBattle(env) {
       c.fillStyle = 'rgba(255,255,255,0.09)'; for (let k = 0; k < w - 14; k += 12) for (let r = 0; r < h - 6; r++) { const px = x + 6 + k + (h - 6 - r); if (px < x + w - 7) c.fillRect(px, y + 3 + r, 4, 1); }
       ico.push([x - 7, y - 8]);
       const fg = on ? (lum(tcol) > 170 ? 'dark' : 'white') : (dis ? 'mute' : 'white');
-      const cwid = typeChipW(mi.type); typeChip(c, mi.type, x + w - cwid - 7, y + 3, dis);
-      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 16 - cwid - 14) nm = nm.slice(0, -1); T(c, nm, x + 16, y + 7, fg);
-      const pp = 'PP ' + s0.pp + '/' + s0.maxpp; Ts(c, pp, x + w - 8 - twS(pp, .5), y + 15, s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg, .5);
+      const pp = s0.pp + '/' + s0.maxpp, ppc = s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg;
+      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 16 - tw(pp) - 12) nm = nm.slice(0, -1); T(c, nm, x + 16, y + 7, fg); TR(c, pp, x + w - 9, y + 7, ppc);
       if (on) { const ax = x - 17 + Math.round(Math.sin(S.t * 9)); if (!pngAt(ARROW, c, ax, y + 4)) tri(c, ax + 8, y + 12, 4, '#ff5a5a'); }
     }
     for (const q of ico) infoDot(c, q[0], q[1]);
@@ -1228,9 +1227,18 @@ function createBattle(env) {
   }
   function singleMsg(c) {
     const m = CF.msg, md = S.mode; S.hit.cmd = null; S.hit.mv = null; S.hit.yn = null;
-    if (md === 'cmd') {   // FIGHT / BAG / POKéMON / RUN are the big hex buttons beside the screen (Layout.js); the arrows + A still work
+    if (md === 'cmd') {   // FIGHT / BAG / PARTY / RUN are the hex buttons beside the screen (Layout.js); when there is no room for them the menu is drawn here
       gbaBox(c, m.x, m.y, m.w, m.h);
-      wrapPx((S.lines || []).join(' '), m.w - 24).slice(0, 2).forEach((l, i) => T(c, l, m.x + 10, m.y + 9 + i * 15, 'white'));
+      const hud = !!(root.PMLayout && root.PMLayout.hudOk);
+      wrapPx((S.lines || []).join(' '), hud ? m.w - 24 : 104).slice(0, 2).forEach((l, i) => T(c, l, m.x + 10, m.y + 9 + i * 15, 'white'));
+      if (hud) return;
+      const ix = m.x + m.w - 108, iy = m.y + 4, iw = 104, ih = m.h - 8, lab = ['FIGHT', 'BAG', 'PARTY', 'RUN']; whiteInset(c, ix, iy, iw, ih); S.hit.cmd = [];
+      const pos = [[1, 0], [0, 1], [0, 0], [1, 1]];   // same grid as the hex buttons: left column PARTY / BAG, right column FIGHT / RUN
+      for (let i = 0; i < 4; i++) {
+        const cx = ix + pos[i][0] * 52, ry = iy + 6 + pos[i][1] * 14; S.hit.cmd.push({ x: cx, y: iy + pos[i][1] * 17, w: 52, h: 17 });
+        if (S.cmd === i) tri(c, cx + 5 + Math.round(Math.sin(S.t * 9)), ry + 4, 3, '#383840');
+        T(c, lab[i], cx + 12, ry, 'ink');
+      }
       return;
     }
     if (md === 'move') { moveList(c, S.b.active(0), S.mv, false); return; }
