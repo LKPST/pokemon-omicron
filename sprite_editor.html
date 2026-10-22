@@ -74,6 +74,8 @@ input[type=color]{padding:0;height:30px;width:44px;flex:none}
     <div class="hint">Characters drawn with this cell:</div><div id="ft_chips"></div>
     <div class="row"><input id="ft_char" placeholder="char or tag, e.g. Q  é  /up/  Lv" maxlength="12" style="flex:2"><button id="ft_assign" style="background:#2e8b57">Assign here</button></div>
     <div class="row"><label>Advance (px, blank = 6)<input type="number" id="ft_adv" min="1" max="16" placeholder="6"></label><button id="ft_auto" title="Measure the glyph's width like the battle engine does">Auto</button></div>
+    <div class="row"><label>Glyph width (cells of 8px) <select id="ft_w"><option>1</option><option>2</option><option>3</option><option>4</option></select></label></div>
+    <div class="hint">Width 2+ draws this cell plus the cells to its right as one wide glyph (e.g. a 16px "PP"). The cells to the right must belong to this glyph. Advance defaults to width×8 when wider than 1.</div>
     <div class="hint">Assigning a character that is already used elsewhere moves it here. Cells tinted green are assigned, orange = more than one character shares the cell.</div>
   </fieldset>
   <fieldset class="ftonly"><legend>Glyph map (<span id="ft_n">0</span>)</legend>
@@ -401,6 +403,7 @@ const EXTRA_G=(()=>{const g={},put=(ch,code)=>{g[ch]={r:code>>4,c:2*(code&15)}},
   run(0xB0,'…“”‘’♂♀');run(0xB8,',×/');if(g['’'])g["'"]=g['’'];if(g['“'])g['"']=g['“'];return g})();
 let tab='pixel',G={},fc={c:2,r:10},efSrc='built-in',efText=EF_DEFAULT;
 const fontItem=()=>items.find(i=>i.isFont);
+const gw=g=>Math.max(1,g&&g.w||1),gadv=g=>g&&g.adv!=null?g.adv:(gw(g)>1?gw(g)*8:6);
 const isFontView=()=>tab==='font'&&items[cur]&&items[cur].isFont;
 function mapSpan(t){ // [start,end] of the { ... } after "this.glyphMap ="
   const i=t.indexOf('glyphMap');if(i<0)throw new Error('no glyphMap found');const o=t.indexOf('{',t.indexOf('=',i));let d=0,q=null;
@@ -412,7 +415,7 @@ function mapSpan(t){ // [start,end] of the { ... } after "this.glyphMap ="
     if(ch==='{')d++;else if(ch==='}'){d--;if(d===0)return[o,k+1]}}
   throw new Error('glyphMap is not closed')}
 function parseEF(t){const[a,b]=mapSpan(t);const m=(new Function('return ('+t.slice(a,b)+')'))();const o={};
-  for(const k of Object.keys(m)){const v=m[k];if(v&&typeof v.c==='number'&&typeof v.r==='number'){o[k]={c:v.c,r:v.r};if(typeof v.adv==='number')o[k].adv=v.adv}}return o}
+  for(const k of Object.keys(m)){const v=m[k];if(v&&typeof v.c==='number'&&typeof v.r==='number'){o[k]={c:v.c,r:v.r};if(typeof v.adv==='number')o[k].adv=v.adv;if(typeof v.w==='number'&&v.w>1)o[k].w=v.w}}return o}
 function fixKnown(g){ // the umlaut cells in the old file were one 16px cell too far left
   const want={'Ä':2,'Ö':4,'Ü':6,'ä':8,'ö':10,'ü':12};let n=0;
   if(g['Ä']&&g[':']&&g['Ä'].c===g[':'].c&&g['Ä'].r===g[':'].r){for(const k in want)if(g[k]&&g[k].r===15){g[k].c=want[k];n++}}
@@ -440,17 +443,17 @@ $('ft_extra').onclick=()=>{let n=0;for(const k of Object.keys(EXTRA_G))if(!G[k])
 function fontPick(p){if(!isFontView()||p.x<0||p.y<0||p.x>=cv.width||p.y>=cv.height)return false;fc={c:Math.floor(p.x/8),r:Math.floor(p.y/16)};fontUI();return true}
 function fontOverlay(){if(!isFontView())return;const W=cv.width,H=cv.height;octx.save();
   const m=charsByCell();
-  for(const[k,cs]of m){const[c,r]=k.split(',').map(Number);octx.fillStyle=cs.length>1?'rgba(255,160,40,.30)':'rgba(60,200,120,.14)';octx.fillRect(c*8*z,r*16*z,8*z,16*z);
+  for(const[k,cs]of m){const[c,r]=k.split(',').map(Number);const ww=Math.max(...cs.map(k=>gw(G[k])));octx.fillStyle=cs.length>1?'rgba(255,160,40,.30)':'rgba(60,200,120,.14)';octx.fillRect(c*8*z,r*16*z,8*ww*z,16*z);
     if(z>=3){octx.font=`bold ${Math.max(9,Math.min(16,z*2.2))}px ui-monospace,monospace`;octx.textBaseline='bottom';octx.fillStyle='#fff';octx.strokeStyle='#000';octx.lineWidth=3;const t=cs.length>1?cs[0]+'+':cs[0];octx.strokeText(t,c*8*z+2,(r+1)*16*z-1);octx.fillText(t,c*8*z+2,(r+1)*16*z-1)}}
   octx.lineWidth=1;octx.strokeStyle='rgba(120,160,255,.35)';octx.beginPath();for(let x=0;x<=W;x+=8){octx.moveTo(x*z+.5,0);octx.lineTo(x*z+.5,H*z)}for(let y=0;y<=H;y+=16){octx.moveTo(0,y*z+.5);octx.lineTo(W*z,y*z+.5)}octx.stroke();
-  octx.strokeStyle='#ffd54a';octx.lineWidth=2;octx.strokeRect(fc.c*8*z+1,fc.r*16*z+1,8*z-2,16*z-2);octx.restore()}
+  octx.strokeStyle='#ffd54a';octx.lineWidth=2;{const cs=cellChars(fc.c,fc.r),ww=cs.length?Math.max(...cs.map(k=>gw(G[k]))):1;octx.strokeRect(fc.c*8*z+1,fc.r*16*z+1,8*ww*z-2,16*z-2)}octx.restore()}
 function fontUI(){const it=fontItem(),cols=it?Math.floor(it.c.width/8):32,rows=it?Math.floor(it.c.height/16):0,frame=fc.r*cols+fc.c;
   $('ft_info').innerHTML=`column <b>${fc.c}</b>, row <b>${fc.r}</b> &nbsp;·&nbsp; frame <b>${frame}</b> &nbsp;·&nbsp; pixels x ${fc.c*8}…${fc.c*8+7}, y ${fc.r*16}…${fc.r*16+15}`;
   const cs=cellChars(fc.c,fc.r);$('ft_chips').innerHTML=cs.length?cs.map(k=>`<span>${esc(k)}<b data-k="${esc(k)}" title="Unassign">×</b></span>`).join(''):'<span style="color:#778">nothing assigned</span>';
-  $('ft_adv').value=cs.length&&G[cs[0]].adv!=null?G[cs[0]].adv:'';
+  $('ft_adv').value=cs.length&&G[cs[0]].adv!=null?G[cs[0]].adv:'';$('ft_w').value=cs.length?gw(G[cs[0]]):1;
   const f=$('ft_filter').value.trim().toLowerCase(),keys=Object.keys(G).sort((a,b)=>G[a].r-G[b].r||G[a].c-G[b].c||(a<b?-1:1)).filter(k=>!f||k.toLowerCase().includes(f)||(G[k].c+','+G[k].r).includes(f));
   const dup=charsByCell();$('ft_n').textContent=Object.keys(G).length;
-  $('ft_list').innerHTML=keys.map(k=>`<div data-k="${esc(k)}" class="${G[k].c===fc.c&&G[k].r===fc.r?'cur':''} ${dup.get(G[k].c+','+G[k].r).length>1?'dup':''}"><i>${esc(k)}</i><span>c${G[k].c} r${G[k].r}</span><u>${G[k].adv!=null?'adv '+G[k].adv:''}</u></div>`).join('');
+  $('ft_list').innerHTML=keys.map(k=>`<div data-k="${esc(k)}" class="${G[k].c===fc.c&&G[k].r===fc.r?'cur':''} ${dup.get(G[k].c+','+G[k].r).length>1?'dup':''}"><i>${esc(k)}</i><span>c${G[k].c} r${G[k].r}</span><u>${(G[k].w>1?'w'+G[k].w+' ':'')+(G[k].adv!=null?'adv '+G[k].adv:'')}</u></div>`).join('');
   overlay();drawPreview()}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 $('ft_chips').onclick=e=>{const k=e.target.dataset&&e.target.dataset.k;if(k!=null){delete G[k];fontUI()}};
@@ -462,12 +465,13 @@ $('ft_zoom').onclick=()=>{const it=fontItem();if(!it)return;if(items[cur]!==it)s
   view.scrollLeft=40+(fc.c*8+4)*z-view.clientWidth/2;view.scrollTop=40+(fc.r*16+8)*z-view.clientHeight/2};
 $('ft_assign').onclick=assign;$('ft_char').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();assign()}};
 function assign(){let ch=$('ft_char').value;if(!ch)return;ch=ch.replace(/\s+$/,'');if(!ch)return;const was=G[ch]&&(G[ch].c!==fc.c||G[ch].r!==fc.r)?G[ch]:null;
-  const adv=$('ft_adv').value===''?null:Math.max(1,Math.min(16,+$('ft_adv').value));G[ch]={c:fc.c,r:fc.r};if(adv!=null)G[ch].adv=adv;else if(G[ch].adv==null)delete G[ch].adv;
+  const adv=$('ft_adv').value===''?null:Math.max(1,Math.min(16,+$('ft_adv').value));const w=+$('ft_w').value;G[ch]={c:fc.c,r:fc.r};if(adv!=null)G[ch].adv=adv;if(w>1)G[ch].w=w;
   $('ft_char').value='';fontUI();status(was?`"${ch}" moved here from c${was.c} r${was.r}.`:`"${ch}" assigned to c${fc.c} r${fc.r}.`)}
 $('ft_adv').onchange=()=>{const cs=cellChars(fc.c,fc.r),v=$('ft_adv').value===''?null:Math.max(1,Math.min(16,+$('ft_adv').value));for(const k of cs){if(v==null)delete G[k].adv;else G[k].adv=v}fontUI()};
-$('ft_auto').onclick=()=>{const it=fontItem();if(!it)return;const d=it.c.getContext('2d').getImageData(fc.c*8,fc.r*16,8,16).data,r0=d[0],g0=d[1],b0=d[2];let mx=-1;
-  for(let y=0;y<16;y++)for(let x=0;x<8;x++){const i=(y*8+x)*4;if(d[i+3]&&!(d[i]===r0&&d[i+1]===g0&&d[i+2]===b0)&&!(d[i]>=245&&d[i+1]>=245&&d[i+2]>=245))mx=Math.max(mx,x)}
-  $('ft_adv').value=mx<0?6:Math.max(6,Math.min(10,mx+2));$('ft_adv').onchange()};
+$('ft_w').onchange=()=>{const w=+$('ft_w').value;for(const k of cellChars(fc.c,fc.r)){if(w>1)G[k].w=w;else delete G[k].w}fontUI()};
+$('ft_auto').onclick=()=>{const it=fontItem();if(!it)return;const W=+$('ft_w').value*8,d=it.c.getContext('2d').getImageData(fc.c*8,fc.r*16,W,16).data,r0=it.c.getContext('2d').getImageData(0,0,1,1).data;let mx=-1;const g0=r0[1],b0=r0[2];const rr=r0[0];
+  for(let y=0;y<16;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;if(d[i+3]&&!(d[i]===rr&&d[i+1]===g0&&d[i+2]===b0)&&!(d[i]>=245&&d[i+1]>=245&&d[i+2]>=245))mx=Math.max(mx,x)}
+  $('ft_adv').value=mx<0?6:Math.max(6,Math.min(W+2,mx+2));$('ft_adv').onchange()};
 // ----- preview (same rules as the engine: space 5, newline 16, /tag/, advance 6 or the glyph's own adv)
 let kc=null,kcKey='';
 function keyedSheet(){const it=fontItem();if(!it)return null;const w=it.c.width,h=it.c.height,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(it.c,0,0);
@@ -478,19 +482,28 @@ function keyedSheet(){const it=fontItem();if(!it)return null;const w=it.c.width,
   x.putImageData(id,0,0);return c}
 function drawPreview(){if(tab!=='font')return;const pc=$('ft_prev'),px=pc.getContext('2d'),k=keyedSheet();if(!k){pc.width=10;pc.height=10;return}
   const sc=+$('ft_scale').value,txt=$('ft_text').value,lines=txt.split('\n');
-  const adv=ch=>(G[ch]&&G[ch].adv!=null)?G[ch].adv:6;
+  const adv=ch=>gadv(G[ch]);
   const width=Math.max(...lines.map(l=>{let x=0,i=0;while(i<l.length){const ch=l[i];if(ch===' '){x+=5;i++;continue}let key=null;if(ch==='/'){const j=l.indexOf('/',i+1);if(j>0&&G[l.slice(i,j+1)])key=l.slice(i,j+1)}
       if(key){x+=adv(key);i+=key.length}else{x+=adv(ch);i++}}return x}),8);
   pc.width=Math.min(1200,(width+2)*sc);pc.height=lines.length*16*sc;px.imageSmoothingEnabled=false;
   lines.forEach((l,li)=>{let x=0,i=0;while(i<l.length){const ch=l[i];if(ch===' '){x+=5;i++;continue}let key=null;if(ch==='/'){const j=l.indexOf('/',i+1);if(j>0&&G[l.slice(i,j+1)])key=l.slice(i,j+1)}
-    const gk=key||ch,g=G[gk];if(g)px.drawImage(k,g.c*8,g.r*16,8,16,x*sc,li*16*sc,8*sc,16*sc);x+=adv(gk);i+=key?key.length:1}})}
+    const gk=key||ch,g=G[gk];if(g)px.drawImage(k,g.c*8,g.r*16,8*gw(g),16,x*sc,li*16*sc,8*gw(g)*sc,16*sc);x+=adv(gk);i+=key?key.length:1}})}
 ['ft_text','ft_scale','ft_ink','ft_shadow','ft_orig'].forEach(id=>$(id).addEventListener('input',drawPreview));$('ft_orig').addEventListener('change',drawPreview);
 setInterval(()=>{if(tab==='font')drawPreview()},400);
 // ----- export
 function genEF(){const[a,b]=mapSpan(efText||EF_DEFAULT);const keys=Object.keys(G).sort((x,y)=>G[x].r-G[y].r||G[x].c-G[y].c||(x<y?-1:1));let out='{\n',row=-1;
-  for(const k of keys){const g=G[k];if(g.r!==row){row=g.r;out+=`\n      // Row ${row}\n`}out+=`      ${JSON.stringify(k)}: { c: ${g.c}, r: ${g.r}${g.adv!=null?', adv: '+g.adv:''} },\n`}
+  for(const k of keys){const g=G[k];if(g.r!==row){row=g.r;out+=`\n      // Row ${row}\n`}out+=`      ${JSON.stringify(k)}: { c: ${g.c}, r: ${g.r}${g.w>1?', w: '+g.w:''}${g.adv!=null?', adv: '+g.adv:''} },\n`}
   out+='    }';let t=efText.slice(0,a)+out.replace(/^\{\n\n/,'{\n')+efText.slice(b);
-  t=t.replace(/currentX \+= 6 \* scale;[^\n]*/,"currentX += ((matchedGlyph && matchedGlyph.adv != null) ? matchedGlyph.adv : 6) * scale; // glyph advance (adv in the map, default 6)");
+  t=t.replace(/currentX \+= 6 \* scale;[^\n]*/,"currentX += (matchedGlyph ? (matchedGlyph.adv != null ? matchedGlyph.adv : ((matchedGlyph.w || 1) > 1 ? matchedGlyph.w * 8 : 6)) : 6) * scale; // glyph advance (adv in the map; default 6, or w*8 for wide glyphs)");
+  t=t.replace(/const charImage = this\.scene\.add\.image\(\s*currentX,\s*currentY,\s*'emerald_font',\s*frameIndex\s*\);\s*charImage\.setOrigin\(0, 0\);\s*charImage\.setDepth\(depth\);\s*charImage\.setScale\(scale\);[^\n]*\s*createdGlyphs\.push\(charImage\);/,
+`const cellsW = matchedGlyph.w || 1; // wide glyphs use w cells side by side
+        for (let k = 0; k < cellsW; k++) {
+          const charImage = this.scene.add.image(currentX + k * 8 * scale, currentY, 'emerald_font', frameIndex + k);
+          charImage.setOrigin(0, 0);
+          charImage.setDepth(depth);
+          charImage.setScale(scale);
+          createdGlyphs.push(charImage);
+        }`);
   if(!/Generated by the Font Editor/.test(t))t='// Generated by the Font Editor tab of background_remover.html - edit the glyph map there (c = column, r = row of the 8x16 cells in graphics/fonts/latin_short.png, adv = advance in px)\n'+t;
   return t}
 const jsonOut=()=>JSON.stringify(G,null,1);
