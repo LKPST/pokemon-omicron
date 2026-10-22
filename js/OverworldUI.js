@@ -27,12 +27,13 @@
   // font = { img, cols }  img = the white font sheet (ow_font_white), glyph n at ((n % cols) * 8, floor(n / cols) * 16)
   function glyphOf(ch) { const g = (window.OW_GLYPHS || (window.OverworldText && window.OverworldText.glyphs) || {})[ch]; return g ? g.r * 32 + g.c : -1; }
   function adv(ch) { return (window.OverworldText ? window.OverworldText.charWidth(ch) : (ch === ' ' ? 5 : 6)); }
-  function textW(str, sc) { let w = 0; for (const ch of String(str)) w += adv(ch) * sc; return w; }
+  function toks(str) { const O = window.OverworldText; return O && O.tokens ? O.tokens(str) : [...String(str)].map(ch => ({ ch, gl: null, adv: adv(ch), w: 1 })); }
+  function textW(str, sc) { let w = 0; for (const t of toks(str)) w += t.adv * sc; return w; }
   function drawText(ctx, font, str, x, y, sc, color, shadow) {
     str = String(str == null ? '' : str);
     const w = Math.max(1, textW(str, sc)), cv = mk(w + 8 * sc, 16 * sc), c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
     let cx = 0;
-    for (const ch of str) { const n = glyphOf(ch); if (n >= 0) c.drawImage(font.img, (n % font.cols) * 8, Math.floor(n / font.cols) * 16, 8, 16, cx, 0, 8 * sc, 16 * sc); cx += adv(ch) * sc; }
+    for (const t of toks(str)) { const n = t.gl ? t.gl.r * 32 + t.gl.c : glyphOf(t.ch); if (n >= 0) c.drawImage(font.img, (n % font.cols) * 8, Math.floor(n / font.cols) * 16, 8 * t.w, 16, cx, 0, 8 * t.w * sc, 16 * sc); cx += t.adv * sc; }
     if (color) { c.globalCompositeOperation = 'source-in'; c.fillStyle = color; c.fillRect(0, 0, cv.width, cv.height); }
     ctx.save(); ctx.imageSmoothingEnabled = false;
     if (shadow !== false) { const sh = mk(cv.width, cv.height), s = sh.getContext('2d'); s.drawImage(cv, 0, 0); s.globalCompositeOperation = 'source-in'; s.fillStyle = 'rgba(0,0,0,0.55)'; s.fillRect(0, 0, sh.width, sh.height); ctx.drawImage(sh, x + sc, y + sc); }
@@ -265,94 +266,41 @@
       const dF = specOf(o.from), dT = specOf(o.to), shiny = !!o.shiny, name = o.name || nameOf(o.from), toName = nameOf(o.to);
       const [font, imO, imN] = await Promise.all([new Promise(r => withFont(scene, r)), loadImg(dF.battleSprite || dF.frontSprite), loadImg(dT.battleSprite || dT.frontSprite)]);
       if (!font || !scene.sys || !scene.sys.isActive()) return fin(false);
-      const pO = pictureOf(imO, { mon: true, shiny, max: 130 }) || fallbackPicture('pokemon'), pN = pictureOf(imN, { mon: true, shiny, max: 130 }) || fallbackPicture('pokemon');
-      const keys = [], tex = cv => { const k = addTex(scene, cv); keys.push(k); return k; };
-      const kO = tex(pO), kN = tex(pN), kWO = tex(whiteOf(pO)), kWN = tex(whiteOf(pN));
-      const S = (window.OW_TEXT && window.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 }, D = 6200, objs = [], tweens = [], cx = S.x + S.w / 2, cy = S.y + S.h / 2 - 28, base = cy + 72;
-      const add = (x, tw) => { objs.push(x); return x; };
-      // backgrounds: blue energy (before) and pink (after)
-      const grad = (c0, c1) => { const cv = mk(4, 64), g = cv.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, c0); gr.addColorStop(1, c1); g.fillStyle = gr; g.fillRect(0, 0, 4, 64); return tex(cv); };
-      const glowCv = mk(128, 128), gg = glowCv.getContext('2d'), grd = gg.createRadialGradient(64, 64, 0, 64, 64, 64); grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.35, 'rgba(255,255,255,0.55)'); grd.addColorStop(1, 'rgba(255,255,255,0)'); gg.fillStyle = grd; gg.fillRect(0, 0, 128, 128); const kGlow = tex(glowCv);
-      const ringCv = mk(128, 128), rg = ringCv.getContext('2d'); rg.strokeStyle = '#ffffff'; rg.lineWidth = 5; rg.beginPath(); rg.arc(64, 64, 58, 0, 7); rg.stroke(); const kRing = tex(ringCv);
-      const bgB = add(scene.add.image(cx, S.y + S.h / 2, grad('#0a2486', '#1f7cf5')).setDisplaySize(S.w, S.h).setScrollFactor(0).setDepth(D).setAlpha(0));
-      const bgP = add(scene.add.image(cx, S.y + S.h / 2, grad('#8a1d86', '#ff4f9a')).setDisplaySize(S.w, S.h).setScrollFactor(0).setDepth(D).setAlpha(0));
-      const T = (cfg) => { const t = scene.tweens.add(cfg); tweens.push(t); return t; };
+      const pO = pictureOf(imO, { mon: true, shiny, max: 120 }) || fallbackPicture('pokemon'), pN = pictureOf(imN, { mon: true, shiny, max: 120 }) || fallbackPicture('pokemon');
+      const keys = [addTex(scene, pO), addTex(scene, pN), addTex(scene, whiteOf(pO)), addTex(scene, whiteOf(pN))], [kO, kN, kWO, kWN] = keys;
+      const S = (window.OW_TEXT && window.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 }, D = 6200, objs = [], cx = S.x + S.w / 2, base = S.y + 196;
+      const dim = scene.add.rectangle(cx, S.y + S.h / 2, S.w, S.h, 0x070a18, 1).setScrollFactor(0).setDepth(D).setAlpha(0); objs.push(dim);
+      const sp = scene.add.image(cx, base, kO).setOrigin(0.5, 1).setScrollFactor(0).setDepth(D + 1).setAlpha(0); objs.push(sp);
+      const flash = scene.add.rectangle(cx, S.y + S.h / 2, S.w, S.h, 0xffffff, 1).setScrollFactor(0).setDepth(D + 3).setAlpha(0); objs.push(flash);
+      const msg = scene.add.image(S.x + Math.round((S.w - 448) / 2), S.y + S.h - 86, kO).setOrigin(0, 0).setScrollFactor(0).setDepth(D + 2).setAlpha(0); objs.push(msg);
+      const arrow = scene.add.triangle(msg.x + 448 - 24, msg.y + 56, 0, 0, 14, 0, 7, 9, 0xffffff, 0.9).setScrollFactor(0).setDepth(D + 3).setVisible(false); objs.push(arrow);
+      let msgKey = null, waiting = null, cancelled = false, animating = false;
       const wait = ms => new Promise(r => scene.time.delayedCall(ms, r));
-      // moving light streaks + bokeh (tinted per phase)
-      const streaks = [], bokeh = [];
-      for (let i = 0; i < 16; i++) {
-        const w = 160 + Math.random() * 260, y = S.y + Math.random() * S.h, r = add(scene.add.rectangle(S.x + S.w + w, y, w, 2 + Math.random() * 5, 0xbfe6ff, 0.28).setRotation(-0.32).setScrollFactor(0).setDepth(D + 1).setAlpha(0)); streaks.push(r);
-        const run = () => { if (finished) return; r.x = S.x + S.w + w; r.y = S.y + Math.random() * S.h; T({ targets: r, x: S.x - w, y: r.y - 160, duration: 900 + Math.random() * 1400, delay: Math.random() * 600, onComplete: run }); }; run();
-      }
-      for (let i = 0; i < 7; i++) {
-        const b = add(scene.add.image(S.x + Math.random() * S.w, S.y + Math.random() * S.h, kGlow).setScale(0.6 + Math.random() * 1.1).setTint(0x66d8ff).setAlpha(0).setScrollFactor(0).setDepth(D + 1)); bokeh.push(b);
-        T({ targets: b, x: b.x + (Math.random() - 0.5) * 120, y: b.y - 40 - Math.random() * 60, duration: 3000 + Math.random() * 3000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      }
-      const glow = add(scene.add.image(cx, cy, kGlow).setScale(1.2).setAlpha(0).setScrollFactor(0).setDepth(D + 2));
-      const sp = add(scene.add.image(cx, base, kO).setOrigin(0.5, 1).setScrollFactor(0).setDepth(D + 3).setAlpha(0));
-      const flash = add(scene.add.rectangle(cx, S.y + S.h / 2, S.w, S.h, 0xffffff, 1).setScrollFactor(0).setDepth(D + 5).setAlpha(0));
-      // typewriter message box (one canvas texture, redrawn while the letters appear)
-      const MW = 448, MH = 76, mkey = 'owui_evomsg_' + (++uid);
-      const mtex = scene.textures.createCanvas(mkey, MW, MH); keys.push(mkey);
-      const msg = add(scene.add.image(S.x + Math.round((S.w - MW) / 2), S.y + S.h - MH - 10, mkey).setOrigin(0, 0).setScrollFactor(0).setDepth(D + 6).setAlpha(0));
-      const arrow = add(scene.add.triangle(msg.x + MW - 26, msg.y + 56, 0, 0, 14, 0, 7, 9, 0xffffff, 0.9).setScrollFactor(0).setDepth(D + 7).setVisible(false));
-      T({ targets: arrow, y: arrow.y + 4, duration: 320, yoyo: true, repeat: -1 });
-      let waiting = null, typing = null, cancelled = false, animating = false;
-      const paintMsg = (text, n) => {
-        const c = mtex.context; c.clearRect(0, 0, MW, MH); chamfer(c, 1, 1, MW - 2, MH - 2, 8); c.fillStyle = 'rgba(8,12,26,0.94)'; c.fill(); chamfer(c, 1.5, 1.5, MW - 3, MH - 3, 8); c.lineWidth = 2; c.strokeStyle = API.accent; c.stroke();
-        let left = n; wrapText(text, 2, MW - 60).slice(0, 2).forEach((l, i) => { const part = l.slice(0, Math.max(0, left)); left -= l.length + 1; if (part) drawText(c, font, part, 20, 10 + i * 30, 2, '#ffffff'); });
-        mtex.refresh();
-      };
       const say = (text, needKey) => new Promise(res => {
-        msg.setAlpha(1); arrow.setVisible(false); let n = 0; const total = text.length;
-        const finish = () => { if (typing) { typing.remove(false); typing = null; } paintMsg(text, total + 5); if (!needKey) return res(); arrow.setVisible(true); waiting = () => { arrow.setVisible(false); waiting = null; res(); }; };
-        paintMsg(text, 0);
-        typing = scene.time.addEvent({ delay: 38, loop: true, callback: () => { n++; paintMsg(text, n); if (n >= total) finish(); } });
-        typing.skip = finish; say.skip = finish;
+        const k = addTex(scene, drawMsg(font, text)); msg.setTexture(k); if (msgKey) dropTex(scene, msgKey); msgKey = k; msg.setAlpha(1);
+        if (!needKey) return res();
+        arrow.setVisible(true); waiting = () => { arrow.setVisible(false); waiting = null; res(); };
       });
       const onKey = ev => {
         if (ev.repeat) return;
-        if (['Space', 'Enter', 'KeyZ', 'KeyX'].includes(ev.code)) { if (typing && typing.skip) typing.skip(); else if (waiting) waiting(); else if (animating && ev.code === 'KeyX' && o.canCancel !== false) cancelled = true; }
-        else if (animating && ['Escape', 'Backspace'].includes(ev.code) && o.canCancel !== false) cancelled = true;
+        if (waiting && ['Space', 'Enter', 'KeyZ', 'KeyX'].includes(ev.code)) waiting();
+        else if (animating && o.canCancel !== false && ['KeyX', 'Escape', 'Backspace'].includes(ev.code)) cancelled = true;
       };
-      const onPtr = () => { if (typing && typing.skip) typing.skip(); else if (waiting) waiting(); };
+      const onPtr = () => { if (waiting) waiting(); };
       scene.input.keyboard.on('keydown', onKey); scene.input.on('pointerdown', onPtr);
       const cleanup = () => {
-        scene.input.keyboard.off('keydown', onKey); scene.input.off('pointerdown', onPtr); if (typing) { typing.remove(false); typing = null; }
-        scene.tweens.add({ targets: objs.filter(x => x !== flash), alpha: 0, duration: 320, onComplete: () => { tweens.forEach(t => { try { t.stop(); } catch (e) { /* gone */ } }); objs.forEach(x => { try { x.destroy(); } catch (e) { /* gone */ } }); keys.forEach(k => dropTex(scene, k)); } });
+        scene.input.keyboard.off('keydown', onKey); scene.input.off('pointerdown', onPtr);
+        scene.tweens.add({ targets: [dim, sp, msg], alpha: 0, duration: 260, onComplete: () => { objs.forEach(x => { try { x.destroy(); } catch (e) { /* gone */ } }); keys.concat(msgKey ? [msgKey] : []).forEach(k => dropTex(scene, k)); } });
       };
-      const burst = (n, col) => { for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, d = 80 + Math.random() * 160, s = add(scene.add.image(cx, cy, kGlow).setScale(0.12 + Math.random() * 0.2).setTint(col).setScrollFactor(0).setDepth(D + 4).setAlpha(0.9)); T({ targets: s, x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, alpha: 0, duration: 900 + Math.random() * 700, onComplete: () => s.destroy() }); } };
-
-      // 1. blue energy field, the Pokémon floats
-      T({ targets: bgB, alpha: 1, duration: 500 }); streaks.concat(bokeh).forEach(s => T({ targets: s, alpha: s.type === 'Image' ? 0.3 : 0.28, duration: 700 }));
-      T({ targets: sp, alpha: 1, duration: 600 }); const bob = T({ targets: sp, y: base - 10, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      await wait(2600);
+      scene.tweens.add({ targets: dim, alpha: 0.94, duration: 300 }); scene.tweens.add({ targets: sp, alpha: 1, duration: 300 }); await wait(340);
       await say('What? ' + name + ' is evolving!', true);
-      msg.setAlpha(0);
-      // 2. a ring pulses out, the Pokémon starts to glow and flicker between the two forms
-      animating = true;
-      for (let r = 0; r < 2; r++) { const ring = add(scene.add.image(cx, cy, kRing).setScale(0.6).setAlpha(0.9).setScrollFactor(0).setDepth(D + 4)); T({ targets: ring, scale: 3.4, alpha: 0, duration: 900, onComplete: () => ring.destroy() }); await wait(500); }
-      T({ targets: glow, alpha: 0.75, scale: 3.4, duration: 3600, ease: 'Sine.easeIn' });
-      const fl = (a, b) => { sp.setTexture(a); };
-      for (let i = 0; i < 14 && !cancelled; i++) {
-        const toNew = i % 2 === 1; sp.setTexture(toNew ? kWN : kWO); sp.setScale(1 + (toNew ? 0.06 : 0)); sp.x = cx + (i > 7 ? (Math.random() - 0.5) * 4 : 0);
-        if (i === 6 || i === 10) burst(6, 0xbfe6ff);
-        await wait(Math.max(110, 560 * Math.pow(0.82, i)));
-      }
-      animating = false; sp.x = cx;
-      if (cancelled) {
-        bob.stop(); T({ targets: glow, alpha: 0, duration: 300 }); sp.setTexture(kO).setScale(1).setAlpha(1); await say('Huh? ' + name + ' stopped evolving!', true); cleanup(); return fin(false);
-      }
-      // 3. the light takes over the screen, the pink field and the new form appear
-      T({ targets: flash, alpha: 1, duration: 700 }); await wait(760);
-      bob.stop(); sp.y = base; sp.setTexture(kWN).setScale(1); bgB.setAlpha(0); bgP.setAlpha(1); glow.setAlpha(0);
-      streaks.concat(bokeh).forEach(s => { s.setTint ? s.setTint(0xff9ad8) : s.setFillStyle(0xffd0ec, 0.3); });
-      T({ targets: flash, alpha: 0, duration: 900 }); burst(30, 0xffe0f4);
-      await wait(900);
-      const full = add(scene.add.image(cx, base, kN).setOrigin(0.5, 1).setScrollFactor(0).setDepth(D + 3).setAlpha(0));
-      T({ targets: full, alpha: 1, duration: 700 }); T({ targets: sp, alpha: 0, duration: 700 });
-      T({ targets: [sp, full], y: base - 8, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      await wait(2200);
+      msg.setAlpha(0); animating = true;
+      for (let i = 0; i < 18 && !cancelled; i++) { sp.setTexture(i % 2 ? kWN : kWO); sp.setScale(1 + 0.05 * (i % 2)); await wait(Math.max(70, 330 * Math.pow(0.8, i))); }
+      animating = false;
+      if (cancelled) { sp.setTexture(kO).setScale(1); await say('Huh? ' + name + ' stopped evolving!', true); cleanup(); return fin(false); }
+      sp.setTexture(kN).setScale(1.15); flash.setAlpha(1); scene.tweens.add({ targets: flash, alpha: 0, duration: 700 });
+      scene.tweens.add({ targets: sp, scale: 1, duration: 500, ease: 'Back.easeOut' }); sparkles(scene, cx, base - 60);
+      await wait(800);
       await say('Congratulations! Your ' + name + ' evolved into ' + toName + '!', true);
       cleanup(); fin(true);
     } catch (e) { console.error('[OWUI.evolve]', e); fin(false); }
@@ -381,14 +329,14 @@
   API.runEvolutions = function (scene, done) {
     const gsm = window.GameStateManager, lb = gsm && gsm.lastBattle, list = lb && lb.evolutions;
     if (!list || !list.length) { if (done) done(); return false; }
-    lb.evolutions = []; API.busy = true;
+    lb.evolutions = [];
     const party = ((gsm.saveData || {}).party || []).filter(m => m && m.species), seen = new Set(), todo = list.filter(e => !seen.has(e.idx) && seen.add(e.idx));
     scene.isLocked = true;
     const next = i => {
       if (i >= todo.length || !scene.sys || !scene.sys.isActive()) {
         scene.time.delayedCall(250, () => {
           const J = Phaser.Input.Keyboard.JustDown; ['spaceKey', 'followKey', 'enterKey', 'bagKey'].forEach(k => { if (scene[k]) J(scene[k]); });
-          API.busy = false; scene.isLocked = false; try { if (window.OWFollower) { window.OWFollower.refresh(); } } catch (e) { /* ignore */ } try { window.SaveSystem && window.SaveSystem.touch('party'); } catch (e) { /* ignore */ }
+          scene.isLocked = false; try { if (window.OWFollower) { window.OWFollower.refresh(); } } catch (e) { /* ignore */ } try { window.SaveSystem && window.SaveSystem.touch('party'); } catch (e) { /* ignore */ }
           if (done) done();
         }); return;
       }
