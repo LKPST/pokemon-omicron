@@ -47,6 +47,10 @@ const EXTRA_GLYPHS = (() => {
   return g;
 })();
 const TOKENS = { Lv: 'Lv', PP: 'PP', ID: 'ID', No: '№' };
+// Per-glyph options that can come from EmeraldFont.js (set them in the Font Editor tab): w = how many 8 px cells the glyph is wide, adv = pixels the cursor moves after it.
+const glW = gl => Math.max(1, (gl && gl.w) || 1);
+const glAdv = gl => (gl && typeof gl.adv === 'number') ? gl.adv : null;
+const glPx = gl => Math.max(8, 8 * glW(gl));   // pixels of the sheet that belong to the glyph
 const pretty = s => String(s == null ? '' : s).replace(/^(MOVE|SPECIES|ABILITY|TYPE|ITEM|NATURE|RIBBON)_/, '').toLowerCase().split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 const BALL_BY_ID = { 1: 'poke', 2: 'great', 3: 'ultra', 4: 'master', 5: 'premier' };
 const BALLS = { poke: ['#e83848', '#f8f8f8'], great: ['#3868e0', '#f8f8f8'], ultra: ['#f0c820', '#383848'], premier: ['#f8f8f8', '#f8f8f8'], master: ['#9038c8', '#f8f8f8'] };
@@ -82,6 +86,7 @@ function createBag(env) {
     let base = EMERALD_GLYPHS;
     try { const o = env.glyphs && env.glyphs(); if (o && typeof o === 'object') base = o; } catch (e) { /* keep the copy */ }
     GLY = Object.assign({}, EXTRA_GLYPHS, base); for (const k of Object.keys(GLY)) if (!GLY[k]) delete GLY[k];
+    if (GLY['/m/']) GLY['\u2642'] = GLY['/m/']; if (GLY['/f/']) GLY['\u2640'] = GLY['/f/'];   // the tags /m/ /f/ of EmeraldFont.js are the male / female signs
   }
   function fallbackSheet() {   // only used when latin_short.png cannot be read: draws a plain pixel font
     const c = mk(256, 288), x = c.getContext('2d', { willReadFrequently: true });
@@ -147,11 +152,12 @@ function createBag(env) {
   function advOf(key) {
     if (advCache.has(key)) return advCache.get(key);
     let a = 6; const gl = GLY[key];
+    if (glAdv(gl) != null) { advCache.set(key, glAdv(gl)); return glAdv(gl); }   // advance set in EmeraldFont.js
     if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 8, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
+      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, glPx(gl), 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
       let mx = -1;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) { const i = (y * 8 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
-      if (mx >= 0) a = clamp(mx + 2, 6, 10);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < glPx(gl); x++) { const i = (y * glPx(gl) + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
+      if (mx >= 0) a = clamp(mx + 2, 6, glPx(gl) + 2);
     }
     advCache.set(key, a); return a;
   }
@@ -162,13 +168,13 @@ function createBag(env) {
       if (ch === '{') { const j = s.indexOf('}', i); if (j > 0) { const k = TOKENS[s.slice(i + 1, j)]; if (k && GLY[k]) { yield { gl: GLY[k], adv: advOf(k) }; i = j + 1; continue; } } }
       if (ch === '/') { const j = s.indexOf('/', i + 1); if (j > 0) { const tag = s.slice(i, j + 1); if (GLY[tag]) { yield { gl: GLY[tag], adv: advOf(tag) }; i = j + 1; continue; } } }
       if (ch === ' ') { yield { gl: null, adv: 5 }; i++; continue; }
-      yield { gl: GLY[ch] || null, adv: 6 }; i++;
+      yield { gl: GLY[ch] || null, adv: glAdv(GLY[ch]) ?? 6 }; i++;
     }
   }
   const tw = s => { let w = 0; for (const g of glyphs(s)) w += g.adv; return w; };
   function T(c, s, x, y, k = 'dark') {
     const f = font(TX[k][0], TX[k][1]); let cx = x;
-    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, 8, 16, cx, y - FT.top + opt.nudge, 8, 16); cx += g.adv; }
+    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, glPx(g.gl), 16, cx, y - FT.top + opt.nudge, glPx(g.gl), 16); cx += g.adv; }
     return cx;
   }
   const TR = (c, s, xr, y, k) => T(c, s, xr - tw(s), y, k);
