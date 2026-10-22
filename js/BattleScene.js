@@ -255,7 +255,7 @@ function createBattle(env) {
   let FLASH = .45, SLIDE = 1.15;   // intro lengths (seconds); BattleScene.CONFIG.intro overrides
   // layout of the TOP surface (GBA pixels)
   // Live values: copied every frame from BattleScene.CONFIG (see the top of BattleScene.js), so editing the config in the console moves things at once.
-  const FOE = { cx: 170, bottom: 74, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 6, boxW: 104, fit: 64, scale: 0, trBottom: 74, trScale: 1 };
+  const FOE = { cx: 170, bottom: 74, platY: 72, platX: 170, trX: 170, boxX: 6, boxY: 9, boxW: 104, fit: 64, scale: 0, trBottom: 74, trScale: 1 };
   const ALLY = { cx: 60, bottom: 112, platY: 110, platX: 60, trX: 60, boxX: 126, boxY: 84, boxW: 108, fit: 64, scale: 1, trBottom: 112, trScale: 1 };
   const CF = { levelBox: { x: 148, y: 26 }, ball: 1, msg: { x: 4, y: 111, w: 232, h: 42 }, info: { x: 4, y: 4 }, party: { x: 4, y: 12, gap: 38, show: true }, btn: { x: 4, y: 56, w: 112, h: 44, gapX: 8, gapY: 4 } };
   function applyConfig() {
@@ -831,7 +831,7 @@ function createBattle(env) {
     S.lowT = (S.lowT || 0) + dt; if (window.StartMenu && window.StartMenu.tickBg) window.StartMenu.tickBg(dt);
     { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode;
       const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else { S.stripT = (S.stripT || 0) + dt; if (S.stripT > 1.5) S.stripPlayed = true; } }
-    if (S.rows && S.mode !== 'intro') for (let i = 0; i < 2; i++) { const R = S.rows[i]; if (R.done) continue; R.t += dt; if (R.out < 0 && side(i).vis && R.t > 1.7) R.out = 0; if (R.out >= 0) { R.out += dt; if (R.out > .5) R.done = true; } }
+    if (S.rows && S.mode !== 'intro') for (let i = 0; i < 2; i++) { const R = S.rows[i]; if (R.done) continue; R.t += dt; if (R.out < 0 && side(i).vis && R.t > 1.7) R.out = 0; if (R.out >= 0) { R.out += dt; if (R.out > .42) R.done = true; } }
     for (const sd of S.sides) if (sd.blink > 0) sd.blink = Math.max(0, sd.blink - dt);
     if (S.ov && S.ov.ready) { S.ov.t = (S.ov.t || 0) + dt; S.ov.core.update(dt); }
     tickFx(dt); for (const pa of S.particles) pa.t += dt; S.particles = S.particles.filter(p => p.t < p.dur);
@@ -1006,7 +1006,7 @@ function createBattle(env) {
   function infoBox(c, sd, isPlayer) {
     if (!sd.vis || !sd.species || sd.alpha <= 0) return;
     if (S.mode === 'intro' && !isPlayer && S.introFoe) return;   // the wild Pokémon's box appears when it has finished sliding in
-    if (single()) return infoBoxGba(c, sd, isPlayer);
+    if (single() && S.rows && !S.rows[isPlayer ? 0 : 1].done && (isPlayer || (S.b && S.b.kind === 'trainer'))) return;   // the pokéball row must be completely gone first
     const H = isPlayer ? ALLY : FOE, x = H.boxX, y = H.boxY, w = H.boxW, bh = isPlayer ? 10 : 8, by = y + 11, slant = 6;
     S.hit[isPlayer ? 'allyBox' : 'foeBox'] = { x, y, w, h: 11 + bh + (isPlayer ? 5 : 1) };
     const nm = sd.name.length > 10 ? sd.name.slice(0, 10) : sd.name, nx = T(c, nm, x + 1, y - 1, 'dark');
@@ -1105,15 +1105,15 @@ function createBattle(env) {
   const easeOut = p => 1 - Math.pow(1 - clamp(p), 3);
   // a row of pokéballs on a thin line: pop in one by one (ap = seconds since it appeared), slide away (out = seconds since the send-out)
   function ballRow(c, party, x, y, rtl, ap, out) {
-    const n = 6, sp = 9, w = n * sp + 8, x0 = rtl ? x - w : x, off = out > 0 ? (rtl ? 1 : -1) * easeOut(out / .38) * (w + 30) : 0, lx = x0 + off;
+    const n = 6, sp = 7, w = n * sp + 6, x0 = rtl ? x - w : x, off = out > 0 ? (rtl ? 1 : -1) * easeOut(out / .38) * (w + 40) : 0, lx = x0 + off;
     const lw = Math.round(w * easeOut(ap / .25)); if (lw <= 0) return;
     const lx2 = rtl ? lx + w - lw : lx;
-    rect(c, lx2, y + 8, lw, 2, '#2a2e3a'); rect(c, lx2, y + 8, lw, 1, '#6a7088');
+    rect(c, Math.round(lx2), y + 5, lw, 1, '#2a2e3a');
     for (let i = 0; i < n; i++) {
       const tt = ap - .1 - i * .09; if (tt <= 0) continue;
-      const r = Math.round(tt < .1 ? 4.8 * tt / .1 : tt < .18 ? 4.8 - .8 * (tt - .1) / .08 : 4); if (r < 1) continue;
+      const r = Math.round(tt < .1 ? 3 * tt / .1 : tt < .18 ? 3 - (tt - .1) / .08 : 2); if (r < 1) continue;
       const M = party[i], stt = !M ? 'empty' : M.hp <= 0 ? 'faint' : M.status ? 'status' : 'ok';
-      miniBall(c, Math.round(lx + 7 + i * sp), y + 3, stt, r);
+      miniBall(c, Math.round(lx + 5 + i * sp), y + 2, stt, r);
     }
   }
   function miniBall(c, cx, cy, st, R) {
@@ -1130,36 +1130,37 @@ function createBattle(env) {
     for (let i = 0; i < n; i++) { const M = party[i], st = !M ? 'empty' : M.hp <= 0 ? 'faint' : M.status ? 'status' : 'ok'; miniBall(c, x0 + 8 + i * 10, y + 5, st); }
   }
   function partyBalls(c) {
-    if (!S.b || !S.rows) return;
-    const me = S.b.sides[0].party || [], foe = S.b.sides[1].party || [], tr = S.b.kind === 'trainer';
-    const R0 = S.rows[0], R1 = S.rows[1];
-    if (S.mode !== 'intro') {
-      if (!R0.done) ballRow(c, me, 236, 96, true, R0.t, R0.out);
-      if (tr && !R1.done) ballRow(c, foe, 4, 20, false, R1.t, R1.out);
-    }
-    if (R0.done && side(0).vis && sdAlive(0)) ballRow(c, me, GB.ally.x + GB.ally.w - 1, GB.ally.y - 12, true, 99, 0);
-    if (tr && R1.done && side(1).vis && sdAlive(1)) ballRow(c, foe, GB.foe.x, GB.foe.y + GB.foe.h + 1, false, 99, 0);
+    if (!S.b || !S.rows || S.mode === 'intro') return;
+    const me = S.b.sides[0].party || [], foe = S.b.sides[1].party || [], R0 = S.rows[0], R1 = S.rows[1];
+    if (!R0.done) ballRow(c, me, 236, 98, true, R0.t, R0.out);
+    if (S.b.kind === 'trainer' && !R1.done) ballRow(c, foe, 4, 22, false, R1.t, R1.out);
   }
   const sdAlive = i => side(i).alpha > 0;
   const inR = (r, x, y) => r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
   const lum = h => { const r = rgbOf(h); return (r[0] * .3 + r[1] * .59 + r[2] * .11); };
+  function effLabel(P, mi) {
+    try { if (!(mi.power > 0)) return null; const F = S.b.active(1); if (!F) return null; const e = S.b.typeMult(mi.type, F, P, mi.mv); return e === 0 ? ['No effect', '#ff9a9a'] : e > 1 ? ['Super effective', '#ffe45a'] : e < 1 ? ['Not very effective', '#ffb4b4'] : ['Effective', '#e8ecf8']; } catch (e) { return null; }
+  }
+  // Fight: the screen darkens and the four moves stack on the right (name, type, PP, how effective it is)
   function moveList(c, P, sel, learn) {
-    const m = CF.msg; gbaBox(c, m.x, m.y, m.w, m.h); S.hit.mv = [];
-    const lx = m.x + 4, ly = m.y + 4, lw = 146, lh = m.h - 8; whiteInset(c, lx, ly, lw, lh);
+    c.fillStyle = 'rgba(4,6,16,0.62)'; c.fillRect(0, 0, W, H); S.hit.mv = [];
+    const x0 = 40, w = 196, h = 24;
     for (let i = 0; i < 4; i++) {
-      const cx = lx + (i & 1) * 70, ry = ly + 6 + (i >> 1) * 15, s0 = P.moves[i], mw = (i & 1) ? 62 : 56; S.hit.mv.push({ x: cx, y: ly + (i >> 1) * 18, w: 72, h: 18 });
-      if (sel === i) tri(c, cx + 5 + Math.round(Math.sin(S.t * 9)), ry + 4, 3, '#383840');
-      if (!s0) { T(c, '-', cx + 13, ry, 'mute'); continue; }
-      const mi = mvInfo(s0.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled;
-      let nm = mi.name; while (nm.length > 3 && tw(nm) > mw) nm = nm.slice(0, -1); T(c, nm, cx + 12, ry, dis ? 'mute' : 'ink');
+      const y = 5 + i * 26, s0 = P.moves[i]; S.hit.mv.push({ x: x0, y: y - 1, w, h: h + 2 });
+      if (!s0) { pill(c, x0, y, w, h, 'rgba(40,44,60,.55)', 8); T(c, '-', x0 + 10, y + 8, 'mute'); continue; }
+      const mi = mvInfo(s0.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled, on = sel === i, tcol = dis ? '#6b7080' : TYPE_COLOR(mi.type);
+      const base = on ? tcol : '#3b3f4e', fg = on ? (lum(tcol) > 165 ? 'dark' : 'white') : (dis ? 'mute' : 'white');
+      pill(c, x0, y + 2, w, h, '#0a0c14', 9); pill(c, x0, y, w, h, on ? '#ffffff' : '#7a8098', 9); pill(c, x0 + 1, y + 1, w - 2, h - 2, base, 8);
+      if (on) { rect(c, x0 + 8, y + 2, w - 16, 1, 'rgba(255,255,255,.45)'); tri(c, x0 - 8 + Math.round(Math.sin(S.t * 9)), y + 12, 4, '#ff5a5a'); }
+      let nm = mi.name; while (nm.length > 3 && tw(nm) > 84) nm = nm.slice(0, -1); T(c, nm, x0 + 9, y + 2, fg);
+      const lab = learn ? null : effLabel(P, mi); if (lab) TR(c, lab[0], x0 + w - 8, y + 2, on ? (lab[0] === 'Super effective' ? 'dark' : fg) : 'white');
+      const tn = pretty(mi.type).toUpperCase().slice(0, 7), pw = tw(tn) + 8, pc = TYPE_COLOR(mi.type);
+      pill(c, x0 + 9, y + 13, pw, 9, dis ? '#6b7080' : pc, 4); Tc(c, tn, x0 + 9, pw, y + 13, lum(pc) > 165 && !dis ? 'dark' : 'white', false);
+      T(c, 'PP ' + s0.pp + '/' + s0.maxpp, x0 + 9 + pw + 6, y + 12, s0.pp <= Math.floor(s0.maxpp / 4) && !on ? 'red' : fg);
     }
-    const rx = lx + lw + 3, rw = m.x + m.w - 4 - rx, ry = ly; whiteInset(c, rx, ry, rw, lh); const s0 = P.moves[sel]; if (!s0) return;
-    const mi = mvInfo(s0.key);
-    if (S.mvMsg && S.mode === 'move') { wrapPx(S.mvMsg, rw - 10).slice(0, 3).forEach((l, i) => T(c, l, rx + 5, ry + 4 + i * 10, 'red')); return; }
-    T(c, 'PP', rx + 6, ry + 5, 'ink'); TR(c, s0.pp + '/' + s0.maxpp, rx + rw - 6, ry + 5, s0.pp <= Math.floor(s0.maxpp / 4) ? 'red' : 'ink');
-    if (learn) { T(c, 'FORGET?', rx + 6, ry + 20, 'red'); return; }
-    const tn = pretty(mi.type).toUpperCase().slice(0, 8), tcol = TYPE_COLOR(mi.type);
-    pill(c, rx + 6, ry + 19, rw - 12, 11, tcol, 4); Tc(c, tn, rx + 6, rw - 12, ry + 19, lum(tcol) > 150 ? 'dark' : 'white', false);
+    const m = CF.msg; gbaBox(c, m.x, m.y, m.w, m.h);
+    const txt = S.mvMsg && S.mode === 'move' ? S.mvMsg : learn ? 'Forget which move?' : 'Choose a move.';
+    wrapPx(txt, m.w - 24).slice(0, 2).forEach((l, i) => T(c, l, m.x + 10, m.y + 9 + i * 15, S.mvMsg && S.mode === 'move' ? 'red' : 'white'));
   }
   function ynBox(c) {
     const m = CF.msg, x = m.x + 2, y = m.y - 38; panel(c, x, y, 62, 36, false); S.hit.yn = [];
@@ -1167,15 +1168,9 @@ function createBattle(env) {
   }
   function singleMsg(c) {
     const m = CF.msg, md = S.mode; S.hit.cmd = null; S.hit.mv = null; S.hit.yn = null;
-    if (md === 'cmd') {
+    if (md === 'cmd') {   // FIGHT / BAG / POKéMON / RUN are the big hex buttons beside the screen (Layout.js); the arrows + A still work
       gbaBox(c, m.x, m.y, m.w, m.h);
-      wrapPx((S.lines || []).join(' '), 104).slice(0, 2).forEach((l, i) => T(c, l, m.x + 10, m.y + 9 + i * 15, 'white'));
-      const ix = m.x + m.w - 108, iy = m.y + 4, iw = 104, ih = m.h - 8, lab = ['FIGHT', 'BAG', 'POKéMON', 'RUN']; whiteInset(c, ix, iy, iw, ih); S.hit.cmd = [];
-      for (let i = 0; i < 4; i++) {
-        const cx = ix + (i & 1) * 52, ry = iy + 6 + (i >> 1) * 14; S.hit.cmd.push({ x: cx, y: iy + (i >> 1) * 17, w: 52, h: 17 });
-        if (S.cmd === i) tri(c, cx + 5 + Math.round(Math.sin(S.t * 9)), ry + 4, 3, '#383840');
-        T(c, lab[i], cx + 12, ry, 'ink');
-      }
+      wrapPx((S.lines || []).join(' '), m.w - 24).slice(0, 2).forEach((l, i) => T(c, l, m.x + 10, m.y + 9 + i * 15, 'white'));
       return;
     }
     if (md === 'move') { moveList(c, S.b.active(0), S.mv, false); return; }
@@ -1192,7 +1187,14 @@ function createBattle(env) {
     if ((md === 'setAsk' || md === 'learnAsk') && S.hit.yn) { for (let i = 0; i < 2; i++) if (inR(S.hit.yn[i], x, y)) { S.yn = i; press('a'); return; } return; }
     if (md === 'play') press('a');
   }
+  // landscape: the party / bag screen is drawn on its OWN 240x160 texture shown at an exact 2x (no 160->155 squash, which dropped pixel rows and cut the text)
+  function renderOv(c) {
+    if (!(S.ov && S.ov.ready)) return -1;
+    c.imageSmoothingEnabled = false; c.clearRect(0, 0, 240, 160); S.ov.core.render(c);
+    return 1 - Math.pow(1 - clamp((S.ov.t || 0) / .28), 3);
+  }
   function drawOvTop(c) {
+    if (single()) return;
     if (!(S.ov && S.ov.ready)) return;
     const oc = OVC.getContext('2d'); oc.imageSmoothingEnabled = false; oc.clearRect(0, 0, 240, 160); S.ov.core.render(oc);
     const e = 1 - Math.pow(1 - clamp((S.ov.t || 0) / .28), 3); c.imageSmoothingEnabled = false; c.drawImage(OVC, 0, 0, 240, 160, 0, Math.round((1 - e) * H), 240, H);
@@ -1458,7 +1460,8 @@ function createBattle(env) {
       sides: S.sides.map(s => ({ name: s.name, level: s.level, hp: Math.round(s.dhp), maxhp: s.maxhp, status: s.status, vis: s.vis, dx: s.dx, dy: s.dy })), over: S.b && S.b.over, finished: !!S.finished, intro: S.introT };
   }
   function rebuild() { /* images load on demand */ }
-  return { prepareCaught, spriteReport, S, opt, W, H, press, click, tap, update, render, start, initFont, status, rebuild, warnings, act, getImg, nudge, layoutPreview, LEG };
+  const hud = { state: () => ({ on: !!S.b && !S.fadeDir && !S.ov, mode: S.mode, cmd: S.cmd || 0 }), choose: i => { if (S.mode === 'cmd' && !S.fadeDir) { S.cmd = i; press('a'); } } };
+  return { renderOv, hud, prepareCaught, spriteReport, S, opt, W, H, press, click, tap, update, render, start, initFont, status, rebuild, warnings, act, getImg, nudge, layoutPreview, LEG };
 }
 root.BattleSceneCore = createBattle;
 })(window);
@@ -1502,11 +1505,13 @@ class BattleScene extends Phaser.Scene {
     this.add.rectangle(cw / 2, ch / 2, cw, ch, 0x111111).setDepth(0);
     const mkTex = key => { if (this.textures.exists(key)) this.textures.remove(key); const t = this.textures.createCanvas(key, 240, 155); try { t.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } return t; };
     this.texTop = mkTex('bs_top'); this.texBot = mkTex('bs_bot');
+    if (window.PMLayout && window.PMLayout.landscape) { if (this.textures.exists('bs_ov')) this.textures.remove('bs_ov'); this.texOv = this.textures.createCanvas('bs_ov', 240, 160); try { this.texOv.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ } this.ctxOv = this.texOv.getContext ? this.texOv.getContext() : this.texOv.context; }
     this.ctxTop = this.texTop.getContext ? this.texTop.getContext() : this.texTop.context; this.ctxBot = this.texBot.getContext ? this.texBot.getContext() : this.texBot.context;
     const SG = !!(window.PMLayout && window.PMLayout.landscape); this.single = SG;   // landscape: ONE screen, 480 x 320
     this.add.image(0, 0, 'bs_top').setOrigin(0, 0).setScale(cw / 240, (SG ? 320 : topH) / 155).setDepth(1);
     if (!SG) { this.add.image(0, botY, 'bs_bot').setOrigin(0, 0).setScale(cw / 240, (ch - botY) / 155).setDepth(1); if (gap > 0) this.add.rectangle(cw / 2, topH + gap / 2, cw, gap, 0x111111).setDepth(30); }
-    else this.input.on('pointerdown', p => { try { core.tap(p.x / (cw / 240), p.y * 155 / 320); } catch (e) { /* ignore */ } });
+    else this.imgOv = this.add.image(0, 0, 'bs_ov').setOrigin(0, 0).setScale(cw / 240, 2).setDepth(2).setVisible(false);
+    if (SG) this.input.on('pointerdown', p => { try { core.tap(p.x / (cw / 240), p.y * 155 / 320); } catch (e) { /* ignore */ } });
 
     const audioCache = {};
     const cry = sp => { const db = typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null; let e = db && db[sp]; if (!e && db) { const k = Object.keys(db).find(x => x.toUpperCase().replace(/[^A-Z0-9]/g, '') === String(sp).toUpperCase().replace(/[^A-Z0-9]/g, '')); e = k && db[k]; } if (!e || !e.cry) return; try { const a = audioCache[e.cry] || (audioCache[e.cry] = new Audio(e.cry)); a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => { /* blocked until a key press */ }); } catch (er) { /* no audio */ } };
@@ -1520,7 +1525,7 @@ class BattleScene extends Phaser.Scene {
       onEnd: res => this.finishBattle(res),
       glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
     });
-    this.core = core; BattleScene._core = core;
+    this.core = core; BattleScene._core = core; window.PMBattle = SG ? core.hud : null;
 
     // ---- who fights: TrainerTable (looked up by the trainer ID in the script) or the data passed in
     const opp = gsm && gsm.opponentPartyMon1;
@@ -1585,6 +1590,7 @@ class BattleScene extends Phaser.Scene {
     this.core.update(Math.min(.05, delta / 1000));
     if (!this.ctxTop) return;
     this.core.render(this.ctxTop, this.single ? null : this.ctxBot); this.texTop.refresh(); if (!this.single) this.texBot.refresh();
+    if (this.single && this.imgOv && this.ctxOv) { const e = this.core.renderOv(this.ctxOv); if (e < 0) this.imgOv.setVisible(false); else { this.texOv.refresh(); this.imgOv.setVisible(true).setY(Math.round((1 - e) * 320)); } }
     this.coordEditor();
   }
 
@@ -1617,13 +1623,13 @@ class BattleScene extends Phaser.Scene {
   }
 
   teardown() {
-    if (this.tornDown) return; this.tornDown = true;
+    if (this.tornDown) return; this.tornDown = true; window.PMBattle = null;
     try { window.removeEventListener('keydown', this.kd, true); } catch (e) { /* ignore */ }
     BattleScene.musicOn = false;   // the audio unlock in Layout.js must not restart it
     try { const m = this.battleMusic; if (m) { m.pause(); m.currentTime = 0; setTimeout(() => { if (!BattleScene.musicOn) { try { m.pause(); m.currentTime = 0; } catch (e) { /* ignore */ } } }, 400); } } catch (e) { /* ignore */ }   // (the 2nd pause catches a play() that was still pending)
     // The two canvas textures are NOT removed here: the scene's images still use them for the frame being drawn, and removing a texture
     // in use makes WebGL throw "Cannot read properties of null (reading 'isGLTexture')". create() replaces them on the next battle.
-    this.ctxTop = this.ctxBot = null;
+    this.ctxTop = this.ctxBot = this.ctxOv = null;
   }
 }
 // ---------------------------------------------------------------------------
