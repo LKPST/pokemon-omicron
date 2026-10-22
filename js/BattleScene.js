@@ -1566,7 +1566,7 @@ if (typeof window.removeSpriteBackground !== 'function') {
 // ---------------------------------------------------------------------------
 // the Phaser scene
 // ---------------------------------------------------------------------------
-class BattleScene extends Phaser.Scene {
+window.BattleScene = class BattleScene extends Phaser.Scene {   // assigned (not declared) so loading this file twice can never throw "already declared"
   constructor() { super('BattleScene'); }
   init(data) { this.battleData = data || {}; this.finishedOnce = false; }
 
@@ -1707,7 +1707,7 @@ class BattleScene extends Phaser.Scene {
     // in use makes WebGL throw "Cannot read properties of null (reading 'isGLTexture')". create() replaces them on the next battle.
     this.ctxTop = this.ctxBot = this.ctxOv = null;
   }
-}
+};
 // ---------------------------------------------------------------------------
 // LAYOUT / SCALE  -  edit these numbers, change them live in the browser console while a battle is open, or (easiest) use
 // battle_layout_editor.html, which drags everything around and writes this block back into this file for you.
