@@ -827,7 +827,9 @@ function createBattle(env) {
   // ================================================== update
   const HUDM = ['cmd', 'move', 'party', 'bag', 'learnAsk', 'learnPick', 'setAsk'];
   function update(dt) {
-    S.t += dt;
+    S.t += dt; S.dt = dt;
+    if (S.mode === 'move' || S.mode === 'learnPick') S.mvT = (S.mvT || 0) + dt; else S.mvT = 0;
+    if (S.mvInfo) S.infoT = (S.infoT || 0) + dt; else S.infoT = 0;
     S.lowT = (S.lowT || 0) + dt; if (window.StartMenu && window.StartMenu.tickBg) window.StartMenu.tickBg(dt);
     { const want = HUDM.includes(S.mode) ? 1 : 0, cur = S.botIn || 0; S.botIn = want > cur ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 3.4); if (want) S.botMode = S.mode;
       const noStrip = ['move', 'party', 'bag', 'learnPick'].includes(S.mode); if (noStrip || S.botIn <= 0) S.stripT = 0; else { S.stripT = (S.stripT || 0) + dt; if (S.stripT > 1.5) S.stripPlayed = true; } }
@@ -1031,6 +1033,18 @@ function createBattle(env) {
       const ef = Math.ceil(eW * clamp(sd.exp));   // ceil: even a tiny gain shows as at least 1 px if (ef > 0) { rect(c, ex, ey, ef, 3, '#34d4f4'); rect(c, ex, ey, ef, 1, 'rgba(255,255,255,0.4)'); }
     }
   }
+  function infoShown(sd, isPlayer) {
+    if (!sd.vis || !sd.species || sd.alpha <= 0) return false;
+    if (S.mode === 'intro' && !isPlayer && S.introFoe) return false;
+    if (single() && S.rows && !S.rows[isPlayer ? 0 : 1].done && (isPlayer || (S.b && S.b.kind === 'trainer'))) return false;
+    return true;
+  }
+  // the HP boxes slide in from their side when the Pokémon appears (the foe's from the left, yours from the right)
+  function infoAnim(c, sd, isPlayer) {
+    sd.boxT = infoShown(sd, isPlayer) ? (sd.boxT || 0) + (S.dt || 0) : 0;
+    const e = 1 - Math.pow(1 - clamp(sd.boxT / .4), 3), dx = Math.round((1 - e) * (isPlayer ? 150 : -150));
+    c.save(); c.translate(dx, 0); infoBox(c, sd, isPlayer); c.restore();
+  }
   function drawParticles(c) {
     for (const pa of S.particles) {
       const p = clamp(pa.t / pa.dur); if (pa.side == null) continue;
@@ -1182,10 +1196,10 @@ function createBattle(env) {
   }
   // Fight: the screen darkens and the four moves stack on the right; the border shows the matchup (gold = super effective, red = not very, grey = normal)
   function moveList(c, P, sel, learn) {
-    c.fillStyle = 'rgba(4,6,16,0.62)'; c.fillRect(0, 0, W, H); S.hit.mv = []; S.hit.mvi = [];
+    const mT = S.mvT == null ? 9 : S.mvT; c.fillStyle = 'rgba(4,6,16,' + (0.62 * clamp(mT / .18)).toFixed(3) + ')'; c.fillRect(0, 0, W, H); S.hit.mv = []; S.hit.mvi = [];
     const x0 = 102, w = 134, h = 23, ico = [];
     for (let i = 0; i < 4; i++) {
-      const on = sel === i, y = 10 + i * 25, x = x0 + (on ? -3 : 0), s0 = P.moves[i]; S.hit.mv.push({ x: x0 - 4, y: y - 1, w: w + 8, h: h + 2 }); S.hit.mvi.push({ x: x - 7, y: y - 8, w: 18, h: 18 });
+      const on = sel === i, y = 10 + i * 25, slide = Math.round((1 - (1 - Math.pow(1 - clamp((mT - i * .05) / .24), 3))) * 150), x = x0 + (on ? -3 : 0) + slide, s0 = P.moves[i]; S.hit.mv.push({ x: x0 - 4 + slide, y: y - 1, w: w + 8, h: h + 2 }); S.hit.mvi.push({ x: x - 7, y: y - 8, w: 18, h: 18 });
       if (!s0) { pill(c, x0, y, w, h, 'rgba(40,44,60,.5)', 7); continue; }
       const mi = mvInfo(s0.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled, tcol = dis ? '#6b7080' : TYPE_COLOR(mi.type), ek = learn ? 'neutral' : effKind(P, mi);
       const base = on ? tcol : mixHex(tcol, 52, .62), bc = EFF_BORDER[ek];
@@ -1200,7 +1214,8 @@ function createBattle(env) {
       if (on) { const ax = x - 17 + Math.round(Math.sin(S.t * 9)); if (!pngAt(ARROW, c, ax, y + 4)) tri(c, ax + 8, y + 12, 4, '#ff5a5a'); }
     }
     for (const q of ico) infoDot(c, q[0], q[1]);
-    const sp = P.moves[sel], smi = sp && mvInfo(sp.key); if (S.mvInfo && sp) moveInfoPanel(c, smi, sp);
+    const iT = S.infoT == null ? 9 : S.infoT;
+    const sp = P.moves[sel], smi = sp && mvInfo(sp.key); if (S.mvInfo && sp) { c.save(); c.translate(-Math.round((1 - (1 - Math.pow(1 - clamp(iT / .2), 3))) * 100), 0); moveInfoPanel(c, smi, sp); c.restore(); }
     const m = CF.msg; gbaBox(c, m.x, m.y, m.w, m.h);
     if (S.mvInfo && sp) { const ls = wrapPx(moveDesc(smi) || 'No description.', m.w - 24).slice(0, 3), sp2 = ls.length > 2 ? 11 : 15; ls.forEach((l, i) => T(c, l, m.x + 10, m.y + (ls.length > 2 ? 6 : 9) + i * sp2, 'white')); return; }
     const txt = S.mvMsg && S.mode === 'move' ? S.mvMsg : learn ? 'Forget which move?' : 'Choose a move.';
@@ -1258,7 +1273,7 @@ function createBattle(env) {
       if (cu.ballPos) drawBallSprite(c, cu.ballPos.x, cu.ballPos.y, cu.ballPos.rot, CF.ball);
       if (cu.open && cu.spT != null && cu.spT < .16) drawBallSprite(c, cu.open.x, cu.open.y, 0, CF.ball, cu.spT < .08 ? 2 : 1);
     }
-    infoBox(c, side(1), false); infoBox(c, side(0), true);
+    infoAnim(c, side(1), false); infoAnim(c, side(0), true);
     levelBoxView(c);
     if (single()) { partyBalls(c); singleMsg(c); drawOvTop(c); } else msgBox(c);   // always visible, whatever menu is open
     if (S.mode === 'intro') introOverlay(c);
