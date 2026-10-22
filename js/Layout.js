@@ -13,7 +13,7 @@
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 9, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 10, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -89,20 +89,16 @@
   #pm-tc .pill { border-radius: 999px; color: #eef1ff; font: 700 calc(var(--u) * .26) / 1 system-ui, sans-serif; background: rgba(40,43,60,.9); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px rgba(255,255,255,.2); }
   #pm-tc .pill.on { background: #26a8a0; color: #05161a; }
   #pm-tc .cam svg { width: 56%; height: 56%; }
-  #pm-bh { position: fixed; inset: 0; z-index: 21; pointer-events: none; display: none; }
-  #pm-bh .bw { position: absolute; pointer-events: auto; filter: drop-shadow(0 4px 5px rgba(0,0,0,.55)); transition: transform .12s, filter .12s; -webkit-tap-highlight-color: transparent; touch-action: none; }
-  #pm-bh .bw.sel { transform: scale(1.07); filter: drop-shadow(0 0 9px rgba(255,255,255,.9)) drop-shadow(0 4px 5px rgba(0,0,0,.55)); }
-  #pm-bh .bo, #pm-bh .bi { position: absolute; }
-  #pm-bh .bw.L .bo, #pm-bh .bw.L .bi { clip-path: polygon(0 50%, 20% 0, 100% 0, 100% 100%, 20% 100%); }
-  #pm-bh .bw.R .bo, #pm-bh .bw.R .bi { clip-path: polygon(0 0, 80% 0, 100% 50%, 80% 100%, 0 100%); }
-  #pm-bh .bo { inset: 0; background: rgba(16,20,36,.92); } #pm-bh .bw.sel .bo { background: #fff; }
-  #pm-bh .bi { inset: 3px; display: flex; align-items: center; justify-content: center; color: #fff; font: 800 var(--fs) / 1 system-ui, sans-serif; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
-  #pm-bh .bw.L .bi { padding-left: 12%; } #pm-bh .bw.R .bi { padding-right: 12%; }
-  #pm-bh .bi::before { content: ""; position: absolute; inset: 0 0 52% 0; background: linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,0)); }
-  #pm-bh .bw.sel .bi::after { content: "\\25B6"; position: absolute; left: 24%; color: #ff4a4a; font-size: .8em; text-shadow: none; }
-  #pm-bh .bw.R.sel .bi::after { left: 10%; }
-  #pm-bh .c0 .bi { background: linear-gradient(160deg, #ff7a44, #c4261a); } #pm-bh .c1 .bi { background: linear-gradient(160deg, #f6d040, #b58410); color: #fffbe6; }
-  #pm-bh .c2 .bi { background: linear-gradient(160deg, #46d874, #178a3c); } #pm-bh .c3 .bi { background: linear-gradient(160deg, #44cdee, #1a74b8); }
+  #pm-bh { position: fixed; inset: 0; z-index: 2; pointer-events: none; display: none; }
+  #pm-bh .bw { position: absolute; pointer-events: auto; -webkit-tap-highlight-color: transparent; touch-action: none; transition: transform .1s, filter .1s; filter: drop-shadow(0 3px 3px rgba(0,0,0,.5)); }
+  #pm-bh .bw.sel { transform: scale(1.07); filter: drop-shadow(0 0 7px rgba(255,255,255,.95)) drop-shadow(0 3px 3px rgba(0,0,0,.5)); z-index: 2; }
+  #pm-bh svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  #pm-bh .tx { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 900 var(--fs) / 1 system-ui, -apple-system, sans-serif; letter-spacing: .01em; -webkit-text-stroke: calc(var(--fs) * .22) #1b1f2e; paint-order: stroke fill; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  #pm-bh .L .tx { padding-right: 24%; } #pm-bh .R .tx { padding-left: 24%; }
+  #pm-bh .ar { position: absolute; top: 50%; width: calc(var(--fs) * 1.5); height: auto; margin-top: calc(var(--fs) * -.75); image-rendering: pixelated; display: none; }
+  #pm-bh .sel .ar { display: block; }
+  #pm-bh .L .ar { left: 9%; } #pm-bh .R .ar { right: 9%; transform: scaleX(-1); }
+  #pm-bh .noar .ar { display: none !important; }
   #pm-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; transition: opacity .35s; }
   #pm-toast { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); background: rgba(10,12,20,.88); color: #fff; font: 600 13px system-ui, sans-serif; padding: 7px 14px; border-radius: 999px; z-index: 31; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
   `;
@@ -175,11 +171,28 @@
   // ---------------------------------------------------------------- battle command buttons (outside the main screen)
   // POKéMON + BAG on the left, FIGHT + RUN on the right; shown only while a battle asks "What will X do?"
   const BH = { geo: null, els: [] };
+  const HEXD = {
+    0: ['#ff8c50', '#d22c18', '<path d="M110 90 C70 74 78 44 98 22 C100 42 114 44 118 24 C140 44 150 72 110 90Z" fill="rgba(255,226,140,.38)"/><path d="M150 86 C128 76 132 58 144 46 C146 58 156 58 158 50 C170 62 172 78 150 86Z" fill="rgba(255,226,140,.3)"/>'],
+    1: ['#f6dc50', '#b48a14', '<rect x="82" y="34" width="58" height="48" rx="12" fill="rgba(255,255,255,.3)"/><path d="M92 36 C92 14 130 14 130 36" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="7"/><rect x="104" y="52" width="14" height="10" rx="3" fill="rgba(0,0,0,.18)"/>'],
+    2: ['#4cdc7c', '#168a3a', '<circle cx="110" cy="50" r="36" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="7"/><path d="M74 50 H146" stroke="rgba(255,255,255,.3)" stroke-width="7"/><circle cx="110" cy="50" r="11" fill="rgba(255,255,255,.3)"/>'],
+    3: ['#5ad8f4', '#1c72c4', '<g fill="rgba(255,255,255,.3)"><ellipse cx="90" cy="62" rx="11" ry="16"/><circle cx="82" cy="36" r="5"/><circle cx="91" cy="34" r="5"/><circle cx="100" cy="37" r="5"/><ellipse cx="136" cy="44" rx="11" ry="16"/><circle cx="128" cy="18" r="5"/><circle cx="137" cy="16" r="5"/><circle cx="146" cy="19" r="5"/></g>'],
+  };
+  function hexSvg(i) {
+    const d = HEXD[i], P = '0,50 30,6 190,6 220,50 190,94 30,94', Q = '9,50 34,12 186,12 211,50 186,88 34,88';
+    return '<svg viewBox="0 0 220 100" preserveAspectRatio="none"><defs><linearGradient id="hg' + i + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + d[0] + '"/><stop offset="1" stop-color="' + d[1] + '"/></linearGradient><clipPath id="hc' + i + '"><polygon points="' + Q + '"/></clipPath></defs>' +
+      '<polygon points="' + P + '" transform="translate(0 4)" fill="rgba(0,0,0,.4)"/>' +
+      '<polygon points="' + P + '" fill="#171b28" stroke="#171b28" stroke-width="10" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+      '<polygon points="' + P + '" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+      '<polygon points="' + Q + '" fill="url(#hg' + i + ')" stroke="' + d[1] + '" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+      '<g clip-path="url(#hc' + i + ')">' + d[2] + '<path d="M0 12 H220 V46 C150 56 70 38 0 52Z" fill="rgba(255,255,255,.2)"/></g></svg>';
+  }
   function buildBattleHud() {
     const root = document.createElement('div'); root.id = 'pm-bh'; document.body.appendChild(root); BH.root = root;
     const lab = ['FIGHT', 'BAG', 'POK\u00e9MON', 'RUN'];
     lab.forEach((t, i) => {
-      const w = document.createElement('div'); w.className = 'bw c' + i + (i === 0 || i === 3 ? ' R' : ' L'); w.innerHTML = '<div class="bo"></div><div class="bi">' + t + '</div>'; root.appendChild(w); BH.els[i] = w;
+      const w = document.createElement('div'); w.className = 'bw c' + i + (i === 0 || i === 3 ? ' R' : ' L');
+      w.innerHTML = hexSvg(i) + '<div class="tx">' + t + '</div><img class="ar" src="graphics/battle_scene/battle_arrow.png" alt="" onerror="this.parentNode.classList.add(\'noar\')">';
+      root.appendChild(w); BH.els[i] = w;
       w.addEventListener('pointerdown', e => { e.preventDefault(); try { if (window.PMBattle) window.PMBattle.choose(i); } catch (x) { /* ignore */ } });
     });
     setInterval(() => {
@@ -189,10 +202,12 @@
     }, 70);
   }
   // docked to the main screen's edge (flat side against it, pointed side outward): POKéMON over BAG on the left, FIGHT over RUN on the right, all the same size
-  function placeBattleHud(lx, rx, bw, y0, y1) {
-    if (!BH.root) return; const zh = y1 - y0; BH.geo = (zh >= 96 && bw >= 64) ? 1 : null; if (!BH.geo) return;
-    const gap = 8, bh = Math.min(60, (zh - gap) / 2), ty = y0 + (zh - (bh * 2 + gap)) / 2;
-    const put = (el, x, y) => { Object.assign(el.style, { left: Math.round(x) + 'px', top: Math.round(y) + 'px', width: Math.round(bw) + 'px', height: Math.round(bh) + 'px' }); el.style.setProperty('--fs', Math.max(10, Math.min(20, bh * .27)) + 'px'); };
+  // full hexagons tucked ~20% behind the main screen's edge (the screen covers that part): POKéMON over BAG on the left, FIGHT over RUN on the right, all one size
+  function placeBattleHud(vx, vw, avail, y0, y1, plain) {
+    if (!BH.root) return; const zh = y1 - y0, Wf = Math.min(210, avail / .8); BH.geo = (zh >= 90 && Wf >= 84) ? 1 : null; if (!BH.geo) return;
+    const gap = 6, bh = Math.min(Wf * .58, (zh - gap) / 2), ty = y0 + (zh - (bh * 2 + gap)) / 2, tuck = Wf * .2;
+    const put = (el, x, y) => { Object.assign(el.style, { left: Math.round(x) + 'px', top: Math.round(y) + 'px', width: Math.round(Wf) + 'px', height: Math.round(bh) + 'px' }); el.style.setProperty('--fs', Math.max(11, Math.min(22, bh * .3)) + 'px'); };
+    const lx = vx - Wf + tuck, rx = vx + vw - tuck;
     put(BH.els[2], lx, ty); put(BH.els[1], lx, ty + bh + gap); put(BH.els[0], rx, ty); put(BH.els[3], rx, ty + bh + gap);
   }
 
@@ -247,8 +262,8 @@
     if (portraitPhone) { const py = vy + vh + 14; setPill(els.minus, W / 2 - pw * 1.5 - 12, py, pw, ph); setPill(els.cam, W / 2 - pw / 2, py, pw, ph); setPill(els.plus, W / 2 + pw / 2 + 12, py, pw, ph); }
     else { const tl = dpadSide === 'left'; setPill(els.minus, tl ? padCx : faceCx, topRow, pw, ph); setPill(els.plus, tl ? faceCx : padCx, topRow, pw, ph); setPill(els.cam, tl ? faceCx : padCx, topRow + ph + 8, pw, ph); }
     { const yTop = (portraitPhone ? vy + vh + 14 + ph + 10 : topRow + ph * 2 + 24), yBot = yMid - 8;
-      if (portraitPhone) { const bw2 = Math.min(150, W / 2 - 14); placeBattleHud(W / 2 - bw2 - 4, W / 2 + 4, bw2, yTop, yBot); }
-      else { const bw2 = Math.min(150, vx - si.l - 2, W - si.r - vx - vw - 2); placeBattleHud(vx - bw2, vx + vw, bw2, yTop, yBot); } }
+      if (portraitPhone) { BH.geo = null; }   // no room beside the screen on a portrait phone: the keys / A still work there
+      else placeBattleHud(vx, vw, Math.min(vx - si.l - 4, W - si.r - vx - vw - 4), yTop, yBot); }
     // the d-pad / face groups keep their own hit areas
   }
 
