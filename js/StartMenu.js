@@ -612,7 +612,7 @@ function createStart(env) {
       T(c, CD.page === 0 ? 'TRAINER CARD' : 'TRAINER RIBBONS', 16, 12, 'white'); tabs(c, 138, 11, 42, 13, false);
       if (CD.page === 0) {
         const row = (lab, val, y) => { T(c, lab, 16, y, 'gold'); TR(c, val, 138, y, 'white'); };
-        row('NAME', String(p.name || inf.name).toUpperCase(), 33); row('ID No.', String(inf.id || 0).padStart(5, '0'), 44); row('MONEY', String(+p.money || 0), 55); row('POKéDEX', inf.dexCaught + ' / ' + inf.dexSeen, 66); row('TIME', fmtTime(inf.playTime), 77);
+        row('NAME', String(p.name || inf.name).toUpperCase(), 33); row('ID No.', String(inf.id || 0).padStart(5, '0'), 44); row('MONEY', '/p/' + String(+p.money || 0), 55); row('POKéDEX', inf.dexCaught + ' / ' + inf.dexSeen, 66); row('TIME', fmtTime(inf.playTime), 77);
         const H = HUD().card.sprite; rr(c, H.x, H.y, H.w, H.h, 4, '#0c1a46'); const f = monFrame(trainerSpritePath());
         if (f) drawMonSprite(c, f, H.x + 2, H.y + 2, H.w - 4, H.h - 4, false); else T(c, 'LOADING', H.x + 14, H.y + H.h / 2 - 4, 'grey');
         T(c, 'BADGES', 16, 98, 'gold');
