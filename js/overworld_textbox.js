@@ -47,16 +47,46 @@ const OW_TEXT = {
     return g;
   })();
   
+  // The glyph table of the game's font. If js/utils/EmeraldFont.js is loaded ITS map is used (edit it in the Font Editor tab of
+  // background_remover.html): it adds the /tags/ like /m/ /f/ /up/, wide glyphs (w = cells of 8 px) and per glyph advances (adv).
+  // The table above is only the fallback when EmeraldFont.js is not loaded.
+  let owTable = null, owFromEF = false;
+  function owGlyphs() {
+    if (owTable && (owFromEF || typeof EmeraldFont === 'undefined')) return owTable;
+    let ef = null;
+    try { if (typeof EmeraldFont !== 'undefined') ef = new EmeraldFont(null).glyphMap; } catch (e) { ef = null; }
+    owFromEF = !!ef;
+    owTable = ef ? Object.assign({}, OW_GLYPHS, ef) : OW_GLYPHS;
+    if (ef) { if (owTable['/m/']) owTable['\u2642'] = owTable['/m/']; if (owTable['/f/']) owTable['\u2640'] = owTable['/f/']; }
+    return owTable;
+  }
+  const owAdv = gl => (gl && typeof gl.adv === 'number') ? gl.adv : (gl && gl.w > 1 ? gl.w * 8 : OW_TEXT.advance);
+
   const OverworldText = {
-    glyphs: OW_GLYPHS,
+    get glyphs() { return owGlyphs(); },
+
+    // Splits a line into drawable tokens. A single / is a slash; /name/ (closed by another /) is a special glyph (/m/ /f/ /up/ ...).
+    tokens(s) {
+      s = String(s == null ? '' : s); const G = owGlyphs(), out = []; let i = 0;
+      while (i < s.length) {
+        const ch = s[i];
+        if (ch === ' ') { out.push({ ch: ' ', gl: null, adv: OW_TEXT.space, w: 1 }); i++; continue; }
+        if (ch === '/') {
+          const j = s.indexOf('/', i + 1);
+          if (j > 0) { const tag = s.slice(i, j + 1); if (G[tag]) { out.push({ ch: tag, gl: G[tag], adv: owAdv(G[tag]), w: G[tag].w || 1 }); i = j + 1; continue; } }
+        }
+        const gl = G[ch] || null; out.push({ ch, gl, adv: owAdv(gl), w: (gl && gl.w) || 1 }); i++;
+      }
+      return out;
+    },
   
     // $player, $npc and variables
     expand(text, vars = {}) {
       return String(text == null ? '' : text).replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (m, k) => (vars[k] !== undefined ? vars[k] : m));
     },
   
-    charWidth(ch) { return ch === ' ' ? OW_TEXT.space : OW_TEXT.advance; },
-    lineWidth(s) { let w = 0; for (const ch of s) w += this.charWidth(ch); return w; },   // GBA pixels
+    charWidth(ch) { return ch === ' ' ? OW_TEXT.space : owAdv(owGlyphs()[ch]); },   // one character or one /tag/
+    lineWidth(s) { let w = 0; for (const t of this.tokens(s)) w += t.adv; return w; },   // GBA pixels
   
     // Splits text into pages and lines. Returns { pages:[{lines:[...]}], warnings:[{page,line,type,msg}] }
     layout(text, vars) {
@@ -79,7 +109,7 @@ const OW_TEXT = {
           if (w > OW_TEXT.innerWidth) {
             warnings.push({ page: p, line: l, type: 'width', msg: `Page ${p + 1}, line ${l + 1} is too long (${w}/${OW_TEXT.innerWidth} px). It runs out of the box: add \\n.` });
           }
-          const bad = [...ln].filter(ch => ch !== ' ' && !this.glyphs[ch]);
+          const bad = this.tokens(ln).filter(t => t.ch !== ' ' && !t.gl).map(t => t.ch);
           if (bad.length) warnings.push({ page: p, line: l, type: 'glyph', msg: `Page ${p + 1}, line ${l + 1}: the font has no "${[...new Set(bad)].join('')}".` });
         });
         if (pg.lines.length > OW_TEXT.maxLines) {
@@ -155,13 +185,15 @@ const OW_TEXT = {
     drawLine(scene, x, y, line, depth) {
       const sc = OW_TEXT.scale, out = [];
       let cx = x;
-      for (const ch of line) {
-        const gl = OW_GLYPHS[ch];
+      for (const t of OverworldText.tokens(line)) {
+        const gl = t.gl;
         if (gl) {
-          const im = scene.add.image(cx, y, this.fontKey, gl.r * 32 + gl.c).setOrigin(0, 0).setScale(sc).setDepth(depth).setScrollFactor(0);
-          out.push(im);
+          for (let k = 0; k < t.w; k++) {   // wide glyphs (w > 1) are drawn from w cells side by side
+            const im = scene.add.image(cx + k * 8 * sc, y, this.fontKey, gl.r * 32 + gl.c + k).setOrigin(0, 0).setScale(sc).setDepth(depth).setScrollFactor(0);
+            out.push(im);
+          }
         }
-        cx += OverworldText.charWidth(ch) * sc;
+        cx += t.adv * sc;
       }
       return out;
     },
