@@ -1,1079 +1,1882 @@
 // ===========================================================================
-// PokemonSummary.js   (put it in js/, load it AFTER PokemonDatabase.js, TypeTables.js and GameStateManagerClass.js)
-//
-// The GBA-style party menu + summary screens (Info / Skills / Moves), drawn on a 240x160 canvas.
-//
-//  IN THE GAME   PokemonSummary.open(scene)    opens it over the TOP screen (OW_TEXT.screen, 480x320 = 240x160 at 2x).
-//                PokemonSummary.close()        closes it.        PokemonSummary.isOpen()
-//                The overworld opens it when the player presses Enter (see the [SUMMARY] lines in overworld_scene.js).
-//
-//  WHICH POKEMON?  GameStateManager.saveData.party  (the live save: loaded from the browser's local save at start-up and
-//                  shaped like save.json). Empty slots (null) are skipped. If that is empty, the local save
-//                  (localStorage 'pokemon_micron_save') is tried. Nothing is ever written back.
-//
-//  DATA IT USES    save mon       species, nickname, natdexID, level, exp, expmax, isShiny, gender, HP, maxHP, Attack, Def,
-//                                 spattack, sdpef, speed, nature, ability, teraType, heldItem, ballId, OTName, OTID,
-//                                 caughtloc, moves[{moveId,currentPP,maxPP}]
-//                  PokemonDatabase  sprite (battleSprite), icon (iconSprite), cry, name, types, base stats, abilities
-//                  TypeTable        (tables/TypeTables.js, made with type_icon_tool.html) type icons from your icon sheet
-//                  EmeraldFont      the glyph map of js/utils/EmeraldFont.js (+ the accents / male / female signs it lacks)
-//                  Move table       window.MoveDatabase / MoveTable / MoveTables if you have one (see moveInfo below)
-//
-//  SPECIAL TEXT    {Lv} {PP} {ID} {No} draw the little bitmap glyphs of the font.  /up/ /down/ /left/ /right/ draw arrows.
-//
-//  The same file runs in pokemon_summary.html (the preview / export tool): PokemonSummaryCore(env) is the engine.
+// WEATHER
+// The weather of the map the player is standing in comes from the `weather:`
+// field in overworld_map.js. Supported values (case, spaces, "_" and "-" are
+// ignored, so "Volcanic Ash", "volcanic_ash" and "VolcanicAsh" all work):
+//   Normal · Sunny · Drought · Rain · Thunderstorm · Snow · Fog · Sandstorm · Volcanic Ash
+// The weather of the map you are standing in covers every connected map that is
+// visible on screen. It only changes (with a fade) when the player ENTERS a map
+// with different weather. Weather lives in the world, so it does not follow the camera.
+// To change how a weather looks, edit OW_WEATHER_TYPES below.
 // ===========================================================================
-(function (root) {
-'use strict';
 
-const W = 240, H = 160;
-const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
-const ease = t => 1 - Math.pow(1 - t, 3);
-const backOut = t => { const c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
-const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+// [TABLE] The overworld table. Found as window.OverworldTable, or as a plain `const OverworldTable = {...}` / `OVERWORLD_TABLE` in another script
+// (a const at the top of a script is NOT on window, so window.OverworldTable alone would miss it).
+function OW_TABLE() {
+  if (window.OverworldTable) return window.OverworldTable;
+  let t = null;
+  try { if (typeof OverworldTable !== 'undefined') t = OverworldTable; } catch (e) { /* not declared */ }
+  if (!t) { try { if (typeof OverworldTables !== 'undefined') t = OverworldTables; } catch (e) { /* not declared */ } }
+  if (!t) { try { if (typeof OW_TABLES !== 'undefined') t = OW_TABLES; } catch (e) { /* not declared */ } }
+  if (t) window.OverworldTable = t;
+  else if (!OW_TABLE.warned) { OW_TABLE.warned = true; console.error('[OW] OverworldTable was not found. Check that its script is loaded (and has no error) BEFORE overworld_scene.js in index.html.'); }
+  return t;
+}
 
-// ---------------------------------------------------------------- glyphs
-// The map below is a copy of EmeraldFont.glyphMap (c = column of the 8x16 frames, r = row). If EmeraldFont is loaded in the
-// game, ITS map is used, so a change in EmeraldFont.js is picked up. Characters it does not have come from EXTRA_GLYPHS.
-const EMERALD_GLYPHS = {
-  0:{c:2,r:10},1:{c:4,r:10},2:{c:6,r:10},3:{c:8,r:10},4:{c:10,r:10},5:{c:12,r:10},6:{c:14,r:10},7:{c:16,r:10},8:{c:18,r:10},9:{c:20,r:10},
-  '!':{c:22,r:10},'?':{c:24,r:10},'.':{c:26,r:10},'-':{c:28,r:10},',':{c:16,r:11},
-  A:{c:22,r:11},B:{c:24,r:11},C:{c:26,r:11},D:{c:28,r:11},E:{c:30,r:11},F:{c:0,r:12},G:{c:2,r:12},H:{c:4,r:12},I:{c:6,r:12},J:{c:8,r:12},
-  K:{c:10,r:12},L:{c:12,r:12},M:{c:14,r:12},N:{c:16,r:12},O:{c:18,r:12},P:{c:20,r:12},Q:{c:22,r:12},R:{c:24,r:12},S:{c:26,r:12},T:{c:28,r:12},
-  U:{c:30,r:12},V:{c:0,r:13},W:{c:2,r:13},X:{c:4,r:13},Y:{c:6,r:13},Z:{c:8,r:13},a:{c:10,r:13},b:{c:12,r:13},c:{c:14,r:13},d:{c:16,r:13},
-  e:{c:18,r:13},f:{c:20,r:13},g:{c:22,r:13},h:{c:24,r:13},i:{c:26,r:13},j:{c:28,r:13},k:{c:30,r:13},l:{c:0,r:14},m:{c:2,r:14},n:{c:4,r:14},
-  o:{c:6,r:14},p:{c:8,r:14},q:{c:10,r:14},r:{c:12,r:14},s:{c:14,r:14},t:{c:16,r:14},u:{c:18,r:14},v:{c:20,r:14},w:{c:22,r:14},x:{c:24,r:14},
-  y:{c:26,r:14},z:{c:28,r:14},':':{c:0,r:15},'Ä':{c:0,r:15},'Ö':{c:2,r:15},'Ü':{c:4,r:15},'ä':{c:6,r:15},'ö':{c:8,r:15},'ü':{c:10,r:15},
-  '/up/':{c:0,r:16},'/down/':{c:2,r:16},'/left/':{c:4,r:16},'/right/':{c:6,r:16},'+':{c:8,r:16},Lv:{c:10,r:16},PP:{c:12,r:16},ID:{c:14,r:16},
-  '№':{c:16,r:16},_:{c:18,r:16},'(':{c:6,r:17},')':{c:8,r:17},'■':{c:10,r:17},'▲':{c:12,r:17},'✖':{c:14,r:17}
+const OW_WEATHER_DEPTH = 5000;
+// How many tiles the border block is drawn beyond the edge of the maps. Weather covers the same area.
+const OW_BORDER_RANGE = 14;
+
+// Sprite background removal: the colour of the first pixel (top-left) of an OW sprite sheet
+// is treated as the background. If that pixel is already transparent, nothing is done.
+//   'edge' = only remove that colour where it touches the frame border (safe: keeps white
+//            hats, eyes, etc. inside the sprite)
+//   'all'  = remove every pixel of that colour in the sheet
+const OW_BG_MODE = 'edge';
+const OW_BG_TOLERANCE = 6;   // how far (0-255 per channel) a colour may differ and still count as background
+
+const OW_WEATHER_ALIASES = {
+  '': 'none', normal: 'none', none: 'none', clear: 'none',
+  sunny: 'sunny', sun: 'sunny',
+  drought: 'drought', harshsunlight: 'drought',
+  rain: 'rain', rainy: 'rain',
+  thunderstorm: 'thunderstorm', thunder: 'thunderstorm',
+  snow: 'snow', snowy: 'snow',
+  fog: 'fog', foggy: 'fog',
+  sandstorm: 'sandstorm', sand: 'sandstorm',
+  volcanicash: 'ash', ash: 'ash', ashfall: 'ash',
 };
-// From the Emerald character map (frame = row*32 + 2*(code%16), code = row*16 + column): what EmeraldFont.js does not list.
-const EXTRA_GLYPHS = (() => {
-  const g = {}, put = (ch, code) => { g[ch] = { r: code >> 4, c: 2 * (code & 15) }; };
-  const run = (start, chars) => { let code = start; for (const ch of chars) put(ch, code++); };
-  run(0x01, 'ÀÁÂÇÈÉÊËÌ'); run(0x0B, 'ÎÏÒÓÔŒÙÚÛÑß'); run(0x16, 'àá'); run(0x19, 'çèéêëì');
-  run(0x20, 'îïòóôœùúûñºª'); run(0x2D, '&+'); run(0x35, '=;'); run(0x5A, 'Í%()');
-  run(0xB0, '…“”‘’♂♀'); run(0xB8, ',×/');
-  if (g['’']) g["'"] = g['’']; if (g['“']) g['"'] = g['“'];
-  return g;
-})();
-const TOKENS = { Lv: 'Lv', PP: 'PP', ID: 'ID', No: '№' };
-// Per-glyph options that can come from EmeraldFont.js (set them in the Font Editor tab): w = how many 8 px cells the glyph is wide, adv = pixels the cursor moves after it.
-const glW = gl => Math.max(1, (gl && gl.w) || 1);
-const glAdv = gl => (gl && typeof gl.adv === 'number') ? gl.adv : null;
-const glPx = gl => Math.max(16, 8 * glW(gl));   // pixels of the sheet that belong to the glyph
 
-// ---------------------------------------------------------------- built-in demo data (used only when your tables have nothing)
-const pretty = s => String(s == null ? '' : s).replace(/^(MOVE|SPECIES|ABILITY|TYPE|ITEM|NATURE|RIBBON)_/, '').toLowerCase().split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
-const DEMO = {
-  BULBASAUR: { id: '001', name: 'Bulbasaur', t: ['TYPE_GRASS', 'TYPE_POISON'], b: [45, 49, 49, 65, 65, 45], abs: ['Overgrow'] },
-  CHARMANDER: { id: '004', name: 'Charmander', t: ['TYPE_FIRE'], b: [39, 52, 43, 60, 50, 65], abs: ['Blaze'] },
-  SQUIRTLE: { id: '007', name: 'Squirtle', t: ['TYPE_WATER'], b: [44, 48, 65, 50, 64, 43], abs: ['Torrent'] },
-  PIKACHU: { id: '025', name: 'Pikachu', t: ['TYPE_ELECTRIC'], b: [35, 55, 40, 50, 50, 90], abs: ['Static'] },
-  EEVEE: { id: '133', name: 'Eevee', t: ['TYPE_NORMAL'], b: [55, 55, 50, 45, 65, 55], abs: ['Run Away'] },
-  MAGIKARP: { id: '129', name: 'Magikarp', t: ['TYPE_WATER'], b: [20, 10, 55, 15, 20, 80], abs: ['Swift Swim'] },
+// overlay   : color wash (color, alpha, optional pulse {amount, speed}, optional shift {to, speed}
+//             which slowly blends the colour towards `to` and back)
+// particles : one entry or a list. texture, density (per 100,000 world pixels of screen),
+//             vx/vy (px per second), alpha / scale ranges, tint, align, sway,
+//             splash {chance} (drops land on the "floor" and make a ripple)
+// fog       : drifting cloud layers
+// lightning : random flashes
+const OW_WEATHER_TYPES = {
+  none: {},
+
+  sunny: {
+    overlay: {
+      color: 0xfff0b0, alpha: 0.14,
+      pulse: { amount: 0.04, speed: 0.8 },
+      shift: { to: 0xffd27a, speed: 0.6 },
+    },
+  },
+
+  drought: {
+    overlay: {
+      color: 0xffb347, alpha: 0.24,
+      pulse: { amount: 0.05, speed: 1.2 },
+      shift: { to: 0xff6a1f, speed: 0.9 },
+    },
+    particles: {
+      texture: 'owx_dot', density: 22,
+      vx: [-6, 6], vy: [-45, -20],
+      alpha: [0.12, 0.3], scale: [0.5, 1.1],
+      tint: 0xfff2c0, sway: { amp: [6, 16], freq: [0.8, 1.8] },
+    },
+  },
+
+  rain: {
+    overlay: { color: 0x14213d, alpha: 0.16 },
+    particles: {
+      texture: 'owx_drop', density: 90,
+      vx: [-150, -110], vy: [700, 900],
+      alpha: [0.35, 0.6], scale: [1, 1],
+      tint: 0xbcd7ff, align: true,
+      splash: { chance: 0.7 },
+    },
+  },
+
+  thunderstorm: {
+    overlay: { color: 0x0a1020, alpha: 0.36 },
+    particles: {
+      texture: 'owx_drop', density: 170,
+      vx: [-260, -200], vy: [900, 1150],
+      alpha: [0.4, 0.7], scale: [1, 1.3],
+      tint: 0xa8c4f0, align: true,
+      splash: { chance: 0.5 },
+    },
+    lightning: { minDelay: 3000, maxDelay: 9000 },
+  },
+
+  snow: {
+    overlay: { color: 0xcfe0ff, alpha: 0.08 },
+    particles: {
+      texture: 'owx_dot', density: 60,
+      vx: [-15, 15], vy: [35, 80],
+      alpha: [0.7, 1], scale: [0.5, 1.0],
+      tint: 0xffffff, sway: { amp: [10, 28], freq: [0.6, 1.6] },
+    },
+  },
+
+  ash: {
+    overlay: { color: 0x3b322d, alpha: 0.32 },
+    particles: {
+      texture: 'owx_dot', density: 55,
+      vx: [-30, -8], vy: [40, 75],
+      alpha: [0.5, 0.85], scale: [0.4, 0.9],
+      tint: 0x8a8580, sway: { amp: [6, 18], freq: [0.5, 1.2] },
+    },
+  },
+
+  fog: {
+    overlay: { color: 0xdfe6ea, alpha: 0.14 },
+    fog: [
+      { texture: 'owx_fogA', alpha: 0.34, vx: 12, vy: 2 },
+      { texture: 'owx_fogB', alpha: 0.26, vx: 22, vy: -3 },
+    ],
+  },
+
+  sandstorm: {
+    overlay: { color: 0xb89455, alpha: 0.30, pulse: { amount: 0.05, speed: 0.7 } },
+    particles: [
+      {
+        texture: 'owx_dot', density: 140,
+        vx: [-720, -480], vy: [20, 90],
+        alpha: [0.35, 0.75], scale: [0.35, 0.8],
+        tint: 0xd8b878,
+      },
+      {
+        texture: 'owx_drop', density: 35,
+        vx: [-900, -650], vy: [30, 100],
+        alpha: [0.25, 0.5], scale: [1, 1.8],
+        tint: 0xe6cc94, align: true,
+      },
+    ],
+  },
 };
-const MV = { // key: [name, type, power, accuracy, pp, description]
-  TACKLE: ['Tackle', 'TYPE_NORMAL', 40, 100, 35, 'A full-body charge attack.'], GROWL: ['Growl', 'TYPE_NORMAL', 0, 100, 40, "Lowers the foe's Attack."],
-  VINEWHIP: ['Vine Whip', 'TYPE_GRASS', 45, 100, 25, 'Strikes with slender vines.'], RAZORLEAF: ['Razor Leaf', 'TYPE_GRASS', 55, 95, 25, 'Cuts with sharp leaves. High crit rate.'],
-  EMBER: ['Ember', 'TYPE_FIRE', 40, 100, 25, 'May inflict a burn.'], SCRATCH: ['Scratch', 'TYPE_NORMAL', 40, 100, 35, 'Scratches with sharp claws.'],
-  WATERGUN: ['Water Gun', 'TYPE_WATER', 40, 100, 25, 'Squirts water to attack.'], THUNDERSHOCK: ['Thunder Shock', 'TYPE_ELECTRIC', 40, 100, 30, 'An electric blast. May paralyze.'],
-  QUICKATTACK: ['Quick Attack', 'TYPE_NORMAL', 40, 100, 30, 'An almost invisible, fast attack.'], TAILWHIP: ['Tail Whip', 'TYPE_NORMAL', 0, 100, 30, "Lowers the foe's Defense."],
-  SPLASH: ['Splash', 'TYPE_NORMAL', 0, 0, 40, 'Splashes around. Nothing happens.'], BITE: ['Bite', 'TYPE_DARK', 60, 100, 25, 'A fang attack. May cause flinching.'],
-  CLOSECOMBAT: ['Close Combat', 'TYPE_FIGHTING', 120, 100, 5, 'A reckless all-out attack.'], BULLETPUNCH: ['Bullet Punch', 'TYPE_STEEL', 40, 100, 30, 'A fast punch. Always strikes first.'],
-  SWORDSDANCE: ['Swords Dance', 'TYPE_NORMAL', 0, 0, 20, 'A dance that sharply raises Attack.'], IRONHEAD: ['Iron Head', 'TYPE_STEEL', 80, 100, 15, 'Slams with a hard head. May flinch.'],
+
+const owLerpColor = (a, b, t) => {
+  const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+  const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+  return (Math.round(ar + (br - ar) * t) << 16) | (Math.round(ag + (bg - ag) * t) << 8) | Math.round(ab + (bb - ab) * t);
 };
-const NATURES = { Hardy: [0, 0], Docile: [0, 0], Serious: [0, 0], Bashful: [0, 0], Quirky: [0, 0], Lonely: [1, 2], Brave: [1, 5], Adamant: [1, 3], Naughty: [1, 4], Bold: [2, 1], Relaxed: [2, 5], Impish: [2, 3], Lax: [2, 4],
-  Timid: [5, 1], Hasty: [5, 2], Jolly: [5, 3], Naive: [5, 4], Modest: [3, 1], Mild: [3, 2], Quiet: [3, 5], Rash: [3, 4], Calm: [4, 1], Gentle: [4, 2], Sassy: [4, 5], Careful: [4, 3] };
-const BALL_BY_ID = { 1: 'poke', 2: 'great', 3: 'ultra', 4: 'master', 5: 'premier' };
-const BALLS = { poke: ['#e83848', '#f8f8f8'], great: ['#3868e0', '#f8f8f8'], ultra: ['#f0c820', '#383848'], premier: ['#f8f8f8', '#f8f8f8'], master: ['#9038c8', '#f8f8f8'] };
-const TYPE_COL = { Normal: '#a8a878', Fire: '#f08030', Water: '#6890f0', Electric: '#f0c820', Grass: '#78c850', Ice: '#98d8d8', Fighting: '#c03028', Poison: '#a040a0', Ground: '#d8b858', Flying: '#a890f0', Psychic: '#f85888', Bug: '#a8b820', Rock: '#b8a038', Ghost: '#705898', Dragon: '#7038f8', Dark: '#705848', Steel: '#a8a8c0', Fairy: '#ee99ac', Stellar: '#58b8c8' };
-const TLAB = { Normal: 'NORMAL', Fire: 'FIRE', Water: 'WATER', Electric: 'ELECT', Grass: 'GRASS', Ice: 'ICE', Fighting: 'FIGHT', Poison: 'POISON', Ground: 'GROUND', Flying: 'FLYING', Psychic: 'PSYCH', Bug: 'BUG', Rock: 'ROCK', Ghost: 'GHOST', Dragon: 'DRAGON', Dark: 'DARK', Steel: 'STEEL', Fairy: 'FAIRY', Stellar: 'STELLR' };
-const wrapText = (s, n) => { const out = []; let cur = ''; for (const w of String(s).split(/\s+/).filter(Boolean)) { const t = cur ? cur + ' ' + w : w; if (t.length <= n || !cur) cur = t; else { out.push(cur); cur = w; } } if (cur) out.push(cur); return out; };
-const normType = t => { t = String(t || ''); if (!t) return 'TYPE_NORMAL'; return /^TYPE_/.test(t) ? t : 'TYPE_' + t.toUpperCase().replace(/[^A-Z0-9]+/g, '_'); };
 
-// ===========================================================================
-//  ENGINE
-//  env = {
-//    urlFor(path)  -> url of a project file ('' = not available)       (default: the path itself)
-//    db()          -> PokemonDatabase object or null
-//    types()       -> TypeTable object or null
-//    moves()       -> move table object or null
-//    party()       -> array of save-format mons (nulls allowed)
-//    ballType(id)  -> 'poke' | 'great' | 'ultra' | 'premier' | 'master'
-//    glyphs()      -> glyph map override (optional)
-//    onExit()      -> called when B is pressed on the party list
-//  }
-// ===========================================================================
-function createSummary(env) {
-  const urlFor = env.urlFor || (p => p);
-  const opt = { cries: false, shinyFrame: false, frames: 'auto', nudge: 0 };
-
-  // ------------------------------------------------ images
-  const imgs = new Map(), failed = new Set();
-  function getImg(path) {
-    if (!path) return null;
-    let e = imgs.get(path);
-    if (!e) {
-      e = { img: new Image(), ok: false, fail: false };
-      e.img.onload = () => { e.ok = true; };
-      e.img.onerror = () => { e.fail = true; if (!failed.has(path)) { failed.add(path); warnings.add('image not found: ' + path); try { console.warn('[PS] could not load image: ' + path + '  (looked for it relative to your index.html)'); } catch (er) { /* no console */ } } };
-      const u = urlFor(path);
-      if (u) e.img.src = u; else e.fail = true;
-      imgs.set(path, e);
-    }
-    return e;
+class OverworldWeatherSystem {
+  constructor(scene) {
+    this.scene = scene;
+    this.layers = [];
+    this.currentType = null;
+    this.mapKey = null;
+    this.warned = new Set();
+    OverworldWeatherSystem.ensureTextures(scene);
   }
 
-  // ------------------------------------------------ font
-  let rawSheet = null, fontSrc = '', GLY = {};
-  const FT = { top: 2, cap: 9 }, fontCache = new Map(), advCache = new Map();
-  const loadImgP = url => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('load')); im.src = url; });
-  function buildGlyphs() {
-    let base = EMERALD_GLYPHS;
-    try { const o = env.glyphs && env.glyphs(); if (o && typeof o === 'object') base = o; } catch (e) { /* keep the copy */ }
-    GLY = Object.assign({}, EXTRA_GLYPHS, base); for (const k of Object.keys(GLY)) if (!GLY[k]) delete GLY[k];
-    if (GLY['/m/']) GLY['\u2642'] = GLY['/m/']; if (GLY['/f/']) GLY['\u2640'] = GLY['/f/'];   // the tags /m/ /f/ of EmeraldFont.js are the male / female signs
-  }
-  function fallbackSheet() {   // only used when latin_short.png cannot be read: draws a plain pixel font
-    const c = mk(256, 288), x = c.getContext('2d', { willReadFrequently: true });
-    x.fillStyle = '#f8f8f8'; x.fillRect(0, 0, 256, 288);
-    const cell = mk(8, 16), cx = cell.getContext('2d', { willReadFrequently: true });
-    const put = (gl, drawFn) => {
-      cx.clearRect(0, 0, 8, 16); drawFn(cx);
-      const d = cx.getImageData(0, 0, 8, 16).data, out = x.createImageData(8, 16), o = out.data, ink = new Uint8Array(128);
-      for (let i = 0; i < 128; i++) ink[i] = d[i * 4 + 3] > 110 ? 1 : 0;
-      for (let yy = 0; yy < 16; yy++) for (let xx = 0; xx < 8; xx++) {
-        const i = yy * 8 + xx; let v = 248;
-        if (ink[i]) v = 0; else if ((xx > 0 && ink[i - 1]) || (yy > 0 && ink[i - 8]) || (xx > 0 && yy > 0 && ink[i - 9])) v = 170;
-        o[i * 4] = o[i * 4 + 1] = o[i * 4 + 2] = v; o[i * 4 + 3] = 255;
-      }
-      x.putImageData(out, gl.c * 8, gl.r * 16);
+  static ensureTextures(scene) {
+    const tm = scene.textures;
+    const make = (key, w, h, draw) => {
+      if (tm.exists(key)) return;
+      const g = scene.make.graphics({ x: 0, y: 0, add: false });
+      draw(g);
+      g.generateTexture(key, w, h);
+      g.destroy();
     };
-    const txt = (s, size) => cx => { cx.font = `bold ${size}px "DejaVu Sans Mono","Courier New",monospace`; cx.fillStyle = '#000'; cx.fillText(s, 0, size === 10 ? 12 : 11); };
-    for (const ch of Object.keys(GLY)) {
-      const gl = GLY[ch];
-      if (ch === 'Lv') put(gl, txt('Lv', 8)); else if (ch === 'PP') put(gl, txt('PP', 8)); else if (ch === 'ID') put(gl, txt('ID', 8)); else if (ch === '№') put(gl, txt('No', 8));
-      else if (ch === '/up/' || ch === '/down/' || ch === '/left/' || ch === '/right/') {
-        put(gl, cx => { cx.fillStyle = '#000'; cx.beginPath();
-          if (ch === '/up/') { cx.moveTo(4, 3); cx.lineTo(8, 9); cx.lineTo(0, 9); } else if (ch === '/down/') { cx.moveTo(0, 4); cx.lineTo(8, 4); cx.lineTo(4, 10); }
-          else if (ch === '/left/') { cx.moveTo(1, 6); cx.lineTo(6, 2); cx.lineTo(6, 10); } else { cx.moveTo(7, 6); cx.lineTo(2, 2); cx.lineTo(2, 10); }
-          cx.closePath(); cx.fill(); });
-      } else if (ch.length === 1) put(gl, txt(ch, 10));
-    }
-    return c;
-  }
-  function measureFont() {
-    const gl = GLY['H'], d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 8, 16).data;
-    let t = 99, b = -1;
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) { const i = (y * 8 + x) * 4; if ((d[i] + d[i + 1] + d[i + 2]) / 3 < 110 && d[i + 3] > 0) { t = Math.min(t, y); b = Math.max(b, y); } }
-    if (b < 0) { t = 2; b = 10; }
-    FT.top = t; FT.cap = b - t + 1;
-  }
-  async function initFont() {
-    buildGlyphs();
-    let sheet = null, src = '';
-    try {
-      const fu = urlFor('graphics/fonts/latin_short.png'); if (!fu) throw new Error('none');
-      const im = await loadImgP(fu), c = mk(im.width, im.height), x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(im, 0, 0); x.getImageData(0, 0, 1, 1); sheet = c; src = 'latin_short.png';
-    } catch (e) { sheet = null; }
-    if (!sheet) { sheet = fallbackSheet(); src = 'built-in fallback (latin_short.png not loaded)'; }
-    rawSheet = sheet; fontSrc = src; fontCache.clear(); advCache.clear(); letAdv.clear(); measureFont();
-  }
-  const hex4 = h => { h = h.replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16), h.length > 6 ? parseInt(h.substr(6, 2), 16) : 255]; };
-  function font(tc, sc) {
-    const key = tc + '|' + sc; let f = fontCache.get(key); if (f) return f;
-    const T = hex4(tc), S = hex4(sc), c = mk(rawSheet.width, rawSheet.height), x = c.getContext('2d', { willReadFrequently: true });
-    x.drawImage(rawSheet, 0, 0);
-    const id = x.getImageData(0, 0, c.width, c.height), d = id.data, bgR = d[0], bgG = d[1], bgB = d[2];
-    for (let i = 0; i < d.length; i += 4) {
-      const r = d[i], g = d[i + 1], b = d[i + 2];
-      if (d[i + 3] === 0 || (r === bgR && g === bgG && b === bgB) || (r >= 245 && g >= 245 && b >= 245)) { d[i + 3] = 0; continue; }
-      const q = (r + g + b) / 3 < 110 ? T : S; d[i] = q[0]; d[i + 1] = q[1]; d[i + 2] = q[2]; d[i + 3] = q[3];
-    }
-    x.putImageData(id, 0, 0); fontCache.set(key, c); return c;
-  }
-  const TX = { dark: ['#2a2a3a', '#b4bad0'], white: ['#ffffff', '#5a5e7c'], mute: ['#6a7396', '#cdd3e6'], blue: ['#2f64e0', '#a9bdf2'], red: ['#e0344f', '#f2aab8'], badge: ['#ffffff', '#00000070'], cyan: ['#7ff3e4', '#134a4a'], dim: ['#b6c0e6', '#161c3a'], gold: ['#ffe27a', '#4a3a10'] };
-  // advance of a glyph: 6 px like EmeraldFont, a little more for the wide bitmap glyphs (Lv, PP, ID, arrows ...)
-  function advOf(key) {
-    if (advCache.has(key)) return advCache.get(key);
-    let a = 6; const gl = GLY[key];
-    if (glAdv(gl) != null) { advCache.set(key, glAdv(gl)); return glAdv(gl); }   // advance set in EmeraldFont.js
-    if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, glPx(gl), 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
-      let mx = -1;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < glPx(gl); x++) { const i = (y * glPx(gl) + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
-      if (mx >= 0) a = clamp(mx + 1, 6, glPx(gl) + 2);
-    }
-    advCache.set(key, a); return a;
-  }
-  // proportional advance for letters / punctuation: the width of the drawn pixels + 1 px gap (a fixed 6 px squashed wide letters like m, w, M, W
-  // into their neighbours and left narrow ones (i, l, t) floating apart). Digits stay fixed (6) so numbers line up.
-  const letAdv = new Map();
-  function advLetter(ch) {
-    if (letAdv.has(ch)) return letAdv.get(ch);
-    const gl = GLY[ch]; let a = 6;
-    if (glAdv(gl) != null) { letAdv.set(ch, glAdv(gl)); return glAdv(gl); }   // advance set in EmeraldFont.js
-    if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 16, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
-      let mx = -1, mn = 8;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = (y * 16 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245) && (d[i] + d[i + 1] + d[i + 2]) / 3 < 110) { mx = Math.max(mx, x); mn = Math.min(mn, x); } }
-      if (mx >= 0) a = clamp(mx + 2, 4, 12);
-    }
-    letAdv.set(ch, a); return a;
-  }
-  function* glyphs(s) {
-    s = String(s); let i = 0;
-    while (i < s.length) {
-      const ch = s[i];
-      if (ch === '{') { const j = s.indexOf('}', i); if (j > 0) { const k = TOKENS[s.slice(i + 1, j)]; if (k && GLY[k]) { yield { gl: GLY[k], adv: advOf(k) }; i = j + 1; continue; } } }
-      if (ch === '/') { const j = s.indexOf('/', i + 1); if (j > 0) { const tag = s.slice(i, j + 1); if (GLY[tag]) { yield { gl: GLY[tag], adv: advOf(tag) }; i = j + 1; continue; } } }
-      if (ch === ' ') { yield { gl: null, adv: 5 }; i++; continue; }
-      yield { gl: GLY[ch] || null, adv: glAdv(GLY[ch]) ?? (/[0-9]/.test(ch) ? 6 : advLetter(ch)) }; i++;
-    }
-  }
-  const tw = s => { let w = 0; for (const g of glyphs(s)) w += g.adv; return w; };
-  function T(c, s, x, y, k = 'dark') {
-    const f = font(TX[k][0], TX[k][1]); let cx = x;
-    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, glPx(g.gl), 16, cx, y - FT.top + opt.nudge, glPx(g.gl), 16); cx += g.adv; }
-    return cx;
-  }
-  const TR = (c, s, xr, y, k) => T(c, s, xr - tw(s), y, k);
+    make('owx_px', 2, 2, g => { g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 2, 2); });
+    make('owx_drop', 2, 14, g => { g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 2, 14); });
+    make('owx_dot', 8, 8, g => { g.fillStyle(0xffffff, 1); g.fillCircle(4, 4, 3.5); });
+    // Small flat ring used for rain ripples on the ground
+    make('owx_ring', 16, 8, g => { g.lineStyle(1.5, 0xffffff, 1); g.strokeEllipse(8, 4, 13, 5); });
 
-  // ------------------------------------------------ pixel helpers
-  const rect = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-  function pill(c, x, y, w, h, col, R) {
-    const r = Math.min(R ?? Math.floor(h / 2), Math.floor(h / 2), Math.floor(w / 2)); c.fillStyle = col;
-    for (let row = 0; row < h; row++) {
-      let dy = 0; if (row < r) dy = r - row - .5; else if (row >= h - r) dy = row - (h - r) + .5;
-      const inset = dy ? r - Math.round(Math.sqrt(Math.max(0, r * r - dy * dy))) : 0; c.fillRect(x + inset, y + row, w - 2 * inset, 1);
-    }
-  }
-  function ell(c, cx, cy, rx, ry, col) { c.fillStyle = col; for (let dy = -ry; dy <= ry; dy++) { const w = Math.round(rx * Math.sqrt(1 - (dy * dy) / ((ry + .5) * (ry + .5)))); c.fillRect(cx - w, cy + dy, w * 2, 1); } }
-  function tri(c, x, cy, half, col) { c.fillStyle = col; for (let dy = -half; dy <= half; dy++) c.fillRect(x, cy + dy, half + 1 - Math.abs(dy), 1); }
-  function ball(c, x, y, type, s = 1) {
-    const [top, bot] = BALLS[type] || BALLS.poke;
-    for (let py = 0; py < 9; py++) for (let px = 0; px < 9; px++) {
-      const dx = px - 4, dy = py - 4, r2 = dx * dx + dy * dy; if (r2 > 20) continue;
-      let col = r2 > 12 ? '#202030' : dy === 0 ? '#202030' : dy < 0 ? top : bot; if (r2 <= 2 && dy !== 0 || r2 <= 1) col = '#f8f8f8'; if (r2 === 2 && dy === 0) col = '#202030';
-      c.fillStyle = col; c.fillRect(x + px * s, y + py * s, s, s);
-    }
-  }
-  // the ball the Pokémon was caught in: frame 0 of its sheet in PokeballTables (graphics/poke_ball/gInterfaceGfx_<Name>.png); the drawn ball if there is no sheet
-  function ballIcon(c, m, x, y) {
-    const PT = typeof PokeballTables !== 'undefined' ? PokeballTables : null, d = PT && m.ballId != null ? (PT.get ? PT.get(m.ballId) : PT[m.ballId]) : null, e = d && d.spriteSheet ? getImg(d.spriteSheet) : null;
-    if (e && e.ok) { const fw = d.frameWidth || 16, fh = d.frameHeight || 16; c.imageSmoothingEnabled = false; c.drawImage(keyedIcon(e.img, d.spriteSheet), 0, 0, fw, fh, x, y, fw, fh); return; }
-    if (e && !e.fail) return;   // still loading
-    ball(c, x + 3, y + 3, m.ball, 1);
-  }
-  const STAR = ['..#..', '..#..', '#####', '.###.', '##.##'];
-  function star(c, x, y) { c.fillStyle = '#f0b820'; STAR.forEach((r, j) => { for (let i = 0; i < 5; i++) if (r[i] === '#') c.fillRect(x + i, y + j, 1, 1); }); }
-
-  // ------------------------------------------------ type icons (TypeTable) with a text fallback
-  let keyedSheet = null, keyedFor = null;   // the type sheet with its top-left colour made transparent (TypeTable.bgKey)
-  function typeSheet(TT) {
-    const sh = getImg(TT.sheet); if (!sh || !sh.ok) return null;
-    if (!TT.bgKey) return sh.img;
-    if (keyedFor === sh.img && keyedSheet) return keyedSheet;
-    try {
-      const w = sh.img.naturalWidth, h = sh.img.naturalHeight, c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(sh.img, 0, 0); const id = x.getImageData(0, 0, w, h), d = id.data, r0 = d[0], g0 = d[1], b0 = d[2], tol = TT.bgTolerance || 0;
-      if (d[3] === 255) for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - r0) <= tol && Math.abs(d[i + 1] - g0) <= tol && Math.abs(d[i + 2] - b0) <= tol) d[i + 3] = 0;
-      x.putImageData(id, 0, 0); keyedSheet = c; keyedFor = sh.img; return c;
-    } catch (e) { return sh.img; }
-  }
-  const typeLabel = key => pretty(key);
-  function badge(c, key, x, y) {
-    const TT = env.types && env.types(), te = TT && TT.types && TT.types[key];
-    if (te && te.icon && TT.sheet) {
-      const src = typeSheet(TT);
-      if (src) { c.imageSmoothingEnabled = false; c.drawImage(src, te.icon.x, te.icon.y, te.icon.w, te.icon.h, x, y, te.icon.w, te.icon.h); return te.icon.w; }
-    }
-    const nm = typeLabel(key), lab = (te && te.short ? te.short : TLAB[nm] || nm.toUpperCase().slice(0, 6)).toUpperCase(), w = tw(lab) + 4;
-    pill(c, x, y + 1, w, 13, '#00000040'); pill(c, x, y, w, 13, (te && te.color) || TYPE_COL[nm] || '#a8a878'); T(c, lab, x + 2, y + 2, 'badge'); return w;
-  }
-  function badges(c, types, x, y) { let cx = x; for (const t of types.slice(0, 2)) cx += badge(c, t, cx, y) + 2; }
-
-  // ------------------------------------------------ species / moves / mon
-  const warnings = new Set();
-  let dbIndex = null, dbIndexFor = null;
-  function speciesInfo(key) {
-    const k = String(key || '').trim(), DB = env.db && env.db();
-    if (DB) {
-      if (dbIndexFor !== DB) { dbIndexFor = DB; dbIndex = new Map(); for (const kk of Object.keys(DB)) { const nk = kk.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (!dbIndex.has(nk) || kk === 'SPECIES_NONE') dbIndex.set(nk, kk); } }
-      const parts = k.split('_'), cand = [k, k.replace(/_/g, '')];
-      for (let n = parts.length - 1; n >= 2; n--) cand.push(parts.slice(0, n).join('_'));
-      const more = []; for (const c of cand) { const real = dbIndex.get(c.toUpperCase().replace(/[^A-Z0-9]/g, '')); if (real) more.push(real); }
-      for (const cKey of [...cand, ...more]) { const e = DB[cKey]; if (e && typeof e === 'object' && !(cKey === 'SPECIES_NONE' && k !== 'SPECIES_NONE')) {
-        if (cKey !== k) warnings.add(`${k}: not in PokemonDatabase, showing ${cKey}`);
-        const m = /gSprite(\d+)/.exec(e.battleSprite || '');
-        const ty = [e.type1, e.type2].filter(t => t && t !== 'TYPE_NONE'), ab = [e.ability1, e.ability2, e.hiddenAbility].map(a => a && a !== 'ABILITY_NONE' ? pretty(a) : '');
-        return { id: m ? m[1] : '000', name: e.name && e.name !== 'None' ? e.name : pretty(cKey), t: ty.length ? ty : ['TYPE_NORMAL'],
-          b: [e.baseHP, e.baseAttack, e.baseDefense, e.baseSpAttack, e.baseSpDefense, e.baseSpeed].map(v => v || 50), abs: ab, sprite: e.battleSprite, icon: e.iconSprite, cry: e.cry };
-      } }
-      warnings.add(`${k}: not found in PokemonDatabase`);
-    }
-    const up = k.toUpperCase().replace(/^SPECIES_/, '').replace(/[^A-Z0-9]/g, ''), d = DEMO[up];
-    if (d) return { ...d, sprite: `graphics/pokemon_battle_sprites/battle/gSprite${d.id}${d.name}.png`, icon: `graphics/pokemon_battle_sprites/icons/gIconSprite${d.id}${d.name}.png`, cry: `audio/cries/gCry${d.name}.wav` };
-    return { id: '000', name: pretty(k) || 'Unknown', t: ['TYPE_NORMAL'], b: [50, 50, 50, 50, 50, 50], abs: [], sprite: '', icon: '', cry: '' };
-  }
-  function moveTable() { try { return (env.moves && env.moves()) || null; } catch (e) { return null; } }
-  let mvIdx = null, mvIdxFor = null;
-  function findMove(MT, id, key) {      // exact key, the table's own get(), then a loose match (MOVE_CLOSECOMBAT = MOVE_CLOSE_COMBAT)
-    let e = MT[id] || MT[id.toUpperCase()]; if (e && typeof e === 'object') return e;
-    if (typeof MT.get === 'function') { try { e = MT.get(id); if (e) return e; } catch (er) { /* ignore */ } }
-    if (mvIdxFor !== MT) { mvIdxFor = MT; mvIdx = new Map(); for (const k of Object.keys(MT)) mvIdx.set(k.toUpperCase().replace(/^MOVE_/, '').replace(/[^A-Z0-9]/g, ''), MT[k]); }
-    return mvIdx.get(key) || null;
-  }
-  function moveInfo(x) {
-    const id = typeof x === 'string' ? x : String((x && (x.moveId || x.id || x.name || x.move)) || ''), MT = moveTable();
-    const key = id.toUpperCase().replace(/^MOVE_/, '').replace(/[^A-Z0-9]/g, ''), e = MT && findMove(MT, id, key), d = MV[key];
-    let name, type, pow, acc, ppMax, desc;
-    if (e) { name = e.name || e.moveName || pretty(id); type = e.type || e.moveType; pow = e.power ?? e.basePower ?? e.pow ?? 0; acc = e.accuracy ?? e.acc ?? 0; ppMax = e.pp ?? e.maxPP; desc = e.description || e.desc || e.effectText || ''; }
-    else if (d) { [name, type, pow, acc, ppMax, desc] = d; }
-    else { name = pretty(id) || '---'; type = 'TYPE_NORMAL'; pow = 0; acc = 0; ppMax = 20; desc = ''; }
-    const maxPP = (x && x.maxPP) ?? ppMax ?? 20, cur = (x && x.currentPP) ?? maxPP;
-    return { name: String(name).slice(0, 12), type: normType(type), pow, acc, ppMax: maxPP, pp: cur, desc: String(desc || '') };
-  }
-  const MARK_KEYS = ['circle', 'triangle', 'square', 'heart', 'star', 'diamond'];   // saveData: markings: { circle, triangle, square, heart, star, diamond }
-  function markList(v) { if (Array.isArray(v)) return MARK_KEYS.map((k, i) => !!v[i]); if (v && typeof v === 'object') return MARK_KEYS.map(k => !!v[k]); return MARK_KEYS.map(() => false); }
-  function buildMon(raw) {
-    const sp = speciesInfo(raw.species), L = clamp(parseInt(raw.level) || 5, 1, 100), nat = NATURES[pretty(raw.nature) || 'Hardy'] || [0, 0];
-    const iv = [raw.ivhp ?? raw.ivHP, raw.ivatk ?? raw.ivAttack, raw.ivdef ?? raw.ivDefense, raw.ivspa ?? raw.ivSpAttack, raw.ivspd ?? raw.ivSpDefense, raw.ivspe ?? raw.ivSpeed].map(v => v ?? 15);
-    const calc = i => { const b = sp.b[i]; if (i === 0) return Math.floor((2 * b + iv[0]) * L / 100) + L + 10; const v = Math.floor((2 * b + iv[i]) * L / 100) + 5; return Math.floor(v * (nat[0] === i ? 1.1 : nat[1] === i ? .9 : 1)); };
-    const stats = [raw.maxHP ?? calc(0), raw.Attack ?? calc(1), raw.Def ?? calc(2), raw.spattack ?? calc(3), (raw.sdpef ?? raw.spdef) ?? calc(4), raw.speed ?? calc(5)];
-    const exp = raw.exp ?? L ** 3, expN = raw.expmax ?? (L + 1) ** 3;
-    const g = String(raw.gender || '').toUpperCase(), tera = raw.teraType && raw.teraType !== 'TYPE_NONE' ? raw.teraType : '';
-    const item = raw.heldItem && raw.heldItem !== 'ITEM_NONE' ? pretty(raw.heldItem) : '';
-    return { sp, rawSpecies: raw.species, species: sp.name, nick: String(raw.nickname || sp.name).slice(0, 10), dex: (root.Dex && root.Dex.num && root.Dex.num(raw.species)) || raw.natdexID || parseInt(sp.id, 10), types: sp.t, lv: L, stats, max: stats[0], hp: clamp(raw.HP ?? stats[0], 0, stats[0]),
-      natUp: nat[0], natDown: nat[1], nature: pretty(raw.nature) || 'Hardy', ability: pretty(raw.ability) || sp.abs[0] || '-', gender: g === 'MALE' || g === 'M' ? 'M' : g === 'FEMALE' || g === 'F' ? 'F' : '',
-      ball: (env.ballType ? env.ballType(raw.ballId) : BALL_BY_ID[raw.ballId]) || 'poke', item, tera, ot: raw.OTName || 'PLAYER', idno: String((+raw.OTID || 0) % 100000).padStart(5, '0'),
-      exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, iv, marks: markList(raw.markings), contest: [raw.cool, raw.beauty, raw.cute, raw.smart, raw.tough].map(v => clamp(+v || 0, 0, 255)), sheen: clamp(+raw.sheen || 0, 0, 255), ribbons: Array.isArray(raw.ribbons) ? raw.ribbons.length : (+raw.ribbons || 0), ballId: raw.ballId, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown', status: String(raw.status || '').toLowerCase() };
-  }
-
-  // ------------------------------------------------ state
-  const S = { view: 'party', sel: 0, page: 0, mv: 0, mvMode: false, t: 0, rowT: 0, selT: 9, statP: 1, hpShown: [], party: [], tr: null, pg: null, menu: null, swap: -1, name: null, pageT: 9, mvSwap: -1, mk: null, cask: null, iv: false, banner: null };
-  function rebuild(keepHp) {
-    warnings.clear();
-    const old = S.hpShown, raws = (env.party ? env.party() : []).filter(Boolean).slice(0, 6);
-    S.party = raws.map(buildMon);
-    S.party.forEach(m => { getImg(m.sprite); getImg(m.icon); });
-    const TT = env.types && env.types(); if (TT && TT.sheet) getImg(TT.sheet);
-    if (!TT) warnings.add('TypeTable not found: load tables/TypeTables.js before PokemonSummary.js (text badges are used)');
-    else { if (!TT.sheet) warnings.add('TypeTable has no sheet path'); for (const m of S.party) for (const ty of [...m.types, m.tera]) if (ty && !(TT.types && TT.types[ty] && TT.types[ty].icon)) warnings.add('no icon rect in TypeTable for ' + ty); }
-    S.hpShown = S.party.map((m, i) => keepHp && old[i] !== undefined ? old[i] : 0);
-    S.sel = Math.min(S.sel, Math.max(0, S.party.length - 1));
-    if (!keepHp) { S.bmsg = env.battle && env.battle.prompt ? { text: env.battle.prompt, t: 0, dur: 3 } : null; S.menu = null; S.swap = -1; S.name = null; S.rowT = 0; S.statP = 0; S.view = env.catchMode ? 'summary' : 'party'; S.tr = null; S.pg = null; S.page = 0; S.mvMode = false; S.banner = env.catchMode ? { text: env.catchMode.banner || 'Registered in the POKéDEX!', t: 0 } : null; }
-  }
-  function reset() { imgs.clear(); }
-
-  // ------------------------------------------------ background (per pixel, crisp)
-  const bgc = mk(W, H), bgx = bgc.getContext('2d'), bgd = bgx.createImageData(W, H), bd = bgd.data, RCX = 198, RCY = 86, ringR = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) ringR[y * W + x] = Math.hypot(x + .5 - RCX, y + .5 - RCY);
-  const CR1 = [216, 50, 74], CR2 = [208, 46, 70], CD1 = [168, 38, 62], CD2 = [158, 34, 56], CP = [230, 236, 249], CW = [255, 255, 255], CE = [238, 106, 128];
-  function drawBg(t) {
-    const rot = t * .3, sn = Math.sin(rot), cs = Math.cos(rot), off = Math.floor(t * 18);
-    for (let y = 0; y < H; y++) {
-      const edge = 172 - y * .375;
-      for (let x = 0; x < W; x++) {
-        const i = y * W + x, d = edge - x; let c;
-        if (d < 0) { const r = ringR[i], v = -(x - RCX) * sn + (y - RCY) * cs; c = ((r >= 40 && r <= 46) || (r >= 9 && r <= 13) || (r > 13 && r < 40 && Math.abs(v) <= 5)) ? CW : CP; }
-        else if (d < 2) c = CE; else if (d < 24) c = (((x + y + off) >> 4) & 1) ? CD2 : CD1; else c = (((x + y + off) >> 4) & 1) ? CR2 : CR1;
-        const j = i * 4; bd[j] = c[0]; bd[j + 1] = c[1]; bd[j + 2] = c[2]; bd[j + 3] = 255;
+    const makeFog = (key, seed, blobs, minR, maxR) => {
+      if (tm.exists(key)) return;
+      const size = 512;
+      const tex = tm.createCanvas(key, size, size);
+      const ctx = tex.getContext();
+      let s = seed;
+      const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+      for (let i = 0; i < blobs; i++) {
+        const r = minR + rnd() * (maxR - minR);
+        const bx = rnd() * size;
+        const by = rnd() * size;
+        for (const ox of [-size, 0, size]) {
+          for (const oy of [-size, 0, size]) {
+            const cx = bx + ox, cy = by + oy;
+            if (cx + r < 0 || cx - r > size || cy + r < 0 || cy - r > size) continue;
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+            grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+          }
+        }
       }
-    }
-    bgx.putImageData(bgd, 0, 0);
+      tex.refresh();
+    };
+    makeFog('owx_fogA', 7, 14, 60, 170);
+    makeFog('owx_fogB', 13, 9, 90, 210);
   }
 
-  // ------------------------------------------------ sprites and icons
-  const tmpC = mk(200, 200), tmpX = tmpC.getContext('2d');
-  function frameInfo(e) { const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = opt.frames === 'auto' ? (iw / ih >= 3.5 ? 4 : 1) : +opt.frames; return { n, fw: Math.floor(iw / n), fh: ih }; }
-  function drawSprite(c, m, cx, bottom, bw, bh, pop, flash) {
-    const e = getImg(m.sprite);
-    if (!e || e.fail || !m.sprite) { ball(c, cx - 13, bottom - 30, m.ball, 3); return; }
-    if (!e.ok) return;
-    const fi = frameInfo(e), fr = (m.shiny || opt.shinyFrame) && fi.n > 1 ? 1 : 0; let s = Math.min(bw / fi.fw, bh / fi.fh);
-    s = s >= 2 ? Math.floor(s) : s > 1 ? Math.floor(s * 2) / 2 : s; s *= pop;
-    const dw = Math.max(1, Math.round(fi.fw * s)), dh = Math.max(1, Math.round(fi.fh * s)), dx = Math.round(cx - dw / 2), dy = Math.round(bottom - dh);
-    c.imageSmoothingEnabled = false;
-    if (flash > 0) {
-      tmpC.width = dw; tmpC.height = dh; tmpX.imageSmoothingEnabled = false; tmpX.clearRect(0, 0, dw, dh); tmpX.drawImage(e.img, fr * fi.fw, 0, fi.fw, fi.fh, 0, 0, dw, dh);
-      tmpX.globalCompositeOperation = 'source-atop'; tmpX.fillStyle = `rgba(255,255,255,${flash})`; tmpX.fillRect(0, 0, dw, dh); tmpX.globalCompositeOperation = 'source-over'; c.drawImage(tmpC, dx, dy);
-    } else c.drawImage(e.img, fr * fi.fw, 0, fi.fw, fi.fh, dx, dy, dw, dh);
+  rand(a, b) { return a + Math.random() * (b - a); }
+  range(r) { return this.rand(r[0], r[1]); }
+
+  normalize(name) {
+    const key = String(name == null ? '' : name).toLowerCase().replace(/[\s_\-]/g, '');
+    const type = OW_WEATHER_ALIASES[key];
+    if (type) return type;
+    if (!this.warned.has(key)) {
+      this.warned.add(key);
+      console.warn(`[weather] Unknown weather "${name}" in overworld_map.js. Use: Normal, Sunny, Drought, Rain, Thunderstorm, Snow, Fog, Sandstorm or Volcanic Ash.`);
+    }
+    return 'none';
   }
-  // Pokemon icon sheets come with a solid background colour (the colour of the top-left pixel). It is made transparent here:
-  // only background that touches the edge of the sheet is removed (flood fill), so same-coloured pixels inside the Pokemon stay.
-  const iconKeyed = new WeakMap();
-  function keyedIcon(img, label) {
-    if (iconKeyed.has(img)) return iconKeyed.get(img);
-    let out = img, note = 'no opaque background found';
-    try {
-      const w = img.naturalWidth, h = img.naturalHeight, n = h >= w * 2 ? Math.round(h / w) : 1, fh = Math.floor(h / n), c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(img, 0, 0); const id = x.getImageData(0, 0, w, h), d = id.data, seeds = [];
-      for (let f = 0; f < n; f++) { const y0 = f * fh, y1 = y0 + fh - 1; for (let i = 0; i < w; i++) { seeds.push(y0 * w + i, y1 * w + i); } for (let j = y0; j <= y1; j++) seeds.push(j * w, j * w + w - 1); }
-      const cnt = new Map(); for (const p of seeds) if (d[p * 4 + 3] === 255) { const k = ((d[p * 4] >> 4) << 8) | ((d[p * 4 + 1] >> 4) << 4) | (d[p * 4 + 2] >> 4), e = cnt.get(k) || { n: 0, r: 0, g: 0, b: 0 }; e.n++; e.r += d[p * 4]; e.g += d[p * 4 + 1]; e.b += d[p * 4 + 2]; cnt.set(k, e); }
-      const cands = []; const addC = (r, g, b) => { if (!cands.some(q => Math.abs(q[0] - r) <= 6 && Math.abs(q[1] - g) <= 6 && Math.abs(q[2] - b) <= 6)) cands.push([r, g, b]); };
-      for (let f = 0; f < n; f++) { const p = f * fh * w; if (d[p * 4 + 3] === 255) addC(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]); }
-      let top = null; for (const e of cnt.values()) if (!top || e.n > top.n) top = e; if (top) addC(Math.round(top.r / top.n), Math.round(top.g / top.n), Math.round(top.b / top.n));
-      if (cands.length) {
-        const tol = 18, seen = new Uint8Array(w * h), stack = [];
-        const match = p => { if (d[p * 4 + 3] !== 255) return false; for (const q of cands) if (Math.abs(d[p * 4] - q[0]) <= tol && Math.abs(d[p * 4 + 1] - q[1]) <= tol && Math.abs(d[p * 4 + 2] - q[2]) <= tol) return true; return false; };
-        const fOf = p => Math.min(n - 1, Math.floor(Math.floor(p / w) / fh));
-        const push = p => { if (!seen[p] && match(p)) { seen[p] = 1; stack.push(p); } };
-        for (const p of seeds) push(p);
-        while (stack.length) { const p = stack.pop(), px = p % w, py = (p - px) / w, f0 = fOf(p); const tryP = q => { if (fOf(q) === f0) push(q); };
-          if (px > 0) tryP(p - 1); if (px < w - 1) tryP(p + 1); if (py > 0) tryP(p - w); if (py < h - 1) tryP(p + w); }
-        let cntR = 0; for (let p = 0; p < w * h; p++) if (seen[p]) { d[p * 4 + 3] = 0; cntR++; }
-        x.putImageData(id, 0, 0); out = c; note = `${w}x${h}, ${n} frame(s), background ${cands.map(q => 'rgb(' + q.join(',') + ')').join(' / ')} removed, ${cntR} px`;
+
+  // Call whenever the current map changes (and once when the scene starts)
+  set(name, instant = false, mapKey = null) {
+    if (mapKey) this.mapKey = mapKey;
+    const type = this.normalize(name);
+
+    if (type === this.currentType) {
+      // Same weather: keep it running, just re-cover the maps connected to the new map
+      const layer = this.layers.find(l => !l.leaving && l.type === type);
+      if (layer) this.setRegions(layer, this.computeRegions());
+      return;
+    }
+
+    this.currentType = type;
+    window.OverworldWeather = type;   // read by BattleScene so a battle starts in the map's weather
+    for (const layer of this.layers.slice()) {
+      if (!layer.leaving) this.fadeOut(layer, instant);
+    }
+    if (type !== 'none') this.layers.push(this.createLayer(type, instant));
+  }
+
+  // The weather of the current map covers EVERY connected map (all of them can be on screen).
+  // The weather also covers the border area around those maps (OW_BORDER_RANGE tiles). The expanded rectangles
+  // overlap, so they are merged into non-overlapping bands (otherwise overlays would stack and look darker).
+  computeRegions() {
+    const M = OW_BORDER_RANGE * 32;
+    const rects = Object.values(this.scene.getConnectedMapRects()).map(r => ({ x: r.x - M, y: r.y - M, w: r.w + 2 * M, h: r.h + 2 * M }));
+    const xs = [...new Set(rects.flatMap(r => [r.x, r.x + r.w]))].sort((a, b) => a - b);
+    const ys = [...new Set(rects.flatMap(r => [r.y, r.y + r.h]))].sort((a, b) => a - b);
+    const out = [];
+    for (let j = 0; j < ys.length - 1; j++) {
+      const cy = (ys[j] + ys[j + 1]) / 2;
+      let run = null;
+      const flush = () => { if (run) { out.push({ x: run.x0, y: ys[j], w: run.x1 - run.x0, h: ys[j + 1] - ys[j] }); run = null; } };
+      for (let i = 0; i < xs.length - 1; i++) {
+        const cx = (xs[i] + xs[i + 1]) / 2;
+        if (rects.some(r => cx > r.x && cx < r.x + r.w && cy > r.y && cy < r.y + r.h)) {
+          if (run) run.x1 = xs[i + 1]; else run = { x0: xs[i], x1: xs[i + 1] };
+        } else flush();
       }
-    } catch (e) { out = img; note = 'could not process: ' + e.message; }
-    try { console.log('[PS] icon background: ' + (label || '') + ' -> ' + note); } catch (e) { /* no console */ }
-    iconKeyed.set(img, out); return out;
-  }
-  function drawIcon(c, m, x, y, sel, i) {
-    const e = getImg(m.icon);
-    if (!e || e.fail || !m.icon) { ball(c, x + 9, y + 14, m.ball, 2); return; }
-    if (!e.ok) return;
-    const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = ih >= iw * 2 ? 2 : 1, fh = Math.floor(ih / n), fr = n > 1 ? Math.floor(S.t / (sel ? .16 : .7) + i) % 2 : 0;
-    c.imageSmoothingEnabled = false; c.drawImage(keyedIcon(e.img, m.icon), 0, fr * fh, iw, fh, x + Math.round((32 - iw) / 2), y + 32 - fh, iw, fh);
-  }
-  const genderGlyph = (c, g, xr, y) => { if (g === 'M') TR(c, '/m/', xr, y, 'blue'); else if (g === 'F') TR(c, '/f/', xr, y, 'red'); };
-  function hpBar(c, x, y, w, h, frac, sel) {
-    rect(c, x - 1, y - 1, w + 2, h + 2, sel ? '#9aa2c0' : '#2a2a3a'); rect(c, x, y, w, h, '#586080');
-    const f = Math.ceil(w * frac); if (f > 0) rect(c, x, y, f, h, frac > .5 ? '#38c850' : frac > .2 ? '#f0c820' : '#f03838');
+      flush();
+    }
+    return out;
   }
 
-  const STATUS_TAG = { psn: ['PSN', '#a040a0'], tox: ['PSN', '#782878'], brn: ['BRN', '#f08030'], par: ['PAR', '#c8a010'], slp: ['SLP', '#6870a0'], frz: ['FRZ', '#58a8c8'] };
-  // ------------------------------------------------ PARTY view
-  // the border of the selected row is the Pokémon's type colour (two types = two colours, split down the middle)
-  const BORDER_COL = { normal: '#b0b090', fire: '#f08030', water: '#4a86f0', electric: '#f8d020', grass: '#48c840', ice: '#6ad8e8', fighting: '#d03828', poison: '#b048c0', ground: '#d8b048', flying: '#98a8f8', psychic: '#b050e0', bug: '#a8c020', rock: '#c0a838', ghost: '#7a58b0', dragon: '#6a38f0', dark: '#7a6050', steel: '#a8b8d0', fairy: '#f090c0', stellar: '#40d0c0' };
-  const borderCols = types => { const out = []; for (const t of (types || []).slice(0, 2)) { const k = String(t || '').replace(/^TYPE_/i, '').toLowerCase(); if (BORDER_COL[k] && !out.includes(BORDER_COL[k])) out.push(BORDER_COL[k]); } return out.length ? out : ['#d8dcec']; };
-  function typeBorder(c, x, y, w, h, types) {
-    const cols = borderCols(types); pill(c, x, y, w, h, cols[0]);
-    if (cols[1]) { c.save(); c.beginPath(); c.rect(x + Math.round(w / 2), y - 2, w, h + 4); c.clip(); pill(c, x, y, w, h, cols[1]); c.restore(); }
-  }
-  function drawParty(c) {
-    for (let i = 0; i < 6; i++) {
-      const m = S.party[i], sl = ease(clamp((S.rowT - i * .06) / .35)), x = 8 + Math.round(-(1 - sl) * 150), y = 3 + i * 26;
-      if (!m) { pill(c, x, y, 136, 25, 'rgba(110,16,40,.35)'); continue; }
-      const sel = i === S.sel, tc = sel ? 'white' : 'dark';
-      if (sel) typeBorder(c, x - 2, y - 1, 140, 29, m.types);
-      else if (i === S.swap) pill(c, x - 2, y - 1, 140, 29, '#f0a020');
-      else if (env.battle && env.battle.active && env.battle.active() === i) pill(c, x - 2, y - 1, 140, 29, '#48c878');   // the Pokémon that is fighting now
-      if (!sel) pill(c, x, y + 1, 136, 25, '#9aa6cc'); pill(c, x, y, 136, 25, sel ? '#1c1c28' : '#fbfcff');
-      ell(c, x + 16, y + 20, 12, 3, sel ? '#3c3e52' : '#cdd3e6');
-      drawIcon(c, m, x, y - 8, sel, i);
-      const nx = T(c, m.nick, x + 32, y + 3, tc); if (m.shiny) star(c, nx + 2, y + 5);
-      genderGlyph(c, m.gender, x + 130, y + 3);
-      if (env.battle) { const st = m.hp <= 0 ? ['FNT', '#d03838'] : STATUS_TAG[m.status]; if (st) { pill(c, x + 100, y + 3, 24, 10, st[1], 3); T(c, st[0], x + 103, y + 3, 'white'); } }
-      T(c, '{Lv}' + m.lv, x + 32, y + 14, tc);
-      const hs = S.hpShown[i] || 0; const ht = `${Math.round(hs)}/${m.max}`; hpBar(c, x + 62, y + 16, Math.max(16, Math.min(36, 132 - tw(ht) - 4 - 62)), 3, hs / m.max, sel); TR(c, ht, x + 132, y + 14, tc);
+  createLayer(type, instant) {
+    const cfg = OW_WEATHER_TYPES[type];
+    const layer = {
+      type, cfg, fade: instant ? 1 : 0, leaving: false, time: 0,
+      groups: [].concat(cfg.particles || []).map(spec => ({ spec, items: [] })),
+      regions: [], regionObjs: [], sig: '', bolt: 0,
+      splashes: [], splashPool: [],
+    };
+    if (cfg.lightning) layer.bolt = this.rand(cfg.lightning.minDelay, cfg.lightning.maxDelay);
+
+    this.setRegions(layer, this.computeRegions());
+
+    if (!instant) {
+      this.scene.tweens.add({ targets: layer, fade: 1, duration: 1500, ease: 'Sine.easeInOut' });
     }
-    const m = S.party[S.sel];
-    if (S.party.length) { const ax = 1 + Math.round(Math.sin(S.t * 9) * 1.2), cy = 3 + S.sel * 26 + 12; tri(c, ax - 1, cy, 6, '#1c1c28'); tri(c, ax, cy, 5, '#ffffff'); }
-    TR(c, 'POKéMON', 234, 4, 'mute');
-    if (m) {
-      ell(c, 196, 118, 30, 5, '#c4cfee'); const pp = clamp(S.selT / .3), sc = pp < 1 ? backOut(pp) : 1, bob = Math.sin(S.t * 3.2) > 0 ? 1 : 0;
-      drawSprite(c, m, 196, 118 - bob, 92, 80, Math.max(.2, sc), S.selT < .09 ? .85 : 0);
-    }
-    // under the sprite: the prompt ("Choose a Pokémon.") or the last message (name, level and type are in the rows already)
-    if (!S.menu && S.swap < 0) {
-      const txt = S.bmsg ? S.bmsg.text : (env.battle && env.battle.prompt) || '';
-      if (txt) {
-        const words = String(txt).split(' '), ls = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (tw(t) > 84 && cur) { ls.push(cur); cur = w; } else cur = t; } if (cur) ls.push(cur);
-        const L = ls.slice(0, 2), bw = Math.max(...L.map(tw)) + 16, bx = Math.round(196 - bw / 2), bh = L.length * 12 + 6, by = 154 - bh;
-        pill(c, bx, by + 1, bw, bh, '#000000'); pill(c, bx, by, bw, bh, '#fbfcff'); L.forEach((l, i) => T(c, l, bx + 8, by + 3 + i * 12, S.bmsg && !(env.battle && S.bmsg.text === env.battle.prompt) ? 'red' : 'dark'));
-      }
-    }
-    if (S.swap >= 0 && !S.menu) { const l1 = 'Move to where?', l2 = 'A: OK  B: back', bw = Math.max(tw(l1), tw(l2)) + 20, bx = 238 - bw; pill(c, bx, 127, bw, 27, '#000000'); pill(c, bx, 126, bw, 27, '#fbfcff'); T(c, l1, bx + 7, 129, 'dark'); T(c, l2, bx + 7, 140, 'mute'); }
-    drawMenu(c);
+    return layer;
   }
 
-  // ------------------------------------------------ party pop-up menu (A on a Pokémon)
-  const MENU = { x: 150, w: 86, rh: 15 };
-  function menuRect() { const n = S.menu.opts.length, h = n * MENU.rh + 8; return { x: MENU.x, y: 156 - h, w: MENU.w, h }; }
-  function drawMenu(c) {
-    if (!S.menu) return; const M = S.menu, R = menuRect();
-    pill(c, R.x - 1, R.y, R.w + 2, R.h + 2, '#000000', 7); pill(c, R.x, R.y, R.w, R.h, '#fbfcff', 7);
-    M.opts.forEach((o, i) => { const y = R.y + 4 + i * MENU.rh, on = i === M.i; if (on) pill(c, R.x + 4, y, R.w - 8, MENU.rh - 1, '#1c1c28', 5); T(c, o, R.x + 12, y + 1, on ? 'white' : 'dark'); if (on) tri(c, R.x + R.w - 12, y + 7, 3, '#ffffff'); });
-  }
-  function openMenu() {
-    if (env.battle) { const b = env.battle; S.menu = { i: 0, opts: [b.forced ? 'SEND OUT' : 'SHIFT', 'SUMMARY', 'CANCEL'] }; return; }
-    const o = ['SUMMARY']; if (S.party.length > 1 && env.swap) o.push('SWITCH'); if (env.rename) o.push('NICKNAME'); o.push('CANCEL');
-    S.menu = { i: 0, opts: o };
-  }
-  function menuDo(o) {
-    S.menu = null;
-    if (o === 'SHIFT' || o === 'SEND OUT') { const r = env.battle.pick(S.sel); if (r) S.bmsg = { text: r, t: 0, dur: 2.6 }; else if (env.onExit) env.onExit(); }
-    else if (o === 'SUMMARY') go('summary');
-    else if (o === 'SWITCH') S.swap = S.sel;
-    else if (o === 'NICKNAME') { const m = S.party[S.sel]; startName({ mode: 'mon', mi: S.sel, mon: m, title: 'NICKNAME?', max: 10, initial: '', orig: m.nick, gender: m.gender, allowEmpty: true, fromParty: true }); go('name'); }
-  }
-  function doSwap(i, j) {
-    try { env.swap(i, j); } catch (e) { console.warn('[PS] swap failed', e); }
-    [S.party[i], S.party[j]] = [S.party[j], S.party[i]]; [S.hpShown[i], S.hpShown[j]] = [S.hpShown[j], S.hpShown[i]];
-    S.sel = j; S.swap = -1; S.selT = 0;
-  }
-  function partyPress(k) {
-    const n = S.party.length;
-    if (S.menu) { const M = S.menu; if (k === 'up') M.i = (M.i + M.opts.length - 1) % M.opts.length; else if (k === 'down') M.i = (M.i + 1) % M.opts.length; else if (k === 'a') menuDo(M.opts[M.i]); else if (k === 'b') S.menu = null; return; }
-    if (S.swap >= 0) { if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n); else if (k === 'a') { if (S.sel === S.swap) S.swap = -1; else doSwap(S.swap, S.sel); } else if (k === 'b') S.swap = -1; return; }
-    if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n); else if (k === 'a') openMenu(); else if (k === 'b') { if (env.battle && env.battle.forced) S.bmsg = { text: 'You must choose a Pokémon!', t: 0, dur: 2.2 }; else if (env.onExit) env.onExit(); }
+  setRegions(layer, rects) {
+    const sig = rects.map(r => `${r.x},${r.y},${r.w},${r.h}`).sort().join('|');
+    if (sig === layer.sig) return;
+    layer.sig = sig;
+    this.destroyRegionObjects(layer);
+    layer.regions = rects;
+    layer.regionObjs = rects.map(r => this.buildRegionObjects(layer, r));
   }
 
-  // ------------------------------------------------ NAMING view (Pokémon nickname / player name)
-  // dark glass panels with thin cyan edges and chamfered corners over the party background.
-  // The cursor is a bright selector frame (not a filled key). OK asks "Keep this name?" YES / NO.
-  const GX = 10, GY = 64, KCW = 18, KCH = 15, GCOLS = 12, GROWS = 5, ACC = '#4de3d1', GLASS = 'rgba(6,10,30,.70)', GLASS2 = 'rgba(6,10,30,.84)', EDGE = 'rgba(77,227,209,.30)';
-  const TABS = [{ lb: 'UPPER', x: 8, w: 38 }, { lb: 'lower', x: 50, w: 34 }, { lb: 'Others', x: 88, w: 40 }, { lb: 'DELETE', x: 146, w: 46 }, { lb: 'OK', x: 196, w: 38 }], TY = 41, TH = 14;
-  const L1 = 'ABCDEFGHIJ', L2 = 'KLMNOPQRST', L3 = 'UVWXYZ', D = '0123456789';
-  function gridRow(page, r) {
-    const row = new Array(GCOLS).fill(''), put = (str, at) => [...str].forEach((ch, i) => { row[at + i] = ch; });
-    if (page < 2) {
-      const f = page === 0 ? (x => x) : (x => x.toLowerCase());
-      if (r === 0) { put(f(L1), 0); put(',.', 10); } else if (r === 1) { put(f(L2), 0); put("'-", 10); } else if (r === 2) { put(f(L3), 0); put('♂♀', 10); }
-      else if (r === 3) { for (let i = 2; i < 10; i++) row[i] = ' '; } else put(D, 0);
-    } else {
-      const O = [['!', '?', '&', ':', ';', '~', '#', '%', '+', '=', 'é', 'É'], ['*', '@', '_', '$', '^', '|', '"', '`', '·', '…', 'ñ', 'Ñ'], ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '♂', '♀']];
-      if (r < 3) O[r].forEach((ch, i) => { row[i] = ch; }); else if (r === 3) { for (let i = 2; i < 10; i++) row[i] = ' '; }
+  buildRegionObjects(layer, r) {
+    const scene = this.scene;
+    const cfg = layer.cfg;
+    const box = (depth, tint) => scene.add.image(r.x, r.y, 'owx_px')
+      .setOrigin(0, 0).setDepth(depth).setTint(tint).setDisplaySize(r.w, r.h).setAlpha(0);
+
+    const o = { r, overlay: null, flash: null, fogs: [] };
+    if (cfg.overlay) o.overlay = box(OW_WEATHER_DEPTH, cfg.overlay.color);
+    if (cfg.fog) {
+      o.fogs = cfg.fog.map(f => scene.add.tileSprite(r.x, r.y, r.w, r.h, f.texture)
+        .setOrigin(0, 0).setDepth(OW_WEATHER_DEPTH).setAlpha(0));
     }
-    return row.map(ch => (ch === ' ' || ch === '' || GLY[ch]) ? ch : '');
+    if (cfg.lightning) o.flash = box(OW_WEATHER_DEPTH + 2, 0xffffff);
+    return o;
   }
-  function startName(o) {
-    let mon = o.mon; if (!mon && o.raw) { mon = buildMon(o.raw); getImg(mon.icon); }
-    S.name = { mode: o.mode, mi: o.mi, mon, title: o.title || 'NICKNAME?', max: o.max || 10, text: String(o.initial || '').slice(0, o.max || 10), page: 0, cx: 0, cy: 0, top: -1, orig: o.orig || '', gender: o.gender || '',
-      trainer: o.trainer || '', allowEmpty: o.allowEmpty !== false, allowCancel: o.allowCancel !== false, raw: o.raw, t0: S.t, ask: null };
-    if (o.trainer) getImg(o.trainer);
-    if (!o.fromParty) { S.view = 'name'; S.tr = null; }
-  }
-  function typeChar(ch) { const N = S.name; if (N.text.length < N.max) { N.text += ch; N.bump = S.t; } }
-  function backChar() { const N = S.name; if (N.text.length) { N.text = N.text.slice(0, -1); N.bump = S.t; } }
-  function nameAsk() {        // OK pressed: "Keep this name?"
-    const N = S.name; if (N.mode === 'player' && !N.text.trim()) { N.shake = S.t; return; }
-    N.ask = { i: 0, t: S.t };
-  }
-  function nameConfirm() {
-    const N = S.name, txt = N.text.replace(/\s+$/, ''); N.ask = null;
-    if (N.mode === 'player') { if (!txt.trim()) return; if (env.nameDone) env.nameDone(txt); return; }
-    if (N.mode === 'monraw') { if (env.nameDone) env.nameDone(txt); return; }
-    if (env.rename) env.rename(N.mi, txt);
-    const m = S.party[N.mi]; if (m) m.nick = txt || m.species;
-    if (env.catchMode) { if (env.catchMode.done) env.catchMode.done(txt || null); return; }
-    go('party');
-  }
-  function nameCancel() {
-    const N = S.name; if (N.mode === 'mon') { if (env.catchMode) { if (env.catchMode.done) env.catchMode.done(null); return; } go('party'); return; }
-    if (N.allowCancel && env.nameDone) env.nameDone(null);
-  }
-  function namePressCell() {
-    const N = S.name;
-    if (N.top >= 0) { if (N.top < 3) N.page = N.top; else if (N.top === 3) backChar(); else nameAsk(); return; }
-    const ch = gridRow(N.page, N.cy)[N.cx]; if (ch) typeChar(ch);
-  }
-  const topFromCx = cx => (cx <= 2 ? 0 : cx <= 4 ? 1 : cx <= 6 ? 2 : cx <= 9 ? 3 : 4), cxFromTop = t => [1, 3, 5, 8, 10][t];
-  function nameKeyPress(k) {
-    const N = S.name; if (!N) return;
-    if (N.ask) { if (k === 'left' || k === 'right' || k === 'up' || k === 'down') N.ask.i = 1 - N.ask.i; else if (k === 'a') { if (N.ask.i === 0) nameConfirm(); else N.ask = null; } else if (k === 'b') N.ask = null; return; }
-    if (k === 'left') { if (N.top >= 0) N.top = (N.top + 4) % 5; else N.cx = (N.cx + GCOLS - 1) % GCOLS; }
-    else if (k === 'right') { if (N.top >= 0) N.top = (N.top + 1) % 5; else N.cx = (N.cx + 1) % GCOLS; }
-    else if (k === 'up') { if (N.top >= 0) { N.cx = cxFromTop(N.top); N.top = -1; N.cy = GROWS - 1; } else if (N.cy === 0) { N.top = topFromCx(N.cx); } else N.cy--; }
-    else if (k === 'down') { if (N.top >= 0) { N.cx = cxFromTop(N.top); N.top = -1; N.cy = 0; } else if (N.cy === GROWS - 1) { N.top = topFromCx(N.cx); } else N.cy++; }
-    else if (k === 'a') namePressCell();
-    else if (k === 'b') { if (N.text.length) backChar(); else nameCancel(); }
-  }
-  function nameKey(e) {      // raw keyboard: letters are typed, Backspace deletes, Enter = OK, Esc = cancel (Space presses the highlighted key)
-    if (S.view !== 'name' || S.tr || !S.name) return false;
-    const k = e.key, N = S.name;
-    if (e.pmPad) {   // an on-screen button: it is a controller (A = press the highlighted key, B = delete, X / + = OK, Y = next keyboard page), never a typed letter
-      const p = e.pmPad;
-      if (p === 'a' || p === 'b') { nameKeyPress(p); return true; }
-      if (p === 'x' || p === 'plus') { if (N.ask) nameConfirm(); else nameAsk(); return true; }
-      if (p === 'y') { if (!N.ask) N.page = (N.page + 1) % 3; return true; }
-      return p === 'minus';   // the arrows go through the normal path
+
+  destroyRegionObjects(layer) {
+    for (const o of layer.regionObjs) {
+      if (o.overlay) o.overlay.destroy();
+      if (o.flash) o.flash.destroy();
+      o.fogs.forEach(f => f.destroy());
     }
-    if (N.ask) { if (k === 'Enter') { nameConfirm(); } else if (k === 'Escape' || k === 'Backspace' || k === 'n' || k === 'N') N.ask = null; else if (k === 'y' || k === 'Y') nameConfirm(); else if (k === 'ArrowLeft' || k === 'ArrowRight') N.ask.i = 1 - N.ask.i; else return false; return true; }
-    if (k.length === 1 && k !== ' ' && (/[A-Za-z0-9.,!?'&\-]/.test(k) || GLY[k])) { typeChar(k); return true; }
-    if (k === 'Backspace') { backChar(); return true; }
-    if (k === 'Enter') { nameAsk(); return true; }
-    if (k === 'Escape') { nameCancel(); return true; }
+    layer.regionObjs = [];
+  }
+
+  fadeOut(layer, instant) {
+    layer.leaving = true;
+    this.scene.tweens.killTweensOf(layer);
+    if (instant) {
+      this.destroyLayer(layer);
+      return;
+    }
+    this.scene.tweens.add({
+      targets: layer, fade: 0, duration: 900,
+      onComplete: () => this.destroyLayer(layer),
+    });
+  }
+
+  destroyLayer(layer) {
+    const i = this.layers.indexOf(layer);
+    if (i >= 0) this.layers.splice(i, 1);
+    this.scene.tweens.killTweensOf(layer);
+    for (const g of layer.groups) {
+      g.items.forEach(p => p.img.destroy());
+      g.items = [];
+    }
+    layer.splashes.forEach(s => s.img.destroy());
+    layer.splashPool.forEach(img => img.destroy());
+    layer.splashes = [];
+    layer.splashPool = [];
+    this.destroyRegionObjects(layer);
+  }
+
+  destroy() {
+    for (const layer of this.layers.slice()) this.destroyLayer(layer);
+    this.layers = [];
+    this.currentType = null;
+  }
+
+  // The visible area in WORLD coordinates (zoom aware). Particles live in the world,
+  // so they stay put when the camera moves.
+  getView() {
+    const wv = this.scene.cameras.main.worldView;
+    return { left: wv.x, top: wv.y, right: wv.right, bottom: wv.bottom, w: wv.width, h: wv.height };
+  }
+
+  inRegions(regions, wx, wy) {
+    for (let i = 0; i < regions.length; i++) {
+      const r = regions[i];
+      if (wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h) return true;
+    }
     return false;
   }
-  const ASKB = [{ x: 62, y: 86, w: 52, h: 17 }, { x: 126, y: 86, w: 52, h: 17 }];
-  function nameClick(x, y) {
-    const N = S.name; if (!N) return;
-    if (N.ask) { ASKB.forEach((b, i) => { if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) { N.ask.i = i; if (i === 0) nameConfirm(); else N.ask = null; } }); return; }
-    for (let i = 0; i < TABS.length; i++) { const t = TABS[i]; if (x >= t.x && x < t.x + t.w && y >= TY && y < TY + TH) { N.top = i; namePressCell(); return; } }
-    const col = Math.floor((x - GX) / KCW), row = Math.floor((y - GY) / KCH);
-    if (col >= 0 && col < GCOLS && row >= 0 && row < GROWS) { N.top = -1; N.cx = col; N.cy = row; namePressCell(); }
-  }
-  // chamfered (cut-corner) glass panel: translucent dark fill + 1px edge
-  function chamfer(c, x, y, w, h, fill, line, cut = 2) {
-    c.fillStyle = fill; c.fillRect(x + cut, y, w - 2 * cut, h); c.fillRect(x, y + cut, w, h - 2 * cut);
-    if (!line) return; c.fillStyle = line;
-    c.fillRect(x + cut, y, w - 2 * cut, 1); c.fillRect(x + cut, y + h - 1, w - 2 * cut, 1); c.fillRect(x, y + cut, 1, h - 2 * cut); c.fillRect(x + w - 1, y + cut, 1, h - 2 * cut);
-    for (let i = 0; i < cut; i++) { const d = cut - 1 - i; c.fillRect(x + d, y + i, 1, 1); c.fillRect(x + w - 1 - d, y + i, 1, 1); c.fillRect(x + d, y + h - 1 - i, 1, 1); c.fillRect(x + w - 1 - d, y + h - 1 - i, 1, 1); }
-  }
-  function brackets(c, x, y, w, h, col, L = 6) {
-    c.fillStyle = col;
-    for (const [bx, by, dx, dy] of [[x, y, 1, 1], [x + w - 1, y, -1, 1], [x, y + h - 1, 1, -1], [x + w - 1, y + h - 1, -1, -1]]) { c.fillRect(dx > 0 ? bx : bx - L + 1, by, L, 1); c.fillRect(bx, dy > 0 ? by : by - L + 1, 1, L); }
-  }
-  // the selector: bright frame with brackets that stick out a little, softly pulsing
-  function selector(c, x, y, w, h, pulse) {
-    chamfer(c, x, y, w, h, `rgba(77,227,209,${.16 + .12 * pulse})`, '#bffcf3', 2);
-    brackets(c, x - 2, y - 2, w + 4, h + 4, '#ffffff', 4);
-  }
-  // controller-style key caps for the hint line
-  function padBtn(c, x, y, ch) {     // round button with a letter
-    ell(c, x + 5, y + 5, 5, 5, '#0a1430'); c.fillStyle = ACC; c.fillRect(x + 3, y, 5, 1); c.fillRect(x + 3, y + 10, 5, 1); c.fillRect(x, y + 3, 1, 5); c.fillRect(x + 10, y + 3, 1, 5);
-    c.fillRect(x + 1, y + 1, 2, 1); c.fillRect(x + 8, y + 1, 2, 1); c.fillRect(x + 1, y + 9, 2, 1); c.fillRect(x + 8, y + 9, 2, 1); c.fillRect(x + 1, y + 2, 1, 1); c.fillRect(x + 9, y + 2, 1, 1); c.fillRect(x + 1, y + 8, 1, 1); c.fillRect(x + 9, y + 8, 1, 1);
-    T(c, ch, x + 2, y + 1, 'white');
-  }
-  function enterKey(c, x, y) {       // keyboard Enter cap with the ↵ arrow
-    chamfer(c, x, y, 18, 11, '#0a1430', ACC, 2); c.fillStyle = '#ffffff';
-    c.fillRect(x + 5, y + 5, 1, 1); c.fillRect(x + 6, y + 4, 1, 3); c.fillRect(x + 7, y + 3, 1, 5); c.fillRect(x + 8, y + 5, 5, 1); c.fillRect(x + 12, y + 2, 1, 4);
-  }
-  function drawName(c) {
-    const N = S.name; if (!N) return; const m = N.mon, pulse = .5 + .5 * Math.sin(S.t * 5), shake = N.shake && S.t - N.shake < .25 ? Math.round(Math.sin((S.t - N.shake) * 60) * 2) : 0;
-    // icon (no box, just a soft shadow) and the name field
-    ell(c, 26, 37, 13, 3, 'rgba(0,0,0,.28)');
-    if (N.mode === 'player') {
-      const e = N.trainer && getImg(N.trainer);
-      if (e && e.ok) { c.imageSmoothingEnabled = false; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, k = Math.min(32 / iw, 34 / ih); c.drawImage(e.img, Math.round(26 - iw * k / 2), Math.round(37 - ih * k), Math.round(iw * k), Math.round(ih * k)); }
-    } else if (m) { drawIcon(c, m, 10, 5, true, 0); }
-    chamfer(c, 48 + shake, 8, 186, 28, GLASS2, ACC, 3);
-    const fem = N.gender === 'F' || (m && m.gender === 'F'), male = N.gender === 'M' || (m && m.gender === 'M');
-    if (fem || male) genderGlyph(c, fem ? 'F' : 'M', 229 + shake, 15);
-    const sw = N.max > 8 ? 16 : 22, x0 = 56 + shake, blink = Math.floor(S.t * 2.4) % 2 === 0;
-    for (let i = 0; i < N.max; i++) {
-      const x = x0 + i * sw, ch = N.text[i], act = i === N.text.length;
-      if (ch) { const dy = N.bump && S.t - N.bump < .1 && i === N.text.length - 1 ? -2 : 0; T(c, ch, x + Math.round((sw - 4 - tw(ch)) / 2), 12 + dy, 'white'); }
-      rect(c, x, 28, sw - 4, 1, act && blink ? '#ffffff' : 'rgba(127,243,228,.40)');
-    }
-    // tabs + DELETE / OK
-    TABS.forEach((t, i) => {
-      const active = i < 3 && N.page === i, focus = N.top === i && !N.ask;
-      chamfer(c, t.x, TY, t.w, TH, active ? 'rgba(77,227,209,.26)' : GLASS2, active ? ACC : EDGE, 3);
-      if (focus) selector(c, t.x, TY, t.w, TH, pulse);
-      T(c, t.lb, t.x + Math.round((t.w - tw(t.lb)) / 2), TY + 1, active || focus ? 'white' : (i === 4 ? 'cyan' : 'dim'));
-    });
-    // keyboard
-    chamfer(c, 6, 59, 228, 84, GLASS, EDGE, 6); brackets(c, 6, 59, 228, 84, ACC, 9);
-    for (let r = 0; r < GROWS; r++) {
-      const row = gridRow(N.page, r);
-      for (let q = 0; q < GCOLS; q++) {
-        const ch = row[q], x = GX + q * KCW, y = GY + r * KCH, on = N.top < 0 && N.cx === q && N.cy === r && !N.ask;
-        if (r === 3) {   // the SPACE bar: one wide key
-          if (q !== 2) continue;
-          const bw = 8 * KCW - 2, on2 = N.top < 0 && N.cy === 3 && N.cx >= 2 && N.cx <= 9 && !N.ask;
-          chamfer(c, x, y, bw, KCH - 2, 'rgba(10,18,44,.55)', EDGE, 2); if (on2) selector(c, x, y, bw, KCH - 2, pulse);
-          rect(c, x + Math.round(bw / 2) - 12, y + 9, 24, 1, on2 ? '#ffffff' : 'rgba(127,243,228,.6)'); continue;
+
+  update(delta) {
+    if (!this.layers.length) return;
+    const dt = Math.min(delta, 50) / 1000;
+    const view = this.getView();
+
+    for (const layer of this.layers.slice()) {
+      layer.time += dt;
+      const cfg = layer.cfg;
+
+      for (const o of layer.regionObjs) {
+        if (o.overlay) {
+          const ov = cfg.overlay;
+          let a = ov.alpha;
+          if (ov.pulse) a += Math.sin(layer.time * ov.pulse.speed) * ov.pulse.amount;
+          o.overlay.setAlpha(Math.max(0, a) * layer.fade);
+          if (ov.shift) {
+            const t = (Math.sin(layer.time * ov.shift.speed) + 1) / 2;
+            o.overlay.setTint(owLerpColor(ov.color, ov.shift.to, t));
+          }
         }
-        const live = !!ch;
-        chamfer(c, x, y, KCW - 2, KCH - 2, live ? 'rgba(10,18,44,.55)' : 'rgba(10,18,44,.22)', live ? EDGE : 'rgba(77,227,209,.10)', 2);
-        if (on) selector(c, x, y, KCW - 2, KCH - 2, pulse);
-        if (live) { const gx = x + Math.round((KCW - 2 - tw(ch)) / 2); T(c, ch, gx, y - 1, ch === '♂' ? 'blue' : ch === '♀' ? 'red' : (on ? 'white' : 'white')); }
+        o.fogs.forEach((f, i) => {
+          const spec = cfg.fog[i];
+          f.setAlpha(spec.alpha * layer.fade);
+          f.tilePositionX = o.r.x - layer.time * spec.vx;
+          f.tilePositionY = o.r.y - layer.time * spec.vy;
+        });
+      }
+
+      for (const g of layer.groups) this.updateParticles(layer, g, view, dt);
+      this.updateSplashes(layer, dt);
+
+      if (cfg.lightning && !layer.leaving) {
+        layer.bolt -= dt * 1000;
+        if (layer.bolt <= 0) {
+          this.strike(layer);
+          layer.bolt = this.rand(cfg.lightning.minDelay, cfg.lightning.maxDelay);
+        }
       }
     }
-    // hint line with controller keys
-    let hx = 12; const hy = 146;
-    padBtn(c, hx, hy, 'A'); hx += 14; hx = T(c, 'Add', hx, hy, 'dim') + 8;
-    padBtn(c, hx, hy, 'B'); hx += 14; hx = T(c, 'Delete', hx, hy, 'dim') + 8;
-    enterKey(c, hx, hy); hx += 22; T(c, 'OK', hx, hy, 'dim');
-    // "Keep this name?"  YES / NO
-    if (N.ask) {
-      const k = clamp((S.t - N.ask.t) / .18), e = ease(k); c.fillStyle = `rgba(0,0,10,${.55 * e})`; c.fillRect(0, 0, W, H);
-      const bw = 170, bh = 70, bx = 35, by = Math.round(50 + (1 - e) * 10);
-      chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.94)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
-      const nm = N.text.replace(/\s+$/, '') || (m ? m.species : ''), q = N.mode === 'player' ? 'Is this your name?' : (N.text ? 'Keep this nickname?' : 'Go back to the species name?');
-      T(c, q, bx + Math.round((bw - tw(q)) / 2), by + 8, 'white');
-      const sh = nm.slice(0, 12); T(c, sh, bx + Math.round((bw - tw(sh)) / 2), by + 24, 'gold');
-      ['YES', 'NO'].forEach((lb, i) => { const b = ASKB[i], on = N.ask.i === i; chamfer(c, b.x, b.y, b.w, b.h, on ? 'rgba(77,227,209,.24)' : GLASS2, on ? '#bffcf3' : EDGE, 3); if (on) selector(c, b.x, b.y, b.w, b.h, pulse); T(c, lb, b.x + Math.round((b.w - tw(lb)) / 2), b.y + 2, on ? 'white' : 'dim'); });
+  }
+
+  updateParticles(layer, group, view, dt) {
+    const spec = group.spec;
+    const items = group.items;
+
+    const want = Math.min(600, Math.max(1, Math.round(spec.density * (view.w * view.h) / 100000)));
+    while (items.length < want) items.push(this.spawnParticle(spec, view));
+    while (items.length > want) items.pop().img.destroy();
+
+    const regions = layer.regions;
+
+    for (const p of items) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+
+      // Particles wrap around the (slightly padded) visible area, so the density stays even
+      // when the camera moves, while every particle keeps its place in the world.
+      const L = view.left - p.m, R = view.right + p.m, T = view.top - p.m, B = view.bottom + p.m;
+      if (p.x < L || p.x > R) {
+        p.x = Phaser.Math.Wrap(p.x, L, R);
+        if (!spec.splash) p.y = T + Math.random() * (B - T);
+      }
+
+      if (spec.splash) {
+        // Rain: each drop falls to a random "ground" height, makes a ripple, then restarts
+        if (p.y >= p.land) {
+          if (Math.random() < spec.splash.chance && p.land >= view.top && this.inRegions(regions, p.x, p.land)) {
+            this.addSplash(layer, p.x, p.land);
+          }
+          this.resetParticle(p, spec, view, false);
+        } else if (p.land < view.top || p.land > view.bottom + 30) {
+          this.resetParticle(p, spec, view, false);
+        }
+      } else if (p.y < T || p.y > B) {
+        p.y = Phaser.Math.Wrap(p.y, T, B);
+        p.x = L + Math.random() * (R - L);
+      }
+
+      const sway = p.amp ? Math.sin(layer.time * p.freq + p.phase) * p.amp : 0;
+      const sx = p.x + sway;
+      p.img.setPosition(sx, p.y);
+      p.img.setAlpha(this.inRegions(regions, sx, p.y) ? p.a * layer.fade : 0);
     }
   }
 
-  // ------------------------------------------------ SUMMARY view (dark glass panels over the animated background)
-  const PAGE_TITLE = ['POKéMON INFO', 'POKéMON SKILLS', 'KNOWN MOVES', 'CONTEST DATA'], NPAGES = 4, PW = 134;
-  function ring(c, x0, y0, rot, col) {
-    const R = 33; c.fillStyle = col;
-    for (let dy = -R; dy <= R; dy++) {
-      const wo = Math.sqrt(R * R - dy * dy), wi = Math.abs(dy) < R - 7 ? Math.sqrt((R - 7) * (R - 7) - dy * dy) : -1;
-      if (wi < 0) c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo * 2), 1); else { c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo - wi), 1); c.fillRect(Math.round(x0 + wi), y0 + dy, Math.round(wo - wi), 1); }
-    }
-    const sn = Math.sin(rot), cs = Math.cos(rot);
-    for (let yy = -R + 8; yy <= R - 8; yy++) for (let xx = -R + 8; xx <= R - 8; xx++) { const r = Math.hypot(xx, yy), v = -xx * sn + yy * cs; if (r < R - 7 && r > 11 && Math.abs(v) <= 4) c.fillRect(x0 + xx, y0 + yy, 1, 1); }
-    for (let dy = -12; dy <= 12; dy++) {
-      const wo = Math.sqrt(144 - dy * dy), wi = Math.abs(dy) <= 8 ? Math.sqrt(64 - dy * dy) : -1;
-      if (wi < 0) c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo * 2), 1); else { c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo - wi), 1); c.fillRect(Math.round(x0 + wi), y0 + dy, Math.round(wo - wi), 1); }
-    }
+  spawnParticle(spec, view) {
+    const img = this.scene.add.image(0, 0, spec.texture)
+      .setDepth(OW_WEATHER_DEPTH + 1)
+      .setTint(spec.tint || 0xffffff).setAlpha(0);
+    const p = { img, x: 0, y: 0, vx: 0, vy: 0, a: 1, m: 10, amp: 0, freq: 0, phase: 0, land: 0 };
+    this.resetParticle(p, spec, view, true);
+    return p;
   }
 
-  // markings: six little shapes (lit when the Pokémon has the mark)
-  const MARK_PAT = [
-    ['..###..', '.#####.', '#######', '#######', '#######', '.#####.', '..###..'],
-    ['...#...', '..###..', '..###..', '.#####.', '.#####.', '#######', '#######'],
-    ['#######', '#######', '#######', '#######', '#######', '#######', '#######'],
-    ['.##.##.', '#######', '#######', '#######', '.#####.', '..###..', '...#...'],
-    ['...#...', '...#...', '#######', '.#####.', '..###..', '.##.##.', '.#...#.'],
-    ['...#...', '..###..', '.#####.', '#######', '.#####.', '..###..', '...#...'],
-  ], MARK_COL = ['#ff7a7a', '#7ab8ff', '#a8f08a', '#ff9ad0', '#ffe27a', '#c8a0ff'];
-  function markIcon(c, k, x, y, on) {
-    c.fillStyle = on ? MARK_COL[k] : 'rgba(182,192,230,.26)';
-    MARK_PAT[k].forEach((r, j) => { for (let i = 0; i < 7; i++) if (r[i] === '#') c.fillRect(x + i, y + j, 1, 1); });
-    if (on) { c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(x + 2, y + 2, 1, 1); }
-  }
-  const ivOn = () => !!(env.ivEnabled && env.ivEnabled());
-  // a row that fades / slides in a little after the page opens
-  function rv(c, i, fn) { const k = ease(clamp((S.pageT - i * .05) / .22)); if (k <= 0) return; c.save(); c.globalAlpha = k; c.translate(Math.round((1 - k) * 10), 0); fn(); c.restore(); }
-  const CONDS = [['Cool', '#ff6a5a'], ['Beauty', '#6ab0ff'], ['Cute', '#ff8ac8'], ['Smart', '#7fe08a'], ['Tough', '#ffd05a']];
-  function drawSummary(c) {
-    const m = S.party[S.sel]; if (!m) return;
-    // header
-    chamfer(c, 4, 3, 232, 15, GLASS2, ACC, 3); rect(c, 8, 16, 224, 1, 'rgba(77,227,209,.40)');
-    const showPage = S.pg && S.pg.p < .5 ? S.pg.from : S.page, ban = S.banner && S.banner.t < 3.2 ? S.banner : null;
-    if (ban) { const pulse = .5 + .5 * Math.sin(S.t * 6); T(c, ban.text, 12, 5, pulse > .5 ? 'gold' : 'white'); } else T(c, PAGE_TITLE[showPage], 12, 5, 'white');
-    T(c, '/left/', 164, 5, S.page > 0 ? 'cyan' : 'dim'); T(c, '/right/', 226, 5, S.page < NPAGES - 1 ? 'cyan' : 'dim');
-    for (let i = 0; i < NPAGES; i++) { const on = i === S.page, pulse = on && Math.sin(S.t * 7) > 0; pill(c, 176 + i * 12, 7, 9, 5, on ? (pulse ? '#ffffff' : ACC) : 'rgba(150,160,200,.35)', 2); }
-    // left panel: the Pokémon
-    chamfer(c, 4, 22, 90, 136, GLASS, EDGE, 5); brackets(c, 4, 22, 90, 136, ACC, 8);
-    c.save(); c.beginPath(); c.rect(6, 24, 86, 84); c.clip(); c.globalAlpha = .13; ring(c, 49, 62, S.t * .3, '#ffffff'); c.restore();
-    ell(c, 49, 102, 25, 4, 'rgba(0,0,0,.38)');
-    const pp = clamp(S.selT / .3), sc = pp < 1 ? backOut(pp) : 1, bob = Math.sin(S.t * 3.2) > 0 ? 1 : 0;
-    drawSprite(c, m, 49, 100 - bob, 76, 72, Math.max(.2, sc), S.selT < .09 ? .85 : 0);
-    const nx = T(c, m.nick, 10, 110, m.shiny ? 'gold' : 'white'); if (m.shiny) star(c, nx + 2, 112); genderGlyph(c, m.gender, 88, 110);
-    T(c, '{Lv}' + m.lv, 10, 124, 'dim'); ballIcon(c, m, 70, 119);
-    rect(c, 10, 137, 78, 1, 'rgba(77,227,209,.30)');
-    for (let i = 0; i < 6; i++) markIcon(c, i, 12 + i * 13, 143, !!(m.marks && m.marks[i]));
-    // right panel: the pages
-    chamfer(c, 98, 22, 138, 136, GLASS, EDGE, 5); brackets(c, 98, 22, 138, 136, ACC, 8);
-    c.save(); c.beginPath(); c.rect(100, 24, PW, 132); c.clip();
-    if (S.pg) {
-      const p = ease(clamp(S.pg.p)), d = S.pg.to > S.pg.from ? 1 : -1;
-      c.save(); c.translate(Math.round(-d * p * PW), 0); drawPage(c, S.pg.from, m); c.restore();
-      c.save(); c.translate(Math.round(d * (1 - p) * PW), 0); drawPage(c, S.pg.to, m); c.restore();
-    } else drawPage(c, S.page, m);
-    c.restore();
-    if (S.mk) drawMarkEdit(c, m);
-    if (S.cask) drawCatchAsk(c, m);
-  }
-  function drawMarkEdit(c, m) {
-    const k = ease(clamp((S.t - S.mk.t) / .15)), bw = 118, bh = 46, bx = 61, by = Math.round(58 + (1 - k) * 8);
-    c.fillStyle = `rgba(0,0,10,${.45 * k})`; c.fillRect(0, 0, W, H);
-    chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.95)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
-    T(c, 'MARKINGS', bx + Math.round((bw - tw('MARKINGS')) / 2), by + 5, 'cyan');
-    for (let i = 0; i < 6; i++) { const x = bx + 11 + i * 17, y = by + 20, on = i === S.mk.i; if (on) selector(c, x - 4, y - 4, 15, 15, .5 + .5 * Math.sin(S.t * 5)); markIcon(c, i, x, y, !!m.marks[i]); }
-  }
-  function drawCatchAsk(c, m) {
-    const k = ease(clamp((S.t - S.cask.t) / .18)); c.fillStyle = `rgba(0,0,10,${.55 * k})`; c.fillRect(0, 0, W, H);
-    const bw = 190, bh = 62, bx = 25, by = Math.round(48 + (1 - k) * 10);
-    chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.95)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
-    const q = 'Give a nickname to ' + m.species + '?'; T(c, q, bx + Math.round((bw - tw(q)) / 2), by + 9, 'white');
-    ['YES', 'NO'].forEach((lb, i) => { const bxx = bx + 34 + i * 70, on = S.cask.i === i; chamfer(c, bxx, by + 32, 52, 17, on ? 'rgba(77,227,209,.24)' : GLASS2, on ? '#bffcf3' : EDGE, 3); if (on) selector(c, bxx, by + 32, 52, 17, .5 + .5 * Math.sin(S.t * 5)); T(c, lb, bxx + Math.round((52 - tw(lb)) / 2), by + 34, on ? 'white' : 'dim'); });
-  }
-  function drawPage(c, idx, m) {
-    const x0 = 106, W2 = 122, div = y => { for (let x = 104; x < 232; x += 4) rect(c, x, y, 2, 1, 'rgba(127,243,228,.28)'); }, hint = t => T(c, t, x0, 147, 'dim');
-    if (idx === 0) {
-      const rows = [['{No}', String(m.dex).padStart(3, '0'), 'cyan'], ['Name', m.species], ['Type'], ['Tera'], ['OT', m.ot], ['{ID}No.', m.idno], ['Item', m.item || 'None', m.item ? 'white' : 'dim']];
-      rows.forEach((r, i) => rv(c, i, () => {
-        const y = 27 + i * 13; T(c, r[0], x0, y, 'dim');
-        if (r[0] === 'Type') badges(c, m.types, x0 + 42, y - 2);
-        else if (r[0] === 'Tera') { if (m.tera) badges(c, [m.tera], x0 + 42, y - 2); else T(c, '---', x0 + 42, y, 'dim'); }
-        else T(c, r[1], x0 + 42, y, r[2] || 'white');
-      }));
-      rv(c, 7, () => { div(118); wrapText(`${m.nature} nature. Met at ${m.place}.`, 21).slice(0, 2).forEach((ln, i) => T(c, ln, x0, 122 + i * 11, 'white')); });
-      if (!env.battle) rv(c, 8, () => hint('A: marks'));
-    } else if (idx === 1) {
-      const names = ['HP', 'Attack', 'Defense', 'Sp.Atk', 'Sp.Def', 'Speed'], cols = ['#4cc860', '#e85a4c', '#e8a43c', '#4c8ce8', '#58c8b8', '#d868c8'], cap = 50 + m.lv * 4, iv = S.iv && ivOn();
-      names.forEach((n, i) => rv(c, i, () => {
-        const y = 26 + i * 12; T(c, n, x0, y, i && i === m.natUp ? 'red' : i && i === m.natDown ? 'blue' : 'dim');
-        rect(c, x0 + 44, y + 3, 48, 4, 'rgba(255,255,255,.14)'); const f = iv ? m.iv[i] / 31 : clamp(m.stats[i] / cap); rect(c, x0 + 44, y + 3, Math.round(48 * f * S.statP), 4, cols[i]); rect(c, x0 + 44, y + 3, Math.round(48 * f * S.statP), 1, 'rgba(255,255,255,.35)');
-        if (iv) { const v = m.iv[i]; TR(c, String(v), x0 + 124, y, v >= 31 ? 'gold' : v === 0 ? 'blue' : 'white'); T(c, 'IV', x0 + 96, y, 'dim'); }
-        else TR(c, i === 0 ? `${m.hp}/${m.max}` : String(m.stats[i]), x0 + 124, y, 'white');
-      }));
-      rv(c, 6, () => div(99));
-      rv(c, 7, () => { T(c, 'Ability', x0, 103, 'dim'); T(c, m.ability, x0 + 50, 103, 'white'); });
-      rv(c, 8, () => { T(c, 'Exp.', x0, 115, 'dim'); TR(c, String(m.exp), x0 + 124, 115, 'white'); });
-      rv(c, 9, () => { T(c, 'Next Lv.', x0, 127, 'dim'); TR(c, String(Math.max(0, m.expN - m.exp)), x0 + 124, 127, 'white'); });
-      const fr = clamp(m.exp / Math.max(1, m.expN)) * S.statP; rect(c, x0, 140, 124, 4, 'rgba(255,255,255,.14)'); rect(c, x0, 140, Math.round(124 * fr), 4, '#4c8ce8'); rect(c, x0, 140, Math.round(124 * fr), 1, 'rgba(255,255,255,.35)');
-      if (ivOn()) rv(c, 10, () => hint(iv ? 'A: stats' : 'A: IVs'));
-    } else if (idx === 2) {
-      const n = m.moves.length;
-      for (let i = 0; i < 4; i++) rv(c, i, () => {
-        const y = 25 + i * 24, mo = m.moves[i], on = S.mvMode && i === S.mv, sw = S.mvSwap === i;
-        chamfer(c, x0 - 3, y - 1, 128, 22, sw ? 'rgba(255,226,122,.20)' : on ? 'rgba(77,227,209,.18)' : 'rgba(10,18,44,.45)', sw ? '#ffe27a' : on ? '#bffcf3' : 'rgba(77,227,209,.18)', 3);
-        if (on) brackets(c, x0 - 5, y - 3, 132, 26, '#ffffff', 4);
-        if (!mo) { T(c, '-', x0 + 44, y + 6, 'dim'); return; }
-        badge(c, mo.type, x0, y + 4); T(c, mo.name, x0 + 44, y + 1, 'white');
-        T(c, '{PP}', x0 + 44, y + 12, 'dim'); T(c, ` ${mo.pp}/${mo.ppMax}`, x0 + 44 + advOf('PP'), y + 12, mo.pp === 0 ? 'red' : 'white');
-        TR(c, mo.pow ? 'Pwr' + mo.pow : '---', x0 + 120, y + 12, 'dim');
-      });
-      rv(c, 4, () => { const cur = m.moves[S.mv] || m.moves[0]; if (cur) wrapText(cur.desc, 21).slice(0, 2).forEach((ln, i) => T(c, ln, x0, 123 + i * 11, 'white')); });
-      rv(c, 5, () => hint(!S.mvMode ? 'A: edit moves' : S.mvSwap >= 0 ? 'A: swap here  B: back' : (env.battle || n < 2 ? 'B: back' : 'A: pick  B: back')));
+  resetParticle(p, spec, view, initial) {
+    p.vx = this.range(spec.vx);
+    p.vy = this.range(spec.vy);
+    p.a = this.range(spec.alpha);
+    p.img.setScale(this.range(spec.scale));
+    p.m = Math.max(p.img.displayWidth, p.img.displayHeight) * 0.5 + 8;
+
+    if (spec.sway) {
+      p.amp = this.range(spec.sway.amp);
+      p.freq = this.range(spec.sway.freq);
+      p.phase = Math.random() * Math.PI * 2;
     } else {
-      CONDS.forEach(([nm, col], i) => rv(c, i, () => {
-        const y = 27 + i * 14, v = m.contest[i]; T(c, nm, x0, y, 'dim');
-        rect(c, x0 + 44, y + 3, 56, 5, 'rgba(255,255,255,.14)'); rect(c, x0 + 44, y + 3, Math.round(56 * (v / 255) * S.statP), 5, col); rect(c, x0 + 44, y + 3, Math.round(56 * (v / 255) * S.statP), 1, 'rgba(255,255,255,.4)');
-        TR(c, String(v), x0 + 124, y, 'white');
-      }));
-      rv(c, 5, () => { const y = 27 + 5 * 14 + 2; T(c, 'Sheen', x0, y, 'dim'); rect(c, x0 + 44, y + 3, 56, 5, 'rgba(255,255,255,.14)'); rect(c, x0 + 44, y + 3, Math.round(56 * (m.sheen / 255) * S.statP), 5, '#e8e8f8'); TR(c, String(m.sheen), x0 + 124, y, 'white'); });
-      rv(c, 6, () => div(114));
-      rv(c, 7, () => { const best = m.contest.reduce((a, v, i) => v > m.contest[a] ? i : a, 0); T(c, 'Best', x0, 119, 'dim'); if (m.contest[best] > 0) T(c, CONDS[best][0], x0 + 44, 119, 'gold'); else T(c, 'None yet', x0 + 44, 119, 'dim'); });
-      rv(c, 8, () => { T(c, 'Ribbons', x0, 132, 'dim'); TR(c, String(m.ribbons), x0 + 124, 132, m.ribbons ? 'gold' : 'dim'); });
+      p.amp = 0;
     }
+    if (spec.align) p.img.setRotation(Math.atan2(-p.vx, p.vy));
+
+    if (spec.splash) {
+      p.land = view.top + view.h * (0.3 + Math.random() * 0.7);
+      p.x = view.left - 40 + Math.random() * (view.w + 80);
+      p.y = initial
+        ? view.top + Math.random() * (p.land - view.top)
+        : view.top - p.m - Math.random() * 20;
+      return;
+    }
+
+    p.x = view.left + Math.random() * view.w;
+    p.y = view.top + Math.random() * view.h;
   }
 
-  // ------------------------------------------------ render
-  const lA = mk(W, H), lB = mk(W, H), lAx = lA.getContext('2d'), lBx = lB.getContext('2d'); lAx.imageSmoothingEnabled = lBx.imageSmoothingEnabled = false;
-  const layer = (cv, x, view) => { x.clearRect(0, 0, W, H); (view === 'party' ? drawParty : view === 'name' ? drawName : drawSummary)(x); return cv; };
-  function render(ctx) {
-    if (!rawSheet) return;
-    ctx.imageSmoothingEnabled = false; drawBg(S.t); ctx.drawImage(bgc, 0, 0);
-    if (S.tr) {
-      const p = ease(clamp(S.tr.p)), dir = S.tr.to === 'summary' ? -1 : 1;
-      layer(lA, lAx, S.tr.from); layer(lB, lBx, S.tr.to); ctx.drawImage(lA, Math.round(dir * p * W), 0); ctx.drawImage(lB, Math.round(-dir * (1 - p) * W), 0);
-    } else { layer(lA, lAx, S.view); ctx.drawImage(lA, 0, 0); }
-  }
-  function renderSettled(view, page) {     // a finished frame (no animation in progress), for PNG export
-    const k = { view: S.view, page: S.page, tr: S.tr, pg: S.pg, rowT: S.rowT, selT: S.selT, statP: S.statP, hp: S.hpShown, mvMode: S.mvMode };
-    S.view = view; S.page = page; S.tr = null; S.pg = null; S.rowT = 9; S.selT = 9; S.statP = 1; S.hpShown = S.party.map(m => m.hp); S.mvMode = false;
-    const c = mk(W, H); render(c.getContext('2d'));
-    S.view = k.view; S.page = k.page; S.tr = k.tr; S.pg = k.pg; S.rowT = k.rowT; S.selT = k.selT; S.statP = k.statP; S.hpShown = k.hp; S.mvMode = k.mvMode; return c;
+  addSplash(layer, x, y) {
+    if (layer.splashes.length >= 160) return;
+    const img = layer.splashPool.pop()
+      || this.scene.add.image(0, 0, 'owx_ring').setDepth(OW_WEATHER_DEPTH + 1).setTint(0xdbe9ff);
+    img.setPosition(x, y).setScale(0.4).setAlpha(0.6 * layer.fade).setVisible(true);
+    layer.splashes.push({ img, t: 0, dur: 0.3 + Math.random() * 0.15 });
   }
 
-  // ------------------------------------------------ input / update
-  function cry() {
-    if (!opt.cries) return; const m = S.party[S.sel]; if (!m || !m.cry) return;
-    try { const u = urlFor(m.cry); if (!u) return; if (window.PMAudio) window.PMAudio.play(u, .6); else { const a = new Audio(u); a.volume = .6; a.play().catch(() => {}); } } catch (e) { /* no sound */ }
-  }
-  function select(i) { if (i === S.sel) return; S.sel = i; S.selT = 0; S.statP = 0; S.pageT = 0; S.mvMode = false; S.mvSwap = -1; cry(); }
-  function setPage(p) { p = clamp(p, 0, NPAGES - 1); if (p === S.page) return; S.pg = { from: S.page, to: p, p: 0 }; S.page = p; S.statP = 0; S.pageT = 0; S.mvMode = false; S.mvSwap = -1; }
-  function go(v) { S.tr = { from: S.view, to: v, p: 0 }; S.mvMode = false; if (v === 'summary') { S.page = 0; S.pg = null; S.statP = 0; S.selT = 0; S.pageT = 0; S.mvSwap = -1; cry(); } }
-  function press(k) {
-    if (S.view === 'name' && !S.tr) { nameKeyPress(k); return; }
-    if (S.tr || !S.party.length) { if (k === 'b' && !S.tr && env.onExit) env.onExit(); return; }
-    const n = S.party.length;
-    if (S.view === 'party') partyPress(k);
-    else {
-      if (S.cask) { if (k === 'left' || k === 'right' || k === 'up' || k === 'down') S.cask.i = 1 - S.cask.i; else if (k === 'a') catchAnswer(S.cask.i === 0); else if (k === 'b') catchAnswer(false); return; }
-      if (S.mk) { const m = S.party[S.sel]; if (k === 'left') S.mk.i = (S.mk.i + 5) % 6; else if (k === 'right') S.mk.i = (S.mk.i + 1) % 6; else if (k === 'a') { m.marks[S.mk.i] = !m.marks[S.mk.i]; try { env.setMarks && env.setMarks(S.sel, m.marks.slice()); } catch (e) { /* host error */ } } else if (k === 'b') S.mk = null; return; }
-      const m = S.party[S.sel];
-      if (S.mvMode) {
-        const nm = Math.max(1, m.moves.length);
-        if (k === 'up') S.mv = (S.mv + nm - 1) % nm; else if (k === 'down') S.mv = (S.mv + 1) % nm;
-        else if (k === 'a') {   // A (Z / Space): pick a move, then pick the place to swap it with
-          if (env.battle || m.moves.length < 2) return;
-          if (S.mvSwap < 0) S.mvSwap = S.mv; else { if (S.mvSwap !== S.mv) { const a = S.mvSwap, b = S.mv; [m.moves[a], m.moves[b]] = [m.moves[b], m.moves[a]]; try { env.swapMoves && env.swapMoves(S.sel, a, b); } catch (e) { /* host error */ } } S.mvSwap = -1; }
-        } else if (k === 'b' || k === 'left') { if (S.mvSwap >= 0) S.mvSwap = -1; else S.mvMode = false; }
-        return;
+  updateSplashes(layer, dt) {
+    for (let i = layer.splashes.length - 1; i >= 0; i--) {
+      const s = layer.splashes[i];
+      s.t += dt;
+      const k = s.t / s.dur;
+      if (k >= 1) {
+        s.img.setVisible(false);
+        layer.splashPool.push(s.img);
+        layer.splashes.splice(i, 1);
+        continue;
       }
-      if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n);
-      else if (k === 'left') setPage(S.page - 1); else if (k === 'right') setPage(S.page + 1);
-      else if (k === 'a') { if (S.page === 2) { S.mvMode = true; S.mv = 0; S.mvSwap = -1; } else if (S.page === 0 && !env.battle) S.mk = { i: 0, t: S.t }; else if (S.page === 1 && ivOn()) S.iv = !S.iv; }
-      else if (k === 'b') { if (env.catchMode) S.cask = { i: 0, t: S.t }; else go('party'); }
+      s.img.setScale(0.4 + k * 1.1).setAlpha(0.6 * (1 - k) * layer.fade);
     }
   }
-  function catchAnswer(yes) {
-    S.cask = null; const m = S.party[S.sel], C = env.catchMode;
-    if (!yes) { if (C && C.done) C.done(null); return; }
-    startName({ mode: 'mon', mi: S.sel, mon: m, title: 'NICKNAME?', max: 10, initial: '', orig: m.nick, gender: m.gender, allowEmpty: true, fromParty: true }); go('name');
-  }
-  function click(x, y) {     // x, y in 240x160 screen pixels
-    if (S.tr) return;
-    if (S.view === 'name') { nameClick(x, y); return; }
-    if (S.view === 'party' && S.menu) { const R = menuRect(); if (x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h) { const i = Math.floor((y - R.y - 4) / MENU.rh); if (i >= 0 && i < S.menu.opts.length) { S.menu.i = i; menuDo(S.menu.opts[i]); } } else S.menu = null; return; }
-    if (S.view === 'party') { const i = Math.floor((y - 3) / 26); if (x >= 8 && x <= 144 && i >= 0 && i < S.party.length && (y - 3) % 26 < 25) { if (i === S.sel) press('a'); else select(i); } }
-    else if (y < 18) { if (x >= 172) { const i = Math.floor((x - 176) / 12); if (i >= 0 && i < NPAGES) setPage(i); } else press('b'); }
-    else if (S.page === 2 && x >= 100 && y >= 24 && y < 122) { const i = Math.floor((y - 24) / 24); if (i < 4) { S.mvMode = true; S.mv = i; } }
-  }
-  function update(dt) {
-    if (S.bmsg) { S.bmsg.t += dt; if (S.bmsg.t > S.bmsg.dur) S.bmsg = null; }
-    S.t += dt; S.rowT += dt; S.pageT += dt; if (S.banner) S.banner.t += dt; S.selT += dt; S.statP = Math.min(1, S.statP + dt / .6);
-    if (S.tr) { S.tr.p += dt / .3; if (S.tr.p >= 1) { S.view = S.tr.to; S.tr = null; } }
-    if (S.pg) { S.pg.p += dt / .22; if (S.pg.p >= 1) S.pg = null; }
-    S.party.forEach((m, i) => { const cur = S.hpShown[i] || 0, d = m.hp - cur, st = Math.max(1, m.max * 7) * dt; S.hpShown[i] = Math.abs(d) <= st ? m.hp : cur + Math.sign(d) * st; });
-  }
-  function status() {
-    let sp = 0, ic = 0; for (const m of S.party) { const a = imgs.get(m.sprite), b = imgs.get(m.icon); if (a && a.ok) sp++; if (b && b.ok) ic++; }
-    const TT = env.types && env.types(), sh = TT && TT.sheet ? imgs.get(TT.sheet) : null, DB = env.db && env.db();
-    return { mons: S.party.map(m => ({ nickname: m.nick, saveSpecies: m.rawSpecies, showing: m.species, types: m.types, sprite: m.sprite, spriteLoaded: !!(imgs.get(m.sprite) && imgs.get(m.sprite).ok), icon: m.icon, iconLoaded: !!(imgs.get(m.icon) && imgs.get(m.icon).ok) })), typeSheetPath: TT && TT.sheet, font: fontSrc, species: DB ? Object.keys(DB).length : 0, count: S.party.length, sprites: sp, icons: ic, typeTable: !!TT, typeSheet: !!(sh && sh.ok), moveTable: !!moveTable(), warnings: [...warnings] };
-  }
-  return { S, opt, W, H, press, click, update, render, rebuild, reset, initFont, status, renderSettled, buildMon, startName, nameKey };
-}
-root.PokemonSummaryCore = createSummary;
 
-// ===========================================================================
-//  GAME PART (Phaser): PokemonSummary.open(scene)
-// ===========================================================================
-const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', q: 'left', ArrowRight: 'right', d: 'right', e: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b' };
-const SAVE_KEY = 'pokemon_micron_save';
-function gameParty() {
-  const gs = root.GameStateManager, pick = o => { let p = o && (o.party || o.playerParty || (o.saveData && o.saveData.party)); if (p && !Array.isArray(p) && typeof p === 'object') p = Object.values(p); return Array.isArray(p) ? p.filter(m => m && typeof m === 'object') : []; };
-  let party = pick(gs && gs.saveData);
-  if (!party.length) party = pick(gs);
-  if (!party.length) { for (const k of [SAVE_KEY, 'save', 'saveData', 'pokemon_save']) { try { const o = JSON.parse(localStorage.getItem(k) || 'null'); party = pick(o); if (party.length) break; } catch (e) { /* not json */ } } }
-  return party;
-}
-// real party array in the save (gameParty() returns a filtered copy)
-function partyArray() { const gs = root.GameStateManager, p = gs && gs.saveData && gs.saveData.party; return Array.isArray(p) ? p : null; }
-function partyChanged() { try { if (root.SaveSystem && root.SaveSystem.touch) root.SaveSystem.touch('party'); } catch (e) { /* no save system */ } try { if (root.OWFollower) root.OWFollower.refresh(); } catch (e) { /* no follower */ } }
-const PokemonSummary = {
-  active: false,
-  // IVs on the SKILLS page: shown (press A on that page to switch between stats and IVs) when this game flag is set, or always when IV_ALWAYS is true.
-  // Set it in a script (setflag FLAG_IV_VIEW) or in saveData.flags.FLAG_IV_VIEW.
-  IVFLAG: 'FLAG_IV_VIEW', IV_ALWAYS: false,
-  ivEnabled() { if (this.IV_ALWAYS) return true; const gs = root.GameStateManager, sv = (gs && gs.saveData) || {}; return !!(sv.flags && sv.flags[this.IVFLAG]); },
-  isOpen() { return this.active; },
-
-  open(scene, opts = {}) {
-    if (this.active || !scene) return false;
-    const nameOnly = !!opts.name, party = nameOnly ? [] : gameParty();
-    console.info('[PokemonSummary] open: ' + (nameOnly ? 'naming screen' : party.length + ' Pokemon in the party'));
-    if (!party.length && !nameOnly) { console.warn('[PokemonSummary] the party is empty: GameStateManager.saveData.party has no Pokemon, and no local save was found'); return false; }
-    // (typeof works for tables declared with `const` in your other scripts, window.X would not)
-    const core = createSummary({
-      urlFor: p => p,
-      db: () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null),
-      types: () => (typeof TypeTable !== 'undefined' ? TypeTable : (PokemonSummary._tt || null)),
-      moves: () => (typeof MoveDatabase !== 'undefined' && MoveDatabase) || (typeof MoveTable !== 'undefined' && MoveTable) || (typeof MoveTables !== 'undefined' && MoveTables) || null,
-      party: () => (nameOnly ? [] : gameParty()),
-      swap: (i, j) => { const list = gameParty(), arr = partyArray(); if (!arr || !list[i] || !list[j]) return; const a = arr.indexOf(list[i]), b = arr.indexOf(list[j]); if (a < 0 || b < 0) return; [arr[a], arr[b]] = [arr[b], arr[a]]; partyChanged(); },
-      rename: (i, txt) => { const m = gameParty()[i]; if (!m) return; m.nickname = txt; partyChanged(); },
-      swapMoves: (i, a, b) => { const m = gameParty()[i]; if (!m || !m.moves) return; [m.moves[a], m.moves[b]] = [m.moves[b], m.moves[a]]; partyChanged(); },
-      setMarks: (i, marks) => { const m = gameParty()[i]; if (!m) return; const o = {}; ['circle', 'triangle', 'square', 'heart', 'star', 'diamond'].forEach((k, j) => { o[k] = !!marks[j]; }); m.markings = o; partyChanged(); },
-      ivEnabled: () => PokemonSummary.ivEnabled(),
-      nameDone: txt => { const nm = opts.name; this.close(); if (nm && nm.mode !== 'player' && nm.raw && txt !== null) { nm.raw.nickname = txt; partyChanged(); } if (nm && nm.onDone) nm.onDone(txt); },
-      glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
-      onExit: () => this.close(),
-    });
-    core.opt.cries = opts.cries !== false;
-    this.core = core; this.scene = scene; this.opts = opts; this.openedAt = performance.now();
-    const scr = (root.OW_TEXT && root.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 };
-    core.initFont().then(() => {
-      if (!this.active) return;
-      core.rebuild(false);
-      if (nameOnly) {
-        const nm = opts.name, female = /^f/i.test(String(nm.gender || ''));
-        core.startName(nm.mode === 'player'
-          ? { mode: 'player', title: nm.title || 'YOUR NAME?', max: nm.max || 7, initial: nm.initial || '', orig: nm.current || '', gender: female ? 'F' : 'M', allowEmpty: false, allowCancel: !!nm.allowCancel, trainer: nm.trainer || ('graphics/trainer_front_sprites/player_' + (female ? 'female' : 'male') + '.png') }
-          : { mode: 'monraw', raw: nm.raw, title: nm.title || 'NICKNAME?', max: nm.max || 10, initial: '', orig: nm.raw.nickname || '', gender: '', allowEmpty: true, allowCancel: true });
-      }
-      setTimeout(() => { if (PokemonSummary.active && PokemonSummary.logging) PokemonSummary.debug(); }, 1500);
-      const key = 'ps_screen_canvas';
-      if (scene.textures.exists(key)) scene.textures.remove(key);
-      this.tex = scene.textures.createCanvas(key, W, H);
-      try { this.tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ }
-      this.ctx = this.tex.getContext ? this.tex.getContext() : this.tex.context;
-      this.img = scene.add.image(0, 0, key).setOrigin(0, 0).setScale(scr.w / W, scr.h / H).setScrollFactor(0).setDepth(9000);
-      this.upd = (time, delta) => { core.update(Math.min(.05, delta / 1000)); core.render(this.ctx); this.tex.refresh(); };
-      scene.events.on('update', this.upd);
-    });
-    if (typeof TypeTable === 'undefined' && !this._tt) {   // not loaded by a script tag: fetch it and say exactly what went wrong
-      const url = opts.typeTablesUrl || 'tables/TypeTables.js';
-      fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url + ' (file missing or named wrongly: it must be exactly tables/TypeTables.js)'); return r.text(); })
-        .then(txt => { const o = new Function('window', txt + '\n;return typeof TypeTable!=="undefined"?TypeTable:null')({}); if (!o) throw new Error(url + ' loaded but it does not define TypeTable'); this._tt = o; console.warn('[PS] TypeTable was not defined by a <script> tag, so ' + url + ' was fetched instead. Add <script src="' + url + '"></script> to index.html.'); if (this.active) core.rebuild(true); })
-        .catch(e => console.error('[PS] TypeTables.js problem: ' + e.message));
-    }
-    this.active = true;
-    this.kd = e => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const k = KEYS[e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key];
-      const typing = core.S.view === 'name' && !core.S.tr && e.key && (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Enter' || e.key === 'Escape');
-      if (!k && !typing) return;
-      e.preventDefault(); e.stopImmediatePropagation();
-      if ((e.repeat && e.key !== 'Backspace') || performance.now() - this.openedAt < 250) return;
-      if (typing && core.nameKey(e)) return;
-      if (k) core.press(k);
-    };
-    window.addEventListener('keydown', this.kd, true);
-    return true;
-  },
-
-  close() {
-    if (!this.active) return;
-    this.active = false;
-    window.removeEventListener('keydown', this.kd, true);
+  strike(layer) {
+    const flashes = layer.regionObjs.map(o => o.flash).filter(Boolean);
+    if (!flashes.length) return;
     const scene = this.scene;
-    try { if (this.upd) scene.events.off('update', this.upd); if (this.img) this.img.destroy(); if (scene.textures.exists('ps_screen_canvas')) scene.textures.remove('ps_screen_canvas'); } catch (e) { /* scene already gone */ }
-    this.img = this.tex = this.ctx = this.upd = null;
-    if (scene && scene.time) scene.scriptEndedAt = scene.time.now;     // the overworld ignores input for 300 ms, so the closing key does nothing there
-    if (this.opts && this.opts.onClose) this.opts.onClose();
-  },
-};
-// ---- naming screens (same look as the party screen) --------------------------------------------------------------
-//   PokemonSummary.namePlayer(scene, { gender: 'male'|'female', current: 'PLAYER', max: 7, allowCancel: false, onDone(name) {} })
-//        -> asks for the player's name; the result is stored in saveData.player.name and also given to onDone(name)
-//   PokemonSummary.nameMon(scene, rawMon, { max: 10, onDone(name) {} })   -> nickname for any Pokémon object (rawMon.nickname is set)
-// Type with the keyboard, or move with the arrows and press A / click the keys. Backspace/B = delete, Enter = OK, Esc = cancel.
-PokemonSummary.namePlayer = function (scene, o) {
-  o = o || {}; const gs = root.GameStateManager, sd = gs && gs.saveData;
-  const cur = o.current != null ? o.current : (sd && sd.player && sd.player.name) || '';
-  const gender = o.gender || (sd && sd.player && (sd.player.gender || sd.player.sex)) || 'male';
-  return PokemonSummary.open(scene, { name: { mode: 'player', gender, current: cur, max: o.max || 7, title: o.title, allowCancel: !!o.allowCancel, trainer: o.trainer,
-    onDone: txt => { if (txt !== null && sd) { sd.player = sd.player || {}; sd.player.name = txt; try { root.SaveSystem && root.SaveSystem.touch('name'); } catch (e) { /* ignore */ } } if (o.onDone) o.onDone(txt); } }, onClose: o.onClose, cries: false });
-};
-PokemonSummary.nameMon = function (scene, raw, o) {
-  o = o || {}; return PokemonSummary.open(scene, { name: { mode: 'monraw', raw, max: o.max || 10, title: o.title, onDone: o.onDone }, onClose: o.onClose, cries: false });
-};
-root.PokemonSummary = PokemonSummary;
+    const setAll = a => flashes.forEach(f => { if (f.active) f.setAlpha(a); });
 
-// ---------------------------------------------------------------- Enter key + logger (works even if the scene file has no [SUMMARY] patch)
-// Every Enter press prints a "[PS]" line to the console with what the game looked like at that moment.
-// Switch it off with PokemonSummary.logging = false.  PokemonSummary.debug() prints the state any time.
-PokemonSummary.logging = true;
-const psLog = (...a) => { if (PokemonSummary.logging) console.log('%c[PS]', 'color:#7fa4ff;font-weight:bold', ...a); };
-function psScenes() {
-  const out = [];
-  try { for (const g of psGames()) for (const s of g.scene.getScenes(false)) out.push({ s, active: g.scene.isActive(s.scene.key) }); } catch (e) { psLog('could not list scenes:', e.message); }
-  return out;
+    scene.tweens.killTweensOf(flashes);
+    setAll(0.85);
+    scene.time.delayedCall(70, () => setAll(0.15));
+    scene.time.delayedCall(140, () => setAll(0.7));
+    scene.time.delayedCall(210, () => {
+      const live = flashes.filter(f => f.active);
+      if (live.length) scene.tweens.add({ targets: live, alpha: 0, duration: 380, ease: 'Quad.easeOut' });
+    });
+  }
 }
-// Phaser.GAMES is empty in newer Phaser builds, so the game object is searched for: Phaser.GAMES, then any global that is a Phaser.Game
-// (a `const game = new Phaser.Game()` is not on window, so also try typeof game / phaserGame), then PokemonSummary.game if you set it.
-let psGameCache = null;
-function psGames() {
-  const found = new Set(), P = root.Phaser, isGame = g => g && typeof g === 'object' && g.scene && typeof g.scene.getScenes === 'function' && g.loop;
-  if (PokemonSummary.game && isGame(PokemonSummary.game)) found.add(PokemonSummary.game);
-  if (psGameCache && isGame(psGameCache)) found.add(psGameCache);
-  if (P && P.GAMES) for (const g of P.GAMES) if (isGame(g)) found.add(g);
-  const tryGlobal = f => { try { const g = f(); if (isGame(g)) found.add(g); } catch (e) { /* not declared */ } };
-  tryGlobal(() => game); tryGlobal(() => phaserGame); tryGlobal(() => gameInstance); tryGlobal(() => window.game);
-  if (!found.size) { try { for (const k of Object.getOwnPropertyNames(root)) { let v; try { v = root[k]; } catch (e) { continue; } if (isGame(v)) { found.add(v); break; } } } catch (e) { /* ignore */ } }
-  const arr = [...found]; if (arr[0]) psGameCache = arr[0]; return arr;
-}
-function psState() {
-  const all = psScenes(), ow = all.map(o => o.s).find(s => s && s.player && s.OverworldMaps === undefined && s.currentMapKey !== undefined) || all.map(o => o.s).find(s => s && s.player);
-  return {
-    loaded: true, open: PokemonSummary.active,
-    phaser: !!root.Phaser, games: psGames().length,
-    scenes: all.map(o => `${o.s.scene.key}${o.active ? ' (active)' : ''}`),
-    overworldScene: ow ? ow.scene.key : null,
-    sceneHasEnterKey: !!(ow && ow.enterKey),
-    scriptRunning: ow ? !!ow.scriptRunning : null, isLocked: ow ? !!ow.isLocked : null, isMoving: ow ? !!ow.isMoving : null,
-    partySize: gameParty().length, saveParty: !!(root.GameStateManager && root.GameStateManager.saveData && root.GameStateManager.saveData.party),
-    types: typeof TypeTable !== 'undefined', db: typeof PokemonDatabase !== 'undefined',
-  };
-}
-PokemonSummary.debug = () => {
-  const s = psState(); console.log('[PS] state', s);
-  const c = PokemonSummary.core; if (c) { const st = c.status(); console.table(st.mons); console.log('[PS] type icons: TypeTable ' + (st.typeTable ? 'found' : 'NOT found') + ', sheet ' + st.typeSheetPath + ' -> ' + (st.typeSheet ? 'loaded' : 'NOT loaded') + ' | font: ' + st.font); if (st.warnings.length) console.warn('[PS] warnings:\n' + st.warnings.join('\n')); }
-  else console.log('[PS] the screen is not open: open it with Enter, then call PokemonSummary.debug() again');
-  return s;
+
+const OW_DIRS = {
+  up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 },
 };
-window.addEventListener('keydown', e => {
-  if (e.key !== 'Enter' || e.repeat) return;
-  if (window.StartMenu) return;   // the start menu owns Enter now (Pokémon is a tile in it)
-  const st = psState(); psLog('Enter pressed', st);
-  if (PokemonSummary.active) return;
-  // the scene's own [SUMMARY] code opens it on its next update; if it has not, we do it here after a short wait
-  setTimeout(() => {
-    if (PokemonSummary.active) { psLog('opened by the scene'); return; }
-    const all = psScenes().filter(o => o.active).map(o => o.s), sc = all.find(s => s.player && s.currentMapKey !== undefined) || all.find(s => s.player);
-    if (!sc) { psLog('NOT OPENED: no active scene with a player was found. Scenes:', st.scenes, '| games found:', st.games, '| If games is 0 add this line after you create the game: PokemonSummary.game = game;'); return; }
-    if (sc.scriptRunning) { psLog('NOT OPENED: a script is running'); return; }
-    if (sc.isLocked) { psLog('NOT OPENED: scene.isLocked is true'); return; }
-    if (sc.isMoving) { psLog('NOT OPENED: the player is moving'); return; }
-    psLog('the scene did not open it, opening from the key listener (is the [SUMMARY] patch in overworld_scene.js?)');
-    const ok = PokemonSummary.open(sc); psLog('open() returned', ok);
-  }, 60);
-});
-psLog('PokemonSummary.js loaded. Press Enter in the game; PokemonSummary.debug() prints the state.', psState());
-})(window);
+
+class OverworldScene extends Phaser.Scene {
+  constructor() {
+    super('OverworldScene');
+    this.isLocked = false;
+    this.activeNPC = null;
+    this.player = null;
+    this.playerGridX = 1;
+    this.playerGridY = 1;
+    this.isMoving = false;
+
+    this.currentMapKey = window.GameStateManager && window.GameStateManager.saveData && window.GameStateManager.saveData.mapID
+      ? window.GameStateManager.saveData.mapID
+      : Object.keys(window.OverworldMaps)[0];
+  }
+
+  init() {
+    this.player = null;
+    this.npcs = [];
+    this.triggers = [];
+    this.isMoving = false;
+    this.warping = false;
+    this.worldOffsets = null;
+    this.spinTimer = null;
+    this.scriptRunning = false;   // [SCRIPTS]
+    this.scriptEndedAt = 0;
+    this.camMoved = false;
+    this.playerDest = null;
+    this._musicLoading = {};
+    this.isLocked = false; this._lockedMs = 0;   // a scene that is started again must never keep the lock of the last run
+    this.evolving = false; this._evoN = 0; this._evoPre = false;   // an evolution animation pauses the whole map (wild Pokémon, NPCs, the 'stuck lock' safety net)
+  }
+
+  preload() {
+    BaseScene.prototype.preload.call(this);
+
+    if (window.OverworldTiles) {
+      for (const [tID, tileDef] of Object.entries(window.OverworldTiles)) {
+        if (!tileDef.tileImage) continue;
+
+        if (tileDef.tileType === "Multi-tile" || tileDef.tileType === "Multi-tile Pixel Split") {
+          this.load.spritesheet(`tile_sheet_${tID}`, tileDef.tileImage, {
+            frameWidth: 16, frameHeight: 16, margin: 0, spacing: 0
+          });
+        } else if (tileDef.isAnimated) {
+          // animated single tile: frame size comes from tileDimension (default 16x16); frames run along the row
+          const [fw, fh] = String(tileDef.tileDimension || '16x16').split('x').map(n => parseInt(n) || 16);
+          this.load.spritesheet(`tile_anim_${tID}`, tileDef.tileImage, {
+            frameWidth: fw, frameHeight: fh
+          });
+        } else {
+          this.load.image(`tile_img_${tID}`, tileDef.tileImage);
+        }
+      }
+    }
+
+    if (window.OverworldMaps) {
+      for (const [mKey, mapData] of Object.entries(window.OverworldMaps)) {
+        // [SPEED] the music (a few MB of mp3 that must also be decoded) is no longer loaded here: the map would not appear before it was
+        // downloaded. updateMapMusic() loads the track of the current map AFTER the scene is on screen, and only when a map needs it.
+
+        if (mapData.events) {
+          for (const [eKey, eventData] of Object.entries(mapData.events)) {
+            if (eventData.eventType === 'NPC' && eventData.owID && OW_TABLE()) {
+              const tableEntry = OW_TABLE()[eventData.owID];
+              if (tableEntry && tableEntry.owSprite) {
+                const textureKey = tableEntry.spriteID || `${eventData.owID.toLowerCase()}_ow`;
+                const size = this.getOWFrameSize(tableEntry, eventData.owID);
+
+                if (size) {
+                  if (this.textures.exists(textureKey)) {
+                    const f = this.textures.getFrame(textureKey, 0);
+                    if (f.width !== size.w || f.height !== size.h) {
+                      this.textures.remove(textureKey);
+                    }
+                  }
+                  if (!this.textures.exists(textureKey)) {
+                    this.load.spritesheet(textureKey, tableEntry.owSprite, {
+                      frameWidth: size.w,
+                      frameHeight: size.h
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (OW_TABLE() && !OW_TABLE()['Brendan']) console.error("[OW] The overworld table has no 'Brendan' entry, so the player sprite cannot load. Keys:", Object.keys(OW_TABLE()).slice(0, 12));
+    if (OW_TABLE() && OW_TABLE()['Brendan']) {
+      const bEntry = OW_TABLE()['Brendan'];
+      if (!this.textures.exists('brendan_ow')) {
+        const size = this.getOWFrameSize(bEntry, 'Brendan');
+        if (size) {
+          this.load.spritesheet('brendan_ow', bEntry.owSprite, {
+            frameWidth: size.w,
+            frameHeight: size.h
+          });
+        }
+      }
+    }
+  }
+
+  create() {
+    this.isMoving = false;
+    this.currentMap = window.OverworldMaps[this.currentMapKey];
+
+    if (window.GameStateManager && window.GameStateManager.saveData) {
+      window.GameStateManager.saveData.mapID = this.currentMapKey;
+      window.SaveSystem && window.SaveSystem.touch('map');   // [SAVE] no autosave: SaveSystem.save() runs from the start menu
+    }
+
+    if (window.StartMenu) window.StartMenu.attach(this);   // [MENU] the clickable MENU button on the lower screen
+    this.buildWorldOffsets();
+    this.processSpriteBackgrounds();   // [NEW] remove sprite backgrounds before sprites are created
+    if (window.PMAudio) window.PMAudio.leaveBattle();   // back from a battle: its music is off, the map music may play again
+    this.updateMapMusic(this.currentMapKey);
+
+    this.renderUnifiedWorld();
+    // [SAVE] the first time this scene starts after the page loaded: stand where the save was made, looking the same way
+    if (!this._spawnFromSave) {
+      this._spawnFromSave = true;
+      const sp = window.SaveSystem && window.SaveSystem.savedPos && window.SaveSystem.savedPos();
+      if (sp && (!sp.map || sp.map === this.currentMapKey)) { this.playerGridX = sp.x; this.playerGridY = sp.y; if (['up', 'down', 'left', 'right'].includes(sp.dir)) this.lastDir = sp.dir; console.log('[SAVE] spawning at the saved position', sp); }
+    }
+    this.spawnAllEvents();
+    this.spawnPlayer();
+    if (window.OWFollower) window.OWFollower.attach(this);   // [FOLLOWER] the first party Pokémon walks behind the player
+
+    this.cursors = this.input.keyboard.createCursorKeys();
+    { const K = Phaser.Input.Keyboard.KeyCodes, kk = c => this.input.keyboard.addKey(c, false); this.wasd = { up: kk(K.W), left: kk(K.A), down: kk(K.S), right: kk(K.D) }; }   // W A S D walk too (no key capture, so typing still works)
+    this.followKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);   // SPACE = talk to the follower Pokémon
+    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);   // the interact / talk key is Z (the variable keeps its old name)
+    // [SUMMARY] Enter opens the party / summary screen (js/PokemonSummary.js)
+    this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    this.bagKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);   // [BAG] B opens the bag (js/BagMenu.js)
+
+    // [DUAL SCREEN] the overworld only uses the TOP screen (480x320 = the GBA screen at 2x). The bottom screen is left free.
+    // Change the size in OW_TEXT.screen (overworld_textbox.js).
+    const scr = (window.OW_TEXT && window.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 };
+    this.cameras.main.setViewport(scr.x, scr.y, scr.w, scr.h);
+
+    // [CHANGED] lerp 1 = camera sits exactly on the player every frame (no trailing delay)
+    this.cameras.main.startFollow(this.player, true, 1, 1);
+    this.cameras.main.setRoundPixels(true);
+
+    this.weather = new OverworldWeatherSystem(this);
+    this.weather.set(this.currentMap.weather, true, this.currentMapKey);
+    window.debugWeather = (name) => this.weather.set(name, false, this.currentMapKey);
+    this.events.once('shutdown', () => { if (this.weather) this.weather.destroy(); });
+
+    this.time.addEvent({
+      delay: 1200,
+      loop: true,
+      callback: () => this.updateNPCMovement(),
+    });
+
+    this.showMapBanner();                       // [BANNER]
+    { const lbE = window.GameStateManager && window.GameStateManager.lastBattle; if (lbE && lbE.evolutions && lbE.evolutions.length) { this.evolving = true; this._evoPre = true; } }   // the map is already paused during the 900 ms before the evolution starts
+    if (window.OWUI && window.OWUI.runEvolutions) this.time.delayedCall(900, () => window.OWUI.runEvolutions(this));   // [EVOLVE] Pokémon that reached their level in the last battle
+    if (window.OWWarm) window.OWWarm.start();   // [SPEED] warm the menu / party pictures in the background
+
+    // [NEW] safety net: if the music stopped for any reason, start it again
+    this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => this.updateMapMusic(this.currentMapKey),
+    });
+  }
+
+  // [BANNER] the map-name banner (js/OverworldUI.js): once per map change, and when the game starts / a save is loaded.
+  // Not shown again when the scene restarts on the same map (coming back from a battle). `banner: false` in a map hides it there.
+  showMapBanner() {
+    const k = this.currentMapKey, m = this.currentMap;
+    if (!window.OWUI || !m || m.banner === false || window._lastBannerMap === k) return;
+    window._lastBannerMap = k;
+    this.time.delayedCall(350, () => { if (this.sys && this.sys.isActive() && this.currentMapKey === k) window.OWUI.banner(this, m.map || k); });
+  }
+
+  // ===========================================================================
+  // MUSIC: loops forever, only changes when the new map uses a different track
+  // ===========================================================================
+  updateMapMusic(mapKey) {
+    if (window.PMAudio ? !window.PMAudio.mapOk() : (window.BattleTransition && window.BattleTransition.busy)) return;   // a battle is starting / running: the map music must stay stopped (this method is also called by a timer and by the audio unlock)
+    const mapData = window.OverworldMaps[mapKey];
+    if (!mapData || !mapData.music) return;
+
+    const path = mapData.music;
+    const key = `map_music_${path}`;
+    const cur = window.currentGlobalMusic;
+    const alive = cur && cur.manager && !cur.pendingRemove;
+
+    // Same track: leave it alone (just make sure it is still running and looping)
+    if (alive && window.currentGlobalMusicPath === path) {
+      if (cur.setLoop) cur.setLoop(true);
+      if (cur.isPaused) cur.resume();
+      else if (!cur.isPlaying && !this.sound.locked) cur.play();
+      return;
+    }
+
+    // Different track: stop the old one
+    if (alive) {
+      cur.stop();
+      cur.destroy();
+    }
+    window.currentGlobalMusic = null;
+    window.currentGlobalMusicPath = null;
+
+    if (!this.cache.audio.exists(key)) {
+      // [SPEED] not loaded yet: fetch it in the background, then start it (the scene is already playable)
+      this._musicLoading = this._musicLoading || {};
+      if (!this._musicLoading[key] && this.load) {
+        this._musicLoading[key] = true;
+        this.load.audio(key, path);
+        this.load.once('filecomplete-audio-' + key, () => { this._musicLoading[key] = false; if (this.sys && this.sys.isActive()) this.updateMapMusic(this.currentMapKey); });
+        this.load.once('loaderror', () => { this._musicLoading[key] = false; });
+        if (!this.load.isLoading()) this.load.start();
+      }
+      return;
+    }
+
+    this.sound.pauseOnBlur = false;   // keep playing when the tab loses focus
+    const snd = this.sound.add(key, { loop: true, volume: 0.5 });
+    snd.on('complete', () => { if (window.currentGlobalMusic === snd && snd.manager) snd.play(); });
+    window.currentGlobalMusic = snd;
+    window.currentGlobalMusicPath = path;
+    snd.play();
+  }
+
+  // ===========================================================================
+  // SPRITE BACKGROUND REMOVAL (colour of the first pixel)
+  // ===========================================================================
+  processSpriteBackgrounds() {
+    const keys = new Set(['brendan_ow']);
+    for (const entry of Object.values(OW_TABLE() || {})) {
+      if (!entry || !entry.owSprite) continue;
+      keys.add(entry.spriteID || null);
+    }
+    for (const [id, entry] of Object.entries(OW_TABLE() || {})) {
+      if (entry && entry.owSprite) keys.add(entry.spriteID || `${id.toLowerCase()}_ow`);
+    }
+    keys.delete(null);
+    for (const key of keys) {
+      if (this.textures.exists(key)) this.removeSpriteBackground(key);
+    }
+  }
+
+  removeSpriteBackground(key) {
+    const tex = this.textures.get(key);
+    if (!tex || tex.owBgDone) return;
+
+    const f0 = tex.get(0);
+    if (!f0) return;
+    const fw = f0.width, fh = f0.height;
+    const img = tex.getSourceImage();
+    const W = img.width, H = img.height;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+
+    let data;
+    try {
+      data = ctx.getImageData(0, 0, W, H);
+    } catch (e) {
+      console.warn(`[bg] Can't read pixels of "${key}" (browser security, run the game from a local server):`, e.message);
+      tex.owBgDone = true;
+      return;
+    }
+    const px = data.data;
+
+    // First pixel already transparent -> nothing to do
+    if (px[3] === 0) { tex.owBgDone = true; return; }
+
+    const kr = px[0], kg = px[1], kb = px[2];
+    const tol = OW_BG_TOLERANCE;
+    const isBg = (i) => px[i + 3] > 0
+      && Math.abs(px[i] - kr) <= tol && Math.abs(px[i + 1] - kg) <= tol && Math.abs(px[i + 2] - kb) <= tol;
+
+    if (OW_BG_MODE === 'all') {
+      for (let i = 0; i < px.length; i += 4) if (isBg(i)) px[i + 3] = 0;
+    } else {
+      // Flood fill inward from the border of every frame
+      const cols = Math.floor(W / fw), rows = Math.floor(H / fh);
+      const visited = new Uint8Array(W * H);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x0 = c * fw, y0 = r * fh;
+          const stack = [];
+          const seed = (x, y) => {
+            const idx = y * W + x;
+            if (!visited[idx] && isBg(idx * 4)) { visited[idx] = 1; stack.push(idx); }
+          };
+          for (let x = 0; x < fw; x++) { seed(x0 + x, y0); seed(x0 + x, y0 + fh - 1); }
+          for (let y = 0; y < fh; y++) { seed(x0, y0 + y); seed(x0 + fw - 1, y0 + y); }
+          while (stack.length) {
+            const idx = stack.pop();
+            px[idx * 4 + 3] = 0;
+            const x = idx % W, y = (idx / W) | 0;
+            if (x > x0) seed(x - 1, y);
+            if (x < x0 + fw - 1) seed(x + 1, y);
+            if (y > y0) seed(x, y - 1);
+            if (y < y0 + fh - 1) seed(x, y + 1);
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(data, 0, 0);
+
+    // Replace the texture with the cleaned canvas and re-slice it into the same frames
+    this.textures.remove(key);
+    const nt = this.textures.addCanvas(key, canvas);
+    const cols = Math.floor(W / fw), rows = Math.floor(H / fh);
+    let i = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) nt.add(i++, 0, c * fw, r * fh, fw, fh);
+    }
+    nt.owBgDone = true;
+  }
+
+  // ===========================================================================
+  // MAP NAME / WORLD LAYOUT
+  // ===========================================================================
+  findMapKeyByName(nameOrKey) {
+    if (!window.OverworldMaps || nameOrKey == null) return null;
+    if (window.OverworldMaps[nameOrKey]) return nameOrKey;
+
+    const normalizedTarget = String(nameOrKey).replace(/[\s_]/g, '').toLowerCase();
+
+    for (const [key, data] of Object.entries(window.OverworldMaps)) {
+      const normalizedKey = key.replace(/[\s_]/g, '').toLowerCase();
+      const normalizedMapName = (data.map || '').replace(/[\s_]/g, '').toLowerCase();
+
+      if (normalizedKey === normalizedTarget || normalizedMapName === normalizedTarget) {
+        return key;
+      }
+    }
+    return null;
+  }
+
+  resolveConn(conn) {
+    return conn && conn[0] ? this.findMapKeyByName(conn[0]) : null;
+  }
+
+  // [CHANGED] Computed once. Maps that are not connected to the first map are placed on their
+  // own "island" far to the right, so they no longer draw on top of the first map (needed for warps).
+  buildWorldOffsets() {
+    const maps = window.OverworldMaps;
+    const offs = {};
+
+    const place = (startKey, sx, sy) => {
+      offs[startKey] = { x: sx, y: sy };
+      const queue = [startKey];
+      while (queue.length) {
+        const key = queue.shift();
+        const m = maps[key];
+        const o = offs[key];
+        for (const [dir, conn] of Object.entries(m.connections || {})) {
+          const nk = this.resolveConn(conn);
+          if (!nk || offs[nk]) continue;
+          const n = maps[nk];
+          const shift = (conn[2] || 0) * 32;
+          let x, y;
+          if (dir === 'up') { x = o.x + shift; y = o.y - n.dimensions.height * 32; }
+          else if (dir === 'down') { x = o.x + shift; y = o.y + m.dimensions.height * 32; }
+          else if (dir === 'left') { x = o.x - n.dimensions.width * 32; y = o.y + shift; }
+          else if (dir === 'right') { x = o.x + m.dimensions.width * 32; y = o.y + shift; }
+          else continue;
+          offs[nk] = { x, y };
+          queue.push(nk);
+        }
+      }
+    };
+
+    const keys = Object.keys(maps);
+    place(keys[0], 0, 0);
+    for (const k of keys) {
+      if (offs[k]) continue;
+      let right = 0;
+      for (const [kk, o] of Object.entries(offs)) right = Math.max(right, o.x + maps[kk].dimensions.width * 32);
+      place(k, right + 20 * 32, 0);
+    }
+    this.worldOffsets = offs;
+  }
+
+  getMapWorldOffset(targetKey) {
+    if (!this.worldOffsets) this.buildWorldOffsets();
+    const k = this.findMapKeyByName(targetKey);
+    return (k && this.worldOffsets[k]) || { x: 0, y: 0 };
+  }
+
+  // World rectangles of the current map and every map connected to it (what can be on screen)
+  getConnectedMapRects() {
+    const maps = window.OverworldMaps;
+    const rects = {};
+    const start = maps[this.currentMapKey] ? this.currentMapKey : Object.keys(maps)[0];
+    const seen = new Set([start]);
+    const queue = [start];
+    while (queue.length) {
+      const key = queue.shift();
+      const m = maps[key];
+      const off = this.getMapWorldOffset(key);
+      rects[key] = { x: off.x, y: off.y, w: m.dimensions.width * 32, h: m.dimensions.height * 32 };
+      for (const conn of Object.values(m.connections || {})) {
+        const nk = this.resolveConn(conn);
+        if (nk && !seen.has(nk)) { seen.add(nk); queue.push(nk); }
+      }
+    }
+    return rects;
+  }
+
+  renderUnifiedWorld() {
+    if (this.mapGroup) {
+      this.mapGroup.destroy(true);
+    }
+    this.mapGroup = this.add.group();
+    this.animTiles = [];
+
+    if (!window.OverworldMaps) return;
+
+    for (const [mapKey, mapData] of Object.entries(window.OverworldMaps)) {
+      const offsetPos = this.getMapWorldOffset(mapKey);
+      this.renderMapGrid(mapData, offsetPos.x, offsetPos.y, mapKey);
+    }
+    this.renderBorders();
+  }
+
+  // Creates one tile image for (tileID, frameID) and registers it for tile animation. Returns null when it cannot be drawn.
+  addTileImage(tileID, frameID, x, y, depth) {
+    const tileDef = window.OverworldTiles && window.OverworldTiles[tileID];
+    if (!tileDef) return null;
+    let key, frame = 0, scale, multi = false;
+    if (tileDef.tileType === 'Multi-tile' || tileDef.tileType === 'Multi-tile Pixel Split') {
+      key = `tile_sheet_${tileID}`;
+      if (!this.textures.exists(key)) return null;
+      const total = Math.max(1, this.textures.get(key).frameTotal - 1);
+      frame = Math.min(frameID, total - 1); scale = 2; multi = true;
+    } else if (tileDef.isAnimated) {
+      key = `tile_anim_${tileID}`;
+      scale = 32 / (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
+    } else {
+      key = `tile_img_${tileID}`; scale = 2;
+    }
+    if (!this.textures.exists(key)) return null;
+    const img = this.add.image(x, y, key, frame).setScale(scale).setDepth(depth + (multi ? 2 : 0));
+    this.mapGroup.add(img);
+    if (tileDef.isAnimated) {
+      const tex = this.textures.get(key);
+      const total = Math.max(1, tex.frameTotal - 1);
+      const fw = multi ? 16 : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
+      const cols = Math.max(1, Math.floor(tex.getSourceImage().width / fw));
+      let base, count;
+      if (multi) { base = Math.floor(frame / cols) * cols; count = Math.min(cols, total - base); }
+      else { base = 0; count = cols > 1 ? cols : total; }
+      if (count > 1) this.animTiles.push({ img, base, count });
+    }
+    return img;
+  }
+
+  // BORDER: every map has an optional `borderData` block (width x height, default 2x2, with up to 5 tile layers).
+  // It repeats over the empty space around the maps (up to BORDER_RANGE tiles away). It is always impassable
+  // (the player cannot leave a map where there is no connection), so only the picture matters here.
+  renderBorders() {
+    const maps = window.OverworldMaps;
+    if (!maps) return;
+    const T = 32, BORDER_RANGE = OW_BORDER_RANGE;
+    const info = [];
+    for (const [k, m] of Object.entries(maps)) {
+      const off = this.getMapWorldOffset(k);
+      const b = m.borderData;
+      let layers = [];
+      if (b) {
+        for (let l = 1; l <= 5; l++) {
+          const g = b['tileData_' + l];
+          if (Array.isArray(g) && g.some(r => Array.isArray(r) && r.some(v => v && String(v).trim() !== ''))) layers.push({ l, g });
+        }
+      }
+      info.push({
+        k, b, layers,
+        bw: (b && (b.width || (b.tileData_1 && b.tileData_1[0] && b.tileData_1[0].length))) || 2,
+        bh: (b && (b.height || (b.tileData_1 && b.tileData_1.length))) || 2,
+        x0: Math.round(off.x / T), y0: Math.round(off.y / T), w: m.dimensions.width, h: m.dimensions.height
+      });
+    }
+    // the nearest map owns a cell; cells inside any map are never border
+    const ownerOf = (x, y) => {
+      let best = null, bd = Infinity;
+      for (const i of info) {
+        const d = Math.max(i.x0 - x, x - (i.x0 + i.w - 1), i.y0 - y, y - (i.y0 + i.h - 1));
+        if (d <= 0) return null;
+        if (d < bd) { bd = d; best = i; }
+      }
+      return bd <= BORDER_RANGE ? best : null;
+    };
+    let drawn = 0;
+    for (const me of info) {
+      if (!me.layers.length) continue;
+      for (let y = me.y0 - BORDER_RANGE; y < me.y0 + me.h + BORDER_RANGE; y++) {
+        for (let x = me.x0 - BORDER_RANGE; x < me.x0 + me.w + BORDER_RANGE; x++) {
+          if (ownerOf(x, y) !== me) continue;
+          const bx = (((x - me.x0) % me.bw) + me.bw) % me.bw;
+          const by = (((y - me.y0) % me.bh) + me.bh) % me.bh;
+          for (const { l, g } of me.layers) {
+            const cell = this.parseTileCell(g[by] && g[by][bx]);
+            if (!cell) continue;
+            // below every map tile (-300 and up)
+            if (this.addTileImage(cell.tileID, cell.frameID, x * T + T / 2, y * T + T / 2, -400 + (l - 1) * 10)) drawn++;
+          }
+        }
+      }
+    }
+    console.log(`[render] border: drew ${drawn} tiles`);
+  }
+
+  getTileGrid(mapData) {
+    if (!mapData) return null;
+
+    for (const k of ['tileData_1', 'tileData', 'blockData', 'tiles', 'data', 'mapMatrix', 'grid', 'matrix', 'layout']) {
+      const v = mapData[k];
+      if (Array.isArray(v) && Array.isArray(v[0])) return v;
+    }
+
+    for (const [k, v] of Object.entries(mapData)) {
+      if (Array.isArray(v) && Array.isArray(v[0])) return v;
+      if (Array.isArray(v) && v[0] && typeof v[0] === 'object') {
+        const inner = Object.values(v[0]).find(x => Array.isArray(x) && Array.isArray(x[0]));
+        if (inner) return inner;
+      }
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const inner = Object.values(v).find(x => Array.isArray(x) && Array.isArray(x[0]));
+        if (inner) return inner;
+      }
+    }
+    return null;
+  }
+
+  // Up to 5 stacked tile layers: tileData_1 (bottom) ... tileData_5 (top).
+  // An old single `tileData` grid counts as layer 1. Empty cells ("") are skipped.
+  getTileLayers(mapData) {
+    const out = [];
+    for (let l = 1; l <= 5; l++) {
+      const g = mapData[`tileData_${l}`];
+      if (Array.isArray(g) && Array.isArray(g[0])) out.push({ layer: l, grid: g });
+    }
+    if (!out.length) {
+      const g = this.getTileGrid(mapData);
+      if (g) out.push({ layer: 1, grid: g });
+    }
+    return out;
+  }
+
+  parseTileCell(v) {
+    if (typeof v === 'number') v = `${v}|0`;
+    if (typeof v !== 'string' || v.trim() === '') return null;
+    // cell format: "tileID|frameID|behavior"  behavior: 0 passable, 1 blocked, 2 passable (tile drawn above NPCs/player), 3 surfable, 4 diveable
+    const [a, b, c] = v.split('|');
+    const id = parseInt(a);
+    if (Number.isNaN(id) || id < 0) return null;
+    return { tileID: id, frameID: parseInt(b) || 0, pass: parseInt(c) || 0 };
+  }
+
+  renderMapGrid(mapData, offsetX, offsetY, label = '?') {
+    const layers = this.getTileLayers(mapData);
+    if (!layers.length) {
+      console.warn(`[render] "${label}": no tile layers found. Keys on this map:`, Object.keys(mapData));
+      return;
+    }
+
+    const tileSize = 32;
+    const skipped = { noDef: new Set(), noTexture: new Set() };
+    let drawn = 0;
+
+    for (const { layer, grid } of layers) {
+      for (let row = 0; row < grid.length; row++) {
+        if (!Array.isArray(grid[row])) continue;
+        for (let col = 0; col < grid[row].length; col++) {
+          const cell = this.parseTileCell(grid[row][col]);
+          if (!cell) continue;
+          const { tileID, frameID, pass } = cell;
+
+          const tileDef = window.OverworldTiles && window.OverworldTiles[tileID];
+          if (!tileDef) { skipped.noDef.add(tileID); continue; }
+
+          let key, frame = 0, scale, multi = false;
+          if (tileDef.tileType === 'Multi-tile' || tileDef.tileType === 'Multi-tile Pixel Split') {
+            key = `tile_sheet_${tileID}`;
+            const tex = this.textures.exists(key) ? this.textures.get(key) : null;
+            // trust the real sheet size, not the (possibly wrong) frames value in tiles.js
+            const total = tex ? Math.max(1, tex.frameTotal - 1) : (tileDef.frames || 1);
+            frame = Math.min(frameID, total - 1);
+            scale = 2; multi = true;
+          } else if (tileDef.isAnimated) {
+            key = `tile_anim_${tileID}`;
+            const fw = parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16;
+            scale = 32 / fw;
+          } else {
+            key = `tile_img_${tileID}`;
+            scale = 2;
+          }
+
+          if (!this.textures.exists(key)) { skipped.noTexture.add(key); continue; }
+
+          // layer 1 is the lowest (-300), layer 5 the highest (-100); all stay below NPCs and the player
+          // behavior 2 tiles draw above NPCs and the player (below the weather, which is at 5000)
+          const depth = pass === 2 ? 4000 + layer : -300 + (layer - 1) * 50 + (multi ? 10 : 0);
+          const x = Math.round(offsetX + col * tileSize + tileSize / 2);
+          const y = Math.round(offsetY + row * tileSize + tileSize / 2);
+          const img = this.add.image(x, y, key, frame).setScale(scale).setDepth(depth);
+          this.mapGroup.add(img);
+          // isAnimated: cycle through the frames of the same row of the sheet
+          if (tileDef.isAnimated) {
+            const tex = this.textures.get(key);
+            const total = Math.max(1, tex.frameTotal - 1);
+            const fw = multi ? 16 : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
+            const cols = Math.max(1, Math.floor(tex.getSourceImage().width / fw));
+            let base, count;
+            if (multi) { base = Math.floor(frame / cols) * cols; count = Math.min(cols, total - base); }
+            else { base = 0; count = cols > 1 ? cols : total; }
+            if (count > 1) this.animTiles.push({ img, base, count });
+          }
+          drawn++;
+        }
+      }
+    }
+
+    console.log(`[render] "${label}": drew ${drawn} tiles on ${layers.length} layer(s)`);
+    if (skipped.noDef.size) console.warn(`[render] "${label}": tile IDs missing from OverworldTiles:`, [...skipped.noDef]);
+    if (skipped.noTexture.size) console.warn(`[render] "${label}": textures not loaded:`, [...skipped.noTexture]);
+  }
+
+  logCurrentTileDetails(gridX, gridY, mapKey = this.currentMapKey) {
+    const targetMap = window.OverworldMaps[mapKey];
+    if (!targetMap) return;
+    console.group(`🔍 [Tile Inspector] "${mapKey}" at (${gridX}, ${gridY})`);
+    for (const { layer, grid } of this.getTileLayers(targetMap)) {
+      const c = this.parseTileCell(grid[gridY] && grid[gridY][gridX]);
+      if (!c) { console.log(`• Layer ${layer}: empty`); continue; }
+      const def = (window.OverworldTiles && window.OverworldTiles[c.tileID]) || {};
+      console.log(`• Layer ${layer}: tile ${c.tileID} (${def.tileName || 'Unknown'}) frame ${c.frameID} · behavior: ${['passable', 'BLOCKED', 'passable (above NPC)', 'surf', 'dive', 'GRASS (wild)'][c.pass] || c.pass}`);
+    }
+    console.groupEnd();
+  }
+
+  findFreeSpawnTile(startX, startY) {
+    const { width, height } = this.currentMap.dimensions;
+    const seen = new Set();
+    const queue = [[startX, startY]];
+
+    while (queue.length) {
+      const [x, y] = queue.shift();
+      const k = `${x},${y}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (x < 0 || y < 0 || x >= width || y >= height) continue;
+      if (this.isPassable(x, y)) return { x, y };
+      queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    return { x: startX, y: startY };
+  }
+
+  spawnPlayer() {
+    const free = this.findFreeSpawnTile(this.playerGridX, this.playerGridY);
+    this.playerGridX = free.x;
+    this.playerGridY = free.y;
+
+    const mapOffset = this.getMapWorldOffset(this.currentMapKey);
+    const px = Math.round(mapOffset.x + this.playerGridX * 32 + 16);
+    const py = Math.round(mapOffset.y + this.playerGridY * 32 + 16);
+
+    if (!this.player) {
+      this.player = this.add.sprite(px, py, 'brendan_ow', 0).setOrigin(0.5, 0.85);
+      const sd0 = window.GameStateManager && window.GameStateManager.saveData;
+      const dir0 = ['up', 'down', 'left', 'right'].includes(this.lastDir) ? this.lastDir : (sd0 && ['up', 'down', 'left', 'right'].includes(sd0.facing) ? sd0.facing : 'down');
+      this.player.direction = dir0;   // the way the player was facing before the battle / menu / map change
+      if (window.getOverworldFrame) this.player.setFrame(window.getOverworldFrame(dir0, 0));
+    } else {
+      this.player.setPosition(px, py);
+    }
+  }
+
+  // ===========================================================================
+  // EVENTS
+  // ===========================================================================
+  spawnAllEvents() {
+    if (this.npcGroup) {
+      this.npcGroup.destroy(true);
+    }
+    this.npcGroup = this.add.group();
+    this.npcs = [];
+    this.triggers = [];
+
+    for (const [mapKey, mapData] of Object.entries(window.OverworldMaps)) {
+      const offsetPos = this.getMapWorldOffset(mapKey);
+      this.spawnMapEvents(mapData, mapKey, offsetPos.x, offsetPos.y);
+    }
+  }
+
+  spawnMapEvents(mapData, mapKey, offsetX, offsetY) {
+    if (!mapData.events) return;
+
+    for (const [key, eventData] of Object.entries(mapData.events)) {
+      // [NEW] Warp and Script events are walk-on triggers. They are NOT added to this.npcs,
+      // so they never block the player (isPassable only checks this.npcs).
+      if (eventData.eventType === 'Warp' || eventData.eventType === 'Script' || eventData.eventType === 'Script Tile') {
+        this.triggers.push({
+          type: eventData.eventType === 'Warp' ? 'Warp' : 'Script',
+          key,
+          mapKey,
+          config: eventData,
+          wx: Math.round(offsetX / 32) + (eventData.xPos || 0),
+          wy: Math.round(offsetY / 32) + (eventData.yPos || 0),
+        });
+        continue;
+      }
+
+      if (eventData.eventType === 'NPC' && eventData.owID) {
+        const tableEntry = OW_TABLE()[eventData.owID];
+        if (!tableEntry) continue;
+        // [SCRIPTS] hidden with the hideobject command
+        if (window.OverworldScriptEngine && window.OverworldScriptEngine.isHidden(mapKey, key)) continue;
+
+        const textureKey = tableEntry.spriteID || `${eventData.owID.toLowerCase()}_ow`;
+        if (!this.textures.exists(textureKey)) continue;
+
+        const frame0 = this.textures.getFrame(textureKey, 0);
+        const isBuilding = tableEntry.owType === 'Building';
+
+        const x = Math.round(offsetX + eventData.xPos * 32 + 16);
+        const y = Math.round(offsetY + eventData.yPos * 32 + (isBuilding ? 32 : 16));
+
+        const npcSprite = this.add.sprite(x, y, textureKey, 0)
+          .setOrigin(0.5, isBuilding ? 1 : 0.85);
+
+        npcSprite.footprint = isBuilding
+          ? { w: Math.ceil(frame0.width / 32), h: Math.ceil(frame0.height / 32) }
+          : { w: 1, h: 1 };
+
+        npcSprite.direction = 'down';
+        npcSprite.eventConfig = eventData;
+        npcSprite.eventKey = key;   // [SCRIPTS] lets scripts say applymovement NPC_Portia
+        npcSprite.mapName = mapKey;
+        npcSprite.setDepth(y);
+
+        this.npcs.push(npcSprite);
+        this.npcGroup.add(npcSprite);
+      }
+    }
+  }
+
+  updateNPCMovement() {
+    if (this.isLocked || this.scriptRunning || !this.npcs || this.npcs.length === 0) return;
+
+    this.npcs.forEach(npc => {
+      if (window.OverworldMovement && window.OverworldMovement.tick) { window.OverworldMovement.tick(npc); return; }
+      const config = npc.eventConfig;
+      if (!config || config.movementType !== 'MOVEMENT_TYPE_WANDER_LEFT_RIGHT') return;
+
+      const moveTypes = ['walk_left', 'walk_right'];
+      const chosenMove = Phaser.Math.RND.pick(moveTypes);
+
+      if (window.OverworldMovement) {
+        window.OverworldMovement.execute(npc, chosenMove);
+      }
+    });
+  }
+
+  npcOccupiesTile(npc, worldTX, worldTY) {
+    const isBuilding = npc.originY === 1;
+    const baseX = Math.round((npc.x - 16) / 32);
+    const baseY = Math.round((npc.y - (isBuilding ? 32 : 16)) / 32);
+    const fp = npc.footprint || { w: 1, h: 1 };
+
+    const minX = baseX - Math.floor((fp.w - 1) / 2);
+    const maxX = baseX + Math.floor(fp.w / 2);
+    const minY = baseY - (fp.h - 1);
+
+    if (worldTX >= minX && worldTX <= maxX && worldTY >= minY && worldTY <= baseY) return true;
+    // a walking NPC also holds the tile it left and the tile it is walking onto (see movement_type.js), so the player can never share a tile with it
+    if (npc.dest && npc.dest.x === worldTX && npc.dest.y === worldTY) return true;
+    if (npc.src && npc.src.x === worldTX && npc.src.y === worldTY) return true;
+    return false;
+  }
+
+  isPassable(gridX, gridY) {
+    const cols = this.currentMap.dimensions.width;
+    const rows = this.currentMap.dimensions.height;
+    const connections = this.currentMap.connections || {};
+
+    let targetMap = this.currentMap;
+    let targetMapKey = this.currentMapKey;
+    let localX = gridX;
+    let localY = gridY;
+
+    if (gridY < 0) {
+      const k = this.resolveConn(connections.up);
+      if (!k) return false;
+      targetMapKey = k;
+      targetMap = window.OverworldMaps[k];
+      localX = gridX - (connections.up[2] || 0);
+      localY = targetMap.dimensions.height - 1;
+    } else if (gridY >= rows) {
+      const k = this.resolveConn(connections.down);
+      if (!k) return false;
+      targetMapKey = k;
+      targetMap = window.OverworldMaps[k];
+      localX = gridX - (connections.down[2] || 0);
+      localY = 0;
+    } else if (gridX < 0) {
+      const k = this.resolveConn(connections.left);
+      if (!k) return false;
+      targetMapKey = k;
+      targetMap = window.OverworldMaps[k];
+      localX = targetMap.dimensions.width - 1;
+      localY = gridY - (connections.left[2] || 0);
+    } else if (gridX >= cols) {
+      const k = this.resolveConn(connections.right);
+      if (!k) return false;
+      targetMapKey = k;
+      targetMap = window.OverworldMaps[k];
+      localX = 0;
+      localY = gridY - (connections.right[2] || 0);
+    }
+
+    // A tile is blocked if ANY of its layers is not passable
+    const layers = this.getTileLayers(targetMap);
+    if (!layers.length) return false;
+    const base = layers[0].grid;
+    if (localY < 0 || localY >= base.length || localX < 0 || localX >= base[0].length) return false;
+    for (const { grid } of layers) {
+      const c = this.parseTileCell(grid[localY] && grid[localY][localX]);
+      if (!c) continue;
+      if (c.pass === 1) return false;                     // blocked
+      if (c.pass === 3 && !this.isSurfing) return false;  // surfable water
+      if (c.pass === 4 && !this.isDiving) return false;   // diveable water
+    }
+
+    // Only NPCs/buildings block. Warp and Script triggers are not in this.npcs.
+    if (this.npcs) {
+      const targetOffset = this.getMapWorldOffset(targetMapKey);
+      const worldTX = Math.round(targetOffset.x / 32) + localX;
+      const worldTY = Math.round(targetOffset.y / 32) + localY;
+
+      for (const npc of this.npcs) {
+        if (this.npcOccupiesTile(npc, worldTX, worldTY)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  // ===========================================================================
+  // MOVEMENT
+  // ===========================================================================
+  movePlayerTo(targetX, targetY, direction, onDone) {
+    this.isMoving = true;
+    const mapOffset = this.getMapWorldOffset(this.currentMapKey);
+
+    const destX = Math.round(mapOffset.x + targetX * 32 + 16);
+    const destY = Math.round(mapOffset.y + targetY * 32 + 16);
+
+    this.walkStep = this.walkStep === 1 ? 2 : 1;
+    this.player.setFrame(window.getOverworldFrame(direction, this.walkStep));
+    this.playerDest = { x: Math.round((destX - 16) / 32), y: Math.round((destY - 16) / 32) };   // NPCs treat this tile as taken while the step lasts
+
+    this.tweens.add({
+      targets: this.player,
+      x: destX,
+      y: destY,
+      duration: 150,
+      onComplete: () => {
+        this.playerGridX = targetX;
+        this.playerGridY = targetY;
+        this.player.setPosition(destX, destY);
+        this.player.setFrame(window.getOverworldFrame(direction, 0));
+        this.isMoving = false;
+        this.playerDest = null;
+
+        this.logCurrentTileDetails(targetX, targetY, this.currentMapKey);
+        if (onDone) onDone();
+        else this.handleTriggers();
+      },
+    });
+  }
+
+  tryInteract() {
+    if (!this.npcs || this.npcs.length === 0) return;
+
+    let targetX = Math.round((this.player.x - 16) / 32);
+    let targetY = Math.round((this.player.y - 16) / 32);
+    if (this.player.direction === 'up') targetY -= 1;
+    else if (this.player.direction === 'down') targetY += 1;
+    else if (this.player.direction === 'left') targetX -= 1;
+    else if (this.player.direction === 'right') targetX += 1;
+
+    const targetNPC = this.npcs.find(npc => this.npcOccupiesTile(npc, targetX, targetY));
+
+    if (targetNPC && targetNPC.eventConfig) {
+      const scriptName = targetNPC.eventConfig.script;
+      if (!scriptName || this.scriptRunning) return;
+      this.activeNPC = targetNPC;
+      if (window.OverworldScriptEngine) {
+        window.OverworldScriptEngine.runScript(this, scriptName);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // WALK-ON TRIGGERS (Script + Warp)
+  // ===========================================================================
+  handleTriggers() {
+    if (this.warping || !this.triggers || !this.triggers.length) return;
+
+    const off = this.getMapWorldOffset(this.currentMapKey);
+    const wx = Math.round(off.x / 32) + this.playerGridX;
+    const wy = Math.round(off.y / 32) + this.playerGridY;
+    const t = this.triggers.find(tr => tr.wx === wx && tr.wy === wy);
+    if (!t) return;
+    if (this.scriptRunning) return;
+
+    if (t.type === 'Warp') {
+      this.runWarp(t.config);
+    } else if (t.type === 'Script' && t.config.script && window.OverworldScriptEngine) {
+      // [SCRIPTS] Script Tile: only runs while the variable `scriptVar` equals `varValue`
+      const sv = t.config.scriptVar;
+      if (sv && window.OverworldScriptEngine.getVar(sv) !== (Number(t.config.varValue) || 0)) return;
+      this.activeNPC = null;
+      window.OverworldScriptEngine.runScript(this, t.config.script);
+    }
+  }
+
+  // ===========================================================================
+  // WARPS
+  // Warp event fields (in overworld_map.js):
+  //   xPos, yPos   : the tile that triggers the warp (on the map the event is in)
+  //   map          : target map
+  //   targetWarp   : (optional) name of a Warp event in the target map, e.g. "Warp_1".
+  //                  The player arrives on that warp's tile. "warpName" also works.
+  //   targetX/Y    : (optional) exact arrival tile; wins over targetWarp
+  //   facing       : "Up" | "Down" | "Left" | "Right" (how the player faces on arrival)
+  //   warpType     : "Teleport" | "Normal" | "Hole"
+  // If neither targetWarp nor targetX/Y is given, the player arrives at the first Warp in the
+  // target map that points back to this map, or at the centre of the map as a last resort.
+  // ===========================================================================
+  runWarp(cfg) {
+    if (this.warping) return;
+
+    const targetKey = this.findMapKeyByName(cfg.map);
+    if (!targetKey) {
+      console.warn(`[warp] Target map "${cfg.map}" not found.`);
+      return;
+    }
+
+    const dest = this.resolveWarpDestination(cfg, targetKey);
+    const facing = String(cfg.facing || this.player.direction || 'down').toLowerCase();
+    const dir = OW_DIRS[facing] ? facing : 'down';
+    const type = String(cfg.warpType || 'Normal').toLowerCase().replace(/[\s_\-]/g, '');
+
+    this.warping = true;
+    this.isMoving = true;
+
+    if (type === 'teleport') this.warpTeleport(targetKey, dest, dir);
+    else if (type === 'hole') this.warpHole(targetKey, dest, dir);
+    else this.warpNormal(targetKey, dest, dir);
+  }
+
+  resolveWarpDestination(cfg, targetKey) {
+    const tm = window.OverworldMaps[targetKey];
+    if (cfg.targetX != null && cfg.targetY != null) return { x: cfg.targetX, y: cfg.targetY };
+
+    const events = tm.events || {};
+    const name = cfg.targetWarp || cfg.warpName;
+    let w = name ? events[name] : null;
+    if (!w) {
+      w = Object.values(events).find(e => e.eventType === 'Warp' && this.findMapKeyByName(e.map) === this.currentMapKey);
+    }
+    if (w) return { x: w.xPos || 0, y: w.yPos || 0 };
+
+    return { x: Math.floor(tm.dimensions.width / 2), y: Math.floor(tm.dimensions.height / 2) };
+  }
+
+  // Moves the player (and the current-map state) to a tile of another map. No animation.
+  placePlayerAt(mapKey, gx, gy) {
+    this.currentMapKey = mapKey;
+    this.currentMap = window.OverworldMaps[mapKey];
+    this.playerGridX = gx;
+    this.playerGridY = gy;
+
+    if (window.GameStateManager && window.GameStateManager.saveData) {
+      window.GameStateManager.saveData.mapID = mapKey;
+      window.SaveSystem && window.SaveSystem.touch('map');   // [SAVE] no autosave: SaveSystem.save() runs from the start menu
+    }
+
+    this.updateMapMusic(mapKey);
+    if (this.weather) this.weather.set(this.currentMap.weather, false, mapKey);
+    this.showMapBanner();
+
+    const off = this.getMapWorldOffset(mapKey);
+    this.player.setPosition(Math.round(off.x + gx * 32 + 16), Math.round(off.y + gy * 32 + 16));
+  }
+
+  startSpin() {
+    const order = ['down', 'left', 'up', 'right'];
+    let i = 0;
+    this.stopSpinTimer();
+    this.spinTimer = this.time.addEvent({
+      delay: 60, loop: true,
+      callback: () => this.player.setFrame(window.getOverworldFrame(order[i++ % 4], 0)),
+    });
+  }
+
+  stopSpinTimer() {
+    if (this.spinTimer) { this.spinTimer.remove(false); this.spinTimer = null; }
+  }
+
+  faceAfterWarp(dir) {
+    this.stopSpinTimer();
+    this.player.direction = dir;
+    this.player.setFrame(window.getOverworldFrame(dir, 0));
+  }
+
+  finishWarp() {
+    this.player.setScale(1).setAlpha(1);
+    this.cameras.main.startFollow(this.player, true, 1, 1);
+    this.warping = false;
+    this.isMoving = false;
+  }
+
+  // Teleport: player spins up and out of the exit map, then spins down into the new map
+  warpTeleport(targetKey, dest, dir) {
+    const cam = this.cameras.main;
+    cam.stopFollow();
+    this.startSpin();
+
+    this.tweens.add({
+      targets: this.player,
+      y: this.player.y - 220, alpha: 0,
+      duration: 700, ease: 'Quad.easeIn',
+      onComplete: () => {
+        this.placePlayerAt(targetKey, dest.x, dest.y);
+        const landX = this.player.x, landY = this.player.y;
+        cam.centerOn(landX, landY);
+        this.player.setPosition(landX, landY - 220).setAlpha(0);
+
+        this.tweens.add({
+          targets: this.player,
+          y: landY, alpha: 1,
+          duration: 700, ease: 'Quad.easeOut',
+          onComplete: () => {
+            this.faceAfterWarp(dir);
+            this.finishWarp();
+          },
+        });
+      },
+    });
+  }
+
+  // Normal: screen fades to black, player appears on the target tile and walks one step the way they face
+  warpNormal(targetKey, dest, dir) {
+    const cam = this.cameras.main;
+    cam.fadeOut(250, 0, 0, 0);
+    cam.once('camerafadeoutcomplete', () => {
+      this.placePlayerAt(targetKey, dest.x, dest.y);
+      this.faceAfterWarp(dir);
+      cam.centerOn(this.player.x, this.player.y);
+      cam.fadeIn(250, 0, 0, 0);
+
+      this.time.delayedCall(300, () => {
+        const d = OW_DIRS[dir];
+        const nx = this.playerGridX + d.dx, ny = this.playerGridY + d.dy;
+        const { width, height } = this.currentMap.dimensions;
+        const inside = nx >= 0 && ny >= 0 && nx < width && ny < height;
+        if (inside && this.isPassable(nx, ny)) {
+          this.movePlayerTo(nx, ny, dir, () => this.finishWarp());
+        } else {
+          this.finishWarp();
+        }
+      });
+    });
+  }
+
+  // Hole: a hole opens under the player, who falls in; they drop in from above on the other side
+  warpHole(targetKey, dest, dir) {
+    const cam = this.cameras.main;
+    cam.stopFollow();
+    this.stopSpinTimer();
+
+    const hole = this.add.ellipse(this.player.x, this.player.y, 4, 2, 0x000000, 0.9)
+      .setDepth(this.player.y - 1);
+
+    this.tweens.add({
+      targets: hole, displayWidth: 30, displayHeight: 14,
+      duration: 300, ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: this.player,
+          y: this.player.y + 14, scaleX: 0.2, scaleY: 0.2, alpha: 0,
+          duration: 450, ease: 'Quad.easeIn',
+          onComplete: () => {
+            hole.destroy();
+            this.placePlayerAt(targetKey, dest.x, dest.y);
+            const landX = this.player.x, landY = this.player.y;
+            cam.centerOn(landX, landY);
+            this.player.setScale(1).setAlpha(1).setPosition(landX, landY - 320);
+            this.player.direction = dir;
+            this.player.setFrame(window.getOverworldFrame(dir, 0));
+
+            this.tweens.add({
+              targets: this.player,
+              y: landY, duration: 650, ease: 'Bounce.easeOut',
+              onComplete: () => {
+                cam.shake(120, 0.004);
+                this.faceAfterWarp(dir);
+                this.finishWarp();
+              },
+            });
+          },
+        });
+      },
+    });
+  }
+
+  // ===========================================================================
+  // UPDATE
+  // ===========================================================================
+  tickTileAnim(delta) {
+    if (!this.animTiles || !this.animTiles.length) return;
+    this.tileAnimMs = (this.tileAnimMs || 0) + delta;
+    const step = Math.floor(this.tileAnimMs / 300);
+    if (step === this.tileAnimStep) return;
+    this.tileAnimStep = step;
+    for (const t of this.animTiles) t.img.setFrame(t.base + (step % t.count));
+  }
+
+  // [GUARD] Safety net for the "I can't move after a battle" freeze. It does two things:
+  //  1. a keyboard capture listener (battle / bag / summary / start menu all use one) that was left behind by a screen that is not open any more
+  //     swallows every key for the whole game (the mouse still works): such listeners are removed every second
+  //  2. isLocked / isMoving stuck at true for 3 s while nothing is running (no script, warp, battle transition, wild bump or menu): reset, with a warning
+  inputGuard(time, delta) {
+    if (!this._guardAt || time - this._guardAt > 1000) {
+      this._guardAt = time;
+      try {
+        const bs = this.scene.get('BattleScene'); if (bs && bs.kd && !this.scene.isActive('BattleScene')) window.removeEventListener('keydown', bs.kd, true);
+        for (const o of [window.BagMenu, window.PokemonSummary, window.StartMenu]) if (o && o.kd && !o.active) window.removeEventListener('keydown', o.kd, true);
+      } catch (e) { /* ignore */ }
+    }
+    const menu = (window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen());
+    const legit = menu || this.evolving || this.scriptRunning || this.warping || (window.BattleTransition && window.BattleTransition.busy) || (window.OWWild && window.OWWild.busy);
+    const stuckMoving = this.isMoving && this.player && this.tweens.getTweensOf(this.player).length === 0;
+    if (!legit && (this.isLocked || stuckMoving)) {
+      this._lockedMs = (this._lockedMs || 0) + delta;
+      if (this._lockedMs > 3000) { console.warn('[INPUT] the overworld was locked for 3 s with nothing running (isLocked=' + this.isLocked + ', isMoving=' + this.isMoving + '): unlocking'); this.isLocked = false; this.isMoving = false; this.playerDest = null; this._lockedMs = 0; }
+    } else this._lockedMs = 0;
+  }
+
+  update(time, delta) {
+    this.inputGuard(time, delta);
+    if (this.weather) this.weather.update(delta);
+    this.tickTileAnim(delta);
+    if (window.OWFollower) window.OWFollower.update(this, time, delta);   // [FOLLOWER]
+    if (window.OWWild) window.OWWild.update(this, time, delta);           // [WILD] wild Pokémon on grass (behavior 5)
+
+    // [CHANGED] depth is updated every frame (also while walking), before the early return
+    if (this.player && this.player.direction) { this.lastDir = this.player.direction; const sd1 = window.GameStateManager && window.GameStateManager.saveData; if (sd1) sd1.facing = this.lastDir; }
+    if (this.player && this.npcs) {
+      this.player.setDepth(this.player.y);
+      this.npcs.forEach(npc => npc.setDepth(npc.y));
+    }
+
+    // [SUMMARY] while the summary screen is open the overworld does nothing (the screen reads the keys itself)
+    if ((window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen())) {
+      Phaser.Input.Keyboard.JustDown(this.enterKey);
+      Phaser.Input.Keyboard.JustDown(this.spaceKey); if (this.followKey) Phaser.Input.Keyboard.JustDown(this.followKey);
+      if (this.bagKey) Phaser.Input.Keyboard.JustDown(this.bagKey);
+      return;
+    }
+
+    // [SCRIPTS] no input while a script runs (and for a moment after, so the button that closed the last message does not start it again)
+    if (this.scriptRunning || (this.scriptEndedAt && this.time.now - this.scriptEndedAt < 300)) {
+      Phaser.Input.Keyboard.JustDown(this.spaceKey); if (this.followKey) Phaser.Input.Keyboard.JustDown(this.followKey);
+      return;
+    }
+
+    if (this.isLocked || this.isMoving) { Phaser.Input.Keyboard.JustDown(this.enterKey); if (this.bagKey) Phaser.Input.Keyboard.JustDown(this.bagKey); return; }
+
+    // [BAG] B -> the bag (GameStateManager.saveData.bag)
+    if (this.bagKey && Phaser.Input.Keyboard.JustDown(this.bagKey)) {
+      this.idleMs = 0;
+      if (window.BagMenu) window.BagMenu.open(this);
+      else console.error('[BAG] B pressed, but js/BagMenu.js is not loaded (window.BagMenu is missing).');
+      return;
+    }
+
+    // [SUMMARY] Enter -> summary screen of the party in the save (GameStateManager.saveData.party)
+    if (Phaser.Input.Keyboard.JustDown(this.enterKey)) {
+      this.idleMs = 0;
+      if (window.StartMenu) window.StartMenu.toggle(this);   // [MENU] Start / Enter -> the start menu (Pokémon, Pokédex, Bag ...)
+      else if (window.PokemonSummary) window.PokemonSummary.open(this);
+      else console.error('[MENU] Enter pressed, but js/StartMenu.js is not loaded (window.StartMenu is missing).');
+      return;
+    }
+
+    if (this.followKey && Phaser.Input.Keyboard.JustDown(this.followKey)) {   // [FOLLOWER] SPACE next to it = talk to it
+      this.idleMs = 0;
+      if (window.OWFollower && window.OWFollower.interact) window.OWFollower.interact(this);
+      return;
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+      this.idleMs = 0;
+      this.tryInteract();
+      return;
+    }
+
+    let dx = 0;
+    let dy = 0;
+    let newDir = this.player.direction;
+
+    if (this.cursors.left.isDown || (this.wasd && this.wasd.left.isDown)) {
+      dx = -1;
+      newDir = 'left';
+    } else if (this.cursors.right.isDown || (this.wasd && this.wasd.right.isDown)) {
+      dx = 1;
+      newDir = 'right';
+    } else if (this.cursors.up.isDown || (this.wasd && this.wasd.up.isDown)) {
+      dy = -1;
+      newDir = 'up';
+    } else if (this.cursors.down.isDown || (this.wasd && this.wasd.down.isDown)) {
+      dy = 1;
+      newDir = 'down';
+    }
+
+    this.player.direction = newDir;
+
+    if (dx !== 0 || dy !== 0) {
+      this.idleMs = 0;
+      const targetGridX = this.playerGridX + dx;
+      const targetGridY = this.playerGridY + dy;
+
+      if (this.isPassable(targetGridX, targetGridY)) {
+        const transitionMap = this.checkMapBoundaryTransition(targetGridX, targetGridY);
+        if (transitionMap) {
+          this.executeSeamlessTransition(transitionMap, newDir);
+          return;
+        }
+
+        this.movePlayerTo(targetGridX, targetGridY, newDir);
+      } else {
+        const stepCycle = Math.floor(time / 150) % 2 === 0 ? 1 : 2;
+        const frameIndex = window.getOverworldFrame(newDir, stepCycle);
+        this.player.setFrame(frameIndex);
+      }
+    } else {
+      // idle: after 4 s without input the player walks in place
+      this.idleMs = (this.idleMs || 0) + delta;
+      if (this.idleMs > 4000) {
+        const seq = [1, 0, 2, 0];
+        this.player.setFrame(window.getOverworldFrame(newDir, seq[Math.floor(time / 180) % 4]));
+      } else {
+        this.player.setFrame(window.getOverworldFrame(newDir, 0));
+      }
+    }
+  }
+
+  checkMapBoundaryTransition(gridX, gridY) {
+    const cols = this.currentMap.dimensions.width;
+    const rows = this.currentMap.dimensions.height;
+    const c = this.currentMap.connections;
+
+    if (!c) return null;
+
+    if (gridY < 0) {
+      const k = this.resolveConn(c.up);
+      if (k) return { mapKey: k, entryX: gridX - (c.up[2] || 0), entryY: window.OverworldMaps[k].dimensions.height - 1 };
+    }
+    if (gridY >= rows) {
+      const k = this.resolveConn(c.down);
+      if (k) return { mapKey: k, entryX: gridX - (c.down[2] || 0), entryY: 0 };
+    }
+    if (gridX < 0) {
+      const k = this.resolveConn(c.left);
+      if (k) return { mapKey: k, entryX: window.OverworldMaps[k].dimensions.width - 1, entryY: gridY - (c.left[2] || 0) };
+    }
+    if (gridX >= cols) {
+      const k = this.resolveConn(c.right);
+      if (k) return { mapKey: k, entryX: 0, entryY: gridY - (c.right[2] || 0) };
+    }
+
+    return null;
+  }
+
+  getOWFrameSize(tableEntry, id = '?') {
+    const raw = tableEntry && tableEntry.trueDimension;
+    const m = /^\s*(\d+)\s*[xX]\s*(\d+)\s*$/.exec(raw || '');
+    if (!m) {
+      console.error(`[OW] "${id}" has no valid trueDimension (got "${raw}"), so its sprite can't be sliced.`);
+      return null;
+    }
+    return { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
+  }
+
+  executeSeamlessTransition(transitionData, direction) {
+    this.isMoving = true;
+    this.currentMapKey = transitionData.mapKey;
+    this.currentMap = window.OverworldMaps[this.currentMapKey];
+    this.playerGridX = transitionData.entryX;
+    this.playerGridY = transitionData.entryY;
+
+    if (window.GameStateManager && window.GameStateManager.saveData) {
+      window.GameStateManager.saveData.mapID = this.currentMapKey;
+      window.SaveSystem && window.SaveSystem.touch('map');   // [SAVE] no autosave: SaveSystem.save() runs from the start menu
+    }
+
+    this.updateMapMusic(this.currentMapKey);
+    this.showMapBanner();
+
+    // Entering a map with different weather fades the old one out and the new one in
+    if (this.weather) this.weather.set(this.currentMap.weather, false, this.currentMapKey);
+
+    const mapOffset = this.getMapWorldOffset(this.currentMapKey);
+    const destX = Math.round(mapOffset.x + this.playerGridX * 32 + 16);
+    const destY = Math.round(mapOffset.y + this.playerGridY * 32 + 16);
+
+    this.walkStep = this.walkStep === 1 ? 2 : 1;
+    this.player.setFrame(window.getOverworldFrame(direction, this.walkStep));
+    this.playerDest = { x: Math.round((destX - 16) / 32), y: Math.round((destY - 16) / 32) };   // NPCs treat this tile as taken while the step lasts
+
+    this.tweens.add({
+      targets: this.player,
+      x: destX,
+      y: destY,
+      duration: 150,
+      onComplete: () => {
+        this.player.setFrame(window.getOverworldFrame(direction, 0));
+        this.isMoving = false;
+        this.playerDest = null;
+        this.handleTriggers();
+      }
+    });
+  }
+}
