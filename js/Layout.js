@@ -9,11 +9,11 @@
   const qs = new URLSearchParams(location.search);
   const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } } };
   let mode = qs.get('layout'); if (mode === 'landscape' || mode === 'portrait') ls.set('pm_layout', mode); else mode = ls.get('pm_layout', DEFAULT_MODE);
-  if (mode !== 'landscape' && mode !== 'portrait') mode = DEFAULT_MODE;
+  mode = 'landscape'; ls.set('pm_layout', 'landscape');   // the landscape layout is the only one now (?layout=portrait is ignored)
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 12, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 13, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -207,10 +207,13 @@
   }
   // docked to the main screen's edge (flat side against it, pointed side outward): POKéMON over BAG on the left, FIGHT over RUN on the right, all the same size
   // full hexagons tucked ~20% behind the main screen's edge (the screen covers that part): POKéMON over BAG on the left, FIGHT over RUN on the right, all one size
-  function placeBattleHud(vx, vw, avail, y0, y1, plain) {
-    if (!BH.root) return; const zh = y1 - y0, Wf = Math.min(210, avail / .8); BH.geo = (zh >= 90 && Wf >= 84) ? 1 : null; if (!BH.geo) return;
-    const gap = 6, bh = Math.min(Wf * .58, (zh - gap) / 2), ty = y0 + (zh - (bh * 2 + gap)) / 2, tuck = Wf * .2;
-    const put = (el, x, y) => { Object.assign(el.style, { left: Math.round(x) + 'px', top: Math.round(y) + 'px', width: Math.round(Wf) + 'px', height: Math.round(bh) + 'px' }); el.style.setProperty('--fs', Math.max(11, Math.min(22, bh * .3)) + 'px'); };
+  function placeBattleHud(vx, vw, avail, y0, y1) {
+    BH.geo = null; PM.hudOk = false; if (!BH.root) return;
+    const zh = y1 - y0, W0 = Math.min(210, avail / .8), gap = 6, bh = Math.min(W0 * .58, (zh - gap) / 2), Wf = Math.min(W0, bh * 2.4);
+    if (zh < 70 || W0 < 70 || bh < 30) return;
+    BH.geo = 1; PM.hudOk = true;
+    const ty = y0 + (zh - (bh * 2 + gap)) / 2, tuck = Wf * .2;
+    const put = (el, x, y) => { Object.assign(el.style, { left: Math.round(x) + 'px', top: Math.round(y) + 'px', width: Math.round(Wf) + 'px', height: Math.round(bh) + 'px' }); el.style.setProperty('--fs', Math.max(10, Math.min(22, bh * .3)) + 'px'); };
     const lx = vx - Wf + tuck, rx = vx + vw - tuck;
     put(BH.els[2], lx, ty); put(BH.els[1], lx, ty + bh + gap); put(BH.els[0], rx, ty); put(BH.els[3], rx, ty + bh + gap);
   }
@@ -239,7 +242,8 @@
       else { Object.assign(gripL.style, { left: '0px', top: '0px', width: vx + 'px', height: H + 'px', borderRadius: '0 46px 46px 0' }); Object.assign(gripR.style, { left: (vx + vw) + 'px', top: '0px', width: Math.max(0, W - vx - vw) + 'px', height: H + 'px', borderRadius: '46px 0 0 46px' }); } }
     if (!tc) return;
     tc.style.setProperty('--op', cfg.opacity);
-    const u = Math.max(54, Math.min(portraitPhone ? 80 : 70, (portraitPhone ? W * .2 : Math.min(H * .24, (vx + 90)))) ) * cfg.size;
+    let u = Math.max(54, Math.min(portraitPhone ? 80 : 70, (portraitPhone ? W * .2 : Math.min(H * .24, (vx + 90)))) ) * cfg.size;
+    if (!portraitPhone) { const gut = Math.min(vx - si.l, W - si.r - vx - vw); u = Math.max(40, Math.min(u, (gut + 14) / 2.5)); }   // phones: keep the button clusters inside the side gutters
     const padS = Math.round(u * 1.85), left = cfg.hand === 'left';
     const edge = 12, bot = si.b + 12;
     const place = (el, x, y, w, h) => { Object.assign(el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' }); el.style.setProperty('--u', u + 'px'); };
@@ -265,8 +269,8 @@
     const setPill = (el, x, y, w, h) => { place(el, x, y, w, h); const p = el.firstChild; p.style.cssText = 'position:absolute;inset:0;pointer-events:auto'; };
     if (portraitPhone) { const py = vy + vh + 14; setPill(els.minus, W / 2 - pw * 1.5 - 12, py, pw, ph); setPill(els.cam, W / 2 - pw / 2, py, pw, ph); setPill(els.plus, W / 2 + pw / 2 + 12, py, pw, ph); }
     else { const tl = dpadSide === 'left'; setPill(els.minus, tl ? padCx : faceCx, topRow, pw, ph); setPill(els.plus, tl ? faceCx : padCx, topRow, pw, ph); setPill(els.cam, tl ? faceCx : padCx, topRow + ph + 8, pw, ph); }
-    { const yTop = (portraitPhone ? vy + vh + 14 + ph + 10 : topRow + ph * 2 + 24), yBot = yMid - 8;
-      if (portraitPhone) { BH.geo = null; }   // no room beside the screen on a portrait phone: the keys / A still work there
+    { const yTop = topRow + ph * 2 + 14, yBot = yMid - 6;
+      if (portraitPhone) { BH.geo = null; PM.hudOk = false; }   // no room beside the screen when the phone is held upright: the battle then draws its own menu on the screen
       else placeBattleHud(vx, vw, Math.min(vx - si.l - 4, W - si.r - vx - vw - 4), yTop, yBot); }
     // the d-pad / face groups keep their own hit areas
   }
