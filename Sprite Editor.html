@@ -1,11 +1,24 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Pixel Editor</title>
+<html lang="en"><head><meta charset="utf-8"><title>Pixel Editor + Font Editor</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 *{box-sizing:border-box}
-body{margin:0;height:100vh;display:grid;grid-template-columns:48px 1fr 310px;grid-template-rows:auto 1fr 24px;background:#14161c;color:#dde;font:12px system-ui,sans-serif;overflow:hidden}
+body{margin:0;height:100vh;display:grid;grid-template-columns:48px 1fr 330px;grid-template-rows:auto auto 1fr 24px;background:#14161c;color:#dde;font:12px system-ui,sans-serif;overflow:hidden}
 button,select,input{font:inherit;background:#262a36;color:#eef;border:1px solid #3a4052;border-radius:5px;padding:5px 7px}
 button{cursor:pointer}button:hover{background:#343b50}button.on{background:#3a6df0;border-color:#5d8aff}
+#tabs{grid-column:1/4;display:flex;gap:2px;padding:6px 6px 0;background:#15171e;border-bottom:1px solid #2c3140}
+#tabs button{border-radius:7px 7px 0 0;border-bottom:none;padding:7px 16px;background:#1c1f28;color:#9ab;font-weight:600}
+#tabs button.on{background:#3a6df0;color:#fff;border-color:#5d8aff}
+.ftonly{display:none!important}body[data-tab=font] .ftonly{display:flex!important}
+#ft_chips{display:flex;flex-wrap:wrap;gap:4px;min-height:26px}
+#ft_chips span{background:#262a36;border:1px solid #3a4052;border-radius:5px;padding:2px 4px 2px 7px;font:13px ui-monospace,monospace;display:flex;gap:6px;align-items:center}
+#ft_chips span b{color:#ff8a80;cursor:pointer}
+#ft_list{max-height:210px;overflow:auto;display:flex;flex-direction:column;gap:1px;font:12px ui-monospace,monospace}
+#ft_list div{display:flex;gap:8px;padding:2px 5px;border-radius:4px;cursor:pointer;color:#bcd}
+#ft_list div:hover{background:#262a36}#ft_list div.cur{background:#222a40;color:#fff}#ft_list div.dup{color:#ffb55a}
+#ft_list div i{font-style:normal;width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff}
+#ft_list div u{text-decoration:none;color:#8a93a6;margin-left:auto}
+#ft_prev{background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/12px 12px;image-rendering:pixelated;max-width:100%;border:1px solid #556}
 #top{grid-column:1/4;display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding:6px;background:#1c1f28;border-bottom:1px solid #2c3140}
 #top .sep{width:1px;height:22px;background:#3a4052;margin:0 3px}
 #tools{display:flex;flex-direction:column;gap:4px;padding:6px;background:#1c1f28;border-right:1px solid #2c3140;overflow:auto}
@@ -34,6 +47,7 @@ input[type=color]{padding:0;height:30px;width:44px;flex:none}
 .hint{color:#778;font-size:11px;line-height:1.4}
 #drop{position:fixed;inset:0;background:rgba(58,109,240,.25);border:3px dashed #5d8aff;display:none;align-items:center;justify-content:center;font-size:22px;z-index:9;pointer-events:none}
 </style></head><body>
+<div id="tabs"><button id="tabPx" class="on">Pixel Editor</button><button id="tabFt">Font Editor</button></div>
 <div id="top">
   <button id="bOpen">Open images</button><button id="bFolder">Open folder</button><button id="bNew">New</button>
   <input type="file" id="fFiles" accept="image/*" multiple hidden><input type="file" id="fFolder" webkitdirectory multiple hidden>
@@ -49,6 +63,38 @@ input[type=color]{padding:0;height:30px;width:44px;flex:none}
 <div id="tools"></div>
 <div id="view"><div id="stage"><canvas id="ov"></canvas></div></div>
 <div id="side">
+  <fieldset class="ftonly"><legend>Font sheet</legend>
+    <div class="row"><button id="ft_load" style="background:#3a6df0">Load latin_short.png</button><button id="ft_loadjs">Load EmeraldFont.js…</button></div>
+    <input type="file" id="ft_file" accept="image/*" hidden><input type="file" id="ft_filejs" accept=".js,text/javascript" hidden>
+    <div id="ft_src" class="hint">Pick the 🎯-like <b>▦ cell tool (C)</b> or just click / paint on the sheet: the clicked 8×16 cell becomes the selected glyph cell. Background removal, ZIP etc. below work on the sheet too.</div>
+  </fieldset>
+  <fieldset class="ftonly"><legend>Selected cell</legend>
+    <div id="ft_info" class="hint">–</div>
+    <div class="row"><button id="ft_l">◀</button><button id="ft_u">▲</button><button id="ft_d">▼</button><button id="ft_r">▶</button><button id="ft_zoom">Zoom to cell</button></div>
+    <div class="hint">Characters drawn with this cell:</div><div id="ft_chips"></div>
+    <div class="row"><input id="ft_char" placeholder="char or tag, e.g. Q  é  /up/  Lv" maxlength="12" style="flex:2"><button id="ft_assign" style="background:#2e8b57">Assign here</button></div>
+    <div class="row"><label>Advance (px, blank = 6)<input type="number" id="ft_adv" min="1" max="16" placeholder="6"></label><button id="ft_auto" title="Measure the glyph's width like the battle engine does">Auto</button></div>
+    <div class="hint">Assigning a character that is already used elsewhere moves it here. Cells tinted green are assigned, orange = more than one character shares the cell.</div>
+  </fieldset>
+  <fieldset class="ftonly"><legend>Glyph map (<span id="ft_n">0</span>)</legend>
+    <input id="ft_filter" placeholder="filter…">
+    <div id="ft_list"></div>
+    <div class="row"><button id="ft_reloadjs">Reload from js/utils</button><button id="ft_extra">Add accents &amp; symbols</button></div>
+    <div class="row"><button id="ft_reset">Built-in map</button></div>
+  </fieldset>
+  <fieldset class="ftonly"><legend>Preview</legend>
+    <textarea id="ft_text" rows="3" style="width:100%;background:#262a36;color:#eef;border:1px solid #3a4052;border-radius:5px;padding:5px">Hello World! Lv50  PP 35/35
+Pokémon ♂♀  /up/ /down/ /left/ /right/</textarea>
+    <div class="row"><label>Scale<select id="ft_scale"><option>2</option><option selected>3</option><option>4</option></select></label>
+      <label>Ink<input type="color" id="ft_ink" value="#383838"></label><label>Shadow<input type="color" id="ft_shadow" value="#d8d8d8"></label></div>
+    <label class="in"><input type="checkbox" id="ft_orig" checked> Original sheet colours</label>
+    <canvas id="ft_prev" width="10" height="10"></canvas>
+  </fieldset>
+  <fieldset class="ftonly"><legend>Export (for the game)</legend>
+    <button id="ft_zip" style="background:#2e8b57">Download ZIP: latin_short.png + EmeraldFont.js</button>
+    <div class="row"><button id="ft_dljs">EmeraldFont.js</button><button id="ft_dljson">glyphs.json</button><button id="ft_dlpng">latin_short.png</button></div>
+    <div class="hint">ZIP paths: <code>graphics/fonts/latin_short.png</code> and <code>js/utils/EmeraldFont.js</code> – unzip into the repo root. The game's menus, battle and bag already read the glyph map from EmeraldFont.js.</div>
+  </fieldset>
   <fieldset><legend>Colours</legend>
     <div class="row"><label>Primary (left click)<input type="color" id="c1" value="#000000"></label><label>Secondary (right click)<input type="color" id="c2" value="#ffffff"></label></div>
     <label>Opacity <span id="aV">100</span>%<input type="range" id="alpha" min="0" max="100" value="100"></label>
@@ -90,7 +136,7 @@ let items=[],cur=-1,cv=null,ctx=null,z=4,tool='pencil',spaceDown=false,sel=null,
 let drag=null,hover={x:0,y:0};
 const TOOLS=[['pencil','✏️','Pencil (B)','b'],['eraser','🧽','Eraser (E)','e'],['fill','🪣','Fill (G)','g'],['pick','💧','Colour picker (I)','i'],
  ['line','╱','Line (L)','l'],['rect','▭','Rectangle (R)','r'],['ellipse','◯','Ellipse (O)','o'],['select','⬚','Select (M)','m'],['wand','✨','Magic wand (W)','w'],
- ['bgpick','🎯','Pick background pixel (K)','k'],['hand','✋','Hand (H)','h']];
+ ['bgpick','🎯','Pick background pixel (K)','k'],['cell','▦','Pick font glyph cell (C)','c'],['hand','✋','Hand (H)','h']];
 $('tools').innerHTML=TOOLS.map(([t,i,n])=>`<button data-t="${t}" title="${n}">${i}</button>`).join('');
 $('tools').onclick=e=>{const b=e.target.closest('button');if(b)setTool(b.dataset.t)};
 function setTool(t){if(flt&&t!=='select')commitFloat();tool=t;document.querySelectorAll('#tools button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
@@ -199,7 +245,7 @@ const inRect=(p,r)=>r&&p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h;
 
 // ---------- overlay ----------
 const maskCv=document.createElement('canvas');
-function overlay(){if(!cv)return;octx.clearRect(0,0,ov.width,ov.height);octx.imageSmoothingEnabled=false;
+function overlayBase(){if(!cv)return;octx.clearRect(0,0,ov.width,ov.height);octx.imageSmoothingEnabled=false;
   if($('tGrid').checked&&z>=6){octx.strokeStyle='rgba(255,255,255,.18)';octx.lineWidth=1;octx.beginPath();
     for(let x=0;x<=cv.width;x++){octx.moveTo(x*z+.5,0);octx.lineTo(x*z+.5,ov.height)}for(let y=0;y<=cv.height;y++){octx.moveTo(0,y*z+.5);octx.lineTo(ov.width,y*z+.5)}octx.stroke()}
   if(flt)octx.drawImage(flt.c,flt.x*z,flt.y*z,flt.c.width*z,flt.c.height*z);
@@ -209,6 +255,8 @@ function overlay(){if(!cv)return;octx.clearRect(0,0,ov.width,ov.height);octx.ima
     octx.lineWidth=1;octx.setLineDash([5,4]);octx.strokeStyle='#fff';octx.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);octx.lineDashOffset=4;octx.strokeStyle='#000';octx.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);octx.setLineDash([]);octx.lineDashOffset=0}
   if(drag&&drag.k==='newsel'){const a=drag.a,b=drag.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;octx.fillStyle='rgba(60,130,255,.25)';octx.fillRect(x*z,y*z,w*z,h*z);octx.strokeStyle='#fff';octx.strokeRect(x*z+.5,y*z+.5,w*z-1,h*z-1)}
   if(['pencil','eraser'].includes(tool)&&hover){const s=bsz(),o=Math.floor(s/2);octx.strokeStyle='rgba(255,255,255,.8)';octx.strokeRect((hover.x-o)*z+.5,(hover.y-o)*z+.5,s*z-1,s*z-1)}}
+var fontReady=false;
+function overlay(){overlayBase();if(fontReady)fontOverlay()}
 $('tGrid').onchange=overlay;
 
 // ---------- mouse ----------
@@ -219,6 +267,7 @@ view.addEventListener('contextmenu',e=>e.preventDefault());
 view.addEventListener('mousedown',e=>{if(!cv)return;
   if(e.button===1||spaceDown||tool==='hand'){drag={k:'pan',x:e.clientX,y:e.clientY,sl:view.scrollLeft,st:view.scrollTop};return}
   const p=pos(e),right=e.button===2,c=col(right?'c2':'c1');
+  if(window.fontPick&&fontPick(p)&&tool==='cell')return;
   if(tool==='select'){
     if(flt&&inRect(p,{x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height})){drag={k:'movef',ox:p.x-flt.x,oy:p.y-flt.y};return}
     if(flt)commitFloat();
@@ -344,4 +393,119 @@ window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.t
     else if(k==='+'||k==='=')$('bZp').click();else if(k==='-')$('bZm').click()}});
 window.addEventListener('resize',()=>{});
 setTool('pencil');drawSw();
+
+// ================== FONT EDITOR (tab) ==================
+const EF_DEFAULT="class EmeraldFont {\n  constructor(scene) {\n    this.scene = scene;\n    this.charWidth = 8;\n    this.charHeight = 16;\n    this.sheetColumns = 32;\n\n    this.glyphMap = {\n      // Numerals & Symbols (Row 10)\n      0: { c: 2, r: 10 },\n      1: { c: 4, r: 10 },\n      2: { c: 6, r: 10 },\n      3: { c: 8, r: 10 },\n      4: { c: 10, r: 10 },\n      5: { c: 12, r: 10 },\n      6: { c: 14, r: 10 },\n      7: { c: 16, r: 10 },\n      8: { c: 18, r: 10 },\n      9: { c: 20, r: 10 },\n      '!': { c: 22, r: 10 },\n      '?': { c: 24, r: 10 },\n      '.': { c: 26, r: 10 },\n      '-': { c: 28, r: 10 },\n      ',': { c: 16, r: 11 },\n\n      // Uppercase A-E\n      A: { c: 22, r: 11 },\n      B: { c: 24, r: 11 },\n      C: { c: 26, r: 11 },\n      D: { c: 28, r: 11 },\n      E: { c: 30, r: 11 },\n\n      // Uppercase F-U\n      F: { c: 0, r: 12 },\n      G: { c: 2, r: 12 },\n      H: { c: 4, r: 12 },\n      I: { c: 6, r: 12 },\n      J: { c: 8, r: 12 },\n      K: { c: 10, r: 12 },\n      L: { c: 12, r: 12 },\n      M: { c: 14, r: 12 },\n      N: { c: 16, r: 12 },\n      O: { c: 18, r: 12 },\n      P: { c: 20, r: 12 },\n      Q: { c: 22, r: 12 },\n      R: { c: 24, r: 12 },\n      S: { c: 26, r: 12 },\n      T: { c: 28, r: 12 },\n      U: { c: 30, r: 12 },\n\n      // Uppercase V-Z\n      V: { c: 0, r: 13 },\n      W: { c: 2, r: 13 },\n      X: { c: 4, r: 13 },\n      Y: { c: 6, r: 13 },\n      Z: { c: 8, r: 13 },\n\n      // Lowercase a-k (Row 13)\n      a: { c: 10, r: 13 },\n      b: { c: 12, r: 13 },\n      c: { c: 14, r: 13 },\n      d: { c: 16, r: 13 },\n      e: { c: 18, r: 13 },\n      f: { c: 20, r: 13 },\n      g: { c: 22, r: 13 },\n      h: { c: 24, r: 13 },\n      i: { c: 26, r: 13 },\n      j: { c: 28, r: 13 },\n      k: { c: 30, r: 13 },\n\n      // Lowercase l-z (Row 14)\n      l: { c: 0, r: 14 },\n      m: { c: 2, r: 14 },\n      n: { c: 4, r: 14 },\n      o: { c: 6, r: 14 },\n      p: { c: 8, r: 14 },\n      q: { c: 10, r: 14 },\n      r: { c: 12, r: 14 },\n      s: { c: 14, r: 14 },\n      t: { c: 16, r: 14 },\n      u: { c: 18, r: 14 },\n      v: { c: 20, r: 14 },\n      w: { c: 22, r: 14 },\n      x: { c: 24, r: 14 },\n      y: { c: 26, r: 14 },\n      z: { c: 28, r: 14 },\n\n      // Row 15: Diaeresis characters\n      ':': { c: 0, r: 15 },\n      \u00c4: { c: 0, r: 15 },\n      \u00d6: { c: 2, r: 15 },\n      \u00dc: { c: 4, r: 15 },\n      \u00e4: { c: 6, r: 15 },\n      \u00f6: { c: 8, r: 15 },\n      \u00fc: { c: 10, r: 15 },\n\n      // Row 16: UI Symbols & D-Pad arrows\n      '/up/': { c: 0, r: 16 }, // Up arrow glyph\n      '/down/': { c: 2, r: 16 }, // Down arrow glyph\n      '/left/': { c: 4, r: 16 }, // Left arrow glyph\n      '/right/': { c: 6, r: 16 }, // Right arrow glyph\n      '+': { c: 8, r: 16 },\n      Lv: { c: 10, r: 16 },\n      PP: { c: 12, r: 16 },\n      ID: { c: 14, r: 16 },\n      '\u2116': { c: 16, r: 16 },\n      _: { c: 18, r: 16 },\n      '\u2460': { c: 20, r: 16 },\n      '\u2461': { c: 22, r: 16 },\n      '\u2462': { c: 24, r: 16 },\n      '\u2463': { c: 26, r: 16 },\n      '\u2464': { c: 28, r: 16 },\n      '\u2465': { c: 30, r: 16 },\n\n      // Row 17\n      '\u2466': { c: 0, r: 17 },\n      '\u2467': { c: 2, r: 17 },\n      '\u2468': { c: 4, r: 17 },\n      '(': { c: 6, r: 17 },\n      ')': { c: 8, r: 17 },\n      '\u25a0': { c: 10, r: 17 },\n      '\u25b2': { c: 12, r: 17 },\n      '\u2716': { c: 14, r: 17 },\n    };\n  }\n\n  ensureTexture() {\n    // 1. If Phaser already has 'emerald_font' registered in this scene, we're good\n    if (this.scene.textures.exists('emerald_font')) return true;\n\n    // 2. If 'latin_short' was loaded by BattleScene or elsewhere, build 'emerald_font' from it instantly\n    if (this.scene.textures.exists('latin_short')) {\n      const sourceImage = this.scene.textures.get('latin_short').getSourceImage();\n      return this._buildCanvasTexture(sourceImage);\n    }\n\n    // 3. Otherwise, check global shared image cache\n    if (!window._globalEmeraldFontImg) {\n      window._globalEmeraldFontImg = new Image();\n      window._globalEmeraldFontImg.src = 'graphics/fonts/latin_short.png';\n    }\n\n    if (window._globalEmeraldFontImg.complete && window._globalEmeraldFontImg.naturalWidth > 0) {\n      return this._buildCanvasTexture(window._globalEmeraldFontImg);\n    }\n\n    return false;\n  }\n\n  _buildCanvasTexture(sourceImage) {\n    if (this.scene.textures.exists('emerald_font')) return true;\n\n    const canvasTex = this.scene.textures.createCanvas('emerald_font', sourceImage.width, sourceImage.height);\n    if (!canvasTex) return false;\n\n    canvasTex.draw(0, 0, sourceImage);\n    const ctx = canvasTex.context;\n    const imgData = ctx.getImageData(0, 0, sourceImage.width, sourceImage.height);\n    const data = imgData.data;\n\n    const bgR = data[0];\n    const bgG = data[1];\n    const bgB = data[2];\n\n    for (let i = 0; i < data.length; i += 4) {\n      const r = data[i];\n      const g = data[i + 1];\n      const b = data[i + 2];\n\n      if ((r === bgR && g === bgG && b === bgB) || (r >= 245 && g >= 245 && b >= 245)) {\n        data[i + 3] = 0;\n      }\n    }\n\n    ctx.putImageData(imgData, 0, 0);\n    canvasTex.refresh();\n\n    let frameIndex = 0;\n    for (let y = 0; y < sourceImage.height; y += 16) {\n      for (let x = 0; x < sourceImage.width; x += 8) {\n        canvasTex.add(frameIndex, 0, x, y, 8, 16);\n        frameIndex++;\n      }\n    }\n    return true;\n  }\n\n  print(startX, startY, text, depth = 11, scale = 2) {\n    // If the texture isn't built yet, trigger an async load and auto-redraw when ready\n    if (!this.ensureTexture()) {\n      if (window._globalEmeraldFontImg && !window._globalEmeraldFontImg.onload) {\n        window._globalEmeraldFontImg.onload = () => {\n          // Re-trigger print once loaded\n          this.print(startX, startY, text, depth, scale);\n        };\n      }\n      return [];\n    }\n\n    const createdGlyphs = [];\n    let currentX = startX;\n    let currentY = startY;\n    const strText = String(text);\n\n    let i = 0;\n    while (i < strText.length) {\n      const char = strText[i];\n\n      if (char === '\\n') {\n        currentX = startX;\n        currentY += 16 * scale; // Scaled line height\n        i++;\n        continue;\n      }\n\n      if (char === ' ') {\n        currentX += 5 * scale; // Scaled space width\n        i++;\n        continue;\n      }\n\n      let matchedGlyph = null;\n      let matchedTagLength = 0;\n\n      if (char === '/') {\n        const closingIndex = strText.indexOf('/', i + 1);\n        if (closingIndex !== -1) {\n          const potentialTag = strText.substring(i, closingIndex + 1);\n          if (this.glyphMap[potentialTag]) {\n            matchedGlyph = this.glyphMap[potentialTag];\n            matchedTagLength = potentialTag.length;\n          }\n        }\n      }\n\n      if (!matchedGlyph) {\n        matchedGlyph = this.glyphMap[char];\n        matchedTagLength = 1;\n      }\n\n      if (matchedGlyph) {\n        const frameIndex = matchedGlyph.r * this.sheetColumns + matchedGlyph.c;\n        const charImage = this.scene.add.image(\n          currentX,\n          currentY,\n          'emerald_font',\n          frameIndex\n        );\n        charImage.setOrigin(0, 0);\n        charImage.setDepth(depth);\n        charImage.setScale(scale); // Scale up glyphs to match high-res canvas\n        createdGlyphs.push(charImage);\n      }\n\n      currentX += 6 * scale; // Scaled character spacing\n      i += matchedTagLength;\n    }\n\n    return createdGlyphs;\n  }\n}";
+const EXTRA_G=(()=>{const g={},put=(ch,code)=>{g[ch]={r:code>>4,c:2*(code&15)}},run=(st,cs)=>{let k=st;for(const ch of cs)put(ch,k++)};
+  run(0x01,'ÀÁÂÇÈÉÊËÌ');run(0x0B,'ÎÏÒÓÔŒÙÚÛÑß');run(0x16,'àá');run(0x19,'çèéêëì');run(0x20,'îïòóôœùúûñºª');run(0x2D,'&+');run(0x35,'=;');run(0x5A,'Í%()');
+  run(0xB0,'…“”‘’♂♀');run(0xB8,',×/');if(g['’'])g["'"]=g['’'];if(g['“'])g['"']=g['“'];return g})();
+let tab='pixel',G={},fc={c:2,r:10},efSrc='built-in',efText=EF_DEFAULT;
+const fontItem=()=>items.find(i=>i.isFont);
+const isFontView=()=>tab==='font'&&items[cur]&&items[cur].isFont;
+function mapSpan(t){ // [start,end] of the { ... } after "this.glyphMap ="
+  const i=t.indexOf('glyphMap');if(i<0)throw new Error('no glyphMap found');const o=t.indexOf('{',t.indexOf('=',i));let d=0,q=null;
+  for(let k=o;k<t.length;k++){const ch=t[k];
+    if(q){if(ch==='\\')k++;else if(ch===q)q=null;continue}
+    if(ch==='"'||ch==="'"||ch==='`'){q=ch;continue}
+    if(ch==='/'&&t[k+1]==='/'){k=t.indexOf('\n',k);if(k<0)break;continue}
+    if(ch==='/'&&t[k+1]==='*'){k=t.indexOf('*/',k)+1;continue}
+    if(ch==='{')d++;else if(ch==='}'){d--;if(d===0)return[o,k+1]}}
+  throw new Error('glyphMap is not closed')}
+function parseEF(t){const[a,b]=mapSpan(t);const m=(new Function('return ('+t.slice(a,b)+')'))();const o={};
+  for(const k of Object.keys(m)){const v=m[k];if(v&&typeof v.c==='number'&&typeof v.r==='number'){o[k]={c:v.c,r:v.r};if(typeof v.adv==='number')o[k].adv=v.adv}}return o}
+function fixKnown(g){ // the umlaut cells in the old file were one 16px cell too far left
+  const want={'Ä':2,'Ö':4,'Ü':6,'ä':8,'ö':10,'ü':12};let n=0;
+  if(g['Ä']&&g[':']&&g['Ä'].c===g[':'].c&&g['Ä'].r===g[':'].r){for(const k in want)if(g[k]&&g[k].r===15){g[k].c=want[k];n++}}
+  return n}
+function setMap(g,src,txt){G=g;efSrc=src;if(txt)efText=txt;const n=fixKnown(G);if(n)status(`Fixed ${n} umlaut cells (Ä Ö Ü ä ö ü pointed one cell too far left, so they drew ':' etc.).`);fontUI()}
+function cellChars(c,r){return Object.keys(G).filter(k=>G[k].c===c&&G[k].r===r)}
+function charsByCell(){const m=new Map();for(const k of Object.keys(G)){const key=G[k].c+','+G[k].r;if(!m.has(key))m.set(key,[]);m.get(key).push(k)}return m}
+// ----- loading
+async function loadFontImage(file){
+  let f=file;
+  if(!f){try{const r=await fetch('graphics/fonts/latin_short.png',{cache:'no-cache'});if(!r.ok)throw 0;const b=await r.blob();f=new File([b],'latin_short.png',{type:'image/png'})}catch(e){$('ft_file').click();return}}
+  const before=items.length;await addFile(f);if(items.length===before){status('Could not read that image.');return}
+  items.forEach(i=>delete i.isFont);const it=items[items.length-1];it.isFont=true;it.path='graphics/fonts/latin_short';it.name='latin_short';
+  select(items.length-1);buildList();$('ft_src').textContent=`Font sheet: ${it.c.width}×${it.c.height} px  =  ${Math.floor(it.c.width/8)} × ${Math.floor(it.c.height/16)} cells of 8×16.`;fontUI();status('Font sheet loaded. Click a cell, paint, assign characters.')}
+$('ft_load').onclick=()=>loadFontImage();$('ft_file').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)loadFontImage(f)};
+async function loadEngine(file){
+  try{let t;if(file)t=await file.text();else{const r=await fetch('js/utils/EmeraldFont.js',{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);t=await r.text()}
+    setMap(parseEF(t),file?file.name:'js/utils/EmeraldFont.js',t);status(`Loaded the glyph map from ${efSrc} (${Object.keys(G).length} characters).`)}
+  catch(e){status('Could not load EmeraldFont.js ('+e.message+'). Use "Load EmeraldFont.js…" to pick the file, or the built-in map.')}}
+$('ft_loadjs').onclick=()=>$('ft_filejs').click();$('ft_filejs').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)loadEngine(f)};
+$('ft_reloadjs').onclick=()=>loadEngine();
+$('ft_reset').onclick=()=>{setMap(parseEF(EF_DEFAULT),'built-in',EF_DEFAULT)};
+$('ft_extra').onclick=()=>{let n=0;for(const k of Object.keys(EXTRA_G))if(!G[k]){G[k]={c:EXTRA_G[k].c,r:EXTRA_G[k].r};n++}fontUI();status(`Added ${n} missing Emerald characters (accents, ♂ ♀, quotes, …).`)};
+// ----- selection / overlay
+function fontPick(p){if(!isFontView()||p.x<0||p.y<0||p.x>=cv.width||p.y>=cv.height)return false;fc={c:Math.floor(p.x/8),r:Math.floor(p.y/16)};fontUI();return true}
+function fontOverlay(){if(!isFontView())return;const W=cv.width,H=cv.height;octx.save();
+  const m=charsByCell();
+  for(const[k,cs]of m){const[c,r]=k.split(',').map(Number);octx.fillStyle=cs.length>1?'rgba(255,160,40,.30)':'rgba(60,200,120,.14)';octx.fillRect(c*8*z,r*16*z,8*z,16*z);
+    if(z>=3){octx.font=`bold ${Math.max(9,Math.min(16,z*2.2))}px ui-monospace,monospace`;octx.textBaseline='bottom';octx.fillStyle='#fff';octx.strokeStyle='#000';octx.lineWidth=3;const t=cs.length>1?cs[0]+'+':cs[0];octx.strokeText(t,c*8*z+2,(r+1)*16*z-1);octx.fillText(t,c*8*z+2,(r+1)*16*z-1)}}
+  octx.lineWidth=1;octx.strokeStyle='rgba(120,160,255,.35)';octx.beginPath();for(let x=0;x<=W;x+=8){octx.moveTo(x*z+.5,0);octx.lineTo(x*z+.5,H*z)}for(let y=0;y<=H;y+=16){octx.moveTo(0,y*z+.5);octx.lineTo(W*z,y*z+.5)}octx.stroke();
+  octx.strokeStyle='#ffd54a';octx.lineWidth=2;octx.strokeRect(fc.c*8*z+1,fc.r*16*z+1,8*z-2,16*z-2);octx.restore()}
+function fontUI(){const it=fontItem(),cols=it?Math.floor(it.c.width/8):32,rows=it?Math.floor(it.c.height/16):0,frame=fc.r*cols+fc.c;
+  $('ft_info').innerHTML=`column <b>${fc.c}</b>, row <b>${fc.r}</b> &nbsp;·&nbsp; frame <b>${frame}</b> &nbsp;·&nbsp; pixels x ${fc.c*8}…${fc.c*8+7}, y ${fc.r*16}…${fc.r*16+15}`;
+  const cs=cellChars(fc.c,fc.r);$('ft_chips').innerHTML=cs.length?cs.map(k=>`<span>${esc(k)}<b data-k="${esc(k)}" title="Unassign">×</b></span>`).join(''):'<span style="color:#778">nothing assigned</span>';
+  $('ft_adv').value=cs.length&&G[cs[0]].adv!=null?G[cs[0]].adv:'';
+  const f=$('ft_filter').value.trim().toLowerCase(),keys=Object.keys(G).sort((a,b)=>G[a].r-G[b].r||G[a].c-G[b].c||(a<b?-1:1)).filter(k=>!f||k.toLowerCase().includes(f)||(G[k].c+','+G[k].r).includes(f));
+  const dup=charsByCell();$('ft_n').textContent=Object.keys(G).length;
+  $('ft_list').innerHTML=keys.map(k=>`<div data-k="${esc(k)}" class="${G[k].c===fc.c&&G[k].r===fc.r?'cur':''} ${dup.get(G[k].c+','+G[k].r).length>1?'dup':''}"><i>${esc(k)}</i><span>c${G[k].c} r${G[k].r}</span><u>${G[k].adv!=null?'adv '+G[k].adv:''}</u></div>`).join('');
+  overlay();drawPreview()}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+$('ft_chips').onclick=e=>{const k=e.target.dataset&&e.target.dataset.k;if(k!=null){delete G[k];fontUI()}};
+$('ft_list').onclick=e=>{const d=e.target.closest('div[data-k]');if(!d)return;const k=d.dataset.k;fc={c:G[k].c,r:G[k].r};fontUI()};
+$('ft_filter').oninput=fontUI;
+function nav(dc,dr){const it=fontItem();if(!it)return;fc={c:Math.max(0,Math.min(Math.floor(it.c.width/8)-1,fc.c+dc)),r:Math.max(0,Math.min(Math.floor(it.c.height/16)-1,fc.r+dr))};fontUI()}
+$('ft_l').onclick=()=>nav(-1,0);$('ft_r').onclick=()=>nav(1,0);$('ft_u').onclick=()=>nav(0,-1);$('ft_d').onclick=()=>nav(0,1);
+$('ft_zoom').onclick=()=>{const it=fontItem();if(!it)return;if(items[cur]!==it)select(items.indexOf(it));z=Math.max(8,Math.min(28,Math.floor((view.clientHeight-100)/16)));applyZoom();
+  view.scrollLeft=40+(fc.c*8+4)*z-view.clientWidth/2;view.scrollTop=40+(fc.r*16+8)*z-view.clientHeight/2};
+$('ft_assign').onclick=assign;$('ft_char').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();assign()}};
+function assign(){let ch=$('ft_char').value;if(!ch)return;ch=ch.replace(/\s+$/,'');if(!ch)return;const was=G[ch]&&(G[ch].c!==fc.c||G[ch].r!==fc.r)?G[ch]:null;
+  const adv=$('ft_adv').value===''?null:Math.max(1,Math.min(16,+$('ft_adv').value));G[ch]={c:fc.c,r:fc.r};if(adv!=null)G[ch].adv=adv;else if(G[ch].adv==null)delete G[ch].adv;
+  $('ft_char').value='';fontUI();status(was?`"${ch}" moved here from c${was.c} r${was.r}.`:`"${ch}" assigned to c${fc.c} r${fc.r}.`)}
+$('ft_adv').onchange=()=>{const cs=cellChars(fc.c,fc.r),v=$('ft_adv').value===''?null:Math.max(1,Math.min(16,+$('ft_adv').value));for(const k of cs){if(v==null)delete G[k].adv;else G[k].adv=v}fontUI()};
+$('ft_auto').onclick=()=>{const it=fontItem();if(!it)return;const d=it.c.getContext('2d').getImageData(fc.c*8,fc.r*16,8,16).data,r0=d[0],g0=d[1],b0=d[2];let mx=-1;
+  for(let y=0;y<16;y++)for(let x=0;x<8;x++){const i=(y*8+x)*4;if(d[i+3]&&!(d[i]===r0&&d[i+1]===g0&&d[i+2]===b0)&&!(d[i]>=245&&d[i+1]>=245&&d[i+2]>=245))mx=Math.max(mx,x)}
+  $('ft_adv').value=mx<0?6:Math.max(6,Math.min(10,mx+2));$('ft_adv').onchange()};
+// ----- preview (same rules as the engine: space 5, newline 16, /tag/, advance 6 or the glyph's own adv)
+let kc=null,kcKey='';
+function keyedSheet(){const it=fontItem();if(!it)return null;const w=it.c.width,h=it.c.height,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(it.c,0,0);
+  const id=x.getImageData(0,0,w,h),d=id.data,r0=d[0],g0=d[1],b0=d[2],orig=$('ft_orig').checked,ink=hex2($('ft_ink').value),sh=hex2($('ft_shadow').value);
+  for(let i=0;i<d.length;i+=4){const r=d[i],g=d[i+1],b=d[i+2];
+    if(d[i+3]===0||(r===r0&&g===g0&&b===b0)||(r>=245&&g>=245&&b>=245)){d[i+3]=0;continue}
+    if(!orig){const q=(r+g+b)/3<110?ink:sh;d[i]=q[0];d[i+1]=q[1];d[i+2]=q[2]}}
+  x.putImageData(id,0,0);return c}
+function drawPreview(){if(tab!=='font')return;const pc=$('ft_prev'),px=pc.getContext('2d'),k=keyedSheet();if(!k){pc.width=10;pc.height=10;return}
+  const sc=+$('ft_scale').value,txt=$('ft_text').value,lines=txt.split('\n');
+  const adv=ch=>(G[ch]&&G[ch].adv!=null)?G[ch].adv:6;
+  const width=Math.max(...lines.map(l=>{let x=0,i=0;while(i<l.length){const ch=l[i];if(ch===' '){x+=5;i++;continue}let key=null;if(ch==='/'){const j=l.indexOf('/',i+1);if(j>0&&G[l.slice(i,j+1)])key=l.slice(i,j+1)}
+      if(key){x+=adv(key);i+=key.length}else{x+=adv(ch);i++}}return x}),8);
+  pc.width=Math.min(1200,(width+2)*sc);pc.height=lines.length*16*sc;px.imageSmoothingEnabled=false;
+  lines.forEach((l,li)=>{let x=0,i=0;while(i<l.length){const ch=l[i];if(ch===' '){x+=5;i++;continue}let key=null;if(ch==='/'){const j=l.indexOf('/',i+1);if(j>0&&G[l.slice(i,j+1)])key=l.slice(i,j+1)}
+    const gk=key||ch,g=G[gk];if(g)px.drawImage(k,g.c*8,g.r*16,8,16,x*sc,li*16*sc,8*sc,16*sc);x+=adv(gk);i+=key?key.length:1}})}
+['ft_text','ft_scale','ft_ink','ft_shadow','ft_orig'].forEach(id=>$(id).addEventListener('input',drawPreview));$('ft_orig').addEventListener('change',drawPreview);
+setInterval(()=>{if(tab==='font')drawPreview()},400);
+// ----- export
+function genEF(){const[a,b]=mapSpan(efText||EF_DEFAULT);const keys=Object.keys(G).sort((x,y)=>G[x].r-G[y].r||G[x].c-G[y].c||(x<y?-1:1));let out='{\n',row=-1;
+  for(const k of keys){const g=G[k];if(g.r!==row){row=g.r;out+=`\n      // Row ${row}\n`}out+=`      ${JSON.stringify(k)}: { c: ${g.c}, r: ${g.r}${g.adv!=null?', adv: '+g.adv:''} },\n`}
+  out+='    }';let t=efText.slice(0,a)+out.replace(/^\{\n\n/,'{\n')+efText.slice(b);
+  t=t.replace(/currentX \+= 6 \* scale;[^\n]*/,"currentX += ((matchedGlyph && matchedGlyph.adv != null) ? matchedGlyph.adv : 6) * scale; // glyph advance (adv in the map, default 6)");
+  if(!/Generated by the Font Editor/.test(t))t='// Generated by the Font Editor tab of background_remover.html - edit the glyph map there (c = column, r = row of the 8x16 cells in graphics/fonts/latin_short.png, adv = advance in px)\n'+t;
+  return t}
+const jsonOut=()=>JSON.stringify(G,null,1);
+$('ft_dljs').onclick=()=>save(new Blob([genEF()],{type:'text/javascript'}),'EmeraldFont.js');
+$('ft_dljson').onclick=()=>save(new Blob([jsonOut()],{type:'application/json'}),'glyphs.json');
+$('ft_dlpng').onclick=async()=>{const it=fontItem();if(!it){status('Load the font sheet first.');return}if(it===items[cur]&&flt)commitFloat();save(await toPng(it.c),'latin_short.png')};
+$('ft_zip').onclick=async()=>{const it=fontItem();if(!it){status('Load the font sheet first.');return}if(it===items[cur]&&flt)commitFloat();const enc=new TextEncoder();
+  save(zip([{name:'graphics/fonts/latin_short.png',data:new Uint8Array(await(await toPng(it.c)).arrayBuffer())},{name:'js/utils/EmeraldFont.js',data:enc.encode(genEF())},{name:'glyphs.json',data:enc.encode(jsonOut())}]),'font_update.zip');status('font_update.zip downloaded: unzip it into the repo root.')};
+// ----- tabs
+function setTab(t){tab=t;document.body.dataset.tab=t;$('tabPx').classList.toggle('on',t==='pixel');$('tabFt').classList.toggle('on',t==='font');
+  if(t==='font'){if(!Object.keys(G).length){try{setMap(parseEF(EF_DEFAULT),'built-in',EF_DEFAULT)}catch(e){}if(/^https?:/.test(location.protocol))loadEngine()}
+    if(!fontItem()&&/^https?:/.test(location.protocol))loadFontImage();else{const it=fontItem();if(it&&items[cur]!==it)select(items.indexOf(it))}
+    setTool('cell')}
+  fontUI();overlay()}
+$('tabPx').onclick=()=>setTab('pixel');$('tabFt').onclick=()=>setTab('font');
+fontReady=true;
+if(/[?&]tab=font/.test(location.search))setTab('font');else document.body.dataset.tab='pixel';
 </script></body></html>
