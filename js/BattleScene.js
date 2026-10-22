@@ -1089,20 +1089,21 @@ function createBattle(env) {
     if (S.b.kind === 'trainer' && side(1).vis) ballStrip(c, foe, FOE.boxX, FOE.boxY + 22, false);
   }
   const inR = (r, x, y) => r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  const lum = h => { const r = rgbOf(h); return (r[0] * .3 + r[1] * .59 + r[2] * .11); };
   function moveList(c, P, sel, learn) {
     const m = CF.msg; panel(c, m.x, m.y, m.w, m.h, true); S.hit.mv = [];
     for (let i = 0; i < 4; i++) {
-      const x = m.x + 16 + (i & 1) * 70, y = m.y + 8 + (i >> 1) * 15, s = P.moves[i]; S.hit.mv.push({ x: x - 10, y: y - 3, w: 70, h: 15 });
-      if (!s) { T(c, '-', x, y, 'mute'); continue; }
-      const mi = mvInfo(s.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled; let nm = mi.name; while (nm.length > 3 && tw(nm) > 62) nm = nm.slice(0, -1);
-      T(c, nm, x, y, dis ? 'mute' : 'dark'); if (sel === i) tri(c, x - 7 + Math.round(Math.sin(S.t * 9)), y + 4, 3, '#d04040');
+      const x = m.x + 6 + (i & 1) * 73, y = m.y + 3 + (i >> 1) * 19, w = 70, h = 16, s = P.moves[i]; S.hit.mv.push({ x, y, w, h: 19 });
+      if (!s) { pill(c, x, y, w, h, '#2a2e42', 9); continue; }
+      const mi = mvInfo(s.key), dis = S.mode === 'move' && S.b.usable(P)[i] && S.b.usable(P)[i].disabled, col = dis ? '#6b7080' : TYPE_COLOR(mi.type), off = btn(c, x, y, w, h, col, sel === i);
+      let nm = mi.name; while (nm.length > 3 && tw(nm) > w - 12) nm = nm.slice(0, -1); Tc(c, nm, x, w, y + 3 + off, lum(col) > 150 ? 'dark' : 'white', false);
     }
-    const px = m.x + 150, pw = m.w - 152; panel(c, px, m.y + 3, pw, m.h - 6, false); const s = P.moves[sel]; if (!s) return;
+    const px = m.x + 158, pw = m.w - 162, py = m.y + 4, ph = m.h - 8; pill(c, px, py + 1, pw, ph, '#0e1020', 7); pill(c, px, py, pw, ph, '#242a44', 7); const s = P.moves[sel]; if (!s) return;
     const mi = mvInfo(s.key);
-    if (S.mvMsg && S.mode === 'move') { wrapPx(S.mvMsg, pw - 12).slice(0, 2).forEach((l, i) => T(c, l, px + 6, m.y + 8 + i * 14, 'red')); return; }
-    if (learn) T(c, 'Forget which?', px + 6, m.y + 7, 'red'); else T(c, 'PP', px + 6, m.y + 7, 'dark');
-    TR(c, s.pp + '/' + s.maxpp, px + pw - 6, m.y + (learn ? 21 : 7), s.pp <= Math.floor(s.maxpp / 4) ? 'red' : 'dark');
-    if (!learn) badge(c, mi.type, px + 6, m.y + 22);
+    if (S.mvMsg && S.mode === 'move') { wrapPx(S.mvMsg, pw - 12).slice(0, 3).forEach((l, i) => T(c, l, px + 6, py + 3 + i * 11, 'red')); return; }
+    if (learn) { T(c, 'Forget which?', px + 6, py + 4, 'red'); TR(c, s.pp + '/' + s.maxpp, px + pw - 6, py + 18, 'white'); return; }
+    T(c, 'PP', px + 6, py + 4, 'white'); TR(c, s.pp + '/' + s.maxpp, px + pw - 6, py + 4, s.pp <= Math.floor(s.maxpp / 4) ? 'red' : 'white');
+    badge(c, mi.type, px + 6, py + 19);
   }
   function ynBox(c) {
     const m = CF.msg, x = m.x + 2, y = m.y - 38; panel(c, x, y, 62, 36, false); S.hit.yn = [];
@@ -1112,9 +1113,12 @@ function createBattle(env) {
     const m = CF.msg, md = S.mode; S.hit.cmd = null; S.hit.mv = null; S.hit.yn = null;
     if (md === 'cmd') {
       panel(c, m.x, m.y, m.w, m.h, true);
-      wrapPx((S.lines || []).join(' '), 116).slice(0, 2).forEach((l, i) => T(c, l, m.x + 8, m.y + 8 + i * 16, 'dark'));
-      const px = m.x + 130, pw = m.w - 132; panel(c, px, m.y + 3, pw, m.h - 6, false); const lab = ['FIGHT', 'BAG', 'POKéMON', 'RUN']; S.hit.cmd = [];
-      for (let i = 0; i < 4; i++) { const x = px + 14 + (i & 1) * 54, y = m.y + 8 + (i >> 1) * 15; S.hit.cmd.push({ x: x - 10, y: y - 4, w: 54, h: 16 }); T(c, lab[i], x, y, 'dark'); if (S.cmd === i) tri(c, x - 6 + Math.round(Math.sin(S.t * 9)), y + 4, 3, '#d04040'); }
+      wrapPx((S.lines || []).join(' '), 104).slice(0, 2).forEach((l, i) => T(c, l, m.x + 8, m.y + 8 + i * 16, 'dark'));
+      const lab = ['FIGHT', 'BAG', 'POKéMON', 'RUN'], col = ['#d9381e', '#2196f3', '#9c27b0', '#e6a800']; S.hit.cmd = [];
+      for (let i = 0; i < 4; i++) {
+        const x = m.x + 118 + (i & 1) * 56, y = m.y + 3 + (i >> 1) * 19, w = 53, h = 16; S.hit.cmd.push({ x, y, w, h: 19 });
+        const off = btn(c, x, y, w, h, col[i], S.cmd === i); Tc(c, lab[i], x, w, y + 3 + off, i === 3 ? 'dark' : 'white', false);
+      }
       return;
     }
     if (md === 'move') { moveList(c, S.b.active(0), S.mv, false); return; }
@@ -1498,7 +1502,7 @@ class BattleScene extends Phaser.Scene {
 
     // ---- music
     // music: a plain <audio> element, created (and downloading) as soon as BattleScene.js loads, so it starts at once
-    try { const m = BattleScene.musicEl(); if (m) { m.loop = true; m.volume = 0.5; m.currentTime = 0; const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a key press */ }); this.battleMusic = m; } } catch (e) { /* no audio */ }
+    try { const m = BattleScene.musicEl(); if (m) { m.loop = true; m.volume = 0.5; m.currentTime = 0; BattleScene.musicOn = true; const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a key press */ }); this.battleMusic = m; } } catch (e) { /* no audio */ }
 
     // ---- input
     const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b' };
@@ -1558,7 +1562,8 @@ class BattleScene extends Phaser.Scene {
   teardown() {
     if (this.tornDown) return; this.tornDown = true;
     try { window.removeEventListener('keydown', this.kd, true); } catch (e) { /* ignore */ }
-    try { if (this.battleMusic) { this.battleMusic.pause(); this.battleMusic.currentTime = 0; } } catch (e) { /* ignore */ }
+    BattleScene.musicOn = false;   // the audio unlock in Layout.js must not restart it
+    try { const m = this.battleMusic; if (m) { m.pause(); m.currentTime = 0; setTimeout(() => { if (!BattleScene.musicOn) { try { m.pause(); m.currentTime = 0; } catch (e) { /* ignore */ } } }, 400); } } catch (e) { /* ignore */ }   // (the 2nd pause catches a play() that was still pending)
     // The two canvas textures are NOT removed here: the scene's images still use them for the frame being drawn, and removing a texture
     // in use makes WebGL throw "Cannot read properties of null (reading 'isGLTexture')". create() replaces them on the next battle.
     this.ctxTop = this.ctxBot = null;
