@@ -13,7 +13,7 @@
   const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
   const tq = qs.get('touch');
   const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
-  const PM = window.PMLayout = { version: 6, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+  const PM = window.PMLayout = { version: 7, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
     set(o) {
       o = o || {};
       if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
@@ -29,7 +29,7 @@
       const g = window.game; if (!g) return;
       try { const ctx = g.sound && g.sound.context; if (ctx && ctx.state !== 'running') ctx.resume().catch(() => { /* needs a real tap */ }); } catch (e) { /* ignore */ }
       let inBattle = false; try { inBattle = g.scene.isActive('BattleScene'); } catch (e) { /* ignore */ }
-      try { const m = window.BattleScene && window.BattleScene._m; if (inBattle && m && m.paused) { const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* ignore */ }); } } catch (e) { /* ignore */ }
+      try { const m = window.BattleScene && window.BattleScene._m; if (inBattle && m && m.paused && window.BattleScene.musicOn) { const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* ignore */ }); } } catch (e) { /* ignore */ }
       if (inBattle || (window.BattleTransition && window.BattleTransition.busy)) return;
       try {
         const cur = window.currentGlobalMusic;
