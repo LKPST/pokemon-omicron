@@ -61,6 +61,15 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 .owc.open .pop{display:block}.owc .pop input{width:calc(100% - 12px);margin:6px}
 .owc .lst{max-height:300px;overflow:auto}.owc .it{display:flex;gap:8px;align-items:center;padding:4px 8px;cursor:pointer}.owc .it:hover,.owc .it.hl{background:#2a3b52}.owc .it.on{outline:1px solid #ffd600;outline-offset:-1px}
 .owc .it div{min-width:0}.owc .it b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eee;font-weight:500}
+/* ---- tile editor ---- */
+#ted{position:fixed;inset:0;background:#101010;z-index:60;display:flex;flex-direction:column}#ted[hidden]{display:none}
+#tedHead{display:flex;gap:6px;align-items:center;padding:6px 10px;background:#1b1b1b;border-bottom:1px solid #333;flex-wrap:wrap}#tedHead b{color:#00acc1}#tedSt{color:#ffd600;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tedBody{flex:1;display:grid;grid-template-columns:240px minmax(300px,1fr) 330px;min-height:0}
+#tdL,#tdM,#tdR{padding:8px;display:flex;flex-direction:column;gap:6px;border-right:1px solid #2a2a2a;min-height:0;overflow:auto}#tdM{overflow:hidden}
+#tdList{display:flex;flex-direction:column;gap:2px;overflow:auto;flex:1;min-height:80px}.tdit{display:flex;gap:6px;align-items:center;padding:3px 5px;border-radius:4px;cursor:pointer;background:#181818}.tdit:hover{background:#262626}.tdit.on{background:#00363d;outline:1px solid #00acc1}
+.tdit canvas{width:36px;height:36px;background:repeating-conic-gradient(#2a2a2a 0 25%,#222 0 50%) 0 0/8px 8px;image-rendering:pixelated;flex:none}.tdit b{display:block}.tdit small{color:#888}
+#tdCvWrap{flex:1;min-height:120px;position:relative;background:#0b0b0b;border:1px solid #333}#tdCv{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.frow{display:flex;gap:6px}.frow label{flex:1}.help{color:#888;font-size:11px}
 </style></head><body>
 <div id="side">
   <div class="row"><select id="mapSel" style="flex:1"></select><button id="newMap">+ Map</button></div>
@@ -78,7 +87,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 <div id="main">
   <div id="bar">
     <button id="undoB">↶ Undo</button><button id="redoB">↷ Redo</button>
-    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button>
+    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="gridT" checked> Grid</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="sprT" checked> Sprites</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="borT" checked> Border</label>
@@ -86,6 +95,26 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
     <span style="color:#777">Wheel = zoom · Space/Middle/Right-drag = pan · Shift-click palette = pick · V P B R E I = tools</span>
   </div>
   <canvas id="cv" tabindex="0"></canvas><div id="status"></div>
+</div>
+<div id="ted" hidden>
+  <div id="tedHead"><b>🧱 Tiles</b><span id="tdCount" class="help"></span><span id="tedSt"></span>
+    <button id="tdLoadT" title="pick your tiles.js if it was not found next to this page">Load tiles.js…</button>
+    <button id="tdSave" class="on">💾 Save tiles.js</button><button id="tdCopy">Copy</button><button id="tdZipB" title="new/replaced tile images at their project paths + tiles.js">⬇ New images (ZIP)</button><button id="tdClose">✕ Close</button></div>
+  <div id="tedBody">
+    <div id="tdL"><input type="text" id="tdQ" placeholder="search id / name / image…"><div id="tdList"></div>
+      <div class="row"><button id="tdNewImg" class="on" style="flex:1">+ New from image(s)…</button></div>
+      <div class="row"><button id="tdDup" style="flex:1">Duplicate</button><button id="tdDel" style="flex:1">Delete</button></div>
+      <div class="help">Uploading an image captures its size and sets Normal (16×16) or Multi-tile with frames and columns. Change anything on the right.</div></div>
+    <div id="tdM">
+      <div class="row" style="align-items:center"><button id="tdLoadSheet" class="on">Load tile sheet(s)…</button><select id="tdSheet" style="width:auto;flex:1;min-width:120px"></select><button id="tdDelSheet" title="forget this sheet">✕</button></div>
+      <div class="row" style="align-items:center">Grid <input type="number" id="tdGrid" value="16" min="1" style="width:56px"><label style="flex-direction:row;align-items:center;gap:4px;margin:0"><input type="checkbox" id="tdSnap" checked> snap selection to grid</label>Zoom <input type="range" id="tdZ" min="0.5" max="24" step="0.5" value="4" style="width:120px"></div>
+      <div id="tdCvWrap"><canvas id="tdCv"></canvas></div>
+      <div class="row" style="align-items:center">x<input type="number" id="tsX" style="width:60px">y<input type="number" id="tsY" style="width:60px">w<input type="number" id="tsW" style="width:60px">h<input type="number" id="tsH" style="width:60px"><span id="tsInfo" class="help"></span></div>
+      <div class="row" style="align-items:center"><input type="text" id="tsName" placeholder="name for the new tile" style="flex:1;min-width:120px"><button id="tsAdd" class="on" disabled>Add tile from selection</button><button id="tsEach" disabled title="one tile per grid cell, empty cells skipped">Add each cell as a tile</button></div>
+      <div class="help">Drag = highlight · wheel = zoom · Space / middle / right-drag = pan · sheets are remembered in this browser, so you can reuse them · you can also drop images here.</div></div>
+    <div id="tdR"><b style="color:#00acc1">Tile details</b><div id="tdForm"></div></div>
+  </div>
+  <input type="file" id="tdFI" accept="image/*" multiple hidden><input type="file" id="tdFR" accept="image/*" hidden><input type="file" id="tdFS" accept="image/*" multiple hidden><input type="file" id="tdFT" accept=".js,text/javascript" hidden>
 </div>
 <datalist id="musicList"></datalist><datalist id="dlFlag"></datalist><datalist id="dlVar"></datalist><datalist id="dlLabel"></datalist><datalist id="dlTarget"></datalist>
 <div id="sed">
@@ -806,6 +835,201 @@ $('layerBtns').innerHTML=[1,2,3,4,5].map(n=>`<button data-l="${n}">L${n}${n==1?'
 $('layerBtns').onclick=e=>{if(e.target.dataset.l)setLayer(+e.target.dataset.l)};
 $('layerBtns').onchange=e=>{const id=e.target.id;if(id==='viewMode'){viewMode=e.target.value;redraw()}
   else if(id==='passSel'){pass=+e.target.value;brush.cells=brush.cells.map(r=>r.map(v=>v?setPass(v,pass):v));info();redraw()}else if(id==='bhvT')redraw()};
+// =====================================================================================================================
+//  TILE EDITOR  (opens from the "🧱 Tiles" button). Edits tiles.js, adds tiles from uploaded images or from a highlighted
+//  area of a sprite sheet, captures the dimension automatically, keeps your tile sheets for re-use, and updates the palette live.
+// =====================================================================================================================
+const TD={tiles:[],sel:null,sheets:[],sheet:null,z:4,ox:16,oy:16,grid:16,snap:true,sel0:null,rect:null,prefix:'',suffix:'\n',srcText:'',fileHandle:null,q:'',use:null,drag:null,pan:null,space:false};
+const tdE=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tdSlug=s=>String(s).trim().replace(/\.[a-z0-9]+$/i,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')||'tile';
+const tdMsg=t=>{$('tedSt').textContent=t;$('tedSt').title=t};
+// ---------- reading tiles.js text (keeps your own expressions like 96/16 * 32/16 for tiles you do not touch)
+function tdFindTable(src){const m=/window\s*\.\s*OverworldTiles\s*=\s*\{/.exec(src);if(!m)return null;const start=m.index+m[0].length-1;
+  let depth=0,i=start,str=null,es=-1,key=null,lastTop=start+1;const entries=[];
+  for(;i<src.length;i++){const ch=src[i],nx=src[i+1];
+    if(str){if(ch==='\\')i++;else if(ch===str)str=null;continue}
+    if(ch==='/'&&nx==='/'){while(i<src.length&&src[i]!=='\n')i++;continue}
+    if(ch==='/'&&nx==='*'){i=src.indexOf('*/',i+2);if(i<0)return null;i++;continue}
+    if(ch==="'"||ch==='"'||ch==='`'){str=ch;continue}
+    if(ch==='{'){depth++;if(depth===2){const pre=src.slice(lastTop,i),km=/(?:^|[\s,])("[^"]*"|'[^']*'|[\w$]+)\s*:\s*$/.exec(pre);key=km?km[1].replace(/^["']|["']$/g,''):null;es=i}}
+    else if(ch==='}'){depth--;if(depth===1){entries.push({key,text:src.slice(es,i+1)});lastTop=i+1}if(depth===0)break}}
+  if(depth!==0)return null;let end=i+1;while(src[end]===' '||src[end]===';')end++;
+  return{prefix:src.slice(0,m.index),entries,suffix:src.slice(end)}}
+const tdEval=t=>{try{return(new Function('return ('+t+')'))()}catch(e){return undefined}};
+function tdRawFields(block){const raw={};for(const line of block.split(/\r?\n/)){const m=/^\s*([A-Za-z_$][\w$]*)\s*:\s*(.*?)\s*,?\s*$/.exec(line);if(m&&m[2]!=='{')raw[m[1]]=m[2]}return raw}
+function tdFromSource(text){const t=tdFindTable(text);if(!t)return false;
+  const tiles=[];
+  for(const en of t.entries){const d=tdEval(en.text);if(!d||typeof d!=='object')continue;const id=Number(en.key);
+    tiles.push({id:Number.isFinite(id)?id:en.key,d,raw:tdRawFields(en.text),block:en.text,mod:false,canvas:null,src:null})}
+  TD.tiles=tiles;TD.prefix=t.prefix;TD.suffix=t.suffix||'\n';TD.srcText=text;return true}
+function tdFromLive(){const o=window.OverworldTiles||{};TD.tiles=Object.keys(o).map(k=>({id:Number.isFinite(+k)?+k:k,d:JSON.parse(JSON.stringify(o[k])),raw:null,block:null,mod:false,canvas:null,src:null}));TD.prefix='';TD.suffix='\n'}
+async function tdLoadSource(){let p=null;try{const m=JSON.parse(localStorage.edPaths||'{}');p=m['tiles.js']}catch(e){}
+  if(!p&&window.__loadReport){const r=window.__loadReport.find(x=>x.name==='tiles.js');p=r&&r.path}
+  if(p){try{const r=await fetch(p,{cache:'no-store'});if(r.ok){const t=await r.text();if(tdFromSource(t))return true}}catch(e){}}return false}
+// ---------- writing tiles.js
+const tdKey=id=>/^[A-Za-z_$][\w$]*$/.test(String(id))||/^\d+$/.test(String(id))?String(id):JSON.stringify(String(id));
+function tdBlock(t){if(!t.mod&&t.block)return t.block;
+  const lines=Object.keys(t.d).map(k=>{const v=t.d[k];let txt=JSON.stringify(v);
+    if(t.raw&&k in t.raw){const ev=tdEval(t.raw[k]);if(ev!==undefined&&JSON.stringify(ev)===JSON.stringify(v))txt=t.raw[k]}return`    ${k}: ${txt}`});
+  return'{\n'+lines.join(',\n')+'\n  }'}
+function tdOut(){const body=TD.tiles.map(t=>`  ${tdKey(t.id)}: ${tdBlock(t)}`).join(',\n');return TD.prefix+'window.OverworldTiles = {\n'+body+'\n};'+(TD.suffix.startsWith('\n')?'':'\n')+TD.suffix}
+// ---------- live: push the tiles into the map editor (palette + canvas)
+let tdT=0;
+function tdApply(){const o={};for(const t of TD.tiles)o[t.id]=JSON.parse(JSON.stringify(t.d));window.OverworldTiles=o;clearTimeout(tdT);tdT=setTimeout(()=>{buildPalette();redraw()},120)}
+function tdReg(t){if(!t.canvas)return;const p=t.d.tileImage;if(!p)return;const im=new Image();im.n=99;im.onload=()=>{im.ok=1;clearTimeout(tdT);tdT=setTimeout(()=>{buildPalette();redraw();tdList();tdForm()},80)};im.src=t.canvas.toDataURL('image/png');imgs[p]=im}
+// ---------- helpers
+const tdById=id=>TD.tiles.find(t=>String(t.id)===String(id));
+const tdNextId=()=>{let m=-1;for(const t of TD.tiles)if(Number.isFinite(+t.id))m=Math.max(m,+t.id);return m+1};
+function tdUsage(){const u={};const walk=v=>{if(typeof v==='string'){const m=/^(\d+)\|/.exec(v);if(m)u[m[1]]=(u[m[1]]||0)+1}else if(Array.isArray(v))for(const x of v)walk(x);else if(v&&typeof v==='object')for(const k of Object.keys(v))if(k!=='events')walk(v[k])};
+  for(const m of Object.values(repo))walk(m);return u}
+function tdUniquePath(base){let p=base,i=2;const used=new Set(TD.tiles.map(t=>t.d.tileImage));while(used.has(p))p=base.replace(/(\.png)?$/,'_'+(i++)+'$1');return p}
+function tdImgSize(t){const i=t.canvas||tileImg(t.d);return i?{w:i.naturalWidth||i.width,h:i.naturalHeight||i.height}:null}
+function tdMakeTile(canvas,name,src,file){const id=tdNextId(),w=canvas.width,h=canvas.height,cols=Math.max(1,Math.ceil(w/16)),rows=Math.max(1,Math.ceil(h/16)),multi=!(w===16&&h===16);
+  const d={tileID:id,tileName:name,tileType:multi?'Multi-tile':'Normal',isAnimated:false,frames:cols*rows};if(multi&&cols>=1)d.columns=cols;
+  d.tileImage=tdUniquePath('graphics/tiles/'+(file?tdSlug(file):tdSlug(name).toLowerCase())+'.png');d.tileDimension=w+'x'+h;
+  const t={id,d,raw:null,block:null,mod:true,canvas,src:src||null};TD.tiles.push(t);tdReg(t);return t}
+function tdCrop(sheet,x,y,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(sheet.canvas,x,y,w,h,0,0,w,h);return c}
+// ---------- tile list
+function tdThumb(t,sz=36){const c=document.createElement('canvas');c.width=c.height=sz;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+  const draw=n=>{const i=t.canvas||tileImg(t.d);if(i){const w=i.naturalWidth||i.width,h=i.naturalHeight||i.height,k=Math.min(sz/w,sz/h);x.clearRect(0,0,sz,sz);x.drawImage(i,(sz-w*k)/2,(sz-h*k)/2,w*k,h*k)}else if(n<14)setTimeout(()=>draw(n+1),250)};draw(0);return c}
+function tdList(){const l=$('tdList');l.innerHTML='';const q=TD.q.toLowerCase();let n=0;
+  for(const t of TD.tiles){const txt=`${t.id} ${t.d.tileName||''} ${t.d.tileType||''} ${t.d.tileImage||''}`.toLowerCase();if(q&&!txt.includes(q))continue;n++;
+    const r=document.createElement('div');r.className='tdit'+(t===TD.sel?' on':'');r.appendChild(tdThumb(t));
+    const d=document.createElement('div');d.innerHTML=`<b>${tdE(t.id)} · ${tdE(t.d.tileName||'?')}</b><small>${tdE(t.d.tileType||'')} · ${tdE(t.d.tileDimension||'')}${t.mod?' · <i style="color:#ffd600">edited</i>':''}${t.canvas&&t.mod?' · new image':''}</small>`;r.appendChild(d);
+    r.onclick=()=>{TD.sel=t;tdList();tdForm();tdDraw()};l.appendChild(r)}
+  if(!n)l.innerHTML='<div class="help" style="padding:8px">no tiles match</div>';$('tdCount').textContent=TD.tiles.length+' tiles'}
+// ---------- details form
+function tdForm(){const f=$('tdForm'),t=TD.sel;if(!t){f.innerHTML='<div class="help">Pick a tile on the left, or add one from an image or from the sheet.</div>';return}
+  const d=t.d,use=(TD.use||{})[t.id]||0,sz=tdImgSize(t);
+  f.innerHTML=`
+  <label>tileID<input type="number" id="tfId" value="${tdE(t.id)}" ${use?'disabled title="used on maps, so the ID is locked"':''}></label>
+  <label>tileName<input type="text" id="tfName" value="${tdE(d.tileName||'')}"></label>
+  <label>tileType<input type="text" id="tfType" list="tdTypes" value="${tdE(d.tileType||'')}"><datalist id="tdTypes"><option>Normal</option><option>Multi-tile</option></datalist></label>
+  <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="tfAnim" ${d.isAnimated?'checked':''}> isAnimated</label>
+  <div class="frow"><label>frames<input type="number" id="tfFr" min="1" value="${tdE(d.frames??1)}"></label><label>columns<input type="number" id="tfCol" min="1" value="${tdE(d.columns??'')}" placeholder="(none)"></label></div>
+  <label>tileImage (path in the project)<input type="text" id="tfImg" value="${tdE(d.tileImage||'')}"></label>
+  <div class="frow"><label>width<input type="number" id="tfW" min="1" value="${(String(d.tileDimension||'').split('x')[0])||''}"></label><label>height<input type="number" id="tfH" min="1" value="${(String(d.tileDimension||'').split('x')[1])||''}"></label></div>
+  <div class="row"><button id="tfDetect" title="read the real size of the image">Detect size${sz?` (${sz.w}×${sz.h})`:''}</button><button id="tfAuto" title="frames = cells of 16×16, columns = width / 16">Auto frames &amp; columns</button></div>
+  <div class="row"><button id="tfRepl">Replace image…</button><button id="tfCrop" ${TD.rect&&TD.sheet?'':'disabled'} title="use the highlighted area of the sheet">Replace from sheet selection</button></div>
+  <div class="help">Used on maps: <b>${use}</b> cell(s)${t.canvas&&t.mod?' · this image is new and goes in the ZIP at the path above':''}</div>
+  ${Object.keys(d).filter(k=>!['tileID','tileName','tileType','isAnimated','frames','columns','tileImage','tileDimension'].includes(k)).map(k=>`<div class="help">kept: ${tdE(k)} = ${tdE(JSON.stringify(d[k]))}</div>`).join('')}
+  <canvas id="tfPrev" style="margin-top:8px"></canvas>`;
+  const touch=()=>{t.mod=true;tdApply();tdList();tdPrev()};
+  const num=(id,key,del)=>{$(id).oninput=()=>{const v=$(id).value;if(v===''&&del)delete d[key];else if(v!=='')d[key]=Number(v);touch()}};
+  $('tfName').oninput=()=>{d.tileName=$('tfName').value;touch()};$('tfType').oninput=()=>{d.tileType=$('tfType').value;touch()};
+  $('tfAnim').onchange=()=>{d.isAnimated=$('tfAnim').checked;touch()};num('tfFr','frames');num('tfCol','columns',true);
+  $('tfImg').oninput=()=>{const old=d.tileImage;d.tileImage=$('tfImg').value.trim();touch();tdReg(t)};
+  const dim=()=>{d.tileDimension=(+$('tfW').value||0)+'x'+(+$('tfH').value||0);touch()};$('tfW').oninput=dim;$('tfH').oninput=dim;
+  if($('tfId'))$('tfId').onchange=()=>{const v=Number($('tfId').value);if(!Number.isFinite(v)||tdById(v)&&tdById(v)!==t){tdMsg('That ID is already taken.');$('tfId').value=t.id;return}t.id=v;d.tileID=v;t.mod=true;TD.tiles.sort((a,b)=>(+a.id)-(+b.id));tdApply();tdList()};
+  $('tfDetect').onclick=()=>{const s=tdImgSize(t);if(!s)return tdMsg('The image is not loaded (check the path).');d.tileDimension=s.w+'x'+s.h;t.mod=true;tdApply();tdForm();tdList()};
+  $('tfAuto').onclick=()=>{const[w,h]=String(d.tileDimension||'16x16').split('x').map(Number);const c=Math.max(1,Math.ceil((w||16)/16)),r=Math.max(1,Math.ceil((h||16)/16));d.frames=c*r;if(c>1||/^Multi/.test(d.tileType||''))d.columns=c;t.mod=true;tdApply();tdForm();tdList()};
+  $('tfRepl').onclick=()=>$('tdFR').click();
+  $('tfCrop').onclick=()=>{if(!TD.rect||!TD.sheet)return;const r=TD.rect;t.canvas=tdCrop(TD.sheet,r.x,r.y,r.w,r.h);t.src={sheet:TD.sheet.name,...r};d.tileDimension=r.w+'x'+r.h;t.mod=true;tdReg(t);tdApply();tdForm();tdList();tdDraw();tdMsg(`Image of “${d.tileName}” replaced from the sheet (${r.w}×${r.h}).`)};
+  tdPrev()}
+function tdPrev(){const c=$('tfPrev'),t=TD.sel;if(!c||!t)return;const i=t.canvas||tileImg(t.d);if(!i){c.width=c.height=4;return}
+  const w=i.naturalWidth||i.width,h=i.naturalHeight||i.height,k=Math.max(1,Math.min(4,Math.floor(290/w)));c.width=w*k;c.height=h*k;const x=c.getContext('2d');x.imageSmoothingEnabled=false;x.drawImage(i,0,0,w*k,h*k);
+  x.strokeStyle='rgba(255,214,0,.55)';x.lineWidth=1;const n=Math.ceil(w/16),m=Math.ceil(h/16);x.beginPath();for(let a=1;a<n;a++){x.moveTo(a*16*k+.5,0);x.lineTo(a*16*k+.5,h*k)}for(let b=1;b<m;b++){x.moveTo(0,b*16*k+.5);x.lineTo(w*k,b*16*k+.5)}x.stroke();
+  if(/^Multi/.test(t.d.tileType||'')){x.fillStyle='#ffd600';x.font='10px monospace';const cols=t.d.columns||3;for(let f=0;f<(t.d.frames||1);f++){const cx=(f%cols)*16*k+2,cy=Math.floor(f/cols)*16*k+10;if(cx<w*k&&cy<h*k+10)x.fillText(f,cx,cy)}}}
+// ---------- sheets (kept in this browser so you can come back to them)
+const tdIdb=()=>new Promise((res,rej)=>{const r=indexedDB.open('pmTileSheets',1);r.onupgradeneeded=()=>r.result.createObjectStore('s');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+async function tdIdbPut(k,b){try{const d=await tdIdb();d.transaction('s','readwrite').objectStore('s').put(b,k)}catch(e){}}
+async function tdIdbDel(k){try{const d=await tdIdb();d.transaction('s','readwrite').objectStore('s').delete(k)}catch(e){}}
+async function tdIdbAll(){try{const d=await tdIdb();return await new Promise(res=>{const o={},rq=d.transaction('s').objectStore('s').openCursor();rq.onsuccess=()=>{const c=rq.result;if(c){o[c.key]=c.value;c.continue()}else res(o)};rq.onerror=()=>res({})})}catch(e){return{}}}
+const tdBitmap=async b=>{const bm=await createImageBitmap(b),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;c.getContext('2d').drawImage(bm,0,0);return c};
+async function tdAddSheet(file,persist=true){const canvas=await tdBitmap(file);let name=file.name,k=2;while(TD.sheets.some(s=>s.name===name))name=file.name.replace(/(\.[a-z0-9]+)?$/i,'_'+(k++)+'$1');
+  const s={name,canvas};TD.sheets.push(s);if(persist)tdIdbPut(name,file);return s}
+function tdSheetSel(){const s=$('tdSheet');s.innerHTML='';TD.sheets.forEach(x=>s.add(new Option(`${x.name} (${x.canvas.width}×${x.canvas.height})`,x.name)));if(TD.sheet)s.value=TD.sheet.name}
+function tdUseSheet(s,fit=true){TD.sheet=s;TD.rect=null;tdSheetSel();if(s&&fit){const b=$('tdCvWrap').getBoundingClientRect();TD.z=Math.max(1,Math.min(8,Math.floor(Math.min((b.width-30)/s.canvas.width,(b.height-30)/s.canvas.height)||2)));TD.ox=16;TD.oy=16}tdSel();tdDraw()}
+// ---------- sheet view
+const tdCv=$('tdCv'),tdX=tdCv.getContext('2d');
+function tdFit(){const b=$('tdCvWrap').getBoundingClientRect(),d=devicePixelRatio||1;tdCv.width=Math.max(1,b.width*d|0);tdCv.height=Math.max(1,b.height*d|0);tdDraw()}
+let tdNeed=false;function tdDraw(){if(tdNeed)return;tdNeed=true;requestAnimationFrame(()=>{tdNeed=false;tdPaint()})}
+function tdPaint(){const d=devicePixelRatio||1,w=tdCv.width,h=tdCv.height;tdX.setTransform(1,0,0,1,0,0);tdX.clearRect(0,0,w,h);
+  if(!TD.sheet){tdX.fillStyle='#7a7a7a';tdX.font=(14*d)+'px monospace';tdX.fillText('Load a tile sheet (button above) or drop an image here. Drag on it to highlight the tile(s).',20*d,40*d);return}
+  const s=TD.sheet.canvas,z=TD.z*d,ox=TD.ox*d,oy=TD.oy*d;tdX.imageSmoothingEnabled=false;
+  const t=Math.max(8*d,z);tdX.save();tdX.beginPath();tdX.rect(ox,oy,s.width*z,s.height*z);tdX.clip();for(let y=0;y*t<s.height*z;y++)for(let x=0;x*t<s.width*z;x++){tdX.fillStyle=(x+y)&1?'#232323':'#1a1a1a';tdX.fillRect(ox+x*t,oy+y*t,t,t)}tdX.restore();
+  tdX.drawImage(s,ox,oy,s.width*z,s.height*z);
+  const g=Math.max(1,TD.grid);if(g*TD.z>=5){tdX.strokeStyle='rgba(255,255,255,.14)';tdX.lineWidth=1;tdX.beginPath();for(let x=0;x<=s.width;x+=g){tdX.moveTo(ox+x*z+.5,oy);tdX.lineTo(ox+x*z+.5,oy+s.height*z)}for(let y=0;y<=s.height;y+=g){tdX.moveTo(ox,oy+y*z+.5);tdX.lineTo(ox+s.width*z,oy+y*z+.5)}tdX.stroke()}
+  for(const t of TD.tiles){if(!t.src||t.src.sheet!==TD.sheet.name)continue;const r=t.src;tdX.strokeStyle=t===TD.sel?'#ffd600':'rgba(0,229,255,.7)';tdX.lineWidth=t===TD.sel?2:1;tdX.strokeRect(ox+r.x*z+.5,oy+r.y*z+.5,r.w*z,r.h*z);tdX.fillStyle='rgba(0,229,255,.9)';tdX.font=(10*d)+'px monospace';tdX.fillText(t.id,ox+r.x*z+3,oy+r.y*z+11*d)}
+  const r=TD.drag?tdDragRect():TD.rect;if(r){tdX.fillStyle='rgba(255,214,0,.22)';tdX.fillRect(ox+r.x*z,oy+r.y*z,r.w*z,r.h*z);tdX.strokeStyle='#ffd600';tdX.lineWidth=2;tdX.strokeRect(ox+r.x*z,oy+r.y*z,r.w*z,r.h*z)}}
+const tdPx=ev=>{const b=tdCv.getBoundingClientRect();return{x:Math.floor((ev.clientX-b.left-TD.ox)/TD.z),y:Math.floor((ev.clientY-b.top-TD.oy)/TD.z)}};
+function tdDragRect(){const a=TD.drag.a,b=TD.drag.b,s=TD.sheet.canvas,g=TD.snap?Math.max(1,TD.grid):1;
+  let x0=Math.max(0,Math.min(a.x,b.x)),y0=Math.max(0,Math.min(a.y,b.y)),x1=Math.min(s.width-1,Math.max(a.x,b.x)),y1=Math.min(s.height-1,Math.max(a.y,b.y));
+  if(g>1){x0=Math.floor(x0/g)*g;y0=Math.floor(y0/g)*g;x1=Math.min(s.width,(Math.floor(x1/g)+1)*g)-1;y1=Math.min(s.height,(Math.floor(y1/g)+1)*g)-1}
+  return{x:x0,y:y0,w:x1-x0+1,h:y1-y0+1}}
+function tdSel(){const r=TD.rect;$('tsX').value=r?r.x:'';$('tsY').value=r?r.y:'';$('tsW').value=r?r.w:'';$('tsH').value=r?r.h:'';
+  $('tsInfo').textContent=r?`${r.w}×${r.h} px · ${Math.ceil(r.w/16)}×${Math.ceil(r.h/16)} cells of 16 · ${Math.ceil(r.w/16)*Math.ceil(r.h/16)} frames`:'drag on the sheet to highlight a tile';
+  $('tsAdd').disabled=!r;$('tsEach').disabled=!r;if(TD.sel)tdForm()}
+tdCv.addEventListener('contextmenu',e=>e.preventDefault());
+tdCv.addEventListener('mousedown',ev=>{if(!TD.sheet)return;const p=tdPx(ev);
+  if(ev.button===1||ev.button===2||TD.space){TD.pan={sx:ev.clientX,sy:ev.clientY,ox:TD.ox,oy:TD.oy};return}
+  if(ev.button!==0)return;
+  TD.drag={a:p,b:p};tdDraw()});
+addEventListener('mousemove',ev=>{if(TD.pan){TD.ox=TD.pan.ox+ev.clientX-TD.pan.sx;TD.oy=TD.pan.oy+ev.clientY-TD.pan.sy;tdDraw();return}
+  if(TD.drag){TD.drag.b=tdPx(ev);const r=tdDragRect();$('tsInfo').textContent=`${r.w}×${r.h} px`;tdDraw()}});
+addEventListener('mouseup',()=>{TD.pan=null;if(TD.drag){const r=tdDragRect(),moved=TD.drag.a.x!==TD.drag.b.x||TD.drag.a.y!==TD.drag.b.y;TD.rect=(r.w>0&&r.h>0)?r:null;TD.drag=null;
+    tdSel();tdDraw()}});
+tdCv.addEventListener('wheel',ev=>{ev.preventDefault();const b=tdCv.getBoundingClientRect(),mx=ev.clientX-b.left,my=ev.clientY-b.top,old=TD.z;TD.z=Math.max(.5,Math.min(40,old*Math.exp(-Math.max(-120,Math.min(120,ev.deltaY))*0.0015)));TD.ox=mx-(mx-TD.ox)*TD.z/old;TD.oy=my-(my-TD.oy)*TD.z/old;$('tdZ').value=Math.round(TD.z*10)/10;tdDraw()},{passive:false});
+addEventListener('keydown',ev=>{if($('ted').hidden)return;if(ev.code==='Space'&&!/INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)){TD.space=true;ev.preventDefault()}if(ev.key==='Escape'&&!/INPUT|SELECT|TEXTAREA/.test(ev.target.tagName))tdClose()});
+addEventListener('keyup',ev=>{if(ev.code==='Space')TD.space=false});
+$('tdZ').oninput=()=>{const old=TD.z;TD.z=+$('tdZ').value||1;const b=tdCv.getBoundingClientRect(),mx=b.width/2,my=b.height/2;TD.ox=mx-(mx-TD.ox)*TD.z/old;TD.oy=my-(my-TD.oy)*TD.z/old;tdDraw()};
+$('tdGrid').oninput=()=>{TD.grid=Math.max(1,+$('tdGrid').value||16);tdDraw()};$('tdSnap').onchange=()=>{TD.snap=$('tdSnap').checked};
+for(const id of['tsX','tsY','tsW','tsH'])$(id).oninput=()=>{if(!TD.sheet)return;const s=TD.sheet.canvas,x=+$('tsX').value||0,y=+$('tsY').value||0,w=+$('tsW').value||0,h=+$('tsH').value||0;
+  if(w>0&&h>0){TD.rect={x:Math.max(0,Math.min(s.width-1,x)),y:Math.max(0,Math.min(s.height-1,y)),w:Math.min(w,s.width-x),h:Math.min(h,s.height-y)};$('tsInfo').textContent=`${TD.rect.w}×${TD.rect.h} px`;$('tsAdd').disabled=$('tsEach').disabled=false;tdDraw()}};
+// ---------- add tiles
+$('tsAdd').onclick=()=>{if(!TD.rect||!TD.sheet)return;const r=TD.rect,name=($('tsName').value.trim()||('Tile '+tdNextId()));
+  const t=tdMakeTile(tdCrop(TD.sheet,r.x,r.y,r.w,r.h),name,{sheet:TD.sheet.name,...r});TD.sel=t;$('tsName').value='';tdApply();tdList();tdForm();tdDraw();
+  tdMsg(`Tile ${t.id} “${name}” added: ${t.d.tileDimension}, ${t.d.frames} frame(s). The sheet is still loaded, highlight the next one.`)};
+$('tsEach').onclick=()=>{if(!TD.rect||!TD.sheet)return;const r=TD.rect,g=Math.max(1,TD.grid),base=($('tsName').value.trim()||'Tile');let n=0,last=null;
+  for(let y=r.y;y<r.y+r.h;y+=g)for(let x=r.x;x<r.x+r.w;x+=g){const w=Math.min(g,r.x+r.w-x),h=Math.min(g,r.y+r.h-y);const c=tdCrop(TD.sheet,x,y,w,h);
+    let empty=true;const dd=c.getContext('2d').getImageData(0,0,w,h).data;for(let i=3;i<dd.length;i+=4)if(dd[i]){empty=false;break}if(empty)continue;
+    last=tdMakeTile(c,`${base} ${++n}`,{sheet:TD.sheet.name,x,y,w,h})}
+  if(last)TD.sel=last;$('tsName').value='';tdApply();tdList();tdForm();tdDraw();tdMsg(n?`${n} tiles added (one per ${g}×${g} cell, empty cells skipped).`:'Every cell in the selection was empty.')};
+$('tdNewImg').onclick=()=>$('tdFI').click();
+$('tdFI').onchange=async e=>{const fs=[...e.target.files];e.target.value='';let last=null;for(const f of fs){const c=await tdBitmap(f);last=tdMakeTile(c,f.name.replace(/\.[a-z0-9]+$/i,'').replace(/[_-]+/g,' '),null,f.name)}
+  if(last){TD.sel=last;tdApply();tdList();tdForm();tdMsg(`${fs.length} tile(s) added. Size was captured from the image; change anything in the form on the right.`)}};
+$('tdFR').onchange=async e=>{const f=e.target.files[0];e.target.value='';const t=TD.sel;if(!f||!t)return;t.canvas=await tdBitmap(f);t.d.tileDimension=t.canvas.width+'x'+t.canvas.height;t.mod=true;tdReg(t);tdApply();tdForm();tdList();tdMsg(`Image replaced, size captured: ${t.d.tileDimension}. Check frames and columns.`)};
+$('tdDup').onclick=()=>{const t=TD.sel;if(!t)return;const id=tdNextId(),d=JSON.parse(JSON.stringify(t.d));d.tileID=id;d.tileName=(d.tileName||'Tile')+' copy';
+  const n={id,d,raw:null,block:null,mod:true,canvas:t.canvas,src:t.src};
+  if(!t.canvas){const i=tileImg(t.d);if(i){const c=document.createElement('canvas');c.width=i.naturalWidth;c.height=i.naturalHeight;c.getContext('2d').drawImage(i,0,0);n.canvas=c}}
+  d.tileImage=tdUniquePath(d.tileImage||'graphics/tiles/tile.png');TD.tiles.push(n);tdReg(n);TD.sel=n;tdApply();tdList();tdForm()};
+$('tdDel').onclick=()=>{const t=TD.sel;if(!t)return;const use=(TD.use||{})[t.id]||0;if(!confirm(`Delete tile ${t.id} “${t.d.tileName}”?`+(use?`\n\nIt is used on ${use} map cell(s); those cells will show as plain green.`:'')))return;
+  TD.tiles=TD.tiles.filter(x=>x!==t);TD.sel=TD.tiles[0]||null;tdApply();tdList();tdForm();tdDraw()};
+$('tdQ').oninput=()=>{TD.q=$('tdQ').value;tdList()};
+// ---------- sheets buttons
+$('tdLoadSheet').onclick=()=>$('tdFS').click();
+$('tdFS').onchange=async e=>{const fs=[...e.target.files];e.target.value='';let s=null;for(const f of fs)s=await tdAddSheet(f);if(s)tdUseSheet(s)};
+$('tdSheet').onchange=()=>{const s=TD.sheets.find(x=>x.name===$('tdSheet').value);if(s)tdUseSheet(s)};
+$('tdDelSheet').onclick=()=>{const s=TD.sheet;if(!s||!confirm(`Forget the sheet “${s.name}”? (tiles already made from it are kept)`))return;TD.sheets=TD.sheets.filter(x=>x!==s);tdIdbDel(s.name);tdUseSheet(TD.sheets[0]||null)};
+$('tedBody').addEventListener('dragover',e=>e.preventDefault());
+$('tedBody').addEventListener('drop',async e=>{e.preventDefault();const fs=[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'));let s=null;for(const f of fs)s=await tdAddSheet(f);if(s)tdUseSheet(s)});
+// ---------- save / zip
+const tdCRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const tdCrc32=u=>{let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=tdCRC[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+async function tdZip(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;const now=new Date(),dt=((now.getFullYear()-1980)<<9|(now.getMonth()+1)<<5|now.getDate()),tm=(now.getHours()<<11|now.getMinutes()<<5|now.getSeconds()>>1);
+  for(const f of files){const data=new Uint8Array(await f.blob.arrayBuffer()),size=data.length,crc=tdCrc32(data),nm=enc.encode(f.name),h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);h.setUint32(14,crc,true);h.setUint32(18,size,true);h.setUint32(22,size,true);h.setUint16(26,nm.length,true);parts.push(h.buffer,nm,data);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);c.setUint32(16,crc,true);c.setUint32(20,size,true);c.setUint32(24,size,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);cd.push(c.buffer,nm);off+=30+nm.length+size}
+  let cs=0;for(const p of cd)cs+=p.byteLength;parts.push(...cd);const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,files.length,true);z.setUint16(10,files.length,true);z.setUint32(12,cs,true);z.setUint32(16,off,true);parts.push(z.buffer);return new Blob(parts,{type:'application/zip'})}
+const tdDl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000)};
+$('tdSave').onclick=async()=>{const t=tdOut();
+  if(window.showSaveFilePicker){try{TD.fileHandle||=await showSaveFilePicker({suggestedName:'tiles.js',types:[{description:'JavaScript',accept:{'text/javascript':['.js']}}]});const w=await TD.fileHandle.createWritable();await w.write(t);await w.close();tdMsg('tiles.js saved.'+(TD.tiles.some(x=>x.canvas&&x.mod)?' New images are in “Download new images (ZIP)”.':''));return}catch(e){if(e.name==='AbortError')return;TD.fileHandle=null}}
+  tdDl(new Blob([t],{type:'text/javascript'}),'tiles.js');tdMsg('tiles.js downloaded.'+(TD.tiles.some(x=>x.canvas&&x.mod)?' Do not forget the new images ZIP.':''))};
+$('tdCopy').onclick=async()=>{try{await navigator.clipboard.writeText(tdOut());tdMsg('tiles.js copied to the clipboard.')}catch(e){tdMsg('Could not copy; use Save instead.')}};
+$('tdZipB').onclick=async()=>{const list=TD.tiles.filter(t=>t.canvas&&t.mod&&t.d.tileImage);if(!list.length)return tdMsg('No new or replaced tile images yet.');
+  const files=[],seen=new Set();for(const t of list){if(seen.has(t.d.tileImage))continue;seen.add(t.d.tileImage);files.push({name:t.d.tileImage,blob:await new Promise(r=>t.canvas.toBlob(r,'image/png'))})}
+  files.push({name:'tiles.js',blob:new Blob([tdOut()],{type:'text/javascript'})});tdDl(await tdZip(files),'new_tiles.zip');tdMsg(`ZIP with ${files.length-1} image(s) and tiles.js. Put the images in the repo at the same paths (graphics/tiles/…).`)};
+$('tdLoadT').onclick=()=>$('tdFT').click();
+$('tdFT').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(tdFromSource(await f.text())){TD.sel=TD.tiles[0]||null;tdApply();TD.use=tdUsage();tdList();tdForm();tdMsg(`${TD.tiles.length} tiles read from ${f.name}.`)}else tdMsg('Could not find window.OverworldTiles = { … } in that file.')};
+// ---------- open / close
+async function tdOpen(){$('ted').hidden=false;document.body.style.overflow='hidden';
+  if(!TD.tiles.length||!TD.srcText){const ok=await tdLoadSource();if(!ok&&!TD.tiles.length)tdFromLive();else if(!ok)tdMsg('Could not read the tiles.js text; edited tiles will be rewritten from the loaded data.')}
+  TD.use=tdUsage();if(!TD.sel)TD.sel=TD.tiles[0]||null;
+  if(!TD.sheets.length){const all=await tdIdbAll();for(const[k,b]of Object.entries(all)){try{TD.sheets.push({name:k,canvas:await tdBitmap(b)})}catch(e){}}if(TD.sheets.length)TD.sheet=TD.sheets[0]}
+  tdSheetSel();tdList();tdForm();tdFit();tdUseSheet(TD.sheet,true);if(!TD.srcText)tdMsg('tiles.js text not found next to this page: use “Load tiles.js…” so unchanged tiles keep your exact text.')}
+function tdClose(){$('ted').hidden=true;document.body.style.overflow='';buildPalette();redraw()}
+$('tilesB').onclick=tdOpen;$('tdClose').onclick=tdClose;new ResizeObserver(()=>{if(!$('ted').hidden)tdFit()}).observe($('tdCvWrap'));
+
 seInit();load();buildPalette();setLayer(1);changed();setTab('env');
 });
 </script></body></html>
