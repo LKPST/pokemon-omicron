@@ -725,6 +725,12 @@ class OverworldScene extends Phaser.Scene {
     if (!mapData || !mapData.music) return;
 
     const path = mapData.music;
+    // The map music is a plain looping <audio> element (PMAudio.playMap in Layout.js), like the battle music. play() on an element that is already playing does
+    // nothing, so the 1 s safety check below can never restart the track (a Phaser sound restarts from 0 on every play(): that was the "broken record").
+    if (window.PMAudio && window.PMAudio.playMap) {
+      const old = window.currentGlobalMusic; if (old) { try { old.stop(); old.destroy(); } catch (e) { /* ignore */ } window.currentGlobalMusic = null; }   // no second, Phaser copy
+      window.currentGlobalMusicPath = path; window.PMAudio.playMap(path); return;
+    }
     const key = `map_music_${path}`;
     const cur = window.currentGlobalMusic;
     const alive = cur && cur.manager && !cur.pendingRemove;
