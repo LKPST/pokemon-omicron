@@ -1,4 +1,24 @@
 // ===========================================================================
+// TILE BEHAVIORS  (the third number of a map cell "tile|frame|behavior")
+//   0 passable · 1 blocked · 2 passable, tile drawn above NPCs · 3 surf · 4 dive · 5 grass (wild)
+//   6-9   passable, but a wall on the N / E / W / S edge of the tile
+//   10-13 the same with the tile drawn above NPCs ("NPC below")
+//   14    blocked, tile drawn above NPCs
+//   15-18 spin tile: pushes the player left / up / right / down until something stops them
+//   19-22 spin tile, drawn above NPCs
+// ===========================================================================
+window.OW_BEH = window.OW_BEH || {
+  solid: new Set([1, 14]),
+  above: new Set([2, 10, 11, 12, 13, 14, 19, 20, 21, 22]),
+  wall: { 6: 'n', 7: 'e', 8: 'w', 9: 's', 10: 'n', 11: 'e', 12: 'w', 13: 's' },
+  spin: { 15: 'left', 16: 'up', 17: 'right', 18: 'down', 19: 'left', 20: 'up', 21: 'right', 22: 'down' },
+  names: ['passable', 'BLOCKED', 'passable (above NPC)', 'surf', 'dive', 'GRASS (wild)',
+    'passable, N wall', 'passable, E wall', 'passable, W wall', 'passable, S wall',
+    'N wall (above NPC)', 'E wall (above NPC)', 'W wall (above NPC)', 'S wall (above NPC)', 'BLOCKED (above NPC)',
+    'SPIN left', 'SPIN up', 'SPIN right', 'SPIN down', 'SPIN left (above NPC)', 'SPIN up (above NPC)', 'SPIN right (above NPC)', 'SPIN down (above NPC)'],
+};
+
+// ===========================================================================
 // WEATHER
 // The weather of the map the player is standing in comes from the `weather:`
 // field in overworld_map.js. Supported values (case, spaces, "_" and "-" are
@@ -1162,7 +1182,7 @@ class OverworldScene extends Phaser.Scene {
 
           // layer 1 is the lowest (-300), layer 5 the highest (-100); all stay below NPCs and the player
           // behavior 2 tiles draw above NPCs and the player (below the weather, which is at 5000)
-          const depth = pass === 2 ? 4000 + layer : -300 + (layer - 1) * 50 + (multi ? 10 : 0);
+          const depth = window.OW_BEH.above.has(pass) ? 4000 + layer : -300 + (layer - 1) * 50 + (multi ? 10 : 0);
           const x = Math.round(offsetX + col * tileSize + tileSize / 2);
           const y = Math.round(offsetY + row * tileSize + tileSize / 2);
           const img = this.add.image(x, y, key, frame).setScale(scale).setDepth(depth);
@@ -1196,7 +1216,7 @@ class OverworldScene extends Phaser.Scene {
       const c = this.parseTileCell(grid[gridY] && grid[gridY][gridX]);
       if (!c) { console.log(`• Layer ${layer}: empty`); continue; }
       const def = (window.OverworldTiles && window.OverworldTiles[c.tileID]) || {};
-      console.log(`• Layer ${layer}: tile ${c.tileID} (${def.tileName || 'Unknown'}) frame ${c.frameID} · behavior: ${['passable', 'BLOCKED', 'passable (above NPC)', 'surf', 'dive', 'GRASS (wild)'][c.pass] || c.pass}`);
+      console.log(`• Layer ${layer}: tile ${c.tileID} (${def.tileName || 'Unknown'}) frame ${c.frameID} · behavior: ${window.OW_BEH.names[c.pass] || c.pass}`);
     }
     console.groupEnd();
   }
@@ -1342,7 +1362,32 @@ class OverworldScene extends Phaser.Scene {
     return false;
   }
 
-  isPassable(gridX, gridY) {
+  // behaviors of every layer of a tile of the CURRENT map
+  passesAt(gx, gy) {
+    const out = [];
+    if (!this.currentMap) return out;
+    for (const { grid } of this.getTileLayers(this.currentMap)) {
+      const c = this.parseTileCell(grid[gy] && grid[gy][gx]);
+      if (c) out.push(c.pass);
+    }
+    return out;
+  }
+
+  // does a wall on edge `w` ('n','e','w','s') stop a move in direction `dir`? entering = the wall belongs to the tile we step onto
+  wallBlocks(w, dir, entering) {
+    if (!w) return false;
+    if (entering) return (dir === 'up' && w === 's') || (dir === 'down' && w === 'n') || (dir === 'left' && w === 'e') || (dir === 'right' && w === 'w');
+    return (dir === 'up' && w === 'n') || (dir === 'down' && w === 's') || (dir === 'left' && w === 'w') || (dir === 'right' && w === 'e');
+  }
+
+  // the direction a spin tile under the player pushes them, or null
+  spinDir() {
+    for (const p of this.passesAt(this.playerGridX, this.playerGridY)) { const d = window.OW_BEH.spin[p]; if (d) return d; }
+    return null;
+  }
+
+  // dir (optional, 'up'|'down'|'left'|'right'): the way the player is moving, so wall tiles (behavior 6-13) can block it
+  isPassable(gridX, gridY, dir) {
     const cols = this.currentMap.dimensions.width;
     const rows = this.currentMap.dimensions.height;
     const connections = this.currentMap.connections || {};
@@ -1390,9 +1435,15 @@ class OverworldScene extends Phaser.Scene {
     for (const { grid } of layers) {
       const c = this.parseTileCell(grid[localY] && grid[localY][localX]);
       if (!c) continue;
-      if (c.pass === 1) return false;                     // blocked
+      if (window.OW_BEH.solid.has(c.pass)) return false;  // blocked
+      if (dir && this.wallBlocks(window.OW_BEH.wall[c.pass], dir, true)) return false;   // wall on the edge we would enter through
       if (c.pass === 3 && !this.isSurfing) return false;  // surfable water
       if (c.pass === 4 && !this.isDiving) return false;   // diveable water
+    }
+
+    // wall on the edge of the tile we are standing on and leaving through
+    if (dir) {
+      for (const p of this.passesAt(this.playerGridX, this.playerGridY)) if (this.wallBlocks(window.OW_BEH.wall[p], dir, false)) return false;
     }
 
     // Only NPCs/buildings block. Warp and Script triggers are not in this.npcs.
@@ -1791,6 +1842,13 @@ class OverworldScene extends Phaser.Scene {
       newDir = 'down';
     }
 
+    // [SPIN] a spin tile keeps pushing the player until the way ahead is blocked
+    const spin = this.spinDir();
+    if (spin) {
+      const sx = spin === 'left' ? -1 : spin === 'right' ? 1 : 0, sy = spin === 'up' ? -1 : spin === 'down' ? 1 : 0;
+      if (this.isPassable(this.playerGridX + sx, this.playerGridY + sy, spin)) { dx = sx; dy = sy; newDir = spin; }
+    }
+
     this.player.direction = newDir;
 
     if (dx !== 0 || dy !== 0) {
@@ -1798,7 +1856,7 @@ class OverworldScene extends Phaser.Scene {
       const targetGridX = this.playerGridX + dx;
       const targetGridY = this.playerGridY + dy;
 
-      if (this.isPassable(targetGridX, targetGridY)) {
+      if (this.isPassable(targetGridX, targetGridY, newDir)) {
         const transitionMap = this.checkMapBoundaryTransition(targetGridX, targetGridY);
         if (transitionMap) {
           this.executeSeamlessTransition(transitionMap, newDir);
