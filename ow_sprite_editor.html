@@ -216,7 +216,7 @@ function selEntries(){const a=S.entries.filter(e=>S.nsel.has(e));return a.length
 function renderList(){const l=$('list');l.innerHTML='';const c0=cur();if(c0&&!S.nsel.has(c0))S.nsel=new Set([c0]);for(const e of[...S.nsel])if(!S.entries.includes(e))S.nsel.delete(e);
   $('nselN').textContent=S.nsel.size>1?S.nsel.size+' NPCs selected':'';
   S.entries.forEach((e,i)=>{const d=document.createElement('div');d.className='it'+(S.nsel.has(e)?' sel':'');
-    d.innerHTML=`<span><small>${i+1}</small> ${esc(e.name)} <small>${esc(e.fields.owType||'')}</small></span>${e.rect?`<small>${e.cols}×${e.rows}</small>`:'<small class="w" title="no region on the sheet yet">⚠ unplaced</small>'}`;
+    d.innerHTML=`<span><small>${i+1}</small> ${esc(e.name)} <small>${esc(e.fields.owType||'')}${e.fields.owScale?' · ×'+e.fields.owScale:''}</small></span>${e.rect?`<small>${e.cols}×${e.rows}</small>`:'<small class="w" title="no region on the sheet yet">⚠ unplaced</small>'}`;
     d.onclick=ev=>{if(ev.shiftKey&&S.anchor!=null){const lo=Math.min(S.anchor,i),hi=Math.max(S.anchor,i);if(!(ev.ctrlKey||ev.metaKey))S.nsel=new Set();for(let k=lo;k<=hi;k++)S.nsel.add(S.entries[k])}
       else if(ev.ctrlKey||ev.metaKey){if(S.nsel.has(e)&&S.nsel.size>1)S.nsel.delete(e);else S.nsel.add(e);S.anchor=i}
       else{S.nsel=new Set([e]);S.anchor=i}
@@ -249,7 +249,7 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
     if(F.owSprite==='graphics/overworld/'+old+'.png')F.owSprite='graphics/overworld/'+slug(e.name)+'.png',$('fsp').value=F.owSprite;renderList()};
   const bind=(id,fn)=>{$(id).oninput=()=>{fn($(id).value);renderList();redraw()}};
   bind('fid',v=>F.spriteID=v);bind('fty',v=>F.owType=v);bind('fsp',v=>F.owSprite=v);bind('fod',v=>F.owDimension=v);
-  bind('fsc',v=>{const n=+v;if(!(n>0)||n===1)delete F.owScale;else F.owScale=n});
+  bind('fsc',v=>{const n=+v;if(!(n>0)||n===1){delete F.owScale;status('owScale cleared on '+e.name+' (1 = normal size).')}else{F.owScale=n;status('owScale '+n+' set on '+e.name+'. It is written to ow_table.js when you download.')}});
   bind('fsh',v=>{if(v)F.shinySprite=v;else delete F.shinySprite});
   const sz=()=>{F.trueDimension=Math.max(1,+$('fcw').value||1)+'x'+Math.max(1,+$('fch').value||1);redraw()};$('fcw').oninput=sz;$('fch').oninput=sz;
   $('fco').oninput=()=>{e.cols=Math.max(1,+$('fco').value||1);redraw()};$('fro').oninput=()=>{e.rows=Math.max(1,+$('fro').value||1);redraw()};
@@ -629,7 +629,7 @@ $('bZip').onclick=async()=>{if(!S.entries.length)return status('Nothing to expor
   files.push({name:'graphics/overworld/ow_manifest.json',blob:new Blob([manifest()],{type:'application/json'})});
   files.push({name:'graphics/overworld/'+S.sheetName,blob:await sheetBlob()});
   let n=0;const used=new Set();for(const e of S.entries){if(!rectOf(e))continue;const p=e.fields.owSprite;if(!p||used.has(p))continue;used.add(p);files.push({name:p,blob:await cutPng(e)});n++}
-  dl(await buildZip(files),'ow_sprites_export.zip');status(`ZIP ready: ow_table.js, manifest, sheet and ${n} sprite PNG(s). Unzip it on top of the repo.`)};
+  dl(await buildZip(files),'ow_sprites_export.zip');status(`ZIP ready: ow_table.js (${S.entries.length} entries, ${S.entries.filter(e=>e.fields.owScale).length} with owScale), manifest, sheet and ${n} sprite PNG(s). Unzip it on top of the repo.`)};
 // ---------------------------------------------------------------- go
 newSheet(256,256);renderFrames();new ResizeObserver(fit).observe($('cv'));fit();renderList();renderForm();
 window.OWED=S;
