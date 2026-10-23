@@ -133,7 +133,7 @@ dialog::backdrop{background:#000a}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const status=t=>{$('st').textContent=t;$('st').title=t};
-const FIELD_ORDER=['spriteID','frames','genderBased','owType','owDimension','trueDimension','isRunning','isFishing','isSurfing','isCycling','isFlying','owSprite','shinySprite'];
+const FIELD_ORDER=['spriteID','frames','genderBased','owType','owDimension','owScale','trueDimension','isRunning','isFishing','isSurfing','isCycling','isFlying','owSprite','shinySprite'];
 const FLAGS=['genderBased','isRunning','isFishing','isSurfing','isCycling','isFlying'];
 const DEFAULT_SUFFIX=`
 
@@ -237,6 +237,7 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   <div class="row f"><label>owSprite</label><input type="text" id="fsp" value="${esc(F.owSprite)}"></div>
   <div class="row f"><label>shinySprite</label><input type="text" id="fsh" value="${esc(F.shinySprite||'')}" placeholder="(optional)"></div>
   <div class="row f"><label>owDimension</label><input type="text" id="fod" value="${esc(F.owDimension)}" style="width:80px"><span class="hint">collision box</span></div>
+  <div class="row f"><label>owScale</label><input type="number" id="fsc" value="${F.owScale||1}" min="0.25" max="8" step="0.25" style="width:80px"><span class="hint">display size in game &amp; map editor</span></div>
   <div class="row f"><label>Frame size</label><input type="number" id="fcw" value="${cw}"><span>×</span><input type="number" id="fch" value="${ch}"><span class="hint">= trueDimension</span></div>
   <div class="row f"><label>Cols × rows</label><input type="number" id="fco" value="${e.cols}" min="1"><span>×</span><input type="number" id="fro" value="${e.rows}" min="1"></div>
   <div class="row f"><label>Layout</label><select id="flo"><option value="game4x4">Game 4×4 (rows = down/left/right/up)</option><option value="custom3x4">Your 3×4 sheet</option></select></div>
@@ -248,6 +249,7 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
     if(F.owSprite==='graphics/overworld/'+old+'.png')F.owSprite='graphics/overworld/'+slug(e.name)+'.png',$('fsp').value=F.owSprite;renderList()};
   const bind=(id,fn)=>{$(id).oninput=()=>{fn($(id).value);renderList();redraw()}};
   bind('fid',v=>F.spriteID=v);bind('fty',v=>F.owType=v);bind('fsp',v=>F.owSprite=v);bind('fod',v=>F.owDimension=v);
+  bind('fsc',v=>{const n=+v;if(!(n>0)||n===1)delete F.owScale;else F.owScale=n});
   bind('fsh',v=>{if(v)F.shinySprite=v;else delete F.shinySprite});
   const sz=()=>{F.trueDimension=Math.max(1,+$('fcw').value||1)+'x'+Math.max(1,+$('fch').value||1);redraw()};$('fcw').oninput=sz;$('fch').oninput=sz;
   $('fco').oninput=()=>{e.cols=Math.max(1,+$('fco').value||1);redraw()};$('fro').oninput=()=>{e.rows=Math.max(1,+$('fro').value||1);redraw()};
