@@ -52,6 +52,15 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 #seProblems{border-top:1px solid #2a2a2a;padding-top:6px;max-height:140px;overflow:auto}
 #pvCv{width:480px;max-width:100%;image-rendering:pixelated;background:#000;border:1px solid #444;cursor:crosshair}#pvLog{background:#0c0c0c;border:1px solid #2a2a2a;padding:4px;height:150px;overflow:auto;font-size:11px}.dim{color:#778}
 #seRight label{margin:1px 0}
+
+.owc{position:relative;margin:3px 0}.owc>span{color:#999;display:block;margin-bottom:2px}
+.owc .cur{display:flex;align-items:center;gap:8px;background:#262626;border:1px solid #3a3a3a;border-radius:4px;padding:4px 6px;cursor:pointer}
+.owc .cur canvas,.owc .it canvas{width:40px;height:40px;image-rendering:pixelated;background:repeating-conic-gradient(#2d2d2d 0 25%,#222 0 50%) 0 0/10px 10px;border-radius:3px;flex:none}
+.owc .cur b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:#eee}.owc .cur small,.owc .it small{color:#8a8a8a}
+.owc .pop{position:absolute;left:0;right:0;top:100%;z-index:50;background:#181818;border:1px solid #4a4a4a;border-radius:6px;margin-top:2px;box-shadow:0 8px 24px #000a;display:none}
+.owc.open .pop{display:block}.owc .pop input{width:calc(100% - 12px);margin:6px}
+.owc .lst{max-height:300px;overflow:auto}.owc .it{display:flex;gap:8px;align-items:center;padding:4px 8px;cursor:pointer}.owc .it:hover,.owc .it.hl{background:#2a3b52}.owc .it.on{outline:1px solid #ffd600;outline-offset:-1px}
+.owc .it div{min-width:0}.owc .it b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eee;font-weight:500}
 </style></head><body>
 <div id="side">
   <div class="row"><select id="mapSel" style="flex:1"></select><button id="newMap">+ Map</button></div>
@@ -183,8 +192,9 @@ function drawBorders(L,W,H){const IN=Object.entries(repo).map(([k,m])=>({m,x:L[k
 // ---------- event geometry ----------
 const BADGE={Warp:['#8e24aa','W'],Script:['#43a047','S'],'Script Tile':['#43a047','S'],Signpost:['#fb8c00','!'],Tile:['#1e88e5','T'],NPC:['#e53935','N']};
 function isBuilding(ev){return OT()[ev.owID]?.owType==='Building'}
+const osc=id=>{const v=Number((OT()[id]||{}).owScale);return v>0?v:1};   // per-sprite display scale (owScale in ow_table.js)
 function evRect(p,ev){const ox=p.x*TS,oy=p.y*TS,e=OT()[ev.owID];
-  if(showSpr&&e&&ev.eventType==='NPC'){const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),cx=ox+ev.xPos*TS+16;
+  if(showSpr&&e&&ev.eventType==='NPC'){const sc=osc(ev.owID),[w0,h0]=(e.trueDimension||'32x32').split('x').map(Number),w=w0*sc,h=h0*sc,cx=ox+ev.xPos*TS+16;
     return isBuilding(ev)?{x:cx-w/2,y:oy+(ev.yPos+1)*TS-h,w,h}:{x:cx-w/2,y:oy+ev.yPos*TS+16-h*.85,w,h}}
   return{x:ox+ev.xPos*TS,y:oy+ev.yPos*TS,w:TS,h:TS}}
 function footprint(ev){const e=OT()[ev.owID];if(!e||!isBuilding(ev))return null;const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),fw=Math.ceil(w/32),fh=Math.ceil(h/32);
@@ -325,6 +335,29 @@ function inp(type,val,set,optsFn){let e;
   else if(type==='bool'){e=document.createElement('input');e.type='checkbox';e.checked=!!val}
   else{e=document.createElement('input');e.type=type.startsWith('num')?'number':'text';e.value=val??''}
   e.onchange=()=>commit(()=>set(type==='bool'?e.checked:(type==='text'||optsFn)?e.value:(e.value===''?undefined:Number(e.value))));return e}
+// ---- owID picker: scrollable list with a sprite preview for every entry; click to choose, or type to filter
+function owThumb(id){const c=document.createElement('canvas');c.width=c.height=40;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+  const draw=n=>{const s=spr(id);if(s){const k=Math.min(40/s.width,40/s.height,3);const w=s.width*k,h=s.height*k;x.clearRect(0,0,40,40);x.drawImage(s,(40-w)/2,(40-h)/2,w,h)}else if(n<8)setTimeout(()=>draw(n+1),250)};draw(0);return c}
+function owCombo(ev,set){const ids=Object.keys(OT());const box=document.createElement('div');box.className='owc';
+  const cap=document.createElement('span');cap.textContent='owID';box.appendChild(cap);
+  const cur=document.createElement('div');cur.className='cur';box.appendChild(cur);
+  const pop=document.createElement('div');pop.className='pop';box.appendChild(pop);
+  const q=document.createElement('input');q.type='text';q.placeholder='type to filter…';pop.appendChild(q);
+  const lst=document.createElement('div');lst.className='lst';pop.appendChild(lst);let hl=0,shown=[];
+  const info=id=>{const e=OT()[id]||{};return`${e.owType||'?'} · ${e.trueDimension||'?'}${e.owScale&&e.owScale!==1?' · ×'+e.owScale:''}`};
+  const showCur=()=>{cur.innerHTML='';const id=ev.owID||'';if(id&&OT()[id])cur.appendChild(owThumb(id));
+    const b=document.createElement('b');b.textContent=id||'(none)';cur.appendChild(b);const sm=document.createElement('small');sm.textContent=id&&OT()[id]?info(id):(id?'not in table':'');cur.appendChild(sm);const ar=document.createElement('small');ar.textContent='▾';cur.appendChild(ar)};
+  const pick=id=>{box.classList.remove('open');if(id!==(ev.owID||''))commit(()=>set(id));else showCur()};
+  const fill=()=>{const t=q.value.trim().toLowerCase();shown=ids.filter(id=>!t||id.toLowerCase().includes(t)||String(OT()[id].owType||'').toLowerCase().includes(t));lst.innerHTML='';hl=Math.max(0,shown.indexOf(ev.owID));
+    shown.forEach((id,i)=>{const it=document.createElement('div');it.className='it'+(id===ev.owID?' on':'')+(i===hl?' hl':'');it.appendChild(owThumb(id));const d=document.createElement('div');
+      const b=document.createElement('b');b.textContent=id;const sm=document.createElement('small');sm.textContent=info(id);d.append(b,sm);it.appendChild(d);it.onmousedown=e=>{e.preventDefault();pick(id)};lst.appendChild(it)});
+    if(!shown.length)lst.innerHTML='<div class="it"><small>no match</small></div>'};
+  const mark=()=>{[...lst.children].forEach((c,i)=>c.classList.toggle('hl',i===hl));const c=lst.children[hl];if(c&&c.scrollIntoView)c.scrollIntoView({block:'nearest'})};
+  cur.onclick=()=>{const open=box.classList.toggle('open');if(open){q.value='';fill();setTimeout(()=>{q.focus();mark()},0)}};
+  q.oninput=fill;q.onkeydown=e=>{if(e.key==='ArrowDown'){hl=Math.min(shown.length-1,hl+1);mark();e.preventDefault()}else if(e.key==='ArrowUp'){hl=Math.max(0,hl-1);mark();e.preventDefault()}
+    else if(e.key==='Enter'){if(shown[hl])pick(shown[hl]);e.preventDefault()}else if(e.key==='Escape'){box.classList.remove('open')}e.stopPropagation()};
+  q.onblur=()=>setTimeout(()=>box.classList.remove('open'),120);
+  showCur();return box}
 function rowTo(box,label,el){const l=document.createElement('label');l.textContent=label;l.appendChild(el);box.appendChild(l)}
 function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&repo[sel.map]?.events[sel.key];
   if(!ev){I.innerHTML='<i>Pick the Select tool (V) and click an event.</i>';return}
@@ -333,6 +366,7 @@ function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&re
   const xy=document.createElement('div');xy.className='row';I.appendChild(xy);
   rowTo(xy,'X',inp('num',ev.xPos,v=>ev.xPos=v??0));rowTo(xy,'Y',inp('num',ev.yPos,v=>ev.yPos=v??0));
   for(const[f,t,o]of SCHEMA[ev.eventType]||[]){
+    if(f==='owID'&&o==='ow'){I.appendChild(owCombo(ev,v=>{v===undefined||v===''?delete ev.owID:ev.owID=v}));continue}
     rowTo(I,f,inp(t==='select'?'text':t,ev[f],v=>{v===undefined||v===''?delete ev[f]:ev[f]=v},o?()=>OPTS[o](ev):null))}
   if((SCHEMA[ev.eventType]||[]).some(x=>x[0]==='script')){const r=document.createElement('div');r.className='row';
     const b1=document.createElement('button');b1.textContent='✎ Edit script';b1.onclick=()=>seOpenEditor(ev.script||undefined);
@@ -703,7 +737,7 @@ function pvDraw(){const c=$('pvCv'),x=c.getContext('2d'),W=PV.vw,H=PV.vh;x.setTr
     for(let l=1;l<=5;l++){const g=m['tileData_'+l];for(let r=r0;r<=r1;r++)for(let cc=c0;cc<=c1;cc++)drawTile(x,g[r][cc],(p.x+cc)*TS,(p.y+r)*TS,TS)}}
   const list=[...Object.values(PV.ents).filter(e=>e.vis),...(PV.player.vis?[PV.player]:[])].sort((a,b)=>a.y-b.y);
   for(const e of list){const s=spr(e.id),hop=e.hop||0;
-    if(s){const w=s.width,h=s.height;if(e.building)x.drawImage(s,e.x-w/2,e.y-h,w,h);else x.drawImage(s,Math.round(e.x-w/2),Math.round(e.y-h*.85-hop),w,h)}
+    if(s){const sc2=osc(e.id),w=s.width*sc2,h=s.height*sc2;if(e.building)x.drawImage(s,e.x-w/2,e.y-h,w,h);else x.drawImage(s,Math.round(e.x-w/2),Math.round(e.y-h*.85-hop),w,h)}
     else{x.fillStyle=e===PV.player?'#2e7d32':'#c62828';x.fillRect(e.x-10,e.y-26-hop,20,28)}
     if(!e.building){const d=e.dir,fx=e.x+(d==='left'?-14:d==='right'?14:0),fy=e.y+(d==='up'?-18:d==='down'?14:0)-hop;x.fillStyle=e===PV.player?'#69f0ae':'#ffd54f';x.beginPath();
       if(d==='up'||d==='down'){const s2=d==='up'?-1:1;x.moveTo(fx-5,fy);x.lineTo(fx+5,fy);x.lineTo(fx,fy+5*s2)}else{const s2=d==='left'?-1:1;x.moveTo(fx,fy-5);x.lineTo(fx,fy+5);x.lineTo(fx+5*s2,fy)}x.fill()}}
