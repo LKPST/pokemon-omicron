@@ -46,10 +46,20 @@ dialog::backdrop{background:#000a}
   <button id="bMan">Load manifest</button>
   <span class="sp"></span><span id="st"></span>
   <button id="bUndo" title="Ctrl+Z">Undo</button><button id="bRedo" title="Ctrl+Y">Redo</button>
-  <button class="ok" id="bZip">Download ZIP</button>
+  <button class="ok" id="bZip">Download ZIP</button><button class="pri" id="bGit" title="commit ow_table.js and the sprite PNGs straight to GitHub">⬆ Commit to GitHub</button>
   <input type="file" id="fSheet" accept="image/*" hidden><input type="file" id="fPngs" accept="image/png" multiple hidden>
   <input type="file" id="fTable" accept=".js,.txt" hidden><input type="file" id="fMan" accept=".json" hidden><input type="file" id="fPal" accept=".pal,.png,.gif,image/*,.txt" hidden>
 </header>
+<dialog id="ghd"><form method="dialog" style="display:flex;flex-direction:column;gap:6px;min-width:min(480px,86vw)">
+  <b style="font-size:14px">⬆ Commit to GitHub</b>
+  <div class="hint">Needs a fine-grained token for this repository with “Contents: Read and write” (<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" style="color:var(--acc)">create one</a>). It stays only in this browser.</div>
+  <div class="row f"><label>Token</label><input type="password" id="ghTok" autocomplete="off" placeholder="github_pat_…"></div>
+  <div class="row f"><label>Owner</label><input type="text" id="ghOwn"></div><div class="row f"><label>Repository</label><input type="text" id="ghRepo"></div><div class="row f"><label>Branch</label><input type="text" id="ghBr" placeholder="(default)"></div>
+  <div class="row"><label><input type="checkbox" id="ghRem"> remember the token in this browser</label></div>
+  <div class="row f"><label>Message</label><input type="text" id="ghMsg" placeholder="(automatic if empty)"></div>
+  <div class="hint">Files (one commit):</div><div id="ghFiles" style="max-height:34vh;overflow:auto"></div>
+  <div id="ghOut" class="hint"></div>
+  <div class="row"><button class="ok" id="ghGo" style="flex:1">Commit</button><button id="ghClose" style="flex:1">Close</button></div></form></dialog>
 <main>
 <aside class="l">
   <h3>NPCs / trainers</h3>
@@ -632,5 +642,41 @@ $('bZip').onclick=async()=>{if(!S.entries.length)return status('Nothing to expor
   dl(await buildZip(files),'ow_sprites_export.zip');status(`ZIP ready: ow_table.js (${S.entries.length} entries, ${S.entries.filter(e=>e.fields.owScale).length} with owScale), manifest, sheet and ${n} sprite PNG(s). Unzip it on top of the repo.`)};
 // ---------------------------------------------------------------- go
 newSheet(256,256);renderFrames();new ResizeObserver(fit).observe($('cv'));fit();renderList();renderForm();
+
+// ---------------------------------------------------------------- commit to GitHub (one commit, no 100-file limit)
+const GHC={owner:'lkpst',repo:'pokemon-omicron',branch:'',token:'',remember:true,paths:{},msg:''};
+try{Object.assign(GHC,JSON.parse(localStorage.edGH||'{}'))}catch(e){}
+const ghStore=()=>{try{const c={...GHC};if(!c.remember)c.token='';localStorage.edGH=JSON.stringify(c)}catch(e){}};
+async function ghApi(path,method='GET',body){const r=await fetch(`https://api.github.com/repos/${GHC.owner}/${GHC.repo}${path}`,{method,headers:{Authorization:'Bearer '+GHC.token,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  let j=null;try{j=await r.json()}catch(e){}
+  if(!r.ok){const m=(j&&j.message)||r.statusText;throw new Error(r.status===401?'Token rejected (401). Check the token.':r.status===403||r.status===404?`${m} (${r.status}). The token needs access to ${GHC.owner}/${GHC.repo} with “Contents: Read and write”.`:`${m} (${r.status})`)}return j}
+const ghB64=blob=>new Promise(res=>{const f=new FileReader();f.onload=()=>res(String(f.result).split(',')[1]);f.readAsDataURL(blob)});
+let ghList=[];
+function ghBase(){const b=S.autoBase||'';return/^\.\./.test(b)||/^\//.test(b)?'':b}
+async function ghOpen(){if(!S.entries.length)return status('Nothing to commit yet.');const base=ghBase(),it=[];
+  it.push({name:'ow_table.js',path:GHC.paths['ow_table.js']||base+'js/ow_table.js',on:true,note:S.entries.length+' entries',get:async()=>({text:tableJs()})});
+  const used=new Set();for(const e of S.entries){if(!rectOf(e))continue;const p=e.fields.owSprite;if(!p||used.has(p))continue;used.add(p);it.push({name:p,path:base+p,on:true,note:'sprite PNG',get:async()=>({blob:await cutPng(e)})})}
+  it.push({name:'ow_manifest.json',path:base+'graphics/overworld/ow_manifest.json',on:false,note:'optional',get:async()=>({text:manifest()})});
+  it.push({name:S.sheetName,path:base+'graphics/overworld/'+S.sheetName,on:false,note:'the whole sheet (optional)',get:async()=>({blob:await sheetBlob()})});
+  ghList=it;$('ghTok').value=GHC.token||'';$('ghOwn').value=GHC.owner;$('ghRepo').value=GHC.repo;$('ghBr').value=GHC.branch||'';$('ghRem').checked=GHC.remember!==false;$('ghMsg').value=GHC.msg||'';
+  const o=$('ghOut');o.textContent='';o.style.color='';const L=$('ghFiles');L.innerHTML='';
+  it.forEach((x,i)=>{const r=document.createElement('div');r.className='row';r.innerHTML=`<label style="color:var(--fg);width:auto"><input type="checkbox" data-i="${i}" ${x.on?'checked':''}> ${esc(x.name)}</label><input type="text" data-p="${i}" value="${esc(x.path)}" style="flex:1;min-width:140px"><span class="hint">${esc(x.note)}</span>`;L.appendChild(r)});
+  $('ghd').showModal()}
+$('ghGo').onclick=async ev=>{ev.preventDefault();GHC.token=$('ghTok').value.trim();GHC.owner=$('ghOwn').value.trim();GHC.repo=$('ghRepo').value.trim();GHC.branch=$('ghBr').value.trim();GHC.remember=$('ghRem').checked;GHC.msg=$('ghMsg').value;
+  const picked=[...document.querySelectorAll('#ghFiles input[data-i]')].filter(i=>i.checked).map(i=>ghList[+i.dataset.i]);
+  picked.forEach(x=>{const i=ghList.indexOf(x);x.path=document.querySelector(`#ghFiles input[data-p="${i}"]`).value.trim().replace(/^\/+/,'');if(x.name==='ow_table.js')GHC.paths['ow_table.js']=x.path});ghStore();
+  const o=$('ghOut'),say=(t,c)=>{o.textContent=t;o.style.color=c||''};
+  if(!GHC.token||!GHC.owner||!GHC.repo)return say('Fill in the token, owner and repository.','var(--bad)');if(!picked.length)return say('Tick at least one file.','var(--bad)');
+  const msg=GHC.msg.trim()||('Update overworld sprites ('+picked.length+' file'+(picked.length>1?'s':'')+')');$('ghGo').disabled=true;
+  try{say('Checking the repository…');const info=await ghApi('');const br=GHC.branch||info.default_branch;
+    const ref=await ghApi('/git/ref/heads/'+encodeURIComponent(br)),parent=ref.object.sha,pc=await ghApi('/git/commits/'+parent),tree=[];let n=0;
+    for(const x of picked){say(`Uploading ${++n}/${picked.length}: ${x.path}`);const f=await x.get();
+      const b=await ghApi('/git/blobs','POST',f.blob?{content:await ghB64(f.blob),encoding:'base64'}:{content:f.text,encoding:'utf-8'});tree.push({path:x.path,mode:'100644',type:'blob',sha:b.sha})}
+    say('Building the commit…');const nt=await ghApi('/git/trees','POST',{base_tree:pc.tree.sha,tree});
+    if(nt.sha===pc.tree.sha){say('Nothing to commit: the repository already has these exact files.','var(--ok)');$('ghGo').disabled=false;return}
+    const cm=await ghApi('/git/commits','POST',{message:msg,tree:nt.sha,parents:[parent]});await ghApi('/git/refs/heads/'+encodeURIComponent(br),'PATCH',{sha:cm.sha});
+    GHC.msg='';ghStore();say(`✓ Committed ${picked.length} file(s) to ${br}: ${cm.sha.slice(0,7)}. GitHub Pages updates in a minute or two.`,'var(--ok)');status('Committed to GitHub: '+cm.sha.slice(0,7));
+  }catch(e){say('Could not commit: '+e.message,'var(--bad)')}$('ghGo').disabled=false};
+$('ghClose').onclick=ev=>{ev.preventDefault();$('ghd').close()};$('bGit').onclick=ghOpen;
 window.OWED=S;
 </script></body></html>
