@@ -625,6 +625,8 @@ class OverworldScene extends Phaser.Scene {
       }
     }
 
+    // [PLAYER] the player's overworld sprite: male_player_ow by default (female_player_ow for a female player when it exists), Brendan as the fallback
+    { const pc = this.playerOWCandidates(); for (const c of pc) { if (c.key === 'brendan_ow' || this.textures.exists(c.key)) continue; const sz = this.getOWFrameSize(c.entry, c.name); if (sz) this.load.spritesheet(c.key, c.entry.owSprite, { frameWidth: sz.w, frameHeight: sz.h }); } }
     if (OW_TABLE() && !OW_TABLE()['Brendan']) console.error("[OW] The overworld table has no 'Brendan' entry, so the player sprite cannot load. Keys:", Object.keys(OW_TABLE()).slice(0, 12));
     if (OW_TABLE() && OW_TABLE()['Brendan']) {
       const bEntry = OW_TABLE()['Brendan'];
@@ -787,7 +789,7 @@ class OverworldScene extends Phaser.Scene {
   // SPRITE BACKGROUND REMOVAL (colour of the first pixel)
   // ===========================================================================
   processSpriteBackgrounds() {
-    const keys = new Set(['brendan_ow']);
+    const keys = new Set(['brendan_ow', 'male_player_ow', 'female_player_ow']);
     for (const entry of Object.values(OW_TABLE() || {})) {
       if (!entry || !entry.owSprite) continue;
       keys.add(entry.spriteID || null);
@@ -1226,7 +1228,7 @@ class OverworldScene extends Phaser.Scene {
     const py = Math.round(mapOffset.y + this.playerGridY * 32 + 16);
 
     if (!this.player) {
-      this.player = this.add.sprite(px, py, 'brendan_ow', 0).setOrigin(0.5, 0.85);
+      this.player = this.add.sprite(px, py, this.playerTextureKey(), 0).setOrigin(0.5, 0.85).setScale(this.playerScale());
       const sd0 = window.GameStateManager && window.GameStateManager.saveData;
       const dir0 = ['up', 'down', 'left', 'right'].includes(this.lastDir) ? this.lastDir : (sd0 && ['up', 'down', 'left', 'right'].includes(sd0.facing) ? sd0.facing : 'down');
       this.player.direction = dir0;   // the way the player was facing before the battle / menu / map change
@@ -1288,6 +1290,7 @@ class OverworldScene extends Phaser.Scene {
 
         const npcSprite = this.add.sprite(x, y, textureKey, 0)
           .setOrigin(0.5, isBuilding ? 1 : 0.85);
+        if (!isBuilding && Number(tableEntry.owScale) > 0 && Number(tableEntry.owScale) !== 1) npcSprite.setScale(Number(tableEntry.owScale));   // [SCALE] per-sprite display scale from the table
 
         npcSprite.footprint = isBuilding
           ? { w: Math.ceil(frame0.width / 32), h: Math.ceil(frame0.height / 32) }
@@ -1579,7 +1582,7 @@ class OverworldScene extends Phaser.Scene {
   }
 
   finishWarp() {
-    this.player.setScale(1).setAlpha(1);
+    this.player.setScale(this.playerScale()).setAlpha(1);
     this.cameras.main.startFollow(this.player, true, 1, 1);
     this.warping = false;
     this.isMoving = false;
@@ -1660,7 +1663,7 @@ class OverworldScene extends Phaser.Scene {
             this.placePlayerAt(targetKey, dest.x, dest.y);
             const landX = this.player.x, landY = this.player.y;
             cam.centerOn(landX, landY);
-            this.player.setScale(1).setAlpha(1).setPosition(landX, landY - 320);
+            this.player.setScale(this.playerScale()).setAlpha(1).setPosition(landX, landY - 320);
             this.player.direction = dir;
             this.player.setFrame(window.getOverworldFrame(dir, 0));
 
@@ -1845,6 +1848,33 @@ class OverworldScene extends Phaser.Scene {
     }
 
     return null;
+  }
+
+  // [PLAYER] table entries that can be the player sprite, best first: [{ key, name, entry }]
+  playerOWCandidates() {
+    const t = OW_TABLE() || {}, sd = window.GameStateManager && window.GameStateManager.saveData;
+    const female = String((sd && sd.player && sd.player.gender) || 'MALE').toUpperCase() === 'FEMALE';
+    const want = (female ? ['female_player_ow'] : []).concat(['male_player_ow']), out = [];
+    for (const id of want) {
+      for (const [name, entry] of Object.entries(t)) {
+        if (entry && entry.owSprite && ((entry.spriteID || `${name.toLowerCase()}_ow`) === id)) { out.push({ key: id, name, entry }); break; }
+      }
+    }
+    return out;
+  }
+
+  // [PLAYER] texture key of the player sprite that is actually loaded
+  // [PLAYER] display scale of the player sprite (owScale of its table entry)
+  playerScale() {
+    const key = this.playerTextureKey(), t = OW_TABLE() || {};
+    for (const c of this.playerOWCandidates()) if (c.key === key) return Number(c.entry.owScale) > 0 ? Number(c.entry.owScale) : 1;
+    const b = t['Brendan'];
+    return b && Number(b.owScale) > 0 ? Number(b.owScale) : 1;
+  }
+
+  playerTextureKey() {
+    for (const c of this.playerOWCandidates()) if (this.textures.exists(c.key)) return c.key;
+    return 'brendan_ow';
   }
 
   getOWFrameSize(tableEntry, id = '?') {
