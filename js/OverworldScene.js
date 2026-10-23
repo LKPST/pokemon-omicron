@@ -695,7 +695,7 @@ class OverworldScene extends Phaser.Scene {
     });
 
     this.showMapBanner();                       // [BANNER]
-    { const lbE = window.GameStateManager && window.GameStateManager.lastBattle; if (lbE && lbE.evolutions && lbE.evolutions.length) { this.evolving = true; this._evoPre = true; } }   // the map is already paused during the 900 ms before the evolution starts
+    { const lbE = window.GameStateManager && window.GameStateManager.lastBattle; if (lbE && lbE.evolutions && lbE.evolutions.length && window.OWUI && window.OWUI.runEvolutions) { this.evolving = true; this._evoPre = true; this.time.delayedCall(8000, () => { if (this._evoPre) { this._evoPre = false; if (!(this._evoN > 0)) this.evolving = false; } }); } }   // (the 8 s fail-safe: the map can never stay paused if the evolution never starts)   // the map is already paused during the 900 ms before the evolution starts
     if (window.OWUI && window.OWUI.runEvolutions) this.time.delayedCall(900, () => window.OWUI.runEvolutions(this));   // [EVOLVE] Pokémon that reached their level in the last battle
     if (window.OWWarm) window.OWWarm.start();   // [SPEED] warm the menu / party pictures in the background
 
