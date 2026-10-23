@@ -24,6 +24,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)
 .it:last-child{border:0}.it.sel{background:#274a7d}.it small{color:var(--mut)}.it .w{color:var(--bad)}
 #cv{flex:1;min-width:0;position:relative;background:#0b0d13}
 #cv canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#zbar{position:absolute;top:8px;left:8px;display:flex;gap:6px;align-items:center;background:#000b;padding:4px 8px;border-radius:8px;z-index:3}#zbar input[type=range]{width:170px}#zbar span{min-width:46px;text-align:right;color:#cfd6ea}
 #hud{position:absolute;left:8px;bottom:6px;background:#000a;padding:2px 8px;border-radius:5px;color:#cfd6ea;font-size:12px;pointer-events:none}
 .tools{display:flex;flex-wrap:wrap;gap:4px}.tools button{min-width:36px}
 #sw{display:flex;flex-wrap:wrap;gap:3px;max-height:180px;overflow:auto;margin-top:4px}
@@ -53,7 +54,13 @@ dialog::backdrop{background:#000a}
 <aside class="l">
   <h3>NPCs / trainers</h3>
   <div class="list" id="list"></div>
-  <div class="row"><button id="eAdd">+ New</button><button id="eDup">Duplicate</button><button id="eDel">Delete</button><button id="eBulk">Bulk add…</button></div>
+  <div class="hint" style="margin:2px 0">Click selects, <b>Shift</b> = range, <b>Ctrl</b> = add. <span id="nselN"></span></div>
+  <div class="row"><button id="eAdd">+ New</button><button id="eDup">Duplicate</button><button id="eDel" title="Delete key">Delete selected</button><button id="eAll">Select all</button><button id="eBulk">Bulk add…</button></div>
+  <div class="row"><label><input type="checkbox" id="eErase"> also erase their pixels from the sheet</label></div>
+  <div class="row"><label>Order</label><button class="sm" id="mTop" title="to the top">⤒</button><button class="sm" id="mUp">↑</button><button class="sm" id="mDn">↓</button><button class="sm" id="mBot" title="to the bottom">⤓</button>
+    <span>move to #</span><input type="number" id="mTo" value="1" min="1"><button class="sm" id="mGo2">Go</button></div>
+  <div class="row"><button id="mSwap" title="select exactly two NPCs">Swap two</button><label><input type="checkbox" id="mSwapPx" checked> swap their place on the sheet too</label></div>
+  <div class="row"><button id="mPack" title="lays the NPCs out on the sheet in list order">Re-pack sheet in this order…</button><button id="growBtn" hidden>Grow sheet to fit</button></div>
   <div class="warn" id="warns"></div>
   <h3>Selected</h3>
   <div id="form"></div>
@@ -64,10 +71,10 @@ dialog::backdrop{background:#000a}
     <select id="rDir"><option>down</option><option>left</option><option>right</option><option>up</option></select>
     <select id="rSlot"><option value="auto">auto 0,1,2… (selection order)</option><option value="0">0 · stand / idle</option><option value="1">1 · step 1</option><option value="2">2 · step 2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select></div>
   <div class="row"><button class="pri" id="rAssign">Assign to selected</button><button id="rClear">Clear selected</button><button id="rClearA">Clear this animation</button></div>
-  <div class="row"><button id="rAuto">Auto-assign walk from layout</button><button id="rAll">Apply roles to all NPCs</button><label><input type="checkbox" id="rSame" checked> only same grid</label></div>
+  <div class="row"><button id="rAuto">Auto-assign walk from layout</button><button id="rAll">Roles → all NPCs</button><button id="rSel">Roles → selected NPCs</button><label><input type="checkbox" id="rSame" checked> only same grid</label></div>
   <div class="hint" id="rInfo"></div>
 </aside>
-<div id="cv"><canvas id="c"></canvas><div id="hud"></div></div>
+<div id="cv"><canvas id="c"></canvas><div id="zbar"><button class="sm" id="zOut">−</button><input type="range" id="zSl" min="0" max="100" value="40"><button class="sm" id="zIn">+</button><span id="zV">400%</span><button class="sm" id="zFit" title="fit the whole sheet">Fit</button><button class="sm" id="zFitW" title="fit the width">Fit W</button><button class="sm" id="z1">1:1</button></div><div id="hud"></div></div>
 <aside class="r">
   <h3>Tools</h3>
   <div class="tools" id="tools"></div>
@@ -97,6 +104,12 @@ dialog::backdrop{background:#000a}
   <div class="row"><button id="fOut">Outline (colour)</button><button id="fFlipH">Flip H</button><button id="fFlipV">Flip V</button>
     <button id="sL">◀</button><button id="sR">▶</button><button id="sU">▲</button><button id="sD">▼</button><span class="hint">shift pixels</span></div>
   <div class="row"><label>Mirror frame</label><input type="number" id="mSrc" value="1" min="0"><span>→</span><input type="number" id="mDst" value="2" min="0"><button id="mGo">Copy flipped</button></div>
+  <h3>Auto centre</h3>
+  <div class="row"><label>Apply to</label><select id="acT"><option value="sel">selected NPCs</option><option value="npc">this NPC</option><option value="frames">selected frames</option><option value="all">all NPCs</option></select></div>
+  <div class="row"><label>Mode</label><select id="acMode"><option value="group">whole NPC (keeps the walking bob)</option><option value="frame">each frame on its own</option></select></div>
+  <div class="row"><label><input type="checkbox" id="acH" checked> centre horizontally</label><label>vertical</label><select id="acV"><option value="bottom">feet at the bottom</option><option value="center">centre</option><option value="keep">keep</option></select>
+    <label>bottom margin</label><input type="number" id="acM" value="0" min="0" max="24"></div>
+  <div class="row"><button class="pri" id="acGo">Auto centre</button></div>
   <h3>Animation preview</h3>
   <canvas id="prev" width="128" height="160"></canvas>
   <div class="row"><button class="sm" data-d="up">▲</button><button class="sm" data-d="down">▼</button><button class="sm" data-d="left">◀</button><button class="sm" data-d="right">▶</button>
@@ -162,7 +175,7 @@ window.getOverworldFrame = function(direction, step = 0) {
 };
 `;
 // ---------------------------------------------------------------- state
-const S={fsel:[],sheet:null,sx:null,W:0,H:0,sheetName:'trainers_sheet.png',entries:[],sel:-1,frame:0,tool:'pencil',
+const S={nsel:new Set(),anchor:null,fsel:[],sheet:null,sx:null,W:0,H:0,sheetName:'trainers_sheet.png',entries:[],sel:-1,frame:0,tool:'pencil',
   z:4,ox:20,oy:20,undo:[],redo:[],tablePrefix:'',tableSuffix:DEFAULT_SUFFIX,tableLoaded:false,pal:null,imported:null,dirty:true};
 function newSheet(w,h,keep){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});
   if(keep&&S.sheet)x.drawImage(S.sheet,0,0);S.sheet=c;S.sx=x;S.W=w;S.H=h;S.undo=[];S.redo=[];redraw()}
@@ -199,10 +212,16 @@ function scopeRect(){const sc=$('scope').value,e=cur();
   const r=rectOf(e);const fr=(i)=>({x:r.x+(i%e.cols)*r.cw,y:r.y+Math.floor(i/e.cols)*r.ch,w:r.cw,h:r.ch});
   if(sc==='frame'){const sel=(S.fsel.length?S.fsel:[S.frame]).filter(i=>i<e.cols*e.rows),fl=(sel.length?sel:[0]).map(fr),f=fl[0];return{...f,cw:f.w,ch:f.h,frames:fl}}
   const all=[];for(let i=0;i<e.cols*e.rows;i++)all.push(fr(i));return{...r,frames:all}}
-function renderList(){const l=$('list');l.innerHTML='';
-  S.entries.forEach((e,i)=>{const d=document.createElement('div');d.className='it'+(i===S.sel?' sel':'');
-    d.innerHTML=`<span>${esc(e.name)} <small>${esc(e.fields.owType||'')}</small></span>${e.rect?`<small>${e.cols}×${e.rows}</small>`:'<small class="w" title="no region on the sheet yet">⚠ unplaced</small>'}`;
-    d.onclick=()=>{S.sel=i;S.frame=0;S.fsel=[];renderList();renderForm();renderFrames();redraw()};l.append(d)});
+function selEntries(){const a=S.entries.filter(e=>S.nsel.has(e));return a.length?a:(cur()?[cur()]:[])}
+function renderList(){const l=$('list');l.innerHTML='';const c0=cur();if(c0&&!S.nsel.has(c0))S.nsel=new Set([c0]);for(const e of[...S.nsel])if(!S.entries.includes(e))S.nsel.delete(e);
+  $('nselN').textContent=S.nsel.size>1?S.nsel.size+' NPCs selected':'';
+  S.entries.forEach((e,i)=>{const d=document.createElement('div');d.className='it'+(S.nsel.has(e)?' sel':'');
+    d.innerHTML=`<span><small>${i+1}</small> ${esc(e.name)} <small>${esc(e.fields.owType||'')}</small></span>${e.rect?`<small>${e.cols}×${e.rows}</small>`:'<small class="w" title="no region on the sheet yet">⚠ unplaced</small>'}`;
+    d.onclick=ev=>{if(ev.shiftKey&&S.anchor!=null){const lo=Math.min(S.anchor,i),hi=Math.max(S.anchor,i);if(!(ev.ctrlKey||ev.metaKey))S.nsel=new Set();for(let k=lo;k<=hi;k++)S.nsel.add(S.entries[k])}
+      else if(ev.ctrlKey||ev.metaKey){if(S.nsel.has(e)&&S.nsel.size>1)S.nsel.delete(e);else S.nsel.add(e);S.anchor=i}
+      else{S.nsel=new Set([e]);S.anchor=i}
+      S.sel=S.nsel.has(e)?i:S.entries.indexOf([...S.nsel].pop());S.frame=0;S.fsel=[];renderList();renderForm();renderFrames();redraw()};l.append(d)});
+  {let over=false;for(const e of S.entries){const r=rectOf(e);if(r&&(r.x+r.w>S.W||r.y+r.h>S.H))over=true}$('growBtn').hidden=!over}
   const w=[];const ids={};for(const e of S.entries){const id=e.fields.spriteID;ids[id]=(ids[id]||0)+1}
   for(const id in ids)if(ids[id]>1)w.push('Duplicate spriteID: '+id);
   const paths={};for(const e of S.entries){const p=e.fields.owSprite;if(e.rect){paths[p]=(paths[p]||0)+1}}for(const p in paths)if(paths[p]>1)w.push('Same PNG path used twice: '+p);
@@ -265,13 +284,48 @@ $('rAuto').onclick=()=>{const e=cur();if(!e)return;e.roles=(e.roles||[]).filter(
 $('rAll').onclick=()=>{const e=cur();if(!e)return;const same=$('rSame').checked;let n=0;
   for(const o of S.entries){if(o===e)continue;if(same&&(o.cols!==e.cols||o.rows!==e.rows))continue;o.roles=JSON.parse(JSON.stringify(e.roles||[]));for(const x of o.roles){const fl=ANIM_FLAG[x.anim];if(fl)o.fields[fl]=true}n++}
   status(`Roles copied to ${n} other NPC(s)`+(same?' with the same grid.':'.'))};
+$('rSel').onclick=()=>{const e=cur();if(!e)return;let n=0;for(const o of S.entries){if(o===e||!S.nsel.has(o))continue;o.roles=JSON.parse(JSON.stringify(e.roles||[]));for(const x of o.roles){const fl=ANIM_FLAG[x.anim];if(fl)o.fields[fl]=true}n++}status(`Roles copied to ${n} selected NPC(s).`)};
 $('eAdd').onclick=()=>{let n=1;while(S.entries.some(e=>e.name==='New_NPC_'+n))n++;const e=mkEntry('New_NPC_'+n,{},{x:0,y:0},4,4);
   const free=findFree(e);e.rect=free;S.entries.push(e);S.sel=S.entries.length-1;renderList();renderForm();redraw()};
 function findFree(e){const[cw,ch]=cell(e),w=e.cols*cw,h=e.rows*ch;let y=0;for(const o of S.entries){const r=rectOf(o);if(r)y=Math.max(y,r.y+r.h)}
   if(y+h>S.H)newSheet(Math.max(S.W,w),y+h,true);return{x:0,y}}
 $('eDup').onclick=()=>{const e=cur();if(!e)return;const c=mkEntry(e.name+'_copy',JSON.parse(JSON.stringify(e.fields)),null,e.cols,e.rows);c.fields.spriteID=slug(c.name)+'_ow';c.fields.owSprite='graphics/overworld/'+slug(c.name)+'.png';c.layout=e.layout;c.roles=JSON.parse(JSON.stringify(e.roles||[]));
   c.rect=findFree(c);const r=rectOf(e);if(r){S.sx.drawImage(S.sheet,r.x,r.y,r.w,r.h,c.rect.x,c.rect.y,r.w,r.h)}S.entries.push(c);S.sel=S.entries.length-1;renderList();renderForm();redraw()};
-$('eDel').onclick=()=>{if(S.sel<0)return;S.entries.splice(S.sel,1);S.sel=Math.min(S.sel,S.entries.length-1);renderList();renderForm();redraw()};
+function deleteSelected(){const ents=selEntries();if(!ents.length)return;
+  if(!confirm(ents.length===1?`Delete “${ents[0].name}”?`:`Delete ${ents.length} NPCs?`))return;
+  if($('eErase').checked){pushUndo();for(const e of ents){const r=rectOf(e);if(r)S.sx.clearRect(r.x,r.y,r.w,r.h)}}
+  const first=Math.min(...ents.map(e=>S.entries.indexOf(e)));S.entries=S.entries.filter(e=>!ents.includes(e));S.nsel=new Set();
+  S.sel=S.entries.length?Math.min(first,S.entries.length-1):-1;S.anchor=null;S.fsel=[];renderList();renderForm();renderFrames();redraw();status(ents.length+' NPC(s) deleted.')}
+$('eDel').onclick=deleteSelected;
+$('eAll').onclick=()=>{S.nsel=new Set(S.entries);if(S.sel<0&&S.entries.length)S.sel=0;renderList();renderForm()};
+// ---- order / swap / re-pack
+function reorder(fn){const pri=cur(),sel=S.entries.filter(e=>S.nsel.has(e)),rest=S.entries.filter(e=>!S.nsel.has(e));if(!sel.length)return;S.entries=fn(sel,rest,S.entries.slice());S.sel=S.entries.indexOf(pri);if(S.sel<0)S.sel=0;renderList();renderForm();redraw()}
+$('mTop').onclick=()=>reorder((sel,rest)=>sel.concat(rest));$('mBot').onclick=()=>reorder((sel,rest)=>rest.concat(sel));
+$('mUp').onclick=()=>reorder((sel,rest,all)=>{for(let i=1;i<all.length;i++)if(S.nsel.has(all[i])&&!S.nsel.has(all[i-1]))[all[i-1],all[i]]=[all[i],all[i-1]];return all});
+$('mDn').onclick=()=>reorder((sel,rest,all)=>{for(let i=all.length-2;i>=0;i--)if(S.nsel.has(all[i])&&!S.nsel.has(all[i+1]))[all[i+1],all[i]]=[all[i],all[i+1]];return all});
+$('mGo2').onclick=()=>{const n=Math.max(1,Math.min(S.entries.length,+$('mTo').value||1));reorder((sel,rest)=>{const out=rest.slice();out.splice(n-1,0,...sel);return out});status('Moved to position '+n+'.')};
+$('mSwap').onclick=()=>{const a=S.entries.filter(e=>S.nsel.has(e));if(a.length!==2)return status('Select exactly two NPCs (Ctrl+click) to swap them.');
+  const[A,B]=a,i=S.entries.indexOf(A),j=S.entries.indexOf(B);S.entries[i]=B;S.entries[j]=A;
+  if($('mSwapPx').checked){const ra=rectOf(A),rb=rectOf(B);
+    if(!ra||!rb)status('Swapped in the list; the sheet was left alone (one of them has no region).');
+    else if(ra.w!==rb.w||ra.h!==rb.h)status('Swapped in the list. Their regions have different sizes (“'+ra.w+'×'+ra.h+'” vs “'+rb.w+'×'+rb.h+'”), so the sheet was left alone.');
+    else{pushUndo();const ca=document.createElement('canvas');ca.width=ra.w;ca.height=ra.h;ca.getContext('2d').drawImage(S.sheet,ra.x,ra.y,ra.w,ra.h,0,0,ra.w,ra.h);
+      const cb=document.createElement('canvas');cb.width=rb.w;cb.height=rb.h;cb.getContext('2d').drawImage(S.sheet,rb.x,rb.y,rb.w,rb.h,0,0,rb.w,rb.h);
+      S.sx.clearRect(ra.x,ra.y,ra.w,ra.h);S.sx.clearRect(rb.x,rb.y,rb.w,rb.h);S.sx.drawImage(cb,ra.x,ra.y);S.sx.drawImage(ca,rb.x,rb.y);status('Swapped positions in the list and on the sheet.')}}
+  else status('Swapped in the list.');
+  renderList();renderForm();renderFrames();redraw()};
+$('mPack').onclick=()=>{const list=S.entries.filter(e=>rectOf(e));if(!list.length)return status('Nothing is placed on the sheet yet.');
+  const widest=Math.max(...list.map(e=>rectOf(e).w)),auto=Math.max(1,Math.floor(S.W/widest));
+  const v=window.prompt('Re-pack the sheet in list order.\nHow many NPCs per row? (0 = fit the current sheet width)',String(auto));if(v==null)return;
+  let per=Math.floor(+v);if(!(per>0))per=auto;
+  pushUndo();const blocks=list.map(e=>{const r=rectOf(e),c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(S.sheet,r.x,r.y,r.w,r.h,0,0,r.w,r.h);return{e,c,r}});
+  const pos=[];let y=0,x=0,rowH=0,maxX=0;blocks.forEach((b,k)=>{if(k>0&&k%per===0){y+=rowH;x=0;rowH=0}pos.push({x,y});x+=b.r.w;maxX=Math.max(maxX,x);rowH=Math.max(rowH,b.r.h)});
+  const needH=y+rowH,needW=Math.max(S.W,maxX);
+  for(const b of blocks)S.sx.clearRect(b.r.x,b.r.y,b.r.w,b.r.h);
+  if(needW>S.W||needH>S.H){const u=S.undo,rd=S.redo;newSheet(needW,Math.max(S.H,needH),true);S.undo=u;S.redo=rd}
+  blocks.forEach((b,k)=>{S.sx.drawImage(b.c,pos[k].x,pos[k].y);b.e.rect={x:pos[k].x,y:pos[k].y}});
+  renderList();renderForm();renderFrames();redraw();status(`Sheet re-packed in list order: ${per} per row.`)};
+$('growBtn').onclick=()=>{let w=S.W,h=S.H;for(const e of S.entries){const r=rectOf(e);if(r){w=Math.max(w,r.x+r.w);h=Math.max(h,r.y+r.h)}}const u=S.undo,rd=S.redo;newSheet(w,h,true);S.undo=u;S.redo=rd;renderList();redraw();status(`Sheet grown to ${w}×${h}.`)};
 $('bkL').onchange=()=>{const c=$('bkL').value==='custom3x4';$('bkC').value=c?3:4;$('bkR').value=4};
 $('eBulk').onclick=()=>$('dBulk').showModal();$('bkX2').onclick=()=>$('dBulk').close();
 $('bkGo').onclick=()=>{const v=id=>+$(id).value||0,nm=$('bkName').value||'Trainer',x0=v('bkX'),y0=v('bkY'),w=v('bkW'),h=v('bkH'),c=v('bkC'),r=v('bkR'),a=Math.max(1,v('bkA')),n=v('bkN');
@@ -284,7 +338,7 @@ const cv=$('c'),cx=cv.getContext('2d');let need=false;
 function redraw(){if(need)return;need=true;requestAnimationFrame(draw)}
 function fit(){const b=$('cv').getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,b.width*d|0);cv.height=Math.max(1,b.height*d|0);redraw()}
 addEventListener('resize',fit);
-function draw(){need=false;const d=devicePixelRatio||1,w=cv.width,h=cv.height;cx.setTransform(1,0,0,1,0,0);cx.clearRect(0,0,w,h);
+function draw(){need=false;if($('zV').textContent!==Math.round(S.z*100)+'%'){$('zV').textContent=Math.round(S.z*100)+'%';$('zSl').value=z2v(S.z)}const d=devicePixelRatio||1,w=cv.width,h=cv.height;cx.setTransform(1,0,0,1,0,0);cx.clearRect(0,0,w,h);
   const z=S.z*d,ox=S.ox*d,oy=S.oy*d;cx.imageSmoothingEnabled=false;
   const bg=$('bgm').value;
   if(bg==='chk'){cx.save();cx.beginPath();cx.rect(ox,oy,S.W*z,S.H*z);cx.clip();const t=Math.max(8*d,z);for(let y=0;y*t<S.H*z;y++)for(let x=0;x*t<S.W*z;x++){cx.fillStyle=(x+y)&1?'#232838':'#1a1e2b';cx.fillRect(ox+x*t,oy+y*t,t,t)}cx.restore()}
@@ -315,8 +369,10 @@ const primary=()=>{const[r,g,b]=hex2($('col').value);return[r,g,b,Math.max(0,Mat
 let drag=null,hover=null,panning=null,space=false;
 const toPx=ev=>{const b=cv.getBoundingClientRect();return{x:Math.floor((ev.clientX-b.left-S.ox)/S.z),y:Math.floor((ev.clientY-b.top-S.oy)/S.z)}};
 const inb=p=>p.x>=0&&p.y>=0&&p.x<S.W&&p.y<S.H;
-function pushUndo(){const b=S.W*S.H*4,mx=Math.max(5,Math.floor(2.5e8/b));S.undo.push({w:S.W,h:S.H,d:S.sx.getImageData(0,0,S.W,S.H)});if(S.undo.length>mx)S.undo.shift();S.redo=[]}
-function restore(st){const cur={w:S.W,h:S.H,d:S.sx.getImageData(0,0,S.W,S.H)};newSheetKeepStacks(st.w,st.h);S.sx.putImageData(st.d,0,0);return cur}
+function pushUndo(){const b=S.W*S.H*4,mx=Math.max(5,Math.floor(2.5e8/b));S.undo.push({w:S.W,h:S.H,d:S.sx.getImageData(0,0,S.W,S.H),ents:S.entries.slice(),rects:S.entries.map(e=>e.rect?{...e.rect}:null)});if(S.undo.length>mx)S.undo.shift();S.redo=[]}
+function restore(st){const cur={w:S.W,h:S.H,d:S.sx.getImageData(0,0,S.W,S.H),ents:S.entries.slice(),rects:S.entries.map(e=>e.rect?{...e.rect}:null)};newSheetKeepStacks(st.w,st.h);S.sx.putImageData(st.d,0,0);
+  if(st.ents){st.ents.forEach((e,k)=>{if(S.entries.includes(e))e.rect=st.rects[k]?{...st.rects[k]}:null});
+    if(st.ents.length===S.entries.length&&st.ents.every(e=>S.entries.includes(e)))S.entries=st.ents.slice()}return cur}
 function newSheetKeepStacks(w,h){const u=S.undo,r=S.redo;newSheet(w,h,false);S.undo=u;S.redo=r}
 function undo(){const st=S.undo.pop();if(!st)return;S.redo.push(restore(st));afterEdit()}
 function redo(){const st=S.redo.pop();if(!st)return;S.undo.push(restore(st));afterEdit()}
@@ -343,7 +399,7 @@ cv.addEventListener('mousedown',ev=>{const p=toPx(ev);
   if(ev.button!==0)return;
   if(pickTarget!=='col'){const c=pickAt(p);if(c){$(pickTarget).value=toHex(c[0],c[1],c[2])}pickTarget='col';cv.style.cursor='crosshair';return}
   if(S.tool==='select'){let hit=-1;S.entries.forEach((e,i)=>{const r=rectOf(e);if(r&&p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h)hit=i});
-    if(hit>=0){const changed=hit!==S.sel;S.sel=hit;const e=S.entries[hit],r=rectOf(e);if(changed)S.fsel=[];const fi=Math.floor((p.y-r.y)/r.ch)*e.cols+Math.floor((p.x-r.x)/r.cw);renderList();renderForm();selectFrame(fi,ev);if(e.layout==='custom3x4'&&L3NAMES[fi]&&!(e.roles||[]).length)status('Frame '+fi+': '+L3NAMES[fi])}return}
+    if(hit>=0){const changed=hit!==S.sel;S.sel=hit;const e=S.entries[hit],r=rectOf(e);if(changed){S.fsel=[];if(!S.nsel.has(e))S.nsel=new Set([e])}const fi=Math.floor((p.y-r.y)/r.ch)*e.cols+Math.floor((p.x-r.x)/r.cw);renderList();renderForm();selectFrame(fi,ev);if(e.layout==='custom3x4'&&L3NAMES[fi]&&!(e.roles||[]).length)status('Frame '+fi+': '+L3NAMES[fi])}return}
   if(S.tool==='region'){if(!cur()){status('Create an NPC first (+ New).');return}drag={kind:'region',a:{x:Math.max(0,p.x),y:Math.max(0,p.y)},b:{x:Math.max(0,p.x),y:Math.max(0,p.y)}};return}
   if(S.tool==='pick'){setPrimary(pickAt(p));return}
   if(!inb(p))return;
@@ -360,14 +416,20 @@ addEventListener('mouseup',()=>{panning=null;
       e.fields.trueDimension=Math.max(1,Math.round(w/e.cols))+'x'+Math.max(1,Math.round(h/e.rows));status(`Region ${w}×${h} at ${x},${y} → frame ${e.fields.trueDimension}`)}
     drag=null;renderList();renderForm();redraw()}
   else if(drag){drag=null;previewDirty=true;renderList();renderFrames()}});
-cv.addEventListener('wheel',ev=>{ev.preventDefault();const b=cv.getBoundingClientRect(),mx=ev.clientX-b.left,my=ev.clientY-b.top,old=S.z;
-  S.z=Math.max(.5,Math.min(48,old*(ev.deltaY<0?1.2:1/1.2)));if(S.z>4)S.z=Math.round(S.z*2)/2;S.ox=mx-(mx-S.ox)*S.z/old;S.oy=my-(my-S.oy)*S.z/old;redraw()},{passive:false});
+const ZMIN=.25,ZMAX=48,z2v=z=>Math.round(Math.log(z/ZMIN)/Math.log(ZMAX/ZMIN)*100),v2z=v=>ZMIN*Math.pow(ZMAX/ZMIN,v/100);
+function setZoom(z,mx,my){const b=cv.getBoundingClientRect(),old=S.z;z=Math.max(ZMIN,Math.min(ZMAX,z));if(mx==null){mx=b.width/2;my=b.height/2}
+  S.z=z;S.ox=mx-(mx-S.ox)*z/old;S.oy=my-(my-S.oy)*z/old;$('zSl').value=z2v(z);$('zV').textContent=Math.round(z*100)+'%';redraw()}
+cv.addEventListener('wheel',ev=>{ev.preventDefault();const b=cv.getBoundingClientRect();setZoom(S.z*Math.exp(-Math.max(-120,Math.min(120,ev.deltaY))*0.0012),ev.clientX-b.left,ev.clientY-b.top)},{passive:false});
+$('zSl').oninput=()=>setZoom(v2z(+$('zSl').value));$('zIn').onclick=()=>setZoom(S.z*1.25);$('zOut').onclick=()=>setZoom(S.z/1.25);$('z1').onclick=()=>setZoom(1);
+function fitView(wOnly){const b=cv.getBoundingClientRect(),zz=Math.min((b.width-40)/S.W,wOnly?1e9:(b.height-60)/S.H);S.ox=20;S.oy=wOnly?50:Math.max(50,(b.height-S.H*zz)/2);setZoom(zz,20,S.oy)}
+$('zFit').onclick=()=>fitView(false);$('zFitW').onclick=()=>fitView(true);
 addEventListener('keydown',ev=>{if(/INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)&&ev.target.type!=='range')return;
   if(ev.code==='Space'){space=true;ev.preventDefault();return}
+  if(ev.key==='Delete'&&!ev.ctrlKey){deleteSelected();return}
   if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();ev.shiftKey?redo():undo();return}
   if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'){ev.preventDefault();redo();return}
   const t={v:'select',b:'pencil',e:'eraser',g:'fill',i:'pick',r:'region'}[ev.key.toLowerCase()];if(t&&!ev.ctrlKey)setTool(t);
-  if(ev.key==='+'||ev.key==='='){S.z=Math.min(48,S.z*1.25);redraw()}if(ev.key==='-'){S.z=Math.max(.5,S.z/1.25);redraw()}});
+  if(ev.key==='+'||ev.key==='=')setZoom(S.z*1.25);if(ev.key==='-')setZoom(S.z/1.25);});
 addEventListener('keyup',ev=>{if(ev.code==='Space')space=false});
 // ---------------------------------------------------------------- pixel ops on the scope
 function eachScopeData(cb,write=true){const sr=scopeRect();for(const f of sr.frames){const w=Math.min(f.w,S.W-f.x),h=Math.min(f.h,S.H-f.y);if(w<=0||h<=0)continue;const id=S.sx.getImageData(f.x,f.y,w,h);cb(id.data);if(write)S.sx.putImageData(id,f.x,f.y)}}
@@ -406,6 +468,27 @@ $('fOut').onclick=()=>{const c=primary();eachFrame((id,w,h)=>{const d=id.data,o=
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(o[i+3]===0&&(op(x-1,y)||op(x+1,y)||op(x,y-1)||op(x,y+1))){d[i]=c[0];d[i+1]=c[1];d[i+2]=c[2];d[i+3]=255}}})};
 $('mGo').onclick=()=>{const e=cur(),r=e&&rectOf(e);if(!r)return status('Select a placed NPC first.');const a=+$('mSrc').value,b=+$('mDst').value,n=e.cols*e.rows;if(a>=n||b>=n||a<0||b<0)return status('Frame numbers go 0 to '+(n-1)+'.');
   pushUndo();const fr=i=>({x:r.x+(i%e.cols)*r.cw,y:r.y+Math.floor(i/e.cols)*r.ch}),A=fr(a),B=fr(b),id=S.sx.getImageData(A.x,A.y,r.cw,r.ch);flip(id,r.cw,r.ch,false);S.sx.clearRect(B.x,B.y,r.cw,r.ch);S.sx.putImageData(id,B.x,B.y);afterEdit();status(`Frame ${a} copied flipped to ${b}.`)};
+// ---------------------------------------------------------------- auto centre
+function bboxOf(id){const d=id.data,w=id.width,h=id.height;let x0=w,y0=h,x1=-1,y1=-1;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[(y*w+x)*4+3]>=8){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}return x1<0?null:{x0,y0,x1,y1}}
+$('acGo').onclick=()=>{const mode=$('acMode').value,doH=$('acH').checked,vm=$('acV').value,mg=Math.max(0,+$('acM').value||0),tg=$('acT').value,jobs=[];
+  const ok=e=>e&&rectOf(e);
+  if(tg==='frames'){const e=cur();if(ok(e))jobs.push({e,fr:S.fsel.length?S.fsel.slice():[S.frame]})}
+  else if(tg==='npc'){const e=cur();if(ok(e))jobs.push({e,fr:null})}
+  else if(tg==='sel'){for(const e of selEntries())if(ok(e))jobs.push({e,fr:null})}
+  else for(const e of S.entries)if(ok(e))jobs.push({e,fr:null});
+  if(!jobs.length)return status('Nothing to centre: select a placed NPC first.');
+  pushUndo();let moved=0,total=0;
+  for(const j of jobs){const r=rectOf(j.e),idx=j.fr||[...Array(j.e.cols*j.e.rows).keys()],fr=[];
+    for(const i of idx){const x=r.x+(i%j.e.cols)*r.cw,y=r.y+Math.floor(i/j.e.cols)*r.ch;if(x+r.cw>S.W||y+r.ch>S.H)continue;const id=S.sx.getImageData(x,y,r.cw,r.ch),bb=bboxOf(id);if(bb)fr.push({x,y,id,bb})}
+    if(!fr.length)continue;const U=fr.reduce((u,f)=>({x0:Math.min(u.x0,f.bb.x0),y0:Math.min(u.y0,f.bb.y0),x1:Math.max(u.x1,f.bb.x1),y1:Math.max(u.y1,f.bb.y1)}),{x0:1e9,y0:1e9,x1:-1,y1:-1});
+    for(const f of fr){total++;const B=mode==='group'?U:f.bb;let dx=0,dy=0;
+      if(doH)dx=Math.round((r.cw-(B.x1-B.x0+1))/2)-B.x0;
+      if(vm==='center')dy=Math.round((r.ch-(B.y1-B.y0+1))/2)-B.y0;else if(vm==='bottom')dy=(r.ch-1-mg)-B.y1;
+      if(!dx&&!dy)continue;
+      const src=f.id.data,out=new ImageData(r.cw,r.ch),o=out.data;
+      for(let y=0;y<r.ch;y++)for(let x=0;x<r.cw;x++){const a=(y*r.cw+x)*4;if(src[a+3]===0)continue;const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=r.cw||ny>=r.ch)continue;const b=(ny*r.cw+nx)*4;o[b]=src[a];o[b+1]=src[a+1];o[b+2]=src[a+2];o[b+3]=src[a+3]}
+      S.sx.putImageData(out,f.x,f.y);moved++}}
+  afterEdit();status(`Auto centre: ${moved} of ${total} frame(s) moved across ${jobs.length} NPC(s).`)};
 // ---------------------------------------------------------------- palette
 function grab(){const m=new Map();
   eachScopeData(d=>{for(let i=0;i<d.length;i+=4){if(d[i+3]<8)continue;const k=d[i]<<16|d[i+1]<<8|d[i+2];m.set(k,(m.get(k)||0)+1)}},false);
