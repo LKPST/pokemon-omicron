@@ -1127,7 +1127,8 @@ const DIR={battle:'graphics/pokemon_battle_sprites/battle/',icon:'graphics/pokem
 const KL={battle:'battle sprite',icon:'icon sprite',cry:'cry'};
 const species=()=>{const db=window.ED&&window.ED.db;return db?Object.entries(db).filter(([k,e])=>k!=='SPECIES_NONE'&&k!=='SPECIES_'&&e&&e.name).map(([k,e])=>({k,e})):[]};
 const pathOf=(kind,s)=>kind==='battle'?(s.e.battleSprite||''):kind==='icon'?(s.e.iconSprite||''):(s.e.cry||(DIR.cry+'gCry'+s.e.name+'.wav'));
-const have=(kind,s)=>{const p=pathOf(kind,s);if(!p)return false;if(PMFiles.has(bn(p).toLowerCase()))return true;return kind!=='cry'&&PMImgs.has(s.k+'|'+kind)};
+const GH=new Set();
+const have=(kind,s)=>{const p=pathOf(kind,s);if(!p)return false;if(PMFiles.has(bn(p).toLowerCase())||GH.has(bn(p).toLowerCase()))return true;return kind!=='cry'&&PMImgs.has(s.k+'|'+kind)};
 const dexId=s=>{const m=/gSprite(\d+)/.exec(s.e.battleSprite||'');return m?+m[1]:0};
 function index(){const bk=new Map(),bnm=new Map(),add=(m,k,s)=>{if(!k)return;if(!m.has(k))m.set(k,[]);m.get(k).push(s)};
   for(const s of species()){add(bk,norm(s.k.replace(/^SPECIES_/,'')),s);add(bnm,norm(s.e.name),s)}return{bk,bnm}}
@@ -1141,7 +1142,8 @@ const tab=document.createElement('div');tab.id='tab-assets';tab.hidden=true;
 tab.innerHTML=`
 <div class="owbox"><h3>0 · Is the project folder loaded?</h3>
   <div class="hint" id="asSt" style="margin:0"></div>
-  <div class="hint">Use <b>Choose project folder</b> at the top (the whole repo). Only file names are read. Without it every file counts as missing. <code>PokemonDatabase.js</code> must be loaded as well.</div></div>
+  <div class="row"><input type="text" id="asRepo" value="lkpst/pokemon-omicron" style="width:200px"><input type="text" id="asBr" value="main" style="width:80px"><button class="pri" id="asGh">Read from GitHub</button><span class="hint" id="asGhSt" style="margin:0"></span></div>
+  <div class="hint">Reads the file list of your GitHub repo (names only, nothing is downloaded or uploaded). Or use <b>Choose project folder</b> at the top. <code>PokemonDatabase.js</code> must be loaded too (it is read automatically when this page is served from the project).</div></div>
 
 <div class="owbox"><h3>1 · Cry renamer</h3>
   <div class="hint">Choose the folder with your cries. File names only need to contain the Pokémon name or key, e.g. <code>Bulbasaur.wav</code>, <code>001 Bulbasaur.ogg</code>, <code>BULBASAUR_1.wav</code>. Each match is renamed to <code>gCry&lt;Name&gt;.wav</code> using the name in PokemonDatabase. The audio is not converted: a non-wav file keeps its own extension.</div>
@@ -1159,12 +1161,14 @@ tab.innerHTML=`
     <label class="in"><input type="checkbox" id="asFC"> no cry</label>
     <input type="text" id="asQ" placeholder="search" style="width:140px"><button id="asScan">Refresh</button><button id="asCsv">Download list (CSV)</button></div>
   <div class="stats" id="asMsSt"></div>
+  <div class="row"><b>Upload the missing ones:</b><button class="pri" id="asGoI">Icons…</button><button class="pri" id="asGoB">Battle sprites…</button><button class="pri" id="asGoC">Cries…</button>
+    <span class="hint" style="margin:0">pick a folder or files; they are matched by Pokémon name and renamed to the expected file name (see step 3)</span></div>
   <div class="tw" style="max-height:300px;overflow:auto"><table><thead><tr><th>#</th><th>Pokémon</th><th>Battle</th><th>Icon</th><th>Cry</th></tr></thead><tbody id="asMsTb"></tbody></table></div></div>
 
 <div class="owbox"><h3>3 · Upload a folder, capture only what is missing</h3>
-  <div class="hint">Choose a folder with any mix of battle sheets (<code>gSprite…</code>), icon sheets (<code>gIconSprite…</code>) and cries (wav/ogg…). Files are matched to Pokémon by name and kept only when the project is missing that file. Cries are renamed as above. Files with no prefix and no <code>battle</code>/<code>icons</code> folder are treated as:
-    <select id="asDef"><option value="battle">battle sprites</option><option value="icon">icons</option></select></div>
-  <div class="row"><button class="pri" id="asUpD">Choose folder</button><button id="asUpC">Clear</button><input type="file" id="asUpDi" webkitdirectory multiple hidden></div>
+  <div class="hint">Choose a folder with any mix of battle sheets (<code>gSprite…</code>), icon sheets (<code>gIconSprite…</code>) and cries (wav/ogg…). Files are matched to Pokémon by name and kept only when the project is missing that file. Cries are renamed as above. Files with no prefix and no <code>battle</code>/<code>icons</code> folder are told apart by size (battle sheet wide like 256×64, icon sheet tall like 32×64); anything else is treated as:
+    <select id="asDef"><option value="auto">decided by image size</option><option value="battle">battle sprites</option><option value="icon">icons</option></select></div>
+  <div class="row"><button class="pri" id="asUpD">Choose folder</button><button id="asUpF">Choose files</button><button id="asUpC">Clear</button><input type="file" id="asUpDi" webkitdirectory multiple hidden><input type="file" id="asUpFi" accept="image/*,audio/*" multiple hidden></div>
   <div class="stats" id="asUpSt"></div>
   <div class="row"><button class="ok" id="asUpZip" disabled>Download only the missing files (ZIP)</button></div>
   <div class="hint">The ZIP keeps the project paths (<code>graphics/pokemon_battle_sprites/battle/…</code>, <code>audio/cries/…</code>): unzip it on top of the repo.</div>
@@ -1175,6 +1179,17 @@ function show(){for(const id of['sprites','pokemon','moves','ow'])g('tab-'+id).h
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b===btn));try{location.hash='assets'}catch(e){}refresh()}
 btn.onclick=show;
 document.querySelectorAll('.tabs button').forEach(b=>{if(b!==btn)b.addEventListener('click',()=>{tab.hidden=true})});
+
+// ---- read the repo's file list from GitHub (one request: git tree)
+g('asGh').onclick=async()=>{const repo=g('asRepo').value.trim(),br=g('asBr').value.trim()||'main',st=g('asGhSt');
+  if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){st.textContent='write the repo as owner/name';return}
+  st.textContent='reading…';
+  try{const r=await fetch(`https://api.github.com/repos/${repo}/git/trees/${encodeURIComponent(br)}?recursive=1`,{headers:{Accept:'application/vnd.github+json'}});
+    if(!r.ok)throw new Error(r.status===403?'GitHub rate limit reached (try again in a while, or use Choose project folder)':r.status===404?'repo or branch not found (is the repo private?)':'GitHub answered '+r.status);
+    const j=await r.json();GH.clear();let n=0;
+    for(const t of j.tree||[])if(t.type==='blob'&&/^(graphics\/pokemon_battle_sprites\/|audio\/cries\/)/.test(t.path)){GH.add(bn(t.path).toLowerCase());n++}
+    st.textContent=n+' sprite/cry files found'+(j.truncated?' (list was truncated by GitHub)':'');refresh();if(sel&&sel.value)renderSpList()}
+  catch(e){st.textContent='';msg('Could not read GitHub: '+e.message)}};
 
 // ---- 1 cry renamer
 let cr=[];
@@ -1207,7 +1222,7 @@ function missing(){const f={battle:g('asFB').checked,icon:g('asFI').checked,cry:
   out.sort((a,b)=>dexId(a.s)-dexId(b.s)||a.s.k.localeCompare(b.s.k));return out}
 const mark=(miss,s,kind)=>miss?'<span style="color:#ff8a8a">missing</span>':'<span style="color:#6fe3a0">ok</span>';
 function msShow(){const all=species(),out=missing();
-  g('asSt').textContent=!window.ED||!window.ED.db?'PokemonDatabase.js is not loaded.':PMFiles.size?`${PMFiles.size} files from the project folder, ${all.length} species.`:'No project folder loaded yet: everything will show as missing.';
+  g('asSt').textContent=!window.ED||!window.ED.db?'PokemonDatabase.js is not loaded.':(PMFiles.size||GH.size)?`${PMFiles.size} files from the project folder, ${GH.size} from GitHub, ${all.length} species.`:'No file list yet (GitHub or project folder): everything will show as missing.';
   const c=k=>all.filter(s=>!have(k,s)).length;
   g('asMsSt').textContent=`${all.length} species · no battle sprite: ${c('battle')} · no icon: ${c('icon')} · no cry: ${c('cry')} · showing ${out.length}`;
   g('asMsTb').innerHTML=out.slice(0,500).map(({s,m})=>`<tr><td>${dexId(s)||'—'}</td><td>${E(s.e.name)}</td><td>${mark(m.battle)}</td><td>${mark(m.icon)}</td><td>${mark(m.cry)}</td></tr>`).join('')+(out.length>500?`<tr><td colspan="5" class="hint">first 500 shown, narrow the search</td></tr>`:'')}
@@ -1217,11 +1232,14 @@ g('asCsv').onclick=()=>{const rows=[['dex','key','name','battle','icon','cry']];
 
 // ---- 3 capture only missing
 let up=[];
-function upBuild(list){const ix=index(),seen=new Set();up=[];
+async function upBuild(list){const ix=index(),seen=new Set();up=[];
   for(const f of list){const isA=AUD.test(f.name),isI=IMG.test(f.name);if(!isA&&!isI)continue;
+    let dim=null;if(isI){try{const b=await createImageBitmap(f);dim=[b.width,b.height];b.close&&b.close()}catch(e){}}
     const rel=(f.webkitRelativePath||'').toLowerCase(),nm=f.name;
-    let kind=isA?'cry':/^gIconSprite/i.test(nm)?'icon':/^g(?:Front|Back)?(?:Shiny)?Sprite/i.test(nm)?'battle':/\/icons?\//.test(rel)?'icon':/\/battle\//.test(rel)?'battle':g('asDef').value;
-    const it={f,kind,dest:'',st:''},r=find(nm,ix);up.push(it);
+    let kind=isA?'cry':only&&isI&&only!=='cry'?only:/^gIconSprite/i.test(nm)?'icon':/^g(?:Front|Back)?(?:Shiny)?Sprite/i.test(nm)?'battle':/\/icons?\//.test(rel)?'icon':/\/battle\//.test(rel)?'battle':sizeKind(dim)||(g('asDef').value==='auto'?'battle':g('asDef').value);
+    const it={f,kind,dest:'',st:''};up.push(it);
+    if(only&&kind!==only){it.st='not a '+KL[only]+', ignored';it.skip=true;continue}
+    const r=find(nm,ix);
     if(!r){it.st='no Pokémon with that name';continue}if(r.amb){it.st='ambiguous: '+r.amb.map(x=>x.e.name).join(' / ');continue}
     const s=r.s;it.s=s;
     if(have(kind,s)){it.st='already in the project';it.skip=true;continue}
@@ -1231,12 +1249,19 @@ function upBuild(list){const ix=index(),seen=new Set();up=[];
     const key=s.k+'|'+kind;if(seen.has(key)){it.st='duplicate';it.skip=true;continue}
     seen.add(key);it.dest=p;it.st='missing → will be captured';it.ok=true}
   upShow()}
+const sizeKind=d=>!d?null:d[0]>=d[1]*2?'battle':d[1]>=d[0]?'icon':null;   // battle sheet = 4 frames in a row (256x64), icon sheet = 2 frames stacked (32x64)
+function stillMissing(){if(!only)return'';const got=new Set(up.filter(x=>x.ok&&x.kind===only).map(x=>x.s.k)),left=species().filter(s=>!have(only,s)&&!got.has(s.k));
+  return ` · still missing ${KL[only]}: ${left.length}${left.length&&left.length<=40?' ('+left.map(s=>s.e.name).join(', ')+')':''}`}
 function upShow(){const ok=up.filter(x=>x.ok).length;
-  g('asUpSt').textContent=up.length?`${up.length} files · ${ok} captured (missing in project) · ${up.filter(x=>x.skip).length} skipped · ${up.filter(x=>!x.ok&&!x.skip).length} not matched`:'No folder loaded.';
+  g('asUpSt').textContent=up.length?`${up.length} files · ${ok} captured (missing in project) · ${up.filter(x=>x.skip).length} skipped · ${up.filter(x=>!x.ok&&!x.skip).length} not matched${stillMissing()}`:'Nothing loaded.';
   g('asUpTb').innerHTML=up.slice(0,600).map(x=>`<tr><td>${E(x.f.name)}</td><td>${E(x.dest)}</td><td style="color:${x.ok?'#6fe3a0':x.skip?'#ffd166':'#ff8a8a'}">${E(x.st)} <small>(${KL[x.kind]})</small></td></tr>`).join('');
   g('asUpZip').disabled=!ok}
-g('asUpD').onclick=()=>g('asUpDi').click();
-g('asUpDi').onchange=e=>{const l=[...e.target.files];e.target.value='';upLast=l;upBuild(l)};let upLast=[];
+g('asUpD').onclick=()=>{only=null;g('asUpDi').click()};g('asUpF').onclick=()=>{if(!only)g('asUpFi').click()};
+for(const id of['asUpDi','asUpFi'])g(id).onchange=e=>{const l=[...e.target.files];e.target.value='';upLast=l;upBuild(l)};let upLast=[];
+// "Upload the missing ones": ask for one kind, scoped to the Pokémon that miss it
+let only=null;
+for(const[id,k]of[['asGoI','icon'],['asGoB','battle'],['asGoC','cry']])g(id).onclick=()=>{only=k;if(k!=='cry')g('asDef').value=k;
+  const n=species().filter(s=>!have(k,s)).length;msg(`${n} Pokémon have no ${KL[k]}. Pick the ${k==='cry'?'cries':'files'}: they are matched by name and only those ${n} are kept.`);g('asUpFi').click()};
 g('asDef').onchange=()=>upLast.length&&upBuild(upLast);
 g('asUpC').onclick=()=>{up=[];upLast=[];upShow()};
 g('asUpZip').onclick=async()=>{const l=up.filter(x=>x.ok).map(x=>({name:x.dest,blob:x.f}));if(!l.length)return;msg('Packing…');dl(await buildZip(l),'missing_assets.zip');msg(l.length+' files downloaded.')};
