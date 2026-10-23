@@ -511,5 +511,15 @@ window.OverworldTiles = {
     columns: 4,
     tileImage: "graphics/tiles/dark_floors.png",
     tileDimension: "64x48"
+  },
+  52: {
+    tileID: 52,
+    tileName: "PC",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 4,
+    columns: 2,
+    tileImage: "graphics/tiles/pc.png",
+    tileDimension: "32x32"
   }
 };
