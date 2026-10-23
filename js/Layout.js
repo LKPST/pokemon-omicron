@@ -36,8 +36,20 @@
     game() { return window.game || null; },
     battleActive() { try { const g = this.game(); return !!(g && g.scene.isActive('BattleScene')); } catch (e) { return false; } },
     mapOk() { return this.mode === 'map' && !(window.BattleTransition && window.BattleTransition.busy) && !this.battleActive(); },
-    silenceMap() { try { const c = window.currentGlobalMusic; if (c && c.manager && !c.pendingRemove && (c.isPlaying || c.isPaused)) c.stop(); } catch (e) { /* ignore */ } },
+    silenceMap() { try { if (this.mapEl) this.mapEl.pause(); } catch (e) { /* ignore */ } try { const c = window.currentGlobalMusic; if (c && c.manager && !c.pendingRemove && (c.isPlaying || c.isPaused)) c.stop(); } catch (e) { /* ignore */ } },
     silenceBattle() { try { const BS = window.BattleScene, m = BS && BS._m; if (BS) BS.musicOn = false; if (m) { m.pause(); m.currentTime = 0; } } catch (e) { /* ignore */ } },
+    // the map music: one looping <audio> element (native loop, play() is harmless when it is already playing)
+    mapEl: null, mapPath: null,
+    playMap(path) {
+      let el = this.mapEl;
+      if (!el) { el = this.mapEl = new Audio(); el.preload = 'auto'; }
+      el.loop = true;
+      if (this.mapPath !== path) { this.mapPath = path; el.src = path; el.volume = 0.5; }
+      if (el.paused || el.ended) { const pr = el.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a tap: the unlock below starts it */ }); }
+    },
+    // after a long idle: start the map track again from the top on the same element (a new element would need a tap on iPhone)
+    refreshMap() { try { const el = this.mapEl; if (el && this.mapPath) { el.pause(); try { el.currentTime = 0; } catch (e) { /* not ready */ } const pr = el.play(); if (pr && pr.catch) pr.catch(() => { /* ignore */ }); return; } } catch (e) { /* ignore */ }
+      try { const c = window.currentGlobalMusic; if (c) { try { c.stop(); c.destroy(); } catch (e) { /* ignore */ } } window.currentGlobalMusic = null; window.currentGlobalMusicPath = null; const g = this.game(), sc = g && g.scene.getScene('OverworldScene'); if (sc && g.scene.isActive('OverworldScene') && sc.updateMapMusic) sc.updateMapMusic(sc.currentMapKey); } catch (e) { /* ignore */ } },
     enterBattle() { this.mode = 'battle'; this.silenceMap(); },
     leaveBattle() { this.mode = 'map'; this.silenceBattle(); },
     // a short sound (cry) through a primed element
@@ -52,12 +64,13 @@
       } catch (e) { return null; }
     },
     prime() {
-      const prime1 = a => { try { a.muted = true; const pr = a.play(); if (pr && pr.then) pr.then(() => { if (a._keep) { a.muted = false; return; } a.pause(); a.muted = false; }).catch(() => { a.muted = false; }); } catch (e) { /* ignore */ } };
+      const prime1 = a => { try { a.muted = true; const pr = a.play(); if (pr && pr.then) pr.then(() => { if (a._keep || (a === this.mapEl && this.mapPath)) { a.muted = false; return; } a.pause(); a.muted = false; }).catch(() => { a.muted = false; }); } catch (e) { /* ignore */ } };
       if (!this.primed) {
         this.primed = true;
         for (let i = 0; i < 4; i++) { const a = new Audio(SILENT); a.preload = 'auto'; this.pool.push(a); prime1(a); }
         if (IOS && !(navigator.audioSession)) { try { const k = new Audio(SILENT); k.loop = true; k.setAttribute('playsinline', ''); this.keep = k; k.play().catch(() => { this.keep = null; this.primed = false; }); } catch (e) { /* ignore */ } }
       }
+      if (!this.mapEl) { const e = this.mapEl = new Audio(SILENT); e.loop = true; prime1(e); }   // the map music element is unlocked by this first tap
       const BS = window.BattleScene, m = BS && BS._m;
       if (m && !m._primed && !BS.musicOn) { m._primed = true; m._keep = false; prime1(m); }
     },
@@ -75,6 +88,7 @@
       const inBattle = PMAudio.battleActive() || PMAudio.mode === 'battle';
       try { const m = window.BattleScene && window.BattleScene._m; if (inBattle && m && m.paused && window.BattleScene.musicOn) { const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* ignore */ }); } } catch (e) { /* ignore */ }
       if (!PMAudio.mapOk()) return;   // never start the map music during a battle (or while one is starting)
+      try { const el = PMAudio.mapEl; if (el && PMAudio.mapPath) { if (el.paused) { const pr = el.play(); if (pr && pr.catch) pr.catch(() => { /* ignore */ }); } return; } } catch (e) { /* ignore */ }
       try {
         const cur = window.currentGlobalMusic;
         if (cur && cur.manager && !cur.pendingRemove) { if (cur.isPaused) cur.resume(); else if (!cur.isPlaying && !(g.sound && g.sound.locked)) cur.play(); }
@@ -84,7 +98,14 @@
     PM.kickAudio = kick;
     ['pointerdown', 'touchend', 'click', 'keydown'].forEach(t => window.addEventListener(t, () => { const real = t !== 'pointerdown'; kick(real); setTimeout(() => kick(real), 150); setTimeout(() => kick(real), 700); }, { capture: true, passive: true }));
     // coming back to the page (iOS suspends / "interrupts" the audio when the app is in the background or a call comes in)
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) { kick(false); setTimeout(() => kick(false), 400); } });
+    let hiddenAt = 0;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { hiddenAt = performance.now(); return; }
+      const away = hiddenAt ? performance.now() - hiddenAt : 0; hiddenAt = 0;
+      try { const g = window.game, ctx = g && g.sound && g.sound.context; if (ctx && ctx.state !== 'running') ctx.resume().catch(() => { /* needs a tap */ }); } catch (e) { /* ignore */ }
+      if (away > 20000 && PMAudio.mapOk()) setTimeout(() => PMAudio.refreshMap(), 300);   // long away: start the map music fresh
+      kick(false); setTimeout(() => kick(false), 400);
+    });
     window.addEventListener('pageshow', () => kick(false));
   })();
 
