@@ -109,6 +109,36 @@
     window.addEventListener('pageshow', () => kick(false));
   })();
 
+
+  // ---------------------------------------------------------------- music hint + ?debug=1 panel (readable on a phone, no console needed)
+  (function () {
+    const mkBox = css => { const d = document.createElement('div'); d.style.cssText = css; (document.body || document.documentElement).appendChild(d); return d; };
+    let hint = null;
+    const DBG1 = /[?&]debug=1/.test(location.search); let box = null; const logs = [];
+    if (DBG1) {
+      ['warn', 'error'].forEach(k => { const o = console[k]; console[k] = function () { try { logs.push(k[0].toUpperCase() + ': ' + [].map.call(arguments, a => typeof a === 'string' ? a : (a && a.message) || String(a)).join(' ').slice(0, 150)); if (logs.length > 7) logs.shift(); } catch (e) { /* ignore */ } return o.apply(console, arguments); }; });
+      window.addEventListener('error', e => { logs.push('E: ' + e.message); if (logs.length > 7) logs.shift(); });
+      window.addEventListener('unhandledrejection', e => { logs.push('P: ' + ((e.reason && e.reason.message) || e.reason)); if (logs.length > 7) logs.shift(); });
+    }
+    setInterval(() => {
+      try {
+        const el = PMAudio.mapEl, blocked = !!(el && PMAudio.mapPath && el.paused && PMAudio.mapOk());
+        if (blocked && !hint) { hint = mkBox('position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:99998;background:rgba(10,14,30,.82);color:#fff;font:600 13px system-ui,sans-serif;padding:7px 14px;border-radius:999px;pointer-events:none;letter-spacing:.3px'); hint.textContent = '♪ Tap the screen to start the music'; }
+        if (hint) hint.style.display = blocked ? 'block' : 'none';
+        if (!DBG1) return;
+        if (!box) box = mkBox('position:fixed;left:4px;top:4px;z-index:99999;max-width:min(94vw,440px);background:rgba(0,0,0,.74);color:#9f9;font:11px/1.35 ui-monospace,monospace;padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre-wrap;word-break:break-word');
+        const g = window.game, sc = g && g.scene.getScene('OverworldScene'), W = window.OWWild || {}, OS = window.OWSprites, ctx = g && g.sound && g.sound.context;
+        const L = [];
+        L.push('wild: ' + (W.why || '-') + '\nslot ' + (W.lastBucket || '-') + ' | list ' + ((W.list || []).length) + ' | grass ' + (W.grass ? W.grass.size : '-') + ' | mons ' + ((W.mons || []).length) + ' | loading ' + (W.loading || 0) + ' | enabled ' + W.enabled);
+        L.push('sprites loaded: ' + (OS && OS.stats ? OS.stats().loaded.length : '-'));
+        if (sc) L.push('map ' + sc.currentMapKey + ' | locked ' + sc.isLocked + ' | evolving ' + sc.evolving + ' | script ' + sc.scriptRunning);
+        L.push('music: ' + (el ? (el.paused ? 'PAUSED' : 'playing t=' + el.currentTime.toFixed(0)) : 'none') + ' | ctx ' + (ctx && ctx.state) + ' | mode ' + PMAudio.mode + ' | ' + new Date().toTimeString().slice(0, 8));
+        if (logs.length) L.push(logs.join('\n'));
+        box.textContent = L.join('\n');
+      } catch (e) { /* ignore */ }
+    }, 600);
+  })();
+
   if (!PM.landscape) return;                // portrait: nothing to do here (TouchControls.js handles the old layout)
 
   // ---------------------------------------------------------------- key sending
