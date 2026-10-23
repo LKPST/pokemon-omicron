@@ -1,0 +1,2490 @@
+{
+  "version": 1,
+  "sheet": "graphics/overworld/DS _ DSi - Pokemon HeartGold _ SoulSilver - Overworld - Trainers (Overworld) (2).png",
+  "sheetSize": [
+    960,
+    1101
+  ],
+  "sprites": {
+    "Trainer_1": {
+      "fields": {
+        "spriteID": "trainer_1_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_1.png"
+      },
+      "file": "graphics/overworld/trainer_1.png",
+      "rect": [
+        0,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_2": {
+      "fields": {
+        "spriteID": "trainer_2_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_2.png"
+      },
+      "file": "graphics/overworld/trainer_2.png",
+      "rect": [
+        96,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_3": {
+      "fields": {
+        "spriteID": "trainer_3_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_3.png"
+      },
+      "file": "graphics/overworld/trainer_3.png",
+      "rect": [
+        192,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_4": {
+      "fields": {
+        "spriteID": "trainer_4_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_4.png"
+      },
+      "file": "graphics/overworld/trainer_4.png",
+      "rect": [
+        288,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_5": {
+      "fields": {
+        "spriteID": "trainer_5_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_5.png"
+      },
+      "file": "graphics/overworld/trainer_5.png",
+      "rect": [
+        384,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_6": {
+      "fields": {
+        "spriteID": "trainer_6_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_6.png"
+      },
+      "file": "graphics/overworld/trainer_6.png",
+      "rect": [
+        480,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_7": {
+      "fields": {
+        "spriteID": "trainer_7_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_7.png"
+      },
+      "file": "graphics/overworld/trainer_7.png",
+      "rect": [
+        576,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_8": {
+      "fields": {
+        "spriteID": "trainer_8_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_8.png"
+      },
+      "file": "graphics/overworld/trainer_8.png",
+      "rect": [
+        672,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_9": {
+      "fields": {
+        "spriteID": "trainer_9_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_9.png"
+      },
+      "file": "graphics/overworld/trainer_9.png",
+      "rect": [
+        768,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_10": {
+      "fields": {
+        "spriteID": "trainer_10_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_10.png"
+      },
+      "file": "graphics/overworld/trainer_10.png",
+      "rect": [
+        864,
+        0,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_11": {
+      "fields": {
+        "spriteID": "trainer_11_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_11.png"
+      },
+      "file": "graphics/overworld/trainer_11.png",
+      "rect": [
+        0,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_12": {
+      "fields": {
+        "spriteID": "trainer_12_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_12.png"
+      },
+      "file": "graphics/overworld/trainer_12.png",
+      "rect": [
+        96,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_13": {
+      "fields": {
+        "spriteID": "trainer_13_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_13.png"
+      },
+      "file": "graphics/overworld/trainer_13.png",
+      "rect": [
+        192,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_14": {
+      "fields": {
+        "spriteID": "trainer_14_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_14.png"
+      },
+      "file": "graphics/overworld/trainer_14.png",
+      "rect": [
+        288,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_15": {
+      "fields": {
+        "spriteID": "trainer_15_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_15.png"
+      },
+      "file": "graphics/overworld/trainer_15.png",
+      "rect": [
+        384,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_16": {
+      "fields": {
+        "spriteID": "trainer_16_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_16.png"
+      },
+      "file": "graphics/overworld/trainer_16.png",
+      "rect": [
+        480,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_17": {
+      "fields": {
+        "spriteID": "trainer_17_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_17.png"
+      },
+      "file": "graphics/overworld/trainer_17.png",
+      "rect": [
+        576,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_18": {
+      "fields": {
+        "spriteID": "trainer_18_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_18.png"
+      },
+      "file": "graphics/overworld/trainer_18.png",
+      "rect": [
+        672,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_19": {
+      "fields": {
+        "spriteID": "trainer_19_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_19.png"
+      },
+      "file": "graphics/overworld/trainer_19.png",
+      "rect": [
+        768,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_20": {
+      "fields": {
+        "spriteID": "trainer_20_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_20.png"
+      },
+      "file": "graphics/overworld/trainer_20.png",
+      "rect": [
+        864,
+        128,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_21": {
+      "fields": {
+        "spriteID": "trainer_21_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_21.png"
+      },
+      "file": "graphics/overworld/trainer_21.png",
+      "rect": [
+        0,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_22": {
+      "fields": {
+        "spriteID": "trainer_22_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_22.png"
+      },
+      "file": "graphics/overworld/trainer_22.png",
+      "rect": [
+        96,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_23": {
+      "fields": {
+        "spriteID": "trainer_23_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_23.png"
+      },
+      "file": "graphics/overworld/trainer_23.png",
+      "rect": [
+        192,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_24": {
+      "fields": {
+        "spriteID": "trainer_24_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_24.png"
+      },
+      "file": "graphics/overworld/trainer_24.png",
+      "rect": [
+        288,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_25": {
+      "fields": {
+        "spriteID": "trainer_25_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_25.png"
+      },
+      "file": "graphics/overworld/trainer_25.png",
+      "rect": [
+        384,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_26": {
+      "fields": {
+        "spriteID": "trainer_26_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_26.png"
+      },
+      "file": "graphics/overworld/trainer_26.png",
+      "rect": [
+        480,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_27": {
+      "fields": {
+        "spriteID": "trainer_27_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_27.png"
+      },
+      "file": "graphics/overworld/trainer_27.png",
+      "rect": [
+        576,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_28": {
+      "fields": {
+        "spriteID": "trainer_28_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_28.png"
+      },
+      "file": "graphics/overworld/trainer_28.png",
+      "rect": [
+        672,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_29": {
+      "fields": {
+        "spriteID": "trainer_29_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_29.png"
+      },
+      "file": "graphics/overworld/trainer_29.png",
+      "rect": [
+        768,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_30": {
+      "fields": {
+        "spriteID": "trainer_30_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_30.png"
+      },
+      "file": "graphics/overworld/trainer_30.png",
+      "rect": [
+        864,
+        256,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_31": {
+      "fields": {
+        "spriteID": "trainer_31_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_31.png"
+      },
+      "file": "graphics/overworld/trainer_31.png",
+      "rect": [
+        0,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_32": {
+      "fields": {
+        "spriteID": "trainer_32_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_32.png"
+      },
+      "file": "graphics/overworld/trainer_32.png",
+      "rect": [
+        96,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_33": {
+      "fields": {
+        "spriteID": "trainer_33_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_33.png"
+      },
+      "file": "graphics/overworld/trainer_33.png",
+      "rect": [
+        192,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_34": {
+      "fields": {
+        "spriteID": "trainer_34_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_34.png"
+      },
+      "file": "graphics/overworld/trainer_34.png",
+      "rect": [
+        288,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_35": {
+      "fields": {
+        "spriteID": "trainer_35_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_35.png"
+      },
+      "file": "graphics/overworld/trainer_35.png",
+      "rect": [
+        384,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_36": {
+      "fields": {
+        "spriteID": "trainer_36_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_36.png"
+      },
+      "file": "graphics/overworld/trainer_36.png",
+      "rect": [
+        480,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_37": {
+      "fields": {
+        "spriteID": "trainer_37_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_37.png"
+      },
+      "file": "graphics/overworld/trainer_37.png",
+      "rect": [
+        576,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_38": {
+      "fields": {
+        "spriteID": "trainer_38_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_38.png"
+      },
+      "file": "graphics/overworld/trainer_38.png",
+      "rect": [
+        672,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_39": {
+      "fields": {
+        "spriteID": "trainer_39_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_39.png"
+      },
+      "file": "graphics/overworld/trainer_39.png",
+      "rect": [
+        768,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_40": {
+      "fields": {
+        "spriteID": "trainer_40_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_40.png"
+      },
+      "file": "graphics/overworld/trainer_40.png",
+      "rect": [
+        864,
+        384,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_41": {
+      "fields": {
+        "spriteID": "trainer_41_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_41.png"
+      },
+      "file": "graphics/overworld/trainer_41.png",
+      "rect": [
+        0,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_42": {
+      "fields": {
+        "spriteID": "trainer_42_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_42.png"
+      },
+      "file": "graphics/overworld/trainer_42.png",
+      "rect": [
+        96,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_43": {
+      "fields": {
+        "spriteID": "trainer_43_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_43.png"
+      },
+      "file": "graphics/overworld/trainer_43.png",
+      "rect": [
+        192,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_44": {
+      "fields": {
+        "spriteID": "trainer_44_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_44.png"
+      },
+      "file": "graphics/overworld/trainer_44.png",
+      "rect": [
+        288,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_45": {
+      "fields": {
+        "spriteID": "trainer_45_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_45.png"
+      },
+      "file": "graphics/overworld/trainer_45.png",
+      "rect": [
+        384,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_46": {
+      "fields": {
+        "spriteID": "trainer_46_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_46.png"
+      },
+      "file": "graphics/overworld/trainer_46.png",
+      "rect": [
+        480,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_47": {
+      "fields": {
+        "spriteID": "trainer_47_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_47.png"
+      },
+      "file": "graphics/overworld/trainer_47.png",
+      "rect": [
+        576,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_48": {
+      "fields": {
+        "spriteID": "trainer_48_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_48.png"
+      },
+      "file": "graphics/overworld/trainer_48.png",
+      "rect": [
+        672,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_49": {
+      "fields": {
+        "spriteID": "trainer_49_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_49.png"
+      },
+      "file": "graphics/overworld/trainer_49.png",
+      "rect": [
+        768,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_50": {
+      "fields": {
+        "spriteID": "trainer_50_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_50.png"
+      },
+      "file": "graphics/overworld/trainer_50.png",
+      "rect": [
+        864,
+        512,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Male Player": {
+      "fields": {
+        "spriteID": "male_player_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/male_player.png"
+      },
+      "file": "graphics/overworld/male_player.png",
+      "rect": [
+        0,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_52": {
+      "fields": {
+        "spriteID": "trainer_52_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_52.png"
+      },
+      "file": "graphics/overworld/trainer_52.png",
+      "rect": [
+        96,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_53": {
+      "fields": {
+        "spriteID": "trainer_53_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_53.png"
+      },
+      "file": "graphics/overworld/trainer_53.png",
+      "rect": [
+        192,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_54": {
+      "fields": {
+        "spriteID": "trainer_54_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_54.png"
+      },
+      "file": "graphics/overworld/trainer_54.png",
+      "rect": [
+        288,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_55": {
+      "fields": {
+        "spriteID": "trainer_55_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_55.png"
+      },
+      "file": "graphics/overworld/trainer_55.png",
+      "rect": [
+        384,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_56": {
+      "fields": {
+        "spriteID": "trainer_56_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_56.png"
+      },
+      "file": "graphics/overworld/trainer_56.png",
+      "rect": [
+        480,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_57": {
+      "fields": {
+        "spriteID": "trainer_57_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_57.png"
+      },
+      "file": "graphics/overworld/trainer_57.png",
+      "rect": [
+        576,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_58": {
+      "fields": {
+        "spriteID": "trainer_58_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_58.png"
+      },
+      "file": "graphics/overworld/trainer_58.png",
+      "rect": [
+        672,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_59": {
+      "fields": {
+        "spriteID": "trainer_59_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_59.png"
+      },
+      "file": "graphics/overworld/trainer_59.png",
+      "rect": [
+        768,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_60": {
+      "fields": {
+        "spriteID": "trainer_60_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_60.png"
+      },
+      "file": "graphics/overworld/trainer_60.png",
+      "rect": [
+        864,
+        640,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_61": {
+      "fields": {
+        "spriteID": "trainer_61_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_61.png"
+      },
+      "file": "graphics/overworld/trainer_61.png",
+      "rect": [
+        0,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_62": {
+      "fields": {
+        "spriteID": "trainer_62_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_62.png"
+      },
+      "file": "graphics/overworld/trainer_62.png",
+      "rect": [
+        96,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_63": {
+      "fields": {
+        "spriteID": "trainer_63_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_63.png"
+      },
+      "file": "graphics/overworld/trainer_63.png",
+      "rect": [
+        192,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_64": {
+      "fields": {
+        "spriteID": "trainer_64_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_64.png"
+      },
+      "file": "graphics/overworld/trainer_64.png",
+      "rect": [
+        288,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_65": {
+      "fields": {
+        "spriteID": "trainer_65_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_65.png"
+      },
+      "file": "graphics/overworld/trainer_65.png",
+      "rect": [
+        384,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_66": {
+      "fields": {
+        "spriteID": "trainer_66_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_66.png"
+      },
+      "file": "graphics/overworld/trainer_66.png",
+      "rect": [
+        480,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_67": {
+      "fields": {
+        "spriteID": "trainer_67_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_67.png"
+      },
+      "file": "graphics/overworld/trainer_67.png",
+      "rect": [
+        576,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_68": {
+      "fields": {
+        "spriteID": "trainer_68_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_68.png"
+      },
+      "file": "graphics/overworld/trainer_68.png",
+      "rect": [
+        672,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_69": {
+      "fields": {
+        "spriteID": "trainer_69_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_69.png"
+      },
+      "file": "graphics/overworld/trainer_69.png",
+      "rect": [
+        768,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_70": {
+      "fields": {
+        "spriteID": "trainer_70_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_70.png"
+      },
+      "file": "graphics/overworld/trainer_70.png",
+      "rect": [
+        864,
+        768,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_71": {
+      "fields": {
+        "spriteID": "trainer_71_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_71.png"
+      },
+      "file": "graphics/overworld/trainer_71.png",
+      "rect": [
+        0,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_72": {
+      "fields": {
+        "spriteID": "trainer_72_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_72.png"
+      },
+      "file": "graphics/overworld/trainer_72.png",
+      "rect": [
+        96,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_73": {
+      "fields": {
+        "spriteID": "trainer_73_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_73.png"
+      },
+      "file": "graphics/overworld/trainer_73.png",
+      "rect": [
+        192,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_74": {
+      "fields": {
+        "spriteID": "trainer_74_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_74.png"
+      },
+      "file": "graphics/overworld/trainer_74.png",
+      "rect": [
+        288,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_75": {
+      "fields": {
+        "spriteID": "trainer_75_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_75.png"
+      },
+      "file": "graphics/overworld/trainer_75.png",
+      "rect": [
+        384,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_76": {
+      "fields": {
+        "spriteID": "trainer_76_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_76.png"
+      },
+      "file": "graphics/overworld/trainer_76.png",
+      "rect": [
+        480,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_77": {
+      "fields": {
+        "spriteID": "trainer_77_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_77.png"
+      },
+      "file": "graphics/overworld/trainer_77.png",
+      "rect": [
+        576,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_78": {
+      "fields": {
+        "spriteID": "trainer_78_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_78.png"
+      },
+      "file": "graphics/overworld/trainer_78.png",
+      "rect": [
+        672,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_79": {
+      "fields": {
+        "spriteID": "trainer_79_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_79.png"
+      },
+      "file": "graphics/overworld/trainer_79.png",
+      "rect": [
+        768,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    },
+    "Trainer_80": {
+      "fields": {
+        "spriteID": "trainer_80_ow",
+        "frames": 12,
+        "genderBased": false,
+        "owType": "NPC",
+        "owDimension": "16x32",
+        "trueDimension": "32x32",
+        "isRunning": false,
+        "isFishing": false,
+        "isSurfing": false,
+        "isCycling": false,
+        "owSprite": "graphics/overworld/trainer_80.png"
+      },
+      "file": "graphics/overworld/trainer_80.png",
+      "rect": [
+        864,
+        896,
+        96,
+        128
+      ],
+      "frame": [
+        32,
+        32
+      ],
+      "cols": 3,
+      "rows": 4,
+      "layout": "custom3x4",
+      "roles": [],
+      "frames": 12
+    }
+  }
+}
