@@ -1,1079 +1,350 @@
-// ===========================================================================
-// PokemonSummary.js   (put it in js/, load it AFTER PokemonDatabase.js, TypeTables.js and GameStateManagerClass.js)
-//
-// The GBA-style party menu + summary screens (Info / Skills / Moves), drawn on a 240x160 canvas.
-//
-//  IN THE GAME   PokemonSummary.open(scene)    opens it over the TOP screen (OW_TEXT.screen, 480x320 = 240x160 at 2x).
-//                PokemonSummary.close()        closes it.        PokemonSummary.isOpen()
-//                The overworld opens it when the player presses Enter (see the [SUMMARY] lines in overworld_scene.js).
-//
-//  WHICH POKEMON?  GameStateManager.saveData.party  (the live save: loaded from the browser's local save at start-up and
-//                  shaped like save.json). Empty slots (null) are skipped. If that is empty, the local save
-//                  (localStorage 'pokemon_micron_save') is tried. Nothing is ever written back.
-//
-//  DATA IT USES    save mon       species, nickname, natdexID, level, exp, expmax, isShiny, gender, HP, maxHP, Attack, Def,
-//                                 spattack, sdpef, speed, nature, ability, teraType, heldItem, ballId, OTName, OTID,
-//                                 caughtloc, moves[{moveId,currentPP,maxPP}]
-//                  PokemonDatabase  sprite (battleSprite), icon (iconSprite), cry, name, types, base stats, abilities
-//                  TypeTable        (tables/TypeTables.js, made with type_icon_tool.html) type icons from your icon sheet
-//                  EmeraldFont      the glyph map of js/utils/EmeraldFont.js (+ the accents / male / female signs it lacks)
-//                  Move table       window.MoveDatabase / MoveTable / MoveTables if you have one (see moveInfo below)
-//
-//  SPECIAL TEXT    {Lv} {PP} {ID} {No} draw the little bitmap glyphs of the font.  /up/ /down/ /left/ /right/ draw arrows.
-//
-//  The same file runs in pokemon_summary.html (the preview / export tool): PokemonSummaryCore(env) is the engine.
-// ===========================================================================
-(function (root) {
-'use strict';
-
-const W = 240, H = 160;
-const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
-const ease = t => 1 - Math.pow(1 - t, 3);
-const backOut = t => { const c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
-const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-
-// ---------------------------------------------------------------- glyphs
-// The map below is a copy of EmeraldFont.glyphMap (c = column of the 8x16 frames, r = row). If EmeraldFont is loaded in the
-// game, ITS map is used, so a change in EmeraldFont.js is picked up. Characters it does not have come from EXTRA_GLYPHS.
-const EMERALD_GLYPHS = {
-  0:{c:2,r:10},1:{c:4,r:10},2:{c:6,r:10},3:{c:8,r:10},4:{c:10,r:10},5:{c:12,r:10},6:{c:14,r:10},7:{c:16,r:10},8:{c:18,r:10},9:{c:20,r:10},
-  '!':{c:22,r:10},'?':{c:24,r:10},'.':{c:26,r:10},'-':{c:28,r:10},',':{c:16,r:11},
-  A:{c:22,r:11},B:{c:24,r:11},C:{c:26,r:11},D:{c:28,r:11},E:{c:30,r:11},F:{c:0,r:12},G:{c:2,r:12},H:{c:4,r:12},I:{c:6,r:12},J:{c:8,r:12},
-  K:{c:10,r:12},L:{c:12,r:12},M:{c:14,r:12},N:{c:16,r:12},O:{c:18,r:12},P:{c:20,r:12},Q:{c:22,r:12},R:{c:24,r:12},S:{c:26,r:12},T:{c:28,r:12},
-  U:{c:30,r:12},V:{c:0,r:13},W:{c:2,r:13},X:{c:4,r:13},Y:{c:6,r:13},Z:{c:8,r:13},a:{c:10,r:13},b:{c:12,r:13},c:{c:14,r:13},d:{c:16,r:13},
-  e:{c:18,r:13},f:{c:20,r:13},g:{c:22,r:13},h:{c:24,r:13},i:{c:26,r:13},j:{c:28,r:13},k:{c:30,r:13},l:{c:0,r:14},m:{c:2,r:14},n:{c:4,r:14},
-  o:{c:6,r:14},p:{c:8,r:14},q:{c:10,r:14},r:{c:12,r:14},s:{c:14,r:14},t:{c:16,r:14},u:{c:18,r:14},v:{c:20,r:14},w:{c:22,r:14},x:{c:24,r:14},
-  y:{c:26,r:14},z:{c:28,r:14},':':{c:0,r:15},'Ä':{c:0,r:15},'Ö':{c:2,r:15},'Ü':{c:4,r:15},'ä':{c:6,r:15},'ö':{c:8,r:15},'ü':{c:10,r:15},
-  '/up/':{c:0,r:16},'/down/':{c:2,r:16},'/left/':{c:4,r:16},'/right/':{c:6,r:16},'+':{c:8,r:16},Lv:{c:10,r:16},PP:{c:12,r:16},ID:{c:14,r:16},
-  '№':{c:16,r:16},_:{c:18,r:16},'(':{c:6,r:17},')':{c:8,r:17},'■':{c:10,r:17},'▲':{c:12,r:17},'✖':{c:14,r:17}
-};
-// From the Emerald character map (frame = row*32 + 2*(code%16), code = row*16 + column): what EmeraldFont.js does not list.
-const EXTRA_GLYPHS = (() => {
-  const g = {}, put = (ch, code) => { g[ch] = { r: code >> 4, c: 2 * (code & 15) }; };
-  const run = (start, chars) => { let code = start; for (const ch of chars) put(ch, code++); };
-  run(0x01, 'ÀÁÂÇÈÉÊËÌ'); run(0x0B, 'ÎÏÒÓÔŒÙÚÛÑß'); run(0x16, 'àá'); run(0x19, 'çèéêëì');
-  run(0x20, 'îïòóôœùúûñºª'); run(0x2D, '&+'); run(0x35, '=;'); run(0x5A, 'Í%()');
-  run(0xB0, '…“”‘’♂♀'); run(0xB8, ',×/');
-  if (g['’']) g["'"] = g['’']; if (g['“']) g['"'] = g['“'];
-  return g;
-})();
-const TOKENS = { Lv: 'Lv', PP: 'PP', ID: 'ID', No: '№' };
-// Per-glyph options that can come from EmeraldFont.js (set them in the Font Editor tab): w = how many 8 px cells the glyph is wide, adv = pixels the cursor moves after it.
-const glW = gl => Math.max(1, (gl && gl.w) || 1);
-const glAdv = gl => (gl && typeof gl.adv === 'number') ? gl.adv : null;
-const glPx = gl => Math.max(16, 8 * glW(gl));   // pixels of the sheet that belong to the glyph
-
-// ---------------------------------------------------------------- built-in demo data (used only when your tables have nothing)
-const pretty = s => String(s == null ? '' : s).replace(/^(MOVE|SPECIES|ABILITY|TYPE|ITEM|NATURE|RIBBON)_/, '').toLowerCase().split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
-const DEMO = {
-  BULBASAUR: { id: '001', name: 'Bulbasaur', t: ['TYPE_GRASS', 'TYPE_POISON'], b: [45, 49, 49, 65, 65, 45], abs: ['Overgrow'] },
-  CHARMANDER: { id: '004', name: 'Charmander', t: ['TYPE_FIRE'], b: [39, 52, 43, 60, 50, 65], abs: ['Blaze'] },
-  SQUIRTLE: { id: '007', name: 'Squirtle', t: ['TYPE_WATER'], b: [44, 48, 65, 50, 64, 43], abs: ['Torrent'] },
-  PIKACHU: { id: '025', name: 'Pikachu', t: ['TYPE_ELECTRIC'], b: [35, 55, 40, 50, 50, 90], abs: ['Static'] },
-  EEVEE: { id: '133', name: 'Eevee', t: ['TYPE_NORMAL'], b: [55, 55, 50, 45, 65, 55], abs: ['Run Away'] },
-  MAGIKARP: { id: '129', name: 'Magikarp', t: ['TYPE_WATER'], b: [20, 10, 55, 15, 20, 80], abs: ['Swift Swim'] },
-};
-const MV = { // key: [name, type, power, accuracy, pp, description]
-  TACKLE: ['Tackle', 'TYPE_NORMAL', 40, 100, 35, 'A full-body charge attack.'], GROWL: ['Growl', 'TYPE_NORMAL', 0, 100, 40, "Lowers the foe's Attack."],
-  VINEWHIP: ['Vine Whip', 'TYPE_GRASS', 45, 100, 25, 'Strikes with slender vines.'], RAZORLEAF: ['Razor Leaf', 'TYPE_GRASS', 55, 95, 25, 'Cuts with sharp leaves. High crit rate.'],
-  EMBER: ['Ember', 'TYPE_FIRE', 40, 100, 25, 'May inflict a burn.'], SCRATCH: ['Scratch', 'TYPE_NORMAL', 40, 100, 35, 'Scratches with sharp claws.'],
-  WATERGUN: ['Water Gun', 'TYPE_WATER', 40, 100, 25, 'Squirts water to attack.'], THUNDERSHOCK: ['Thunder Shock', 'TYPE_ELECTRIC', 40, 100, 30, 'An electric blast. May paralyze.'],
-  QUICKATTACK: ['Quick Attack', 'TYPE_NORMAL', 40, 100, 30, 'An almost invisible, fast attack.'], TAILWHIP: ['Tail Whip', 'TYPE_NORMAL', 0, 100, 30, "Lowers the foe's Defense."],
-  SPLASH: ['Splash', 'TYPE_NORMAL', 0, 0, 40, 'Splashes around. Nothing happens.'], BITE: ['Bite', 'TYPE_DARK', 60, 100, 25, 'A fang attack. May cause flinching.'],
-  CLOSECOMBAT: ['Close Combat', 'TYPE_FIGHTING', 120, 100, 5, 'A reckless all-out attack.'], BULLETPUNCH: ['Bullet Punch', 'TYPE_STEEL', 40, 100, 30, 'A fast punch. Always strikes first.'],
-  SWORDSDANCE: ['Swords Dance', 'TYPE_NORMAL', 0, 0, 20, 'A dance that sharply raises Attack.'], IRONHEAD: ['Iron Head', 'TYPE_STEEL', 80, 100, 15, 'Slams with a hard head. May flinch.'],
-};
-const NATURES = { Hardy: [0, 0], Docile: [0, 0], Serious: [0, 0], Bashful: [0, 0], Quirky: [0, 0], Lonely: [1, 2], Brave: [1, 5], Adamant: [1, 3], Naughty: [1, 4], Bold: [2, 1], Relaxed: [2, 5], Impish: [2, 3], Lax: [2, 4],
-  Timid: [5, 1], Hasty: [5, 2], Jolly: [5, 3], Naive: [5, 4], Modest: [3, 1], Mild: [3, 2], Quiet: [3, 5], Rash: [3, 4], Calm: [4, 1], Gentle: [4, 2], Sassy: [4, 5], Careful: [4, 3] };
-const BALL_BY_ID = { 1: 'poke', 2: 'great', 3: 'ultra', 4: 'master', 5: 'premier' };
-const BALLS = { poke: ['#e83848', '#f8f8f8'], great: ['#3868e0', '#f8f8f8'], ultra: ['#f0c820', '#383848'], premier: ['#f8f8f8', '#f8f8f8'], master: ['#9038c8', '#f8f8f8'] };
-const TYPE_COL = { Normal: '#a8a878', Fire: '#f08030', Water: '#6890f0', Electric: '#f0c820', Grass: '#78c850', Ice: '#98d8d8', Fighting: '#c03028', Poison: '#a040a0', Ground: '#d8b858', Flying: '#a890f0', Psychic: '#f85888', Bug: '#a8b820', Rock: '#b8a038', Ghost: '#705898', Dragon: '#7038f8', Dark: '#705848', Steel: '#a8a8c0', Fairy: '#ee99ac', Stellar: '#58b8c8' };
-const TLAB = { Normal: 'NORMAL', Fire: 'FIRE', Water: 'WATER', Electric: 'ELECT', Grass: 'GRASS', Ice: 'ICE', Fighting: 'FIGHT', Poison: 'POISON', Ground: 'GROUND', Flying: 'FLYING', Psychic: 'PSYCH', Bug: 'BUG', Rock: 'ROCK', Ghost: 'GHOST', Dragon: 'DRAGON', Dark: 'DARK', Steel: 'STEEL', Fairy: 'FAIRY', Stellar: 'STELLR' };
-const wrapText = (s, n) => { const out = []; let cur = ''; for (const w of String(s).split(/\s+/).filter(Boolean)) { const t = cur ? cur + ' ' + w : w; if (t.length <= n || !cur) cur = t; else { out.push(cur); cur = w; } } if (cur) out.push(cur); return out; };
-const normType = t => { t = String(t || ''); if (!t) return 'TYPE_NORMAL'; return /^TYPE_/.test(t) ? t : 'TYPE_' + t.toUpperCase().replace(/[^A-Z0-9]+/g, '_'); };
-
-// ===========================================================================
-//  ENGINE
-//  env = {
-//    urlFor(path)  -> url of a project file ('' = not available)       (default: the path itself)
-//    db()          -> PokemonDatabase object or null
-//    types()       -> TypeTable object or null
-//    moves()       -> move table object or null
-//    party()       -> array of save-format mons (nulls allowed)
-//    ballType(id)  -> 'poke' | 'great' | 'ultra' | 'premier' | 'master'
-//    glyphs()      -> glyph map override (optional)
-//    onExit()      -> called when B is pressed on the party list
-//  }
-// ===========================================================================
-function createSummary(env) {
-  const urlFor = env.urlFor || (p => p);
-  const opt = { cries: false, shinyFrame: false, frames: 'auto', nudge: 0 };
-
-  // ------------------------------------------------ images
-  const imgs = new Map(), failed = new Set();
-  function getImg(path) {
-    if (!path) return null;
-    let e = imgs.get(path);
-    if (!e) {
-      e = { img: new Image(), ok: false, fail: false };
-      e.img.onload = () => { e.ok = true; };
-      e.img.onerror = () => { e.fail = true; if (!failed.has(path)) { failed.add(path); warnings.add('image not found: ' + path); try { console.warn('[PS] could not load image: ' + path + '  (looked for it relative to your index.html)'); } catch (er) { /* no console */ } } };
-      const u = urlFor(path);
-      if (u) e.img.src = u; else e.fail = true;
-      imgs.set(path, e);
-    }
-    return e;
-  }
-
-  // ------------------------------------------------ font
-  let rawSheet = null, fontSrc = '', GLY = {};
-  const FT = { top: 2, cap: 9 }, fontCache = new Map(), advCache = new Map();
-  const loadImgP = url => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('load')); im.src = url; });
-  function buildGlyphs() {
-    let base = EMERALD_GLYPHS;
-    try { const o = env.glyphs && env.glyphs(); if (o && typeof o === 'object') base = o; } catch (e) { /* keep the copy */ }
-    GLY = Object.assign({}, EXTRA_GLYPHS, base); for (const k of Object.keys(GLY)) if (!GLY[k]) delete GLY[k];
-    if (GLY['/m/']) GLY['\u2642'] = GLY['/m/']; if (GLY['/f/']) GLY['\u2640'] = GLY['/f/'];   // the tags /m/ /f/ of EmeraldFont.js are the male / female signs
-  }
-  function fallbackSheet() {   // only used when latin_short.png cannot be read: draws a plain pixel font
-    const c = mk(256, 288), x = c.getContext('2d', { willReadFrequently: true });
-    x.fillStyle = '#f8f8f8'; x.fillRect(0, 0, 256, 288);
-    const cell = mk(8, 16), cx = cell.getContext('2d', { willReadFrequently: true });
-    const put = (gl, drawFn) => {
-      cx.clearRect(0, 0, 8, 16); drawFn(cx);
-      const d = cx.getImageData(0, 0, 8, 16).data, out = x.createImageData(8, 16), o = out.data, ink = new Uint8Array(128);
-      for (let i = 0; i < 128; i++) ink[i] = d[i * 4 + 3] > 110 ? 1 : 0;
-      for (let yy = 0; yy < 16; yy++) for (let xx = 0; xx < 8; xx++) {
-        const i = yy * 8 + xx; let v = 248;
-        if (ink[i]) v = 0; else if ((xx > 0 && ink[i - 1]) || (yy > 0 && ink[i - 8]) || (xx > 0 && yy > 0 && ink[i - 9])) v = 170;
-        o[i * 4] = o[i * 4 + 1] = o[i * 4 + 2] = v; o[i * 4 + 3] = 255;
+// js/Layout.js  -  LANDSCAPE layout: one centred main screen (480x320) + floating Switch-style controls in the side gutters.
+// Portrait (the old two-screen layout) stays available.  Choose with  ?layout=landscape  /  ?layout=portrait  (remembered in this browser),
+// or in code:  PMLayout.set({ mode:'portrait' })  (reloads the page).  Other settings: PMLayout.set({ opacity:.5, size:1, hand:'left' })  (live).
+// Controls send the same key presses the keyboard does.  D-pad = arrows, A = Z, B = X, X = B (bag), Y = Space (follower talk), "-" = Tab (select), "+" = Enter (menu).
+// The camera button saves a picture of the MAIN screen only.
+(function () {
+  'use strict';
+  const DEFAULT_MODE = 'landscape';       // portrait (the old two-screen layout) stays available with ?layout=portrait
+  const qs = new URLSearchParams(location.search);
+  const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } } };
+  let mode = qs.get('layout'); if (mode === 'landscape' || mode === 'portrait') ls.set('pm_layout', mode); else mode = ls.get('pm_layout', DEFAULT_MODE);
+  mode = 'landscape'; ls.set('pm_layout', 'landscape');   // the landscape layout is the only one now (?layout=portrait is ignored)
+  const cfg = { opacity: parseFloat(ls.get('pm_tc_opacity', '0.9')), size: parseFloat(ls.get('pm_tc_size', '1')), hand: ls.get('pm_tc_hand', 'right') };
+  const tq = qs.get('touch');
+  const isTouch = tq === '1' || (tq !== '0' && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || matchMedia('(pointer: coarse)').matches));
+  const PM = window.PMLayout = { version: 13, mode, isTouch, cfg, landscape: mode === 'landscape', scale: 1,
+    set(o) {
+      o = o || {};
+      if (o.opacity != null) { cfg.opacity = Math.max(.15, Math.min(1, +o.opacity)); ls.set('pm_tc_opacity', cfg.opacity); }
+      if (o.size != null) { cfg.size = Math.max(.7, Math.min(1.5, +o.size)); ls.set('pm_tc_size', cfg.size); }
+      if (o.hand) { cfg.hand = o.hand === 'left' ? 'left' : 'right'; ls.set('pm_tc_hand', cfg.hand); }
+      if (o.mode && o.mode !== mode) { ls.set('pm_layout', o.mode); location.reload(); return; }
+      apply();
+    } };
+  // ---------------------------------------------------------------- audio
+  // ONE place decides which music may play (window.PMAudio): the map music (Phaser sound, window.currentGlobalMusic) and the battle music
+  // (an <audio> element, BattleScene._m) never play together. mode 'battle' is set when a battle starts (BattleTransition.start / BattleScene.create)
+  // and ends in BattleScene.teardown; while it is on, updateMapMusic() and the unlock below refuse to start the map music.
+  // iPhone: sound stays locked until a real tap (touchend / click). On those taps we resume the Web Audio context, play a silent buffer,
+  // set the audio session to "playback" (so the silent switch does not mute the game), and "prime" a few <audio> elements: iOS only lets an
+  // element play from code (cries, battle music) after it has been started once by a tap, so cries go through those primed elements.
+  const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+  const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const PMAudio = window.PMAudio = {
+    mode: 'map', pool: [], primed: false, keep: null,
+    game() { return window.game || null; },
+    battleActive() { try { const g = this.game(); return !!(g && g.scene.isActive('BattleScene')); } catch (e) { return false; } },
+    mapOk() { return this.mode === 'map' && !(window.BattleTransition && window.BattleTransition.busy) && !this.battleActive(); },
+    silenceMap() { try { const c = window.currentGlobalMusic; if (c && c.manager && !c.pendingRemove && (c.isPlaying || c.isPaused)) c.stop(); } catch (e) { /* ignore */ } },
+    silenceBattle() { try { const BS = window.BattleScene, m = BS && BS._m; if (BS) BS.musicOn = false; if (m) { m.pause(); m.currentTime = 0; } } catch (e) { /* ignore */ } },
+    enterBattle() { this.mode = 'battle'; this.silenceMap(); },
+    leaveBattle() { this.mode = 'map'; this.silenceBattle(); },
+    // a short sound (cry) through a primed element
+    play(url, vol) {
+      if (!url) return null;
+      try {
+        let a = this.pool.find(p => p.paused || p.ended);
+        if (!a) { a = new Audio(); this.pool.push(a); }
+        a.muted = false; a.src = url; a.volume = vol == null ? 1 : vol; try { a.currentTime = 0; } catch (e) { /* not ready */ }
+        const pr = a.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a tap */ });
+        return a;
+      } catch (e) { return null; }
+    },
+    prime() {
+      const prime1 = a => { try { a.muted = true; const pr = a.play(); if (pr && pr.then) pr.then(() => { if (a._keep) { a.muted = false; return; } a.pause(); a.muted = false; }).catch(() => { a.muted = false; }); } catch (e) { /* ignore */ } };
+      if (!this.primed) {
+        this.primed = true;
+        for (let i = 0; i < 4; i++) { const a = new Audio(SILENT); a.preload = 'auto'; this.pool.push(a); prime1(a); }
+        if (IOS && !(navigator.audioSession)) { try { const k = new Audio(SILENT); k.loop = true; k.setAttribute('playsinline', ''); this.keep = k; k.play().catch(() => { this.keep = null; this.primed = false; }); } catch (e) { /* ignore */ } }
       }
-      x.putImageData(out, gl.c * 8, gl.r * 16);
-    };
-    const txt = (s, size) => cx => { cx.font = `bold ${size}px "DejaVu Sans Mono","Courier New",monospace`; cx.fillStyle = '#000'; cx.fillText(s, 0, size === 10 ? 12 : 11); };
-    for (const ch of Object.keys(GLY)) {
-      const gl = GLY[ch];
-      if (ch === 'Lv') put(gl, txt('Lv', 8)); else if (ch === 'PP') put(gl, txt('PP', 8)); else if (ch === 'ID') put(gl, txt('ID', 8)); else if (ch === '№') put(gl, txt('No', 8));
-      else if (ch === '/up/' || ch === '/down/' || ch === '/left/' || ch === '/right/') {
-        put(gl, cx => { cx.fillStyle = '#000'; cx.beginPath();
-          if (ch === '/up/') { cx.moveTo(4, 3); cx.lineTo(8, 9); cx.lineTo(0, 9); } else if (ch === '/down/') { cx.moveTo(0, 4); cx.lineTo(8, 4); cx.lineTo(4, 10); }
-          else if (ch === '/left/') { cx.moveTo(1, 6); cx.lineTo(6, 2); cx.lineTo(6, 10); } else { cx.moveTo(7, 6); cx.lineTo(2, 2); cx.lineTo(2, 10); }
-          cx.closePath(); cx.fill(); });
-      } else if (ch.length === 1) put(gl, txt(ch, 10));
-    }
-    return c;
-  }
-  function measureFont() {
-    const gl = GLY['H'], d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 8, 16).data;
-    let t = 99, b = -1;
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) { const i = (y * 8 + x) * 4; if ((d[i] + d[i + 1] + d[i + 2]) / 3 < 110 && d[i + 3] > 0) { t = Math.min(t, y); b = Math.max(b, y); } }
-    if (b < 0) { t = 2; b = 10; }
-    FT.top = t; FT.cap = b - t + 1;
-  }
-  async function initFont() {
-    buildGlyphs();
-    let sheet = null, src = '';
-    try {
-      const fu = urlFor('graphics/fonts/latin_short.png'); if (!fu) throw new Error('none');
-      const im = await loadImgP(fu), c = mk(im.width, im.height), x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(im, 0, 0); x.getImageData(0, 0, 1, 1); sheet = c; src = 'latin_short.png';
-    } catch (e) { sheet = null; }
-    if (!sheet) { sheet = fallbackSheet(); src = 'built-in fallback (latin_short.png not loaded)'; }
-    rawSheet = sheet; fontSrc = src; fontCache.clear(); advCache.clear(); letAdv.clear(); measureFont();
-  }
-  const hex4 = h => { h = h.replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16), h.length > 6 ? parseInt(h.substr(6, 2), 16) : 255]; };
-  function font(tc, sc) {
-    const key = tc + '|' + sc; let f = fontCache.get(key); if (f) return f;
-    const T = hex4(tc), S = hex4(sc), c = mk(rawSheet.width, rawSheet.height), x = c.getContext('2d', { willReadFrequently: true });
-    x.drawImage(rawSheet, 0, 0);
-    const id = x.getImageData(0, 0, c.width, c.height), d = id.data, bgR = d[0], bgG = d[1], bgB = d[2];
-    for (let i = 0; i < d.length; i += 4) {
-      const r = d[i], g = d[i + 1], b = d[i + 2];
-      if (d[i + 3] === 0 || (r === bgR && g === bgG && b === bgB) || (r >= 245 && g >= 245 && b >= 245)) { d[i + 3] = 0; continue; }
-      const q = (r + g + b) / 3 < 110 ? T : S; d[i] = q[0]; d[i + 1] = q[1]; d[i + 2] = q[2]; d[i + 3] = q[3];
-    }
-    x.putImageData(id, 0, 0); fontCache.set(key, c); return c;
-  }
-  const TX = { dark: ['#2a2a3a', '#b4bad0'], white: ['#ffffff', '#5a5e7c'], mute: ['#6a7396', '#cdd3e6'], blue: ['#2f64e0', '#a9bdf2'], red: ['#e0344f', '#f2aab8'], badge: ['#ffffff', '#00000070'], cyan: ['#7ff3e4', '#134a4a'], dim: ['#b6c0e6', '#161c3a'], gold: ['#ffe27a', '#4a3a10'] };
-  // advance of a glyph: 6 px like EmeraldFont, a little more for the wide bitmap glyphs (Lv, PP, ID, arrows ...)
-  function advOf(key) {
-    if (advCache.has(key)) return advCache.get(key);
-    let a = 6; const gl = GLY[key];
-    if (glAdv(gl) != null) { advCache.set(key, glAdv(gl)); return glAdv(gl); }   // advance set in EmeraldFont.js
-    if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, glPx(gl), 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
-      let mx = -1;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < glPx(gl); x++) { const i = (y * glPx(gl) + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245)) mx = Math.max(mx, x); }
-      if (mx >= 0) a = clamp(mx + 1, 6, glPx(gl) + 2);
-    }
-    advCache.set(key, a); return a;
-  }
-  // proportional advance for letters / punctuation: the width of the drawn pixels + 1 px gap (a fixed 6 px squashed wide letters like m, w, M, W
-  // into their neighbours and left narrow ones (i, l, t) floating apart). Digits stay fixed (6) so numbers line up.
-  const letAdv = new Map();
-  function advLetter(ch) {
-    if (letAdv.has(ch)) return letAdv.get(ch);
-    const gl = GLY[ch]; let a = 6;
-    if (glAdv(gl) != null) { letAdv.set(ch, glAdv(gl)); return glAdv(gl); }   // advance set in EmeraldFont.js
-    if (gl && rawSheet) {
-      const d = rawSheet.getContext('2d', { willReadFrequently: true }).getImageData(gl.c * 8, gl.r * 16, 16, 16).data, bgR = d[0], bgG = d[1], bgB = d[2];
-      let mx = -1, mn = 8;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = (y * 16 + x) * 4; if (d[i + 3] && !(d[i] === bgR && d[i + 1] === bgG && d[i + 2] === bgB) && !(d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245) && (d[i] + d[i + 1] + d[i + 2]) / 3 < 110) { mx = Math.max(mx, x); mn = Math.min(mn, x); } }
-      if (mx >= 0) a = clamp(mx + 2, 4, 12);
-    }
-    letAdv.set(ch, a); return a;
-  }
-  function* glyphs(s) {
-    s = String(s); let i = 0;
-    while (i < s.length) {
-      const ch = s[i];
-      if (ch === '{') { const j = s.indexOf('}', i); if (j > 0) { const k = TOKENS[s.slice(i + 1, j)]; if (k && GLY[k]) { yield { gl: GLY[k], adv: advOf(k) }; i = j + 1; continue; } } }
-      if (ch === '/') { const j = s.indexOf('/', i + 1); if (j > 0) { const tag = s.slice(i, j + 1); if (GLY[tag]) { yield { gl: GLY[tag], adv: advOf(tag) }; i = j + 1; continue; } } }
-      if (ch === ' ') { yield { gl: null, adv: 5 }; i++; continue; }
-      yield { gl: GLY[ch] || null, adv: glAdv(GLY[ch]) ?? (/[0-9]/.test(ch) ? 6 : advLetter(ch)) }; i++;
-    }
-  }
-  const tw = s => { let w = 0; for (const g of glyphs(s)) w += g.adv; return w; };
-  function T(c, s, x, y, k = 'dark') {
-    const f = font(TX[k][0], TX[k][1]); let cx = x;
-    for (const g of glyphs(s)) { if (g.gl) c.drawImage(f, g.gl.c * 8, g.gl.r * 16, glPx(g.gl), 16, cx, y - FT.top + opt.nudge, glPx(g.gl), 16); cx += g.adv; }
-    return cx;
-  }
-  const TR = (c, s, xr, y, k) => T(c, s, xr - tw(s), y, k);
-
-  // ------------------------------------------------ pixel helpers
-  const rect = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-  function pill(c, x, y, w, h, col, R) {
-    const r = Math.min(R ?? Math.floor(h / 2), Math.floor(h / 2), Math.floor(w / 2)); c.fillStyle = col;
-    for (let row = 0; row < h; row++) {
-      let dy = 0; if (row < r) dy = r - row - .5; else if (row >= h - r) dy = row - (h - r) + .5;
-      const inset = dy ? r - Math.round(Math.sqrt(Math.max(0, r * r - dy * dy))) : 0; c.fillRect(x + inset, y + row, w - 2 * inset, 1);
-    }
-  }
-  function ell(c, cx, cy, rx, ry, col) { c.fillStyle = col; for (let dy = -ry; dy <= ry; dy++) { const w = Math.round(rx * Math.sqrt(1 - (dy * dy) / ((ry + .5) * (ry + .5)))); c.fillRect(cx - w, cy + dy, w * 2, 1); } }
-  function tri(c, x, cy, half, col) { c.fillStyle = col; for (let dy = -half; dy <= half; dy++) c.fillRect(x, cy + dy, half + 1 - Math.abs(dy), 1); }
-  function ball(c, x, y, type, s = 1) {
-    const [top, bot] = BALLS[type] || BALLS.poke;
-    for (let py = 0; py < 9; py++) for (let px = 0; px < 9; px++) {
-      const dx = px - 4, dy = py - 4, r2 = dx * dx + dy * dy; if (r2 > 20) continue;
-      let col = r2 > 12 ? '#202030' : dy === 0 ? '#202030' : dy < 0 ? top : bot; if (r2 <= 2 && dy !== 0 || r2 <= 1) col = '#f8f8f8'; if (r2 === 2 && dy === 0) col = '#202030';
-      c.fillStyle = col; c.fillRect(x + px * s, y + py * s, s, s);
-    }
-  }
-  // the ball the Pokémon was caught in: frame 0 of its sheet in PokeballTables (graphics/poke_ball/gInterfaceGfx_<Name>.png); the drawn ball if there is no sheet
-  function ballIcon(c, m, x, y) {
-    const PT = typeof PokeballTables !== 'undefined' ? PokeballTables : null, d = PT && m.ballId != null ? (PT.get ? PT.get(m.ballId) : PT[m.ballId]) : null, e = d && d.spriteSheet ? getImg(d.spriteSheet) : null;
-    if (e && e.ok) { const fw = d.frameWidth || 16, fh = d.frameHeight || 16; c.imageSmoothingEnabled = false; c.drawImage(keyedIcon(e.img, d.spriteSheet), 0, 0, fw, fh, x, y, fw, fh); return; }
-    if (e && !e.fail) return;   // still loading
-    ball(c, x + 3, y + 3, m.ball, 1);
-  }
-  const STAR = ['..#..', '..#..', '#####', '.###.', '##.##'];
-  function star(c, x, y) { c.fillStyle = '#f0b820'; STAR.forEach((r, j) => { for (let i = 0; i < 5; i++) if (r[i] === '#') c.fillRect(x + i, y + j, 1, 1); }); }
-
-  // ------------------------------------------------ type icons (TypeTable) with a text fallback
-  let keyedSheet = null, keyedFor = null;   // the type sheet with its top-left colour made transparent (TypeTable.bgKey)
-  function typeSheet(TT) {
-    const sh = getImg(TT.sheet); if (!sh || !sh.ok) return null;
-    if (!TT.bgKey) return sh.img;
-    if (keyedFor === sh.img && keyedSheet) return keyedSheet;
-    try {
-      const w = sh.img.naturalWidth, h = sh.img.naturalHeight, c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(sh.img, 0, 0); const id = x.getImageData(0, 0, w, h), d = id.data, r0 = d[0], g0 = d[1], b0 = d[2], tol = TT.bgTolerance || 0;
-      if (d[3] === 255) for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - r0) <= tol && Math.abs(d[i + 1] - g0) <= tol && Math.abs(d[i + 2] - b0) <= tol) d[i + 3] = 0;
-      x.putImageData(id, 0, 0); keyedSheet = c; keyedFor = sh.img; return c;
-    } catch (e) { return sh.img; }
-  }
-  const typeLabel = key => pretty(key);
-  function badge(c, key, x, y) {
-    const TT = env.types && env.types(), te = TT && TT.types && TT.types[key];
-    if (te && te.icon && TT.sheet) {
-      const src = typeSheet(TT);
-      if (src) { c.imageSmoothingEnabled = false; c.drawImage(src, te.icon.x, te.icon.y, te.icon.w, te.icon.h, x, y, te.icon.w, te.icon.h); return te.icon.w; }
-    }
-    const nm = typeLabel(key), lab = (te && te.short ? te.short : TLAB[nm] || nm.toUpperCase().slice(0, 6)).toUpperCase(), w = tw(lab) + 4;
-    pill(c, x, y + 1, w, 13, '#00000040'); pill(c, x, y, w, 13, (te && te.color) || TYPE_COL[nm] || '#a8a878'); T(c, lab, x + 2, y + 2, 'badge'); return w;
-  }
-  function badges(c, types, x, y) { let cx = x; for (const t of types.slice(0, 2)) cx += badge(c, t, cx, y) + 2; }
-
-  // ------------------------------------------------ species / moves / mon
-  const warnings = new Set();
-  let dbIndex = null, dbIndexFor = null;
-  function speciesInfo(key) {
-    const k = String(key || '').trim(), DB = env.db && env.db();
-    if (DB) {
-      if (dbIndexFor !== DB) { dbIndexFor = DB; dbIndex = new Map(); for (const kk of Object.keys(DB)) { const nk = kk.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (!dbIndex.has(nk) || kk === 'SPECIES_NONE') dbIndex.set(nk, kk); } }
-      const parts = k.split('_'), cand = [k, k.replace(/_/g, '')];
-      for (let n = parts.length - 1; n >= 2; n--) cand.push(parts.slice(0, n).join('_'));
-      const more = []; for (const c of cand) { const real = dbIndex.get(c.toUpperCase().replace(/[^A-Z0-9]/g, '')); if (real) more.push(real); }
-      for (const cKey of [...cand, ...more]) { const e = DB[cKey]; if (e && typeof e === 'object' && !(cKey === 'SPECIES_NONE' && k !== 'SPECIES_NONE')) {
-        if (cKey !== k) warnings.add(`${k}: not in PokemonDatabase, showing ${cKey}`);
-        const m = /gSprite(\d+)/.exec(e.battleSprite || '');
-        const ty = [e.type1, e.type2].filter(t => t && t !== 'TYPE_NONE'), ab = [e.ability1, e.ability2, e.hiddenAbility].map(a => a && a !== 'ABILITY_NONE' ? pretty(a) : '');
-        return { id: m ? m[1] : '000', name: e.name && e.name !== 'None' ? e.name : pretty(cKey), t: ty.length ? ty : ['TYPE_NORMAL'],
-          b: [e.baseHP, e.baseAttack, e.baseDefense, e.baseSpAttack, e.baseSpDefense, e.baseSpeed].map(v => v || 50), abs: ab, sprite: e.battleSprite, icon: e.iconSprite, cry: e.cry };
-      } }
-      warnings.add(`${k}: not found in PokemonDatabase`);
-    }
-    const up = k.toUpperCase().replace(/^SPECIES_/, '').replace(/[^A-Z0-9]/g, ''), d = DEMO[up];
-    if (d) return { ...d, sprite: `graphics/pokemon_battle_sprites/battle/gSprite${d.id}${d.name}.png`, icon: `graphics/pokemon_battle_sprites/icons/gIconSprite${d.id}${d.name}.png`, cry: `audio/cries/gCry${d.name}.wav` };
-    return { id: '000', name: pretty(k) || 'Unknown', t: ['TYPE_NORMAL'], b: [50, 50, 50, 50, 50, 50], abs: [], sprite: '', icon: '', cry: '' };
-  }
-  function moveTable() { try { return (env.moves && env.moves()) || null; } catch (e) { return null; } }
-  let mvIdx = null, mvIdxFor = null;
-  function findMove(MT, id, key) {      // exact key, the table's own get(), then a loose match (MOVE_CLOSECOMBAT = MOVE_CLOSE_COMBAT)
-    let e = MT[id] || MT[id.toUpperCase()]; if (e && typeof e === 'object') return e;
-    if (typeof MT.get === 'function') { try { e = MT.get(id); if (e) return e; } catch (er) { /* ignore */ } }
-    if (mvIdxFor !== MT) { mvIdxFor = MT; mvIdx = new Map(); for (const k of Object.keys(MT)) mvIdx.set(k.toUpperCase().replace(/^MOVE_/, '').replace(/[^A-Z0-9]/g, ''), MT[k]); }
-    return mvIdx.get(key) || null;
-  }
-  function moveInfo(x) {
-    const id = typeof x === 'string' ? x : String((x && (x.moveId || x.id || x.name || x.move)) || ''), MT = moveTable();
-    const key = id.toUpperCase().replace(/^MOVE_/, '').replace(/[^A-Z0-9]/g, ''), e = MT && findMove(MT, id, key), d = MV[key];
-    let name, type, pow, acc, ppMax, desc;
-    if (e) { name = e.name || e.moveName || pretty(id); type = e.type || e.moveType; pow = e.power ?? e.basePower ?? e.pow ?? 0; acc = e.accuracy ?? e.acc ?? 0; ppMax = e.pp ?? e.maxPP; desc = e.description || e.desc || e.effectText || ''; }
-    else if (d) { [name, type, pow, acc, ppMax, desc] = d; }
-    else { name = pretty(id) || '---'; type = 'TYPE_NORMAL'; pow = 0; acc = 0; ppMax = 20; desc = ''; }
-    const maxPP = (x && x.maxPP) ?? ppMax ?? 20, cur = (x && x.currentPP) ?? maxPP;
-    return { name: String(name).slice(0, 12), type: normType(type), pow, acc, ppMax: maxPP, pp: cur, desc: String(desc || '') };
-  }
-  const MARK_KEYS = ['circle', 'triangle', 'square', 'heart', 'star', 'diamond'];   // saveData: markings: { circle, triangle, square, heart, star, diamond }
-  function markList(v) { if (Array.isArray(v)) return MARK_KEYS.map((k, i) => !!v[i]); if (v && typeof v === 'object') return MARK_KEYS.map(k => !!v[k]); return MARK_KEYS.map(() => false); }
-  function buildMon(raw) {
-    const sp = speciesInfo(raw.species), L = clamp(parseInt(raw.level) || 5, 1, 100), nat = NATURES[pretty(raw.nature) || 'Hardy'] || [0, 0];
-    const iv = [raw.ivhp ?? raw.ivHP, raw.ivatk ?? raw.ivAttack, raw.ivdef ?? raw.ivDefense, raw.ivspa ?? raw.ivSpAttack, raw.ivspd ?? raw.ivSpDefense, raw.ivspe ?? raw.ivSpeed].map(v => v ?? 15);
-    const calc = i => { const b = sp.b[i]; if (i === 0) return Math.floor((2 * b + iv[0]) * L / 100) + L + 10; const v = Math.floor((2 * b + iv[i]) * L / 100) + 5; return Math.floor(v * (nat[0] === i ? 1.1 : nat[1] === i ? .9 : 1)); };
-    const stats = [raw.maxHP ?? calc(0), raw.Attack ?? calc(1), raw.Def ?? calc(2), raw.spattack ?? calc(3), (raw.sdpef ?? raw.spdef) ?? calc(4), raw.speed ?? calc(5)];
-    const exp = raw.exp ?? L ** 3, expN = raw.expmax ?? (L + 1) ** 3;
-    const g = String(raw.gender || '').toUpperCase(), tera = raw.teraType && raw.teraType !== 'TYPE_NONE' ? raw.teraType : '';
-    const item = raw.heldItem && raw.heldItem !== 'ITEM_NONE' ? pretty(raw.heldItem) : '';
-    return { sp, rawSpecies: raw.species, species: sp.name, nick: String(raw.nickname || sp.name).slice(0, 10), dex: (root.Dex && root.Dex.num && root.Dex.num(raw.species)) || raw.natdexID || parseInt(sp.id, 10), types: sp.t, lv: L, stats, max: stats[0], hp: clamp(raw.HP ?? stats[0], 0, stats[0]),
-      natUp: nat[0], natDown: nat[1], nature: pretty(raw.nature) || 'Hardy', ability: pretty(raw.ability) || sp.abs[0] || '-', gender: g === 'MALE' || g === 'M' ? 'M' : g === 'FEMALE' || g === 'F' ? 'F' : '',
-      ball: (env.ballType ? env.ballType(raw.ballId) : BALL_BY_ID[raw.ballId]) || 'poke', item, tera, ot: raw.OTName || 'PLAYER', idno: String((+raw.OTID || 0) % 100000).padStart(5, '0'),
-      exp, expN, moves: (raw.moves || []).slice(0, 4).map(moveInfo), sprite: sp.sprite, icon: sp.icon, cry: sp.cry, iv, marks: markList(raw.markings), contest: [raw.cool, raw.beauty, raw.cute, raw.smart, raw.tough].map(v => clamp(+v || 0, 0, 255)), sheen: clamp(+raw.sheen || 0, 0, 255), ribbons: Array.isArray(raw.ribbons) ? raw.ribbons.length : (+raw.ribbons || 0), ballId: raw.ballId, shiny: !!raw.isShiny, place: pretty(raw.caughtloc) || 'Unknown', status: String(raw.status || '').toLowerCase() };
-  }
-
-  // ------------------------------------------------ state
-  const S = { view: 'party', sel: 0, page: 0, mv: 0, mvMode: false, t: 0, rowT: 0, selT: 9, statP: 1, hpShown: [], party: [], tr: null, pg: null, menu: null, swap: -1, name: null, pageT: 9, mvSwap: -1, mk: null, cask: null, iv: false, banner: null };
-  function rebuild(keepHp) {
-    warnings.clear();
-    const old = S.hpShown, raws = (env.party ? env.party() : []).filter(Boolean).slice(0, 6);
-    S.party = raws.map(buildMon);
-    S.party.forEach(m => { getImg(m.sprite); getImg(m.icon); });
-    const TT = env.types && env.types(); if (TT && TT.sheet) getImg(TT.sheet);
-    if (!TT) warnings.add('TypeTable not found: load tables/TypeTables.js before PokemonSummary.js (text badges are used)');
-    else { if (!TT.sheet) warnings.add('TypeTable has no sheet path'); for (const m of S.party) for (const ty of [...m.types, m.tera]) if (ty && !(TT.types && TT.types[ty] && TT.types[ty].icon)) warnings.add('no icon rect in TypeTable for ' + ty); }
-    S.hpShown = S.party.map((m, i) => keepHp && old[i] !== undefined ? old[i] : 0);
-    S.sel = Math.min(S.sel, Math.max(0, S.party.length - 1));
-    if (!keepHp) { S.bmsg = env.battle && env.battle.prompt ? { text: env.battle.prompt, t: 0, dur: 3 } : null; S.menu = null; S.swap = -1; S.name = null; S.rowT = 0; S.statP = 0; S.view = env.catchMode ? 'summary' : 'party'; S.tr = null; S.pg = null; S.page = 0; S.mvMode = false; S.banner = env.catchMode ? { text: env.catchMode.banner || 'Registered in the POKéDEX!', t: 0 } : null; }
-  }
-  function reset() { imgs.clear(); }
-
-  // ------------------------------------------------ background (per pixel, crisp)
-  const bgc = mk(W, H), bgx = bgc.getContext('2d'), bgd = bgx.createImageData(W, H), bd = bgd.data, RCX = 198, RCY = 86, ringR = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) ringR[y * W + x] = Math.hypot(x + .5 - RCX, y + .5 - RCY);
-  const CR1 = [216, 50, 74], CR2 = [208, 46, 70], CD1 = [168, 38, 62], CD2 = [158, 34, 56], CP = [230, 236, 249], CW = [255, 255, 255], CE = [238, 106, 128];
-  function drawBg(t) {
-    const rot = t * .3, sn = Math.sin(rot), cs = Math.cos(rot), off = Math.floor(t * 18);
-    for (let y = 0; y < H; y++) {
-      const edge = 172 - y * .375;
-      for (let x = 0; x < W; x++) {
-        const i = y * W + x, d = edge - x; let c;
-        if (d < 0) { const r = ringR[i], v = -(x - RCX) * sn + (y - RCY) * cs; c = ((r >= 40 && r <= 46) || (r >= 9 && r <= 13) || (r > 13 && r < 40 && Math.abs(v) <= 5)) ? CW : CP; }
-        else if (d < 2) c = CE; else if (d < 24) c = (((x + y + off) >> 4) & 1) ? CD2 : CD1; else c = (((x + y + off) >> 4) & 1) ? CR2 : CR1;
-        const j = i * 4; bd[j] = c[0]; bd[j + 1] = c[1]; bd[j + 2] = c[2]; bd[j + 3] = 255;
-      }
-    }
-    bgx.putImageData(bgd, 0, 0);
-  }
-
-  // ------------------------------------------------ sprites and icons
-  const tmpC = mk(200, 200), tmpX = tmpC.getContext('2d');
-  function frameInfo(e) { const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = opt.frames === 'auto' ? (iw / ih >= 3.5 ? 4 : 1) : +opt.frames; return { n, fw: Math.floor(iw / n), fh: ih }; }
-  function drawSprite(c, m, cx, bottom, bw, bh, pop, flash) {
-    const e = getImg(m.sprite);
-    if (!e || e.fail || !m.sprite) { ball(c, cx - 13, bottom - 30, m.ball, 3); return; }
-    if (!e.ok) return;
-    const fi = frameInfo(e), fr = (m.shiny || opt.shinyFrame) && fi.n > 1 ? 1 : 0; let s = Math.min(bw / fi.fw, bh / fi.fh);
-    s = s >= 2 ? Math.floor(s) : s > 1 ? Math.floor(s * 2) / 2 : s; s *= pop;
-    const dw = Math.max(1, Math.round(fi.fw * s)), dh = Math.max(1, Math.round(fi.fh * s)), dx = Math.round(cx - dw / 2), dy = Math.round(bottom - dh);
-    c.imageSmoothingEnabled = false;
-    if (flash > 0) {
-      tmpC.width = dw; tmpC.height = dh; tmpX.imageSmoothingEnabled = false; tmpX.clearRect(0, 0, dw, dh); tmpX.drawImage(e.img, fr * fi.fw, 0, fi.fw, fi.fh, 0, 0, dw, dh);
-      tmpX.globalCompositeOperation = 'source-atop'; tmpX.fillStyle = `rgba(255,255,255,${flash})`; tmpX.fillRect(0, 0, dw, dh); tmpX.globalCompositeOperation = 'source-over'; c.drawImage(tmpC, dx, dy);
-    } else c.drawImage(e.img, fr * fi.fw, 0, fi.fw, fi.fh, dx, dy, dw, dh);
-  }
-  // Pokemon icon sheets come with a solid background colour (the colour of the top-left pixel). It is made transparent here:
-  // only background that touches the edge of the sheet is removed (flood fill), so same-coloured pixels inside the Pokemon stay.
-  const iconKeyed = new WeakMap();
-  function keyedIcon(img, label) {
-    if (iconKeyed.has(img)) return iconKeyed.get(img);
-    let out = img, note = 'no opaque background found';
-    try {
-      const w = img.naturalWidth, h = img.naturalHeight, n = h >= w * 2 ? Math.round(h / w) : 1, fh = Math.floor(h / n), c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(img, 0, 0); const id = x.getImageData(0, 0, w, h), d = id.data, seeds = [];
-      for (let f = 0; f < n; f++) { const y0 = f * fh, y1 = y0 + fh - 1; for (let i = 0; i < w; i++) { seeds.push(y0 * w + i, y1 * w + i); } for (let j = y0; j <= y1; j++) seeds.push(j * w, j * w + w - 1); }
-      const cnt = new Map(); for (const p of seeds) if (d[p * 4 + 3] === 255) { const k = ((d[p * 4] >> 4) << 8) | ((d[p * 4 + 1] >> 4) << 4) | (d[p * 4 + 2] >> 4), e = cnt.get(k) || { n: 0, r: 0, g: 0, b: 0 }; e.n++; e.r += d[p * 4]; e.g += d[p * 4 + 1]; e.b += d[p * 4 + 2]; cnt.set(k, e); }
-      const cands = []; const addC = (r, g, b) => { if (!cands.some(q => Math.abs(q[0] - r) <= 6 && Math.abs(q[1] - g) <= 6 && Math.abs(q[2] - b) <= 6)) cands.push([r, g, b]); };
-      for (let f = 0; f < n; f++) { const p = f * fh * w; if (d[p * 4 + 3] === 255) addC(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]); }
-      let top = null; for (const e of cnt.values()) if (!top || e.n > top.n) top = e; if (top) addC(Math.round(top.r / top.n), Math.round(top.g / top.n), Math.round(top.b / top.n));
-      if (cands.length) {
-        const tol = 18, seen = new Uint8Array(w * h), stack = [];
-        const match = p => { if (d[p * 4 + 3] !== 255) return false; for (const q of cands) if (Math.abs(d[p * 4] - q[0]) <= tol && Math.abs(d[p * 4 + 1] - q[1]) <= tol && Math.abs(d[p * 4 + 2] - q[2]) <= tol) return true; return false; };
-        const fOf = p => Math.min(n - 1, Math.floor(Math.floor(p / w) / fh));
-        const push = p => { if (!seen[p] && match(p)) { seen[p] = 1; stack.push(p); } };
-        for (const p of seeds) push(p);
-        while (stack.length) { const p = stack.pop(), px = p % w, py = (p - px) / w, f0 = fOf(p); const tryP = q => { if (fOf(q) === f0) push(q); };
-          if (px > 0) tryP(p - 1); if (px < w - 1) tryP(p + 1); if (py > 0) tryP(p - w); if (py < h - 1) tryP(p + w); }
-        let cntR = 0; for (let p = 0; p < w * h; p++) if (seen[p]) { d[p * 4 + 3] = 0; cntR++; }
-        x.putImageData(id, 0, 0); out = c; note = `${w}x${h}, ${n} frame(s), background ${cands.map(q => 'rgb(' + q.join(',') + ')').join(' / ')} removed, ${cntR} px`;
-      }
-    } catch (e) { out = img; note = 'could not process: ' + e.message; }
-    try { console.log('[PS] icon background: ' + (label || '') + ' -> ' + note); } catch (e) { /* no console */ }
-    iconKeyed.set(img, out); return out;
-  }
-  function drawIcon(c, m, x, y, sel, i) {
-    const e = getImg(m.icon);
-    if (!e || e.fail || !m.icon) { ball(c, x + 9, y + 14, m.ball, 2); return; }
-    if (!e.ok) return;
-    const iw = e.img.naturalWidth, ih = e.img.naturalHeight, n = ih >= iw * 2 ? 2 : 1, fh = Math.floor(ih / n), fr = n > 1 ? Math.floor(S.t / (sel ? .16 : .7) + i) % 2 : 0;
-    c.imageSmoothingEnabled = false; c.drawImage(keyedIcon(e.img, m.icon), 0, fr * fh, iw, fh, x + Math.round((32 - iw) / 2), y + 32 - fh, iw, fh);
-  }
-  const genderGlyph = (c, g, xr, y) => { if (g === 'M') TR(c, '/m/', xr, y, 'blue'); else if (g === 'F') TR(c, '/f/', xr, y, 'red'); };
-  function hpBar(c, x, y, w, h, frac, sel) {
-    rect(c, x - 1, y - 1, w + 2, h + 2, sel ? '#9aa2c0' : '#2a2a3a'); rect(c, x, y, w, h, '#586080');
-    const f = Math.ceil(w * frac); if (f > 0) rect(c, x, y, f, h, frac > .5 ? '#38c850' : frac > .2 ? '#f0c820' : '#f03838');
-  }
-
-  const STATUS_TAG = { psn: ['PSN', '#a040a0'], tox: ['PSN', '#782878'], brn: ['BRN', '#f08030'], par: ['PAR', '#c8a010'], slp: ['SLP', '#6870a0'], frz: ['FRZ', '#58a8c8'] };
-  // ------------------------------------------------ PARTY view
-  // the border of the selected row is the Pokémon's type colour (two types = two colours, split down the middle)
-  const BORDER_COL = { normal: '#b0b090', fire: '#f08030', water: '#4a86f0', electric: '#f8d020', grass: '#48c840', ice: '#6ad8e8', fighting: '#d03828', poison: '#b048c0', ground: '#d8b048', flying: '#98a8f8', psychic: '#b050e0', bug: '#a8c020', rock: '#c0a838', ghost: '#7a58b0', dragon: '#6a38f0', dark: '#7a6050', steel: '#a8b8d0', fairy: '#f090c0', stellar: '#40d0c0' };
-  const borderCols = types => { const out = []; for (const t of (types || []).slice(0, 2)) { const k = String(t || '').replace(/^TYPE_/i, '').toLowerCase(); if (BORDER_COL[k] && !out.includes(BORDER_COL[k])) out.push(BORDER_COL[k]); } return out.length ? out : ['#d8dcec']; };
-  function typeBorder(c, x, y, w, h, types) {
-    const cols = borderCols(types); pill(c, x, y, w, h, cols[0]);
-    if (cols[1]) { c.save(); c.beginPath(); c.rect(x + Math.round(w / 2), y - 2, w, h + 4); c.clip(); pill(c, x, y, w, h, cols[1]); c.restore(); }
-  }
-  function drawParty(c) {
-    for (let i = 0; i < 6; i++) {
-      const m = S.party[i], sl = ease(clamp((S.rowT - i * .06) / .35)), x = 8 + Math.round(-(1 - sl) * 150), y = 3 + i * 26;
-      if (!m) { pill(c, x, y, 136, 25, 'rgba(110,16,40,.35)'); continue; }
-      const sel = i === S.sel, tc = sel ? 'white' : 'dark';
-      if (sel) typeBorder(c, x - 2, y - 1, 140, 29, m.types);
-      else if (i === S.swap) pill(c, x - 2, y - 1, 140, 29, '#f0a020');
-      else if (env.battle && env.battle.active && env.battle.active() === i) pill(c, x - 2, y - 1, 140, 29, '#48c878');   // the Pokémon that is fighting now
-      if (!sel) pill(c, x, y + 1, 136, 25, '#9aa6cc'); pill(c, x, y, 136, 25, sel ? '#1c1c28' : '#fbfcff');
-      ell(c, x + 16, y + 20, 12, 3, sel ? '#3c3e52' : '#cdd3e6');
-      drawIcon(c, m, x, y - 8, sel, i);
-      const nx = T(c, m.nick, x + 32, y + 3, tc); if (m.shiny) star(c, nx + 2, y + 5);
-      genderGlyph(c, m.gender, x + 130, y + 3);
-      if (env.battle) { const st = m.hp <= 0 ? ['FNT', '#d03838'] : STATUS_TAG[m.status]; if (st) { pill(c, x + 100, y + 3, 24, 10, st[1], 3); T(c, st[0], x + 103, y + 3, 'white'); } }
-      T(c, '{Lv}' + m.lv, x + 32, y + 14, tc);
-      const hs = S.hpShown[i] || 0; const ht = `${Math.round(hs)}/${m.max}`; hpBar(c, x + 62, y + 16, Math.max(16, Math.min(36, 132 - tw(ht) - 4 - 62)), 3, hs / m.max, sel); TR(c, ht, x + 132, y + 14, tc);
-    }
-    const m = S.party[S.sel];
-    if (S.party.length) { const ax = 1 + Math.round(Math.sin(S.t * 9) * 1.2), cy = 3 + S.sel * 26 + 12; tri(c, ax - 1, cy, 6, '#1c1c28'); tri(c, ax, cy, 5, '#ffffff'); }
-    TR(c, 'POKéMON', 234, 4, 'mute');
-    if (m) {
-      ell(c, 196, 118, 30, 5, '#c4cfee'); const pp = clamp(S.selT / .3), sc = pp < 1 ? backOut(pp) : 1, bob = Math.sin(S.t * 3.2) > 0 ? 1 : 0;
-      drawSprite(c, m, 196, 118 - bob, 92, 80, Math.max(.2, sc), S.selT < .09 ? .85 : 0);
-    }
-    // under the sprite: the prompt ("Choose a Pokémon.") or the last message (name, level and type are in the rows already)
-    if (!S.menu && S.swap < 0) {
-      const txt = S.bmsg ? S.bmsg.text : (env.battle && env.battle.prompt) || '';
-      if (txt) {
-        const words = String(txt).split(' '), ls = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (tw(t) > 84 && cur) { ls.push(cur); cur = w; } else cur = t; } if (cur) ls.push(cur);
-        const L = ls.slice(0, 2), bw = Math.max(...L.map(tw)) + 16, bx = Math.round(196 - bw / 2), bh = L.length * 12 + 6, by = 154 - bh;
-        pill(c, bx, by + 1, bw, bh, '#000000'); pill(c, bx, by, bw, bh, '#fbfcff'); L.forEach((l, i) => T(c, l, bx + 8, by + 3 + i * 12, S.bmsg && !(env.battle && S.bmsg.text === env.battle.prompt) ? 'red' : 'dark'));
-      }
-    }
-    if (S.swap >= 0 && !S.menu) { const l1 = 'Move to where?', l2 = 'A: OK  B: back', bw = Math.max(tw(l1), tw(l2)) + 20, bx = 238 - bw; pill(c, bx, 127, bw, 27, '#000000'); pill(c, bx, 126, bw, 27, '#fbfcff'); T(c, l1, bx + 7, 129, 'dark'); T(c, l2, bx + 7, 140, 'mute'); }
-    drawMenu(c);
-  }
-
-  // ------------------------------------------------ party pop-up menu (A on a Pokémon)
-  const MENU = { x: 150, w: 86, rh: 15 };
-  function menuRect() { const n = S.menu.opts.length, h = n * MENU.rh + 8; return { x: MENU.x, y: 156 - h, w: MENU.w, h }; }
-  function drawMenu(c) {
-    if (!S.menu) return; const M = S.menu, R = menuRect();
-    pill(c, R.x - 1, R.y, R.w + 2, R.h + 2, '#000000', 7); pill(c, R.x, R.y, R.w, R.h, '#fbfcff', 7);
-    M.opts.forEach((o, i) => { const y = R.y + 4 + i * MENU.rh, on = i === M.i; if (on) pill(c, R.x + 4, y, R.w - 8, MENU.rh - 1, '#1c1c28', 5); T(c, o, R.x + 12, y + 1, on ? 'white' : 'dark'); if (on) tri(c, R.x + R.w - 12, y + 7, 3, '#ffffff'); });
-  }
-  function openMenu() {
-    if (env.battle) { const b = env.battle; S.menu = { i: 0, opts: [b.forced ? 'SEND OUT' : 'SHIFT', 'SUMMARY', 'CANCEL'] }; return; }
-    const o = ['SUMMARY']; if (S.party.length > 1 && env.swap) o.push('SWITCH'); if (env.rename) o.push('NICKNAME'); o.push('CANCEL');
-    S.menu = { i: 0, opts: o };
-  }
-  function menuDo(o) {
-    S.menu = null;
-    if (o === 'SHIFT' || o === 'SEND OUT') { const r = env.battle.pick(S.sel); if (r) S.bmsg = { text: r, t: 0, dur: 2.6 }; else if (env.onExit) env.onExit(); }
-    else if (o === 'SUMMARY') go('summary');
-    else if (o === 'SWITCH') S.swap = S.sel;
-    else if (o === 'NICKNAME') { const m = S.party[S.sel]; startName({ mode: 'mon', mi: S.sel, mon: m, title: 'NICKNAME?', max: 10, initial: '', orig: m.nick, gender: m.gender, allowEmpty: true, fromParty: true }); go('name'); }
-  }
-  function doSwap(i, j) {
-    try { env.swap(i, j); } catch (e) { console.warn('[PS] swap failed', e); }
-    [S.party[i], S.party[j]] = [S.party[j], S.party[i]]; [S.hpShown[i], S.hpShown[j]] = [S.hpShown[j], S.hpShown[i]];
-    S.sel = j; S.swap = -1; S.selT = 0;
-  }
-  function partyPress(k) {
-    const n = S.party.length;
-    if (S.menu) { const M = S.menu; if (k === 'up') M.i = (M.i + M.opts.length - 1) % M.opts.length; else if (k === 'down') M.i = (M.i + 1) % M.opts.length; else if (k === 'a') menuDo(M.opts[M.i]); else if (k === 'b') S.menu = null; return; }
-    if (S.swap >= 0) { if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n); else if (k === 'a') { if (S.sel === S.swap) S.swap = -1; else doSwap(S.swap, S.sel); } else if (k === 'b') S.swap = -1; return; }
-    if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n); else if (k === 'a') openMenu(); else if (k === 'b') { if (env.battle && env.battle.forced) S.bmsg = { text: 'You must choose a Pokémon!', t: 0, dur: 2.2 }; else if (env.onExit) env.onExit(); }
-  }
-
-  // ------------------------------------------------ NAMING view (Pokémon nickname / player name)
-  // dark glass panels with thin cyan edges and chamfered corners over the party background.
-  // The cursor is a bright selector frame (not a filled key). OK asks "Keep this name?" YES / NO.
-  const GX = 10, GY = 64, KCW = 18, KCH = 15, GCOLS = 12, GROWS = 5, ACC = '#4de3d1', GLASS = 'rgba(6,10,30,.70)', GLASS2 = 'rgba(6,10,30,.84)', EDGE = 'rgba(77,227,209,.30)';
-  const TABS = [{ lb: 'UPPER', x: 8, w: 38 }, { lb: 'lower', x: 50, w: 34 }, { lb: 'Others', x: 88, w: 40 }, { lb: 'DELETE', x: 146, w: 46 }, { lb: 'OK', x: 196, w: 38 }], TY = 41, TH = 14;
-  const L1 = 'ABCDEFGHIJ', L2 = 'KLMNOPQRST', L3 = 'UVWXYZ', D = '0123456789';
-  function gridRow(page, r) {
-    const row = new Array(GCOLS).fill(''), put = (str, at) => [...str].forEach((ch, i) => { row[at + i] = ch; });
-    if (page < 2) {
-      const f = page === 0 ? (x => x) : (x => x.toLowerCase());
-      if (r === 0) { put(f(L1), 0); put(',.', 10); } else if (r === 1) { put(f(L2), 0); put("'-", 10); } else if (r === 2) { put(f(L3), 0); put('♂♀', 10); }
-      else if (r === 3) { for (let i = 2; i < 10; i++) row[i] = ' '; } else put(D, 0);
-    } else {
-      const O = [['!', '?', '&', ':', ';', '~', '#', '%', '+', '=', 'é', 'É'], ['*', '@', '_', '$', '^', '|', '"', '`', '·', '…', 'ñ', 'Ñ'], ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '♂', '♀']];
-      if (r < 3) O[r].forEach((ch, i) => { row[i] = ch; }); else if (r === 3) { for (let i = 2; i < 10; i++) row[i] = ' '; }
-    }
-    return row.map(ch => (ch === ' ' || ch === '' || GLY[ch]) ? ch : '');
-  }
-  function startName(o) {
-    let mon = o.mon; if (!mon && o.raw) { mon = buildMon(o.raw); getImg(mon.icon); }
-    S.name = { mode: o.mode, mi: o.mi, mon, title: o.title || 'NICKNAME?', max: o.max || 10, text: String(o.initial || '').slice(0, o.max || 10), page: 0, cx: 0, cy: 0, top: -1, orig: o.orig || '', gender: o.gender || '',
-      trainer: o.trainer || '', allowEmpty: o.allowEmpty !== false, allowCancel: o.allowCancel !== false, raw: o.raw, t0: S.t, ask: null };
-    if (o.trainer) getImg(o.trainer);
-    if (!o.fromParty) { S.view = 'name'; S.tr = null; }
-  }
-  function typeChar(ch) { const N = S.name; if (N.text.length < N.max) { N.text += ch; N.bump = S.t; } }
-  function backChar() { const N = S.name; if (N.text.length) { N.text = N.text.slice(0, -1); N.bump = S.t; } }
-  function nameAsk() {        // OK pressed: "Keep this name?"
-    const N = S.name; if (N.mode === 'player' && !N.text.trim()) { N.shake = S.t; return; }
-    N.ask = { i: 0, t: S.t };
-  }
-  function nameConfirm() {
-    const N = S.name, txt = N.text.replace(/\s+$/, ''); N.ask = null;
-    if (N.mode === 'player') { if (!txt.trim()) return; if (env.nameDone) env.nameDone(txt); return; }
-    if (N.mode === 'monraw') { if (env.nameDone) env.nameDone(txt); return; }
-    if (env.rename) env.rename(N.mi, txt);
-    const m = S.party[N.mi]; if (m) m.nick = txt || m.species;
-    if (env.catchMode) { if (env.catchMode.done) env.catchMode.done(txt || null); return; }
-    go('party');
-  }
-  function nameCancel() {
-    const N = S.name; if (N.mode === 'mon') { if (env.catchMode) { if (env.catchMode.done) env.catchMode.done(null); return; } go('party'); return; }
-    if (N.allowCancel && env.nameDone) env.nameDone(null);
-  }
-  function namePressCell() {
-    const N = S.name;
-    if (N.top >= 0) { if (N.top < 3) N.page = N.top; else if (N.top === 3) backChar(); else nameAsk(); return; }
-    const ch = gridRow(N.page, N.cy)[N.cx]; if (ch) typeChar(ch);
-  }
-  const topFromCx = cx => (cx <= 2 ? 0 : cx <= 4 ? 1 : cx <= 6 ? 2 : cx <= 9 ? 3 : 4), cxFromTop = t => [1, 3, 5, 8, 10][t];
-  function nameKeyPress(k) {
-    const N = S.name; if (!N) return;
-    if (N.ask) { if (k === 'left' || k === 'right' || k === 'up' || k === 'down') N.ask.i = 1 - N.ask.i; else if (k === 'a') { if (N.ask.i === 0) nameConfirm(); else N.ask = null; } else if (k === 'b') N.ask = null; return; }
-    if (k === 'left') { if (N.top >= 0) N.top = (N.top + 4) % 5; else N.cx = (N.cx + GCOLS - 1) % GCOLS; }
-    else if (k === 'right') { if (N.top >= 0) N.top = (N.top + 1) % 5; else N.cx = (N.cx + 1) % GCOLS; }
-    else if (k === 'up') { if (N.top >= 0) { N.cx = cxFromTop(N.top); N.top = -1; N.cy = GROWS - 1; } else if (N.cy === 0) { N.top = topFromCx(N.cx); } else N.cy--; }
-    else if (k === 'down') { if (N.top >= 0) { N.cx = cxFromTop(N.top); N.top = -1; N.cy = 0; } else if (N.cy === GROWS - 1) { N.top = topFromCx(N.cx); } else N.cy++; }
-    else if (k === 'a') namePressCell();
-    else if (k === 'b') { if (N.text.length) backChar(); else nameCancel(); }
-  }
-  function nameKey(e) {      // raw keyboard: letters are typed, Backspace deletes, Enter = OK, Esc = cancel (Space presses the highlighted key)
-    if (S.view !== 'name' || S.tr || !S.name) return false;
-    const k = e.key, N = S.name;
-    if (e.pmPad) {   // an on-screen button: it is a controller (A = press the highlighted key, B = delete, X / + = OK, Y = next keyboard page), never a typed letter
-      const p = e.pmPad;
-      if (p === 'a' || p === 'b') { nameKeyPress(p); return true; }
-      if (p === 'x' || p === 'plus') { if (N.ask) nameConfirm(); else nameAsk(); return true; }
-      if (p === 'y') { if (!N.ask) N.page = (N.page + 1) % 3; return true; }
-      return p === 'minus';   // the arrows go through the normal path
-    }
-    if (N.ask) { if (k === 'Enter') { nameConfirm(); } else if (k === 'Escape' || k === 'Backspace' || k === 'n' || k === 'N') N.ask = null; else if (k === 'y' || k === 'Y') nameConfirm(); else if (k === 'ArrowLeft' || k === 'ArrowRight') N.ask.i = 1 - N.ask.i; else return false; return true; }
-    if (k.length === 1 && k !== ' ' && (/[A-Za-z0-9.,!?'&\-]/.test(k) || GLY[k])) { typeChar(k); return true; }
-    if (k === 'Backspace') { backChar(); return true; }
-    if (k === 'Enter') { nameAsk(); return true; }
-    if (k === 'Escape') { nameCancel(); return true; }
-    return false;
-  }
-  const ASKB = [{ x: 62, y: 86, w: 52, h: 17 }, { x: 126, y: 86, w: 52, h: 17 }];
-  function nameClick(x, y) {
-    const N = S.name; if (!N) return;
-    if (N.ask) { ASKB.forEach((b, i) => { if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) { N.ask.i = i; if (i === 0) nameConfirm(); else N.ask = null; } }); return; }
-    for (let i = 0; i < TABS.length; i++) { const t = TABS[i]; if (x >= t.x && x < t.x + t.w && y >= TY && y < TY + TH) { N.top = i; namePressCell(); return; } }
-    const col = Math.floor((x - GX) / KCW), row = Math.floor((y - GY) / KCH);
-    if (col >= 0 && col < GCOLS && row >= 0 && row < GROWS) { N.top = -1; N.cx = col; N.cy = row; namePressCell(); }
-  }
-  // chamfered (cut-corner) glass panel: translucent dark fill + 1px edge
-  function chamfer(c, x, y, w, h, fill, line, cut = 2) {
-    c.fillStyle = fill; c.fillRect(x + cut, y, w - 2 * cut, h); c.fillRect(x, y + cut, w, h - 2 * cut);
-    if (!line) return; c.fillStyle = line;
-    c.fillRect(x + cut, y, w - 2 * cut, 1); c.fillRect(x + cut, y + h - 1, w - 2 * cut, 1); c.fillRect(x, y + cut, 1, h - 2 * cut); c.fillRect(x + w - 1, y + cut, 1, h - 2 * cut);
-    for (let i = 0; i < cut; i++) { const d = cut - 1 - i; c.fillRect(x + d, y + i, 1, 1); c.fillRect(x + w - 1 - d, y + i, 1, 1); c.fillRect(x + d, y + h - 1 - i, 1, 1); c.fillRect(x + w - 1 - d, y + h - 1 - i, 1, 1); }
-  }
-  function brackets(c, x, y, w, h, col, L = 6) {
-    c.fillStyle = col;
-    for (const [bx, by, dx, dy] of [[x, y, 1, 1], [x + w - 1, y, -1, 1], [x, y + h - 1, 1, -1], [x + w - 1, y + h - 1, -1, -1]]) { c.fillRect(dx > 0 ? bx : bx - L + 1, by, L, 1); c.fillRect(bx, dy > 0 ? by : by - L + 1, 1, L); }
-  }
-  // the selector: bright frame with brackets that stick out a little, softly pulsing
-  function selector(c, x, y, w, h, pulse) {
-    chamfer(c, x, y, w, h, `rgba(77,227,209,${.16 + .12 * pulse})`, '#bffcf3', 2);
-    brackets(c, x - 2, y - 2, w + 4, h + 4, '#ffffff', 4);
-  }
-  // controller-style key caps for the hint line
-  function padBtn(c, x, y, ch) {     // round button with a letter
-    ell(c, x + 5, y + 5, 5, 5, '#0a1430'); c.fillStyle = ACC; c.fillRect(x + 3, y, 5, 1); c.fillRect(x + 3, y + 10, 5, 1); c.fillRect(x, y + 3, 1, 5); c.fillRect(x + 10, y + 3, 1, 5);
-    c.fillRect(x + 1, y + 1, 2, 1); c.fillRect(x + 8, y + 1, 2, 1); c.fillRect(x + 1, y + 9, 2, 1); c.fillRect(x + 8, y + 9, 2, 1); c.fillRect(x + 1, y + 2, 1, 1); c.fillRect(x + 9, y + 2, 1, 1); c.fillRect(x + 1, y + 8, 1, 1); c.fillRect(x + 9, y + 8, 1, 1);
-    T(c, ch, x + 2, y + 1, 'white');
-  }
-  function enterKey(c, x, y) {       // keyboard Enter cap with the ↵ arrow
-    chamfer(c, x, y, 18, 11, '#0a1430', ACC, 2); c.fillStyle = '#ffffff';
-    c.fillRect(x + 5, y + 5, 1, 1); c.fillRect(x + 6, y + 4, 1, 3); c.fillRect(x + 7, y + 3, 1, 5); c.fillRect(x + 8, y + 5, 5, 1); c.fillRect(x + 12, y + 2, 1, 4);
-  }
-  function drawName(c) {
-    const N = S.name; if (!N) return; const m = N.mon, pulse = .5 + .5 * Math.sin(S.t * 5), shake = N.shake && S.t - N.shake < .25 ? Math.round(Math.sin((S.t - N.shake) * 60) * 2) : 0;
-    // icon (no box, just a soft shadow) and the name field
-    ell(c, 26, 37, 13, 3, 'rgba(0,0,0,.28)');
-    if (N.mode === 'player') {
-      const e = N.trainer && getImg(N.trainer);
-      if (e && e.ok) { c.imageSmoothingEnabled = false; const iw = e.img.naturalWidth, ih = e.img.naturalHeight, k = Math.min(32 / iw, 34 / ih); c.drawImage(e.img, Math.round(26 - iw * k / 2), Math.round(37 - ih * k), Math.round(iw * k), Math.round(ih * k)); }
-    } else if (m) { drawIcon(c, m, 10, 5, true, 0); }
-    chamfer(c, 48 + shake, 8, 186, 28, GLASS2, ACC, 3);
-    const fem = N.gender === 'F' || (m && m.gender === 'F'), male = N.gender === 'M' || (m && m.gender === 'M');
-    if (fem || male) genderGlyph(c, fem ? 'F' : 'M', 229 + shake, 15);
-    const sw = N.max > 8 ? 16 : 22, x0 = 56 + shake, blink = Math.floor(S.t * 2.4) % 2 === 0;
-    for (let i = 0; i < N.max; i++) {
-      const x = x0 + i * sw, ch = N.text[i], act = i === N.text.length;
-      if (ch) { const dy = N.bump && S.t - N.bump < .1 && i === N.text.length - 1 ? -2 : 0; T(c, ch, x + Math.round((sw - 4 - tw(ch)) / 2), 12 + dy, 'white'); }
-      rect(c, x, 28, sw - 4, 1, act && blink ? '#ffffff' : 'rgba(127,243,228,.40)');
-    }
-    // tabs + DELETE / OK
-    TABS.forEach((t, i) => {
-      const active = i < 3 && N.page === i, focus = N.top === i && !N.ask;
-      chamfer(c, t.x, TY, t.w, TH, active ? 'rgba(77,227,209,.26)' : GLASS2, active ? ACC : EDGE, 3);
-      if (focus) selector(c, t.x, TY, t.w, TH, pulse);
-      T(c, t.lb, t.x + Math.round((t.w - tw(t.lb)) / 2), TY + 1, active || focus ? 'white' : (i === 4 ? 'cyan' : 'dim'));
-    });
-    // keyboard
-    chamfer(c, 6, 59, 228, 84, GLASS, EDGE, 6); brackets(c, 6, 59, 228, 84, ACC, 9);
-    for (let r = 0; r < GROWS; r++) {
-      const row = gridRow(N.page, r);
-      for (let q = 0; q < GCOLS; q++) {
-        const ch = row[q], x = GX + q * KCW, y = GY + r * KCH, on = N.top < 0 && N.cx === q && N.cy === r && !N.ask;
-        if (r === 3) {   // the SPACE bar: one wide key
-          if (q !== 2) continue;
-          const bw = 8 * KCW - 2, on2 = N.top < 0 && N.cy === 3 && N.cx >= 2 && N.cx <= 9 && !N.ask;
-          chamfer(c, x, y, bw, KCH - 2, 'rgba(10,18,44,.55)', EDGE, 2); if (on2) selector(c, x, y, bw, KCH - 2, pulse);
-          rect(c, x + Math.round(bw / 2) - 12, y + 9, 24, 1, on2 ? '#ffffff' : 'rgba(127,243,228,.6)'); continue;
-        }
-        const live = !!ch;
-        chamfer(c, x, y, KCW - 2, KCH - 2, live ? 'rgba(10,18,44,.55)' : 'rgba(10,18,44,.22)', live ? EDGE : 'rgba(77,227,209,.10)', 2);
-        if (on) selector(c, x, y, KCW - 2, KCH - 2, pulse);
-        if (live) { const gx = x + Math.round((KCW - 2 - tw(ch)) / 2); T(c, ch, gx, y - 1, ch === '♂' ? 'blue' : ch === '♀' ? 'red' : (on ? 'white' : 'white')); }
-      }
-    }
-    // hint line with controller keys
-    let hx = 12; const hy = 146;
-    padBtn(c, hx, hy, 'A'); hx += 14; hx = T(c, 'Add', hx, hy, 'dim') + 8;
-    padBtn(c, hx, hy, 'B'); hx += 14; hx = T(c, 'Delete', hx, hy, 'dim') + 8;
-    enterKey(c, hx, hy); hx += 22; T(c, 'OK', hx, hy, 'dim');
-    // "Keep this name?"  YES / NO
-    if (N.ask) {
-      const k = clamp((S.t - N.ask.t) / .18), e = ease(k); c.fillStyle = `rgba(0,0,10,${.55 * e})`; c.fillRect(0, 0, W, H);
-      const bw = 170, bh = 70, bx = 35, by = Math.round(50 + (1 - e) * 10);
-      chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.94)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
-      const nm = N.text.replace(/\s+$/, '') || (m ? m.species : ''), q = N.mode === 'player' ? 'Is this your name?' : (N.text ? 'Keep this nickname?' : 'Go back to the species name?');
-      T(c, q, bx + Math.round((bw - tw(q)) / 2), by + 8, 'white');
-      const sh = nm.slice(0, 12); T(c, sh, bx + Math.round((bw - tw(sh)) / 2), by + 24, 'gold');
-      ['YES', 'NO'].forEach((lb, i) => { const b = ASKB[i], on = N.ask.i === i; chamfer(c, b.x, b.y, b.w, b.h, on ? 'rgba(77,227,209,.24)' : GLASS2, on ? '#bffcf3' : EDGE, 3); if (on) selector(c, b.x, b.y, b.w, b.h, pulse); T(c, lb, b.x + Math.round((b.w - tw(lb)) / 2), b.y + 2, on ? 'white' : 'dim'); });
-    }
-  }
-
-  // ------------------------------------------------ SUMMARY view (dark glass panels over the animated background)
-  const PAGE_TITLE = ['POKéMON INFO', 'POKéMON SKILLS', 'KNOWN MOVES', 'CONTEST DATA'], NPAGES = 4, PW = 134;
-  function ring(c, x0, y0, rot, col) {
-    const R = 33; c.fillStyle = col;
-    for (let dy = -R; dy <= R; dy++) {
-      const wo = Math.sqrt(R * R - dy * dy), wi = Math.abs(dy) < R - 7 ? Math.sqrt((R - 7) * (R - 7) - dy * dy) : -1;
-      if (wi < 0) c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo * 2), 1); else { c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo - wi), 1); c.fillRect(Math.round(x0 + wi), y0 + dy, Math.round(wo - wi), 1); }
-    }
-    const sn = Math.sin(rot), cs = Math.cos(rot);
-    for (let yy = -R + 8; yy <= R - 8; yy++) for (let xx = -R + 8; xx <= R - 8; xx++) { const r = Math.hypot(xx, yy), v = -xx * sn + yy * cs; if (r < R - 7 && r > 11 && Math.abs(v) <= 4) c.fillRect(x0 + xx, y0 + yy, 1, 1); }
-    for (let dy = -12; dy <= 12; dy++) {
-      const wo = Math.sqrt(144 - dy * dy), wi = Math.abs(dy) <= 8 ? Math.sqrt(64 - dy * dy) : -1;
-      if (wi < 0) c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo * 2), 1); else { c.fillRect(Math.round(x0 - wo), y0 + dy, Math.round(wo - wi), 1); c.fillRect(Math.round(x0 + wi), y0 + dy, Math.round(wo - wi), 1); }
-    }
-  }
-
-  // markings: six little shapes (lit when the Pokémon has the mark)
-  const MARK_PAT = [
-    ['..###..', '.#####.', '#######', '#######', '#######', '.#####.', '..###..'],
-    ['...#...', '..###..', '..###..', '.#####.', '.#####.', '#######', '#######'],
-    ['#######', '#######', '#######', '#######', '#######', '#######', '#######'],
-    ['.##.##.', '#######', '#######', '#######', '.#####.', '..###..', '...#...'],
-    ['...#...', '...#...', '#######', '.#####.', '..###..', '.##.##.', '.#...#.'],
-    ['...#...', '..###..', '.#####.', '#######', '.#####.', '..###..', '...#...'],
-  ], MARK_COL = ['#ff7a7a', '#7ab8ff', '#a8f08a', '#ff9ad0', '#ffe27a', '#c8a0ff'];
-  function markIcon(c, k, x, y, on) {
-    c.fillStyle = on ? MARK_COL[k] : 'rgba(182,192,230,.26)';
-    MARK_PAT[k].forEach((r, j) => { for (let i = 0; i < 7; i++) if (r[i] === '#') c.fillRect(x + i, y + j, 1, 1); });
-    if (on) { c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(x + 2, y + 2, 1, 1); }
-  }
-  const ivOn = () => !!(env.ivEnabled && env.ivEnabled());
-  // a row that fades / slides in a little after the page opens
-  function rv(c, i, fn) { const k = ease(clamp((S.pageT - i * .05) / .22)); if (k <= 0) return; c.save(); c.globalAlpha = k; c.translate(Math.round((1 - k) * 10), 0); fn(); c.restore(); }
-  const CONDS = [['Cool', '#ff6a5a'], ['Beauty', '#6ab0ff'], ['Cute', '#ff8ac8'], ['Smart', '#7fe08a'], ['Tough', '#ffd05a']];
-  function drawSummary(c) {
-    const m = S.party[S.sel]; if (!m) return;
-    // header
-    chamfer(c, 4, 3, 232, 15, GLASS2, ACC, 3); rect(c, 8, 16, 224, 1, 'rgba(77,227,209,.40)');
-    const showPage = S.pg && S.pg.p < .5 ? S.pg.from : S.page, ban = S.banner && S.banner.t < 3.2 ? S.banner : null;
-    if (ban) { const pulse = .5 + .5 * Math.sin(S.t * 6); T(c, ban.text, 12, 5, pulse > .5 ? 'gold' : 'white'); } else T(c, PAGE_TITLE[showPage], 12, 5, 'white');
-    T(c, '/left/', 164, 5, S.page > 0 ? 'cyan' : 'dim'); T(c, '/right/', 226, 5, S.page < NPAGES - 1 ? 'cyan' : 'dim');
-    for (let i = 0; i < NPAGES; i++) { const on = i === S.page, pulse = on && Math.sin(S.t * 7) > 0; pill(c, 176 + i * 12, 7, 9, 5, on ? (pulse ? '#ffffff' : ACC) : 'rgba(150,160,200,.35)', 2); }
-    // left panel: the Pokémon
-    chamfer(c, 4, 22, 90, 136, GLASS, EDGE, 5); brackets(c, 4, 22, 90, 136, ACC, 8);
-    c.save(); c.beginPath(); c.rect(6, 24, 86, 84); c.clip(); c.globalAlpha = .13; ring(c, 49, 62, S.t * .3, '#ffffff'); c.restore();
-    ell(c, 49, 102, 25, 4, 'rgba(0,0,0,.38)');
-    const pp = clamp(S.selT / .3), sc = pp < 1 ? backOut(pp) : 1, bob = Math.sin(S.t * 3.2) > 0 ? 1 : 0;
-    drawSprite(c, m, 49, 100 - bob, 76, 72, Math.max(.2, sc), S.selT < .09 ? .85 : 0);
-    const nx = T(c, m.nick, 10, 110, m.shiny ? 'gold' : 'white'); if (m.shiny) star(c, nx + 2, 112); genderGlyph(c, m.gender, 88, 110);
-    T(c, '{Lv}' + m.lv, 10, 124, 'dim'); ballIcon(c, m, 70, 119);
-    rect(c, 10, 137, 78, 1, 'rgba(77,227,209,.30)');
-    for (let i = 0; i < 6; i++) markIcon(c, i, 12 + i * 13, 143, !!(m.marks && m.marks[i]));
-    // right panel: the pages
-    chamfer(c, 98, 22, 138, 136, GLASS, EDGE, 5); brackets(c, 98, 22, 138, 136, ACC, 8);
-    c.save(); c.beginPath(); c.rect(100, 24, PW, 132); c.clip();
-    if (S.pg) {
-      const p = ease(clamp(S.pg.p)), d = S.pg.to > S.pg.from ? 1 : -1;
-      c.save(); c.translate(Math.round(-d * p * PW), 0); drawPage(c, S.pg.from, m); c.restore();
-      c.save(); c.translate(Math.round(d * (1 - p) * PW), 0); drawPage(c, S.pg.to, m); c.restore();
-    } else drawPage(c, S.page, m);
-    c.restore();
-    if (S.mk) drawMarkEdit(c, m);
-    if (S.cask) drawCatchAsk(c, m);
-  }
-  function drawMarkEdit(c, m) {
-    const k = ease(clamp((S.t - S.mk.t) / .15)), bw = 118, bh = 46, bx = 61, by = Math.round(58 + (1 - k) * 8);
-    c.fillStyle = `rgba(0,0,10,${.45 * k})`; c.fillRect(0, 0, W, H);
-    chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.95)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
-    T(c, 'MARKINGS', bx + Math.round((bw - tw('MARKINGS')) / 2), by + 5, 'cyan');
-    for (let i = 0; i < 6; i++) { const x = bx + 11 + i * 17, y = by + 20, on = i === S.mk.i; if (on) selector(c, x - 4, y - 4, 15, 15, .5 + .5 * Math.sin(S.t * 5)); markIcon(c, i, x, y, !!m.marks[i]); }
-  }
-  function drawCatchAsk(c, m) {
-    const k = ease(clamp((S.t - S.cask.t) / .18)); c.fillStyle = `rgba(0,0,10,${.55 * k})`; c.fillRect(0, 0, W, H);
-    const bw = 190, bh = 62, bx = 25, by = Math.round(48 + (1 - k) * 10);
-    chamfer(c, bx, by, bw, bh, 'rgba(6,10,30,.95)', ACC, 4); brackets(c, bx - 3, by - 3, bw + 6, bh + 6, '#ffffff', 6);
-    const q = 'Give a nickname to ' + m.species + '?'; T(c, q, bx + Math.round((bw - tw(q)) / 2), by + 9, 'white');
-    ['YES', 'NO'].forEach((lb, i) => { const bxx = bx + 34 + i * 70, on = S.cask.i === i; chamfer(c, bxx, by + 32, 52, 17, on ? 'rgba(77,227,209,.24)' : GLASS2, on ? '#bffcf3' : EDGE, 3); if (on) selector(c, bxx, by + 32, 52, 17, .5 + .5 * Math.sin(S.t * 5)); T(c, lb, bxx + Math.round((52 - tw(lb)) / 2), by + 34, on ? 'white' : 'dim'); });
-  }
-  function drawPage(c, idx, m) {
-    const x0 = 106, W2 = 122, div = y => { for (let x = 104; x < 232; x += 4) rect(c, x, y, 2, 1, 'rgba(127,243,228,.28)'); }, hint = t => T(c, t, x0, 147, 'dim');
-    if (idx === 0) {
-      const rows = [['{No}', String(m.dex).padStart(3, '0'), 'cyan'], ['Name', m.species], ['Type'], ['Tera'], ['OT', m.ot], ['{ID}No.', m.idno], ['Item', m.item || 'None', m.item ? 'white' : 'dim']];
-      rows.forEach((r, i) => rv(c, i, () => {
-        const y = 27 + i * 13; T(c, r[0], x0, y, 'dim');
-        if (r[0] === 'Type') badges(c, m.types, x0 + 42, y - 2);
-        else if (r[0] === 'Tera') { if (m.tera) badges(c, [m.tera], x0 + 42, y - 2); else T(c, '---', x0 + 42, y, 'dim'); }
-        else T(c, r[1], x0 + 42, y, r[2] || 'white');
-      }));
-      rv(c, 7, () => { div(118); wrapText(`${m.nature} nature. Met at ${m.place}.`, 21).slice(0, 2).forEach((ln, i) => T(c, ln, x0, 122 + i * 11, 'white')); });
-      if (!env.battle) rv(c, 8, () => hint('A: marks'));
-    } else if (idx === 1) {
-      const names = ['HP', 'Attack', 'Defense', 'Sp.Atk', 'Sp.Def', 'Speed'], cols = ['#4cc860', '#e85a4c', '#e8a43c', '#4c8ce8', '#58c8b8', '#d868c8'], cap = 50 + m.lv * 4, iv = S.iv && ivOn();
-      names.forEach((n, i) => rv(c, i, () => {
-        const y = 26 + i * 12; T(c, n, x0, y, i && i === m.natUp ? 'red' : i && i === m.natDown ? 'blue' : 'dim');
-        rect(c, x0 + 44, y + 3, 48, 4, 'rgba(255,255,255,.14)'); const f = iv ? m.iv[i] / 31 : clamp(m.stats[i] / cap); rect(c, x0 + 44, y + 3, Math.round(48 * f * S.statP), 4, cols[i]); rect(c, x0 + 44, y + 3, Math.round(48 * f * S.statP), 1, 'rgba(255,255,255,.35)');
-        if (iv) { const v = m.iv[i]; TR(c, String(v), x0 + 124, y, v >= 31 ? 'gold' : v === 0 ? 'blue' : 'white'); T(c, 'IV', x0 + 96, y, 'dim'); }
-        else TR(c, i === 0 ? `${m.hp}/${m.max}` : String(m.stats[i]), x0 + 124, y, 'white');
-      }));
-      rv(c, 6, () => div(99));
-      rv(c, 7, () => { T(c, 'Ability', x0, 103, 'dim'); T(c, m.ability, x0 + 50, 103, 'white'); });
-      rv(c, 8, () => { T(c, 'Exp.', x0, 115, 'dim'); TR(c, String(m.exp), x0 + 124, 115, 'white'); });
-      rv(c, 9, () => { T(c, 'Next Lv.', x0, 127, 'dim'); TR(c, String(Math.max(0, m.expN - m.exp)), x0 + 124, 127, 'white'); });
-      const fr = clamp(m.exp / Math.max(1, m.expN)) * S.statP; rect(c, x0, 140, 124, 4, 'rgba(255,255,255,.14)'); rect(c, x0, 140, Math.round(124 * fr), 4, '#4c8ce8'); rect(c, x0, 140, Math.round(124 * fr), 1, 'rgba(255,255,255,.35)');
-      if (ivOn()) rv(c, 10, () => hint(iv ? 'A: stats' : 'A: IVs'));
-    } else if (idx === 2) {
-      const n = m.moves.length;
-      for (let i = 0; i < 4; i++) rv(c, i, () => {
-        const y = 25 + i * 24, mo = m.moves[i], on = S.mvMode && i === S.mv, sw = S.mvSwap === i;
-        chamfer(c, x0 - 3, y - 1, 128, 22, sw ? 'rgba(255,226,122,.20)' : on ? 'rgba(77,227,209,.18)' : 'rgba(10,18,44,.45)', sw ? '#ffe27a' : on ? '#bffcf3' : 'rgba(77,227,209,.18)', 3);
-        if (on) brackets(c, x0 - 5, y - 3, 132, 26, '#ffffff', 4);
-        if (!mo) { T(c, '-', x0 + 44, y + 6, 'dim'); return; }
-        badge(c, mo.type, x0, y + 4); T(c, mo.name, x0 + 44, y + 1, 'white');
-        T(c, '{PP}', x0 + 44, y + 12, 'dim'); T(c, ` ${mo.pp}/${mo.ppMax}`, x0 + 44 + advOf('PP'), y + 12, mo.pp === 0 ? 'red' : 'white');
-        TR(c, mo.pow ? 'Pwr' + mo.pow : '---', x0 + 120, y + 12, 'dim');
-      });
-      rv(c, 4, () => { const cur = m.moves[S.mv] || m.moves[0]; if (cur) wrapText(cur.desc, 21).slice(0, 2).forEach((ln, i) => T(c, ln, x0, 123 + i * 11, 'white')); });
-      rv(c, 5, () => hint(!S.mvMode ? 'A: edit moves' : S.mvSwap >= 0 ? 'A: swap here  B: back' : (env.battle || n < 2 ? 'B: back' : 'A: pick  B: back')));
-    } else {
-      CONDS.forEach(([nm, col], i) => rv(c, i, () => {
-        const y = 27 + i * 14, v = m.contest[i]; T(c, nm, x0, y, 'dim');
-        rect(c, x0 + 44, y + 3, 56, 5, 'rgba(255,255,255,.14)'); rect(c, x0 + 44, y + 3, Math.round(56 * (v / 255) * S.statP), 5, col); rect(c, x0 + 44, y + 3, Math.round(56 * (v / 255) * S.statP), 1, 'rgba(255,255,255,.4)');
-        TR(c, String(v), x0 + 124, y, 'white');
-      }));
-      rv(c, 5, () => { const y = 27 + 5 * 14 + 2; T(c, 'Sheen', x0, y, 'dim'); rect(c, x0 + 44, y + 3, 56, 5, 'rgba(255,255,255,.14)'); rect(c, x0 + 44, y + 3, Math.round(56 * (m.sheen / 255) * S.statP), 5, '#e8e8f8'); TR(c, String(m.sheen), x0 + 124, y, 'white'); });
-      rv(c, 6, () => div(114));
-      rv(c, 7, () => { const best = m.contest.reduce((a, v, i) => v > m.contest[a] ? i : a, 0); T(c, 'Best', x0, 119, 'dim'); if (m.contest[best] > 0) T(c, CONDS[best][0], x0 + 44, 119, 'gold'); else T(c, 'None yet', x0 + 44, 119, 'dim'); });
-      rv(c, 8, () => { T(c, 'Ribbons', x0, 132, 'dim'); TR(c, String(m.ribbons), x0 + 124, 132, m.ribbons ? 'gold' : 'dim'); });
-    }
-  }
-
-  // ------------------------------------------------ render
-  const lA = mk(W, H), lB = mk(W, H), lAx = lA.getContext('2d'), lBx = lB.getContext('2d'); lAx.imageSmoothingEnabled = lBx.imageSmoothingEnabled = false;
-  const layer = (cv, x, view) => { x.clearRect(0, 0, W, H); (view === 'party' ? drawParty : view === 'name' ? drawName : drawSummary)(x); return cv; };
-  function render(ctx) {
-    if (!rawSheet) return;
-    ctx.imageSmoothingEnabled = false; drawBg(S.t); ctx.drawImage(bgc, 0, 0);
-    if (S.tr) {
-      const p = ease(clamp(S.tr.p)), dir = S.tr.to === 'summary' ? -1 : 1;
-      layer(lA, lAx, S.tr.from); layer(lB, lBx, S.tr.to); ctx.drawImage(lA, Math.round(dir * p * W), 0); ctx.drawImage(lB, Math.round(-dir * (1 - p) * W), 0);
-    } else { layer(lA, lAx, S.view); ctx.drawImage(lA, 0, 0); }
-  }
-  function renderSettled(view, page) {     // a finished frame (no animation in progress), for PNG export
-    const k = { view: S.view, page: S.page, tr: S.tr, pg: S.pg, rowT: S.rowT, selT: S.selT, statP: S.statP, hp: S.hpShown, mvMode: S.mvMode };
-    S.view = view; S.page = page; S.tr = null; S.pg = null; S.rowT = 9; S.selT = 9; S.statP = 1; S.hpShown = S.party.map(m => m.hp); S.mvMode = false;
-    const c = mk(W, H); render(c.getContext('2d'));
-    S.view = k.view; S.page = k.page; S.tr = k.tr; S.pg = k.pg; S.rowT = k.rowT; S.selT = k.selT; S.statP = k.statP; S.hpShown = k.hp; S.mvMode = k.mvMode; return c;
-  }
-
-  // ------------------------------------------------ input / update
-  function cry() {
-    if (!opt.cries) return; const m = S.party[S.sel]; if (!m || !m.cry) return;
-    try { const u = urlFor(m.cry); if (!u) return; if (window.PMAudio) window.PMAudio.play(u, .6); else { const a = new Audio(u); a.volume = .6; a.play().catch(() => {}); } } catch (e) { /* no sound */ }
-  }
-  function select(i) { if (i === S.sel) return; S.sel = i; S.selT = 0; S.statP = 0; S.pageT = 0; S.mvMode = false; S.mvSwap = -1; cry(); }
-  function setPage(p) { p = clamp(p, 0, NPAGES - 1); if (p === S.page) return; S.pg = { from: S.page, to: p, p: 0 }; S.page = p; S.statP = 0; S.pageT = 0; S.mvMode = false; S.mvSwap = -1; }
-  function go(v) { S.tr = { from: S.view, to: v, p: 0 }; S.mvMode = false; if (v === 'summary') { S.page = 0; S.pg = null; S.statP = 0; S.selT = 0; S.pageT = 0; S.mvSwap = -1; cry(); } }
-  function press(k) {
-    if (S.view === 'name' && !S.tr) { nameKeyPress(k); return; }
-    if (S.tr || !S.party.length) { if (k === 'b' && !S.tr && env.onExit) env.onExit(); return; }
-    const n = S.party.length;
-    if (S.view === 'party') partyPress(k);
-    else {
-      if (S.cask) { if (k === 'left' || k === 'right' || k === 'up' || k === 'down') S.cask.i = 1 - S.cask.i; else if (k === 'a') catchAnswer(S.cask.i === 0); else if (k === 'b') catchAnswer(false); return; }
-      if (S.mk) { const m = S.party[S.sel]; if (k === 'left') S.mk.i = (S.mk.i + 5) % 6; else if (k === 'right') S.mk.i = (S.mk.i + 1) % 6; else if (k === 'a') { m.marks[S.mk.i] = !m.marks[S.mk.i]; try { env.setMarks && env.setMarks(S.sel, m.marks.slice()); } catch (e) { /* host error */ } } else if (k === 'b') S.mk = null; return; }
-      const m = S.party[S.sel];
-      if (S.mvMode) {
-        const nm = Math.max(1, m.moves.length);
-        if (k === 'up') S.mv = (S.mv + nm - 1) % nm; else if (k === 'down') S.mv = (S.mv + 1) % nm;
-        else if (k === 'a') {   // A (Z / Space): pick a move, then pick the place to swap it with
-          if (env.battle || m.moves.length < 2) return;
-          if (S.mvSwap < 0) S.mvSwap = S.mv; else { if (S.mvSwap !== S.mv) { const a = S.mvSwap, b = S.mv; [m.moves[a], m.moves[b]] = [m.moves[b], m.moves[a]]; try { env.swapMoves && env.swapMoves(S.sel, a, b); } catch (e) { /* host error */ } } S.mvSwap = -1; }
-        } else if (k === 'b' || k === 'left') { if (S.mvSwap >= 0) S.mvSwap = -1; else S.mvMode = false; }
-        return;
-      }
-      if (k === 'up') select((S.sel + n - 1) % n); else if (k === 'down') select((S.sel + 1) % n);
-      else if (k === 'left') setPage(S.page - 1); else if (k === 'right') setPage(S.page + 1);
-      else if (k === 'a') { if (S.page === 2) { S.mvMode = true; S.mv = 0; S.mvSwap = -1; } else if (S.page === 0 && !env.battle) S.mk = { i: 0, t: S.t }; else if (S.page === 1 && ivOn()) S.iv = !S.iv; }
-      else if (k === 'b') { if (env.catchMode) S.cask = { i: 0, t: S.t }; else go('party'); }
-    }
-  }
-  function catchAnswer(yes) {
-    S.cask = null; const m = S.party[S.sel], C = env.catchMode;
-    if (!yes) { if (C && C.done) C.done(null); return; }
-    startName({ mode: 'mon', mi: S.sel, mon: m, title: 'NICKNAME?', max: 10, initial: '', orig: m.nick, gender: m.gender, allowEmpty: true, fromParty: true }); go('name');
-  }
-  function click(x, y) {     // x, y in 240x160 screen pixels
-    if (S.tr) return;
-    if (S.view === 'name') { nameClick(x, y); return; }
-    if (S.view === 'party' && S.menu) { const R = menuRect(); if (x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h) { const i = Math.floor((y - R.y - 4) / MENU.rh); if (i >= 0 && i < S.menu.opts.length) { S.menu.i = i; menuDo(S.menu.opts[i]); } } else S.menu = null; return; }
-    if (S.view === 'party') { const i = Math.floor((y - 3) / 26); if (x >= 8 && x <= 144 && i >= 0 && i < S.party.length && (y - 3) % 26 < 25) { if (i === S.sel) press('a'); else select(i); } }
-    else if (y < 18) { if (x >= 172) { const i = Math.floor((x - 176) / 12); if (i >= 0 && i < NPAGES) setPage(i); } else press('b'); }
-    else if (S.page === 2 && x >= 100 && y >= 24 && y < 122) { const i = Math.floor((y - 24) / 24); if (i < 4) { S.mvMode = true; S.mv = i; } }
-  }
-  function update(dt) {
-    if (S.bmsg) { S.bmsg.t += dt; if (S.bmsg.t > S.bmsg.dur) S.bmsg = null; }
-    S.t += dt; S.rowT += dt; S.pageT += dt; if (S.banner) S.banner.t += dt; S.selT += dt; S.statP = Math.min(1, S.statP + dt / .6);
-    if (S.tr) { S.tr.p += dt / .3; if (S.tr.p >= 1) { S.view = S.tr.to; S.tr = null; } }
-    if (S.pg) { S.pg.p += dt / .22; if (S.pg.p >= 1) S.pg = null; }
-    S.party.forEach((m, i) => { const cur = S.hpShown[i] || 0, d = m.hp - cur, st = Math.max(1, m.max * 7) * dt; S.hpShown[i] = Math.abs(d) <= st ? m.hp : cur + Math.sign(d) * st; });
-  }
-  function status() {
-    let sp = 0, ic = 0; for (const m of S.party) { const a = imgs.get(m.sprite), b = imgs.get(m.icon); if (a && a.ok) sp++; if (b && b.ok) ic++; }
-    const TT = env.types && env.types(), sh = TT && TT.sheet ? imgs.get(TT.sheet) : null, DB = env.db && env.db();
-    return { mons: S.party.map(m => ({ nickname: m.nick, saveSpecies: m.rawSpecies, showing: m.species, types: m.types, sprite: m.sprite, spriteLoaded: !!(imgs.get(m.sprite) && imgs.get(m.sprite).ok), icon: m.icon, iconLoaded: !!(imgs.get(m.icon) && imgs.get(m.icon).ok) })), typeSheetPath: TT && TT.sheet, font: fontSrc, species: DB ? Object.keys(DB).length : 0, count: S.party.length, sprites: sp, icons: ic, typeTable: !!TT, typeSheet: !!(sh && sh.ok), moveTable: !!moveTable(), warnings: [...warnings] };
-  }
-  return { S, opt, W, H, press, click, update, render, rebuild, reset, initFont, status, renderSettled, buildMon, startName, nameKey };
-}
-root.PokemonSummaryCore = createSummary;
-
-// ===========================================================================
-//  GAME PART (Phaser): PokemonSummary.open(scene)
-// ===========================================================================
-const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', q: 'left', ArrowRight: 'right', d: 'right', e: 'right', z: 'a', Enter: 'a', ' ': 'a', x: 'b', Escape: 'b', Backspace: 'b' };
-const SAVE_KEY = 'pokemon_micron_save';
-function gameParty() {
-  const gs = root.GameStateManager, pick = o => { let p = o && (o.party || o.playerParty || (o.saveData && o.saveData.party)); if (p && !Array.isArray(p) && typeof p === 'object') p = Object.values(p); return Array.isArray(p) ? p.filter(m => m && typeof m === 'object') : []; };
-  let party = pick(gs && gs.saveData);
-  if (!party.length) party = pick(gs);
-  if (!party.length) { for (const k of [SAVE_KEY, 'save', 'saveData', 'pokemon_save']) { try { const o = JSON.parse(localStorage.getItem(k) || 'null'); party = pick(o); if (party.length) break; } catch (e) { /* not json */ } } }
-  return party;
-}
-// real party array in the save (gameParty() returns a filtered copy)
-function partyArray() { const gs = root.GameStateManager, p = gs && gs.saveData && gs.saveData.party; return Array.isArray(p) ? p : null; }
-function partyChanged() { try { if (root.SaveSystem && root.SaveSystem.touch) root.SaveSystem.touch('party'); } catch (e) { /* no save system */ } try { if (root.OWFollower) root.OWFollower.refresh(); } catch (e) { /* no follower */ } }
-const PokemonSummary = {
-  active: false,
-  // IVs on the SKILLS page: shown (press A on that page to switch between stats and IVs) when this game flag is set, or always when IV_ALWAYS is true.
-  // Set it in a script (setflag FLAG_IV_VIEW) or in saveData.flags.FLAG_IV_VIEW.
-  IVFLAG: 'FLAG_IV_VIEW', IV_ALWAYS: false,
-  ivEnabled() { if (this.IV_ALWAYS) return true; const gs = root.GameStateManager, sv = (gs && gs.saveData) || {}; return !!(sv.flags && sv.flags[this.IVFLAG]); },
-  isOpen() { return this.active; },
-
-  open(scene, opts = {}) {
-    if (this.active || !scene) return false;
-    const nameOnly = !!opts.name, party = nameOnly ? [] : gameParty();
-    console.info('[PokemonSummary] open: ' + (nameOnly ? 'naming screen' : party.length + ' Pokemon in the party'));
-    if (!party.length && !nameOnly) { console.warn('[PokemonSummary] the party is empty: GameStateManager.saveData.party has no Pokemon, and no local save was found'); return false; }
-    // (typeof works for tables declared with `const` in your other scripts, window.X would not)
-    const core = createSummary({
-      urlFor: p => p,
-      db: () => (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null),
-      types: () => (typeof TypeTable !== 'undefined' ? TypeTable : (PokemonSummary._tt || null)),
-      moves: () => (typeof MoveDatabase !== 'undefined' && MoveDatabase) || (typeof MoveTable !== 'undefined' && MoveTable) || (typeof MoveTables !== 'undefined' && MoveTables) || null,
-      party: () => (nameOnly ? [] : gameParty()),
-      swap: (i, j) => { const list = gameParty(), arr = partyArray(); if (!arr || !list[i] || !list[j]) return; const a = arr.indexOf(list[i]), b = arr.indexOf(list[j]); if (a < 0 || b < 0) return; [arr[a], arr[b]] = [arr[b], arr[a]]; partyChanged(); },
-      rename: (i, txt) => { const m = gameParty()[i]; if (!m) return; m.nickname = txt; partyChanged(); },
-      swapMoves: (i, a, b) => { const m = gameParty()[i]; if (!m || !m.moves) return; [m.moves[a], m.moves[b]] = [m.moves[b], m.moves[a]]; partyChanged(); },
-      setMarks: (i, marks) => { const m = gameParty()[i]; if (!m) return; const o = {}; ['circle', 'triangle', 'square', 'heart', 'star', 'diamond'].forEach((k, j) => { o[k] = !!marks[j]; }); m.markings = o; partyChanged(); },
-      ivEnabled: () => PokemonSummary.ivEnabled(),
-      nameDone: txt => { const nm = opts.name; this.close(); if (nm && nm.mode !== 'player' && nm.raw && txt !== null) { nm.raw.nickname = txt; partyChanged(); } if (nm && nm.onDone) nm.onDone(txt); },
-      glyphs: () => { try { return typeof EmeraldFont !== 'undefined' ? new EmeraldFont(null).glyphMap : null; } catch (e) { return null; } },
-      onExit: () => this.close(),
-    });
-    core.opt.cries = opts.cries !== false;
-    this.core = core; this.scene = scene; this.opts = opts; this.openedAt = performance.now();
-    const scr = (root.OW_TEXT && root.OW_TEXT.screen) || { x: 0, y: 0, w: 480, h: 320 };
-    core.initFont().then(() => {
-      if (!this.active) return;
-      core.rebuild(false);
-      if (nameOnly) {
-        const nm = opts.name, female = /^f/i.test(String(nm.gender || ''));
-        core.startName(nm.mode === 'player'
-          ? { mode: 'player', title: nm.title || 'YOUR NAME?', max: nm.max || 7, initial: nm.initial || '', orig: nm.current || '', gender: female ? 'F' : 'M', allowEmpty: false, allowCancel: !!nm.allowCancel, trainer: nm.trainer || ('graphics/trainer_front_sprites/player_' + (female ? 'female' : 'male') + '.png') }
-          : { mode: 'monraw', raw: nm.raw, title: nm.title || 'NICKNAME?', max: nm.max || 10, initial: '', orig: nm.raw.nickname || '', gender: '', allowEmpty: true, allowCancel: true });
-      }
-      setTimeout(() => { if (PokemonSummary.active && PokemonSummary.logging) PokemonSummary.debug(); }, 1500);
-      const key = 'ps_screen_canvas';
-      if (scene.textures.exists(key)) scene.textures.remove(key);
-      this.tex = scene.textures.createCanvas(key, W, H);
-      try { this.tex.setFilter(Phaser.Textures.FilterMode.NEAREST); } catch (e) { /* older Phaser */ }
-      this.ctx = this.tex.getContext ? this.tex.getContext() : this.tex.context;
-      this.img = scene.add.image(0, 0, key).setOrigin(0, 0).setScale(scr.w / W, scr.h / H).setScrollFactor(0).setDepth(9000);
-      this.upd = (time, delta) => { core.update(Math.min(.05, delta / 1000)); core.render(this.ctx); this.tex.refresh(); };
-      scene.events.on('update', this.upd);
-    });
-    if (typeof TypeTable === 'undefined' && !this._tt) {   // not loaded by a script tag: fetch it and say exactly what went wrong
-      const url = opts.typeTablesUrl || 'tables/TypeTables.js';
-      fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url + ' (file missing or named wrongly: it must be exactly tables/TypeTables.js)'); return r.text(); })
-        .then(txt => { const o = new Function('window', txt + '\n;return typeof TypeTable!=="undefined"?TypeTable:null')({}); if (!o) throw new Error(url + ' loaded but it does not define TypeTable'); this._tt = o; console.warn('[PS] TypeTable was not defined by a <script> tag, so ' + url + ' was fetched instead. Add <script src="' + url + '"></script> to index.html.'); if (this.active) core.rebuild(true); })
-        .catch(e => console.error('[PS] TypeTables.js problem: ' + e.message));
-    }
-    this.active = true;
-    this.kd = e => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const k = KEYS[e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key];
-      const typing = core.S.view === 'name' && !core.S.tr && e.key && (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Enter' || e.key === 'Escape');
-      if (!k && !typing) return;
-      e.preventDefault(); e.stopImmediatePropagation();
-      if ((e.repeat && e.key !== 'Backspace') || performance.now() - this.openedAt < 250) return;
-      if (typing && core.nameKey(e)) return;
-      if (k) core.press(k);
-    };
-    window.addEventListener('keydown', this.kd, true);
-    return true;
-  },
-
-  close() {
-    if (!this.active) return;
-    this.active = false;
-    window.removeEventListener('keydown', this.kd, true);
-    const scene = this.scene;
-    try { if (this.upd) scene.events.off('update', this.upd); if (this.img) this.img.destroy(); if (scene.textures.exists('ps_screen_canvas')) scene.textures.remove('ps_screen_canvas'); } catch (e) { /* scene already gone */ }
-    this.img = this.tex = this.ctx = this.upd = null;
-    if (scene && scene.time) scene.scriptEndedAt = scene.time.now;     // the overworld ignores input for 300 ms, so the closing key does nothing there
-    if (this.opts && this.opts.onClose) this.opts.onClose();
-  },
-};
-// ---- naming screens (same look as the party screen) --------------------------------------------------------------
-//   PokemonSummary.namePlayer(scene, { gender: 'male'|'female', current: 'PLAYER', max: 7, allowCancel: false, onDone(name) {} })
-//        -> asks for the player's name; the result is stored in saveData.player.name and also given to onDone(name)
-//   PokemonSummary.nameMon(scene, rawMon, { max: 10, onDone(name) {} })   -> nickname for any Pokémon object (rawMon.nickname is set)
-// Type with the keyboard, or move with the arrows and press A / click the keys. Backspace/B = delete, Enter = OK, Esc = cancel.
-PokemonSummary.namePlayer = function (scene, o) {
-  o = o || {}; const gs = root.GameStateManager, sd = gs && gs.saveData;
-  const cur = o.current != null ? o.current : (sd && sd.player && sd.player.name) || '';
-  const gender = o.gender || (sd && sd.player && (sd.player.gender || sd.player.sex)) || 'male';
-  return PokemonSummary.open(scene, { name: { mode: 'player', gender, current: cur, max: o.max || 7, title: o.title, allowCancel: !!o.allowCancel, trainer: o.trainer,
-    onDone: txt => { if (txt !== null && sd) { sd.player = sd.player || {}; sd.player.name = txt; try { root.SaveSystem && root.SaveSystem.touch('name'); } catch (e) { /* ignore */ } } if (o.onDone) o.onDone(txt); } }, onClose: o.onClose, cries: false });
-};
-PokemonSummary.nameMon = function (scene, raw, o) {
-  o = o || {}; return PokemonSummary.open(scene, { name: { mode: 'monraw', raw, max: o.max || 10, title: o.title, onDone: o.onDone }, onClose: o.onClose, cries: false });
-};
-root.PokemonSummary = PokemonSummary;
-
-// ---------------------------------------------------------------- Enter key + logger (works even if the scene file has no [SUMMARY] patch)
-// Every Enter press prints a "[PS]" line to the console with what the game looked like at that moment.
-// Switch it off with PokemonSummary.logging = false.  PokemonSummary.debug() prints the state any time.
-PokemonSummary.logging = true;
-const psLog = (...a) => { if (PokemonSummary.logging) console.log('%c[PS]', 'color:#7fa4ff;font-weight:bold', ...a); };
-function psScenes() {
-  const out = [];
-  try { for (const g of psGames()) for (const s of g.scene.getScenes(false)) out.push({ s, active: g.scene.isActive(s.scene.key) }); } catch (e) { psLog('could not list scenes:', e.message); }
-  return out;
-}
-// Phaser.GAMES is empty in newer Phaser builds, so the game object is searched for: Phaser.GAMES, then any global that is a Phaser.Game
-// (a `const game = new Phaser.Game()` is not on window, so also try typeof game / phaserGame), then PokemonSummary.game if you set it.
-let psGameCache = null;
-function psGames() {
-  const found = new Set(), P = root.Phaser, isGame = g => g && typeof g === 'object' && g.scene && typeof g.scene.getScenes === 'function' && g.loop;
-  if (PokemonSummary.game && isGame(PokemonSummary.game)) found.add(PokemonSummary.game);
-  if (psGameCache && isGame(psGameCache)) found.add(psGameCache);
-  if (P && P.GAMES) for (const g of P.GAMES) if (isGame(g)) found.add(g);
-  const tryGlobal = f => { try { const g = f(); if (isGame(g)) found.add(g); } catch (e) { /* not declared */ } };
-  tryGlobal(() => game); tryGlobal(() => phaserGame); tryGlobal(() => gameInstance); tryGlobal(() => window.game);
-  if (!found.size) { try { for (const k of Object.getOwnPropertyNames(root)) { let v; try { v = root[k]; } catch (e) { continue; } if (isGame(v)) { found.add(v); break; } } } catch (e) { /* ignore */ } }
-  const arr = [...found]; if (arr[0]) psGameCache = arr[0]; return arr;
-}
-function psState() {
-  const all = psScenes(), ow = all.map(o => o.s).find(s => s && s.player && s.OverworldMaps === undefined && s.currentMapKey !== undefined) || all.map(o => o.s).find(s => s && s.player);
-  return {
-    loaded: true, open: PokemonSummary.active,
-    phaser: !!root.Phaser, games: psGames().length,
-    scenes: all.map(o => `${o.s.scene.key}${o.active ? ' (active)' : ''}`),
-    overworldScene: ow ? ow.scene.key : null,
-    sceneHasEnterKey: !!(ow && ow.enterKey),
-    scriptRunning: ow ? !!ow.scriptRunning : null, isLocked: ow ? !!ow.isLocked : null, isMoving: ow ? !!ow.isMoving : null,
-    partySize: gameParty().length, saveParty: !!(root.GameStateManager && root.GameStateManager.saveData && root.GameStateManager.saveData.party),
-    types: typeof TypeTable !== 'undefined', db: typeof PokemonDatabase !== 'undefined',
+      const BS = window.BattleScene, m = BS && BS._m;
+      if (m && !m._primed && !BS.musicOn) { m._primed = true; m._keep = false; prime1(m); }
+    },
   };
-}
-PokemonSummary.debug = () => {
-  const s = psState(); console.log('[PS] state', s);
-  const c = PokemonSummary.core; if (c) { const st = c.status(); console.table(st.mons); console.log('[PS] type icons: TypeTable ' + (st.typeTable ? 'found' : 'NOT found') + ', sheet ' + st.typeSheetPath + ' -> ' + (st.typeSheet ? 'loaded' : 'NOT loaded') + ' | font: ' + st.font); if (st.warnings.length) console.warn('[PS] warnings:\n' + st.warnings.join('\n')); }
-  else console.log('[PS] the screen is not open: open it with Enter, then call PokemonSummary.debug() again');
-  return s;
-};
-window.addEventListener('keydown', e => {
-  if (e.key !== 'Enter' || e.repeat) return;
-  if (window.StartMenu) return;   // the start menu owns Enter now (Pokémon is a tile in it)
-  const st = psState(); psLog('Enter pressed', st);
-  if (PokemonSummary.active) return;
-  // the scene's own [SUMMARY] code opens it on its next update; if it has not, we do it here after a short wait
-  setTimeout(() => {
-    if (PokemonSummary.active) { psLog('opened by the scene'); return; }
-    const all = psScenes().filter(o => o.active).map(o => o.s), sc = all.find(s => s.player && s.currentMapKey !== undefined) || all.find(s => s.player);
-    if (!sc) { psLog('NOT OPENED: no active scene with a player was found. Scenes:', st.scenes, '| games found:', st.games, '| If games is 0 add this line after you create the game: PokemonSummary.game = game;'); return; }
-    if (sc.scriptRunning) { psLog('NOT OPENED: a script is running'); return; }
-    if (sc.isLocked) { psLog('NOT OPENED: scene.isLocked is true'); return; }
-    if (sc.isMoving) { psLog('NOT OPENED: the player is moving'); return; }
-    psLog('the scene did not open it, opening from the key listener (is the [SUMMARY] patch in overworld_scene.js?)');
-    const ok = PokemonSummary.open(sc); psLog('open() returned', ok);
-  }, 60);
-});
-psLog('PokemonSummary.js loaded. Press Enter in the game; PokemonSummary.debug() prints the state.', psState());
-})(window);
+  (function () {
+    const kick = (real) => {
+      const g = window.game; if (!g) return;
+      try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ }
+      try {
+        const ctx = g.sound && g.sound.context;
+        if (ctx && ctx.state !== 'running') ctx.resume().catch(() => { /* needs a real tap */ });
+        if (real && ctx && !PMAudio._tone) { PMAudio._tone = true; const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); }
+      } catch (e) { /* ignore */ }
+      if (real) PMAudio.prime();
+      const inBattle = PMAudio.battleActive() || PMAudio.mode === 'battle';
+      try { const m = window.BattleScene && window.BattleScene._m; if (inBattle && m && m.paused && window.BattleScene.musicOn) { const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* ignore */ }); } } catch (e) { /* ignore */ }
+      if (!PMAudio.mapOk()) return;   // never start the map music during a battle (or while one is starting)
+      try {
+        const cur = window.currentGlobalMusic;
+        if (cur && cur.manager && !cur.pendingRemove) { if (cur.isPaused) cur.resume(); else if (!cur.isPlaying && !(g.sound && g.sound.locked)) cur.play(); }
+        else if (!cur) { const sc = g.scene.getScene('OverworldScene'); if (sc && g.scene.isActive('OverworldScene') && sc.updateMapMusic) sc.updateMapMusic(sc.currentMapKey); }
+      } catch (e) { /* ignore */ }
+    };
+    PM.kickAudio = kick;
+    ['pointerdown', 'touchend', 'click', 'keydown'].forEach(t => window.addEventListener(t, () => { const real = t !== 'pointerdown'; kick(real); setTimeout(() => kick(real), 150); setTimeout(() => kick(real), 700); }, { capture: true, passive: true }));
+    // coming back to the page (iOS suspends / "interrupts" the audio when the app is in the background or a call comes in)
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { kick(false); setTimeout(() => kick(false), 400); } });
+    window.addEventListener('pageshow', () => kick(false));
+  })();
+
+  if (!PM.landscape) return;                // portrait: nothing to do here (TouchControls.js handles the old layout)
+
+  // ---------------------------------------------------------------- key sending
+  const KEY = {
+    up: ['ArrowUp', 'ArrowUp', 38], down: ['ArrowDown', 'ArrowDown', 40], left: ['ArrowLeft', 'ArrowLeft', 37], right: ['ArrowRight', 'ArrowRight', 39],
+    a: ['z', 'KeyZ', 90], b: ['x', 'KeyX', 88], x: ['b', 'KeyB', 66], y: [' ', 'Space', 32], minus: ['Tab', 'Tab', 9], plus: ['Enter', 'Enter', 13],
+  };
+  const down = new Set();
+  function fire(type, name) {
+    const [key, code, kc] = KEY[name], e = new KeyboardEvent(type, { key, code, bubbles: true, cancelable: true, repeat: false });
+    Object.defineProperty(e, 'keyCode', { get: () => kc }); Object.defineProperty(e, 'which', { get: () => kc });
+    Object.defineProperty(e, 'pmPad', { value: name });   // which on-screen button sent it (the name screen must not TYPE the letter of a pad button)
+    window.dispatchEvent(e);
+  }
+  const DBG = /[?&]debug=1/.test(location.search);
+  const press = n => { if (down.has(n)) return; down.add(n); if (DBG) console.log('[PM] button down: ' + n); fire('keydown', n); if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* ignore */ } } };
+  const release = n => { if (!down.has(n)) return; down.delete(n); fire('keyup', n); };
+
+  // ---------------------------------------------------------------- styles
+  const css = `
+  html.pml, html.pml body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: #07080c; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  html.pml body { position: fixed; inset: 0; display: block; }
+  #pm-bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; image-rendering: pixelated; }
+  #pm-view { position: absolute; z-index: 3; overflow: hidden; background: #000; border-radius: 6px; box-shadow: 0 0 0 5px #0a0c14, 0 0 0 7px rgba(150,170,255,.28), 0 0 38px rgba(90,130,255,.35), 0 10px 40px rgba(0,0,0,.7); }
+  .pm-grip { position: absolute; z-index: 1; overflow: hidden; box-shadow: inset 0 0 50px rgba(0,0,0,.5), 0 0 30px rgba(0,0,0,.6); backdrop-filter: blur(2px); }
+  .pm-grip::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 38%); }
+  .pm-grip::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 10px, rgba(255,255,255,0) 10px 22px); }
+  .pm-grip.l { background: linear-gradient(165deg, rgba(40,205,235,.42), rgba(8,40,78,.72)); border-right: 3px solid rgba(130,235,255,.55); }
+  .pm-grip.r { background: linear-gradient(195deg, rgba(255,92,80,.42), rgba(84,14,30,.72)); border-left: 3px solid rgba(255,160,150,.55); }
+  html.pml #game-container { position: absolute; left: 0; top: 0; border: 0; border-radius: 0; box-shadow: none; margin: 0; }
+  html.pml canvas { image-rendering: pixelated; }
+  #pm-tc { position: absolute; inset: 0; pointer-events: none; z-index: 20; --op: .55; touch-action: none; }
+  #pm-tc * { touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #pm-tc .g { position: absolute; pointer-events: none; opacity: var(--op); }
+  #pm-tc .hit { pointer-events: auto; }
+  #pm-tc .pad { border-radius: 50%; background: radial-gradient(circle at 50% 40%, rgba(70,74,92,.85), rgba(26,28,40,.85)); box-shadow: inset 0 0 0 2px rgba(255,255,255,.18), 0 2px 8px rgba(0,0,0,.5); }
+  #pm-tc .pad::before, #pm-tc .pad::after { content: ""; position: absolute; background: rgba(0,0,0,.28); border-radius: 4px; }
+  #pm-tc .pad::before { left: 36%; right: 36%; top: 8%; bottom: 8%; } #pm-tc .pad::after { top: 36%; bottom: 36%; left: 8%; right: 8%; }
+  #pm-tc .pad i { position: absolute; width: 0; height: 0; border: solid transparent; opacity: .55; z-index: 1; }
+  #pm-tc .pad i.on { opacity: 1; filter: drop-shadow(0 0 4px #7ff); }
+  #pm-tc .pad .u { left: 50%; top: 14%; margin-left: calc(var(--p) * -.09); border-width: 0 calc(var(--p) * .09) calc(var(--p) * .14); border-bottom-color: #e6ebff; }
+  #pm-tc .pad .d { left: 50%; bottom: 14%; margin-left: calc(var(--p) * -.09); border-width: calc(var(--p) * .14) calc(var(--p) * .09) 0; border-top-color: #e6ebff; }
+  #pm-tc .pad .l { top: 50%; left: 14%; margin-top: calc(var(--p) * -.09); border-width: calc(var(--p) * .09) calc(var(--p) * .14) calc(var(--p) * .09) 0; border-right-color: #e6ebff; }
+  #pm-tc .pad .r { top: 50%; right: 14%; margin-top: calc(var(--p) * -.09); border-width: calc(var(--p) * .09) 0 calc(var(--p) * .09) calc(var(--p) * .14); border-left-color: #e6ebff; }
+  #pm-tc .b { position: absolute; border-radius: 50%; background: radial-gradient(circle at 50% 35%, rgba(86,90,110,.9), rgba(30,32,46,.9)); color: #eef1ff; font: 700 calc(var(--u) * .30) / 1 system-ui, sans-serif; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px rgba(255,255,255,.2), 0 2px 6px rgba(0,0,0,.5); }
+  #pm-tc .b.on { background: radial-gradient(circle at 50% 35%, #7ee8e0, #26a8a0); color: #05161a; transform: scale(.94); }
+  #pm-tc .pill { border-radius: 999px; color: #eef1ff; font: 700 calc(var(--u) * .26) / 1 system-ui, sans-serif; background: rgba(40,43,60,.9); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px rgba(255,255,255,.2); }
+  #pm-tc .pill.on { background: #26a8a0; color: #05161a; }
+  #pm-tc .cam svg { width: 56%; height: 56%; }
+  #pm-bh { position: fixed; inset: 0; z-index: 2; pointer-events: none; display: none; }
+  #pm-bh .bw { --tx: 0%; --sc: 1; transform: translateX(var(--tx)) scale(var(--sc)); transition: transform .34s cubic-bezier(.2,1.25,.4,1), filter .1s, visibility 0s .4s; visibility: hidden; pointer-events: none; }
+  #pm-bh.on .bw { visibility: visible; pointer-events: auto; transition-delay: 0s; }
+  #pm-bh:not(.on) .L { --tx: -135%; } #pm-bh:not(.on) .R { --tx: 135%; }
+  #pm-bh.on .c2, #pm-bh.on .c0 { transition-delay: .03s; } #pm-bh.on .c1, #pm-bh.on .c3 { transition-delay: .09s; }
+  #pm-bh .bw { position: absolute; pointer-events: auto; -webkit-tap-highlight-color: transparent; touch-action: none; transition: transform .1s, filter .1s; filter: drop-shadow(0 3px 3px rgba(0,0,0,.5)); }
+  #pm-bh .bw.sel { --sc: 1.07; filter: drop-shadow(0 0 7px rgba(255,255,255,.95)) drop-shadow(0 3px 3px rgba(0,0,0,.5)); z-index: 2; }
+  #pm-bh svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  #pm-bh .tx { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 900 var(--fs) / 1 system-ui, -apple-system, sans-serif; letter-spacing: .01em; -webkit-text-stroke: calc(var(--fs) * .22) #1b1f2e; paint-order: stroke fill; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  #pm-bh .L .tx { padding: 0 24% 0 16%; } #pm-bh .R .tx { padding: 0 16% 0 24%; }
+  #pm-bh .ar { position: absolute; top: 50%; width: calc(var(--fs) * 1.5); height: auto; margin-top: calc(var(--fs) * -.75); image-rendering: pixelated; display: none; }
+  #pm-bh .sel .ar { display: block; }
+  #pm-bh .L .ar { left: 9%; } #pm-bh .R .ar { right: 9%; transform: scaleX(-1); }
+  #pm-bh .noar .ar { display: none !important; }
+  #pm-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; transition: opacity .35s; }
+  #pm-toast { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); background: rgba(10,12,20,.88); color: #fff; font: 600 13px system-ui, sans-serif; padding: 7px 14px; border-radius: 999px; z-index: 31; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
+  `;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+  document.documentElement.classList.add('pml');
+
+  // ---------------------------------------------------------------- DOM
+  let view, tc, flash, toast, bg, gripL, gripR; const els = {};
+  // animated background (the same drifting stripes / bubbles / glow as the start menu), drawn small and scaled up
+  function startBg() {
+    const x = bg.getContext('2d'); let t = 0, last = performance.now();
+    const grad = (w, h, a, b) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, a); g.addColorStop(1, b); x.fillStyle = g; x.fillRect(0, 0, w, h); };
+    function draw(now) {
+      const dt = Math.min(.1, (now - last) / 1000); last = now; t += dt;
+      const w = Math.ceil(innerWidth / 4), h = Math.ceil(innerHeight / 4); if (bg.width !== w || bg.height !== h) { bg.width = w; bg.height = h; }
+      grad(w, h, '#161a2a', '#07080e'); x.save();
+      const off = (t * 9) % 36; x.fillStyle = 'rgba(120,140,200,.06)';
+      for (let k = -8; k < w / 18 + 8; k++) { const x0 = k * 36 + off - h; x.beginPath(); x.moveTo(x0, 0); x.lineTo(x0 + 14, 0); x.lineTo(x0 + 14 + h, h); x.lineTo(x0 + h, h); x.closePath(); x.fill(); }
+      for (let i = 0; i < 14; i++) { const sp = 6 + (i * 7) % 9, px = (i * 53 + 17) % w, py = h + 14 - ((t * sp + i * 41) % (h + 28)), r = 4 + (i * 5) % 9, a = .05 + (i % 3) * .015;
+        x.strokeStyle = 'rgba(190,205,255,' + a * 2.2 + ')'; x.lineWidth = 1; x.beginPath(); x.arc(px + Math.sin(t * .7 + i) * 4, py, r, 0, 6.2832); x.stroke(); x.fillStyle = 'rgba(190,205,255,' + a + ')'; x.beginPath(); x.arc(px + Math.sin(t * .7 + i) * 4, py, r - 1, 0, 6.2832); x.fill(); }
+      const gx = w / 2 + Math.sin(t * .4) * w * .3, g = x.createRadialGradient(gx, h * .4, 4, gx, h * .4, w * .6); g.addColorStop(0, 'rgba(80,110,200,.18)'); g.addColorStop(1, 'rgba(80,110,200,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); x.restore();
+    }
+    let acc = 0; const loop = now => { if (now - acc > 45) { acc = now; try { draw(now); } catch (e) { /* ignore */ } } requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+  }
+  function build() {
+    const gc = document.getElementById('game-container'); if (!gc) return;
+    bg = document.createElement('canvas'); bg.id = 'pm-bg'; document.body.insertBefore(bg, document.body.firstChild); startBg();
+    gripL = document.createElement('div'); gripL.className = 'pm-grip l'; gripR = document.createElement('div'); gripR.className = 'pm-grip r'; document.body.appendChild(gripL); document.body.appendChild(gripR);
+    view = document.createElement('div'); view.id = 'pm-view'; gc.parentNode.insertBefore(view, gc); view.appendChild(gc);
+    flash = document.createElement('div'); flash.id = 'pm-flash'; view.appendChild(flash);
+    toast = document.createElement('div'); toast.id = 'pm-toast'; view.appendChild(toast);
+    buildBattleHud();
+    if (tq !== '0') buildControls();   // the buttons show on every device in landscape (mouse works too); ?touch=0 hides them
+    ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault()));
+    if (isTouch) document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+    window.addEventListener('resize', apply); window.addEventListener('orientationchange', () => setTimeout(apply, 250));
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', apply);
+    window.addEventListener('blur', () => { setDir(null); [...down].forEach(release); });
+    apply();
+  }
+  const g = (cls, html) => { const d = document.createElement('div'); d.className = 'g ' + cls; if (html) d.innerHTML = html; tc.appendChild(d); return d; };
+  function btn(parent, cls, label, key) {
+    const d = document.createElement('div'); d.className = cls + ' hit'; d.innerHTML = label; parent.appendChild(d); bindBtn(d, key); return d;
+  }
+  function bindBtn(el, key) {
+    el.addEventListener('pointerdown', e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } el.classList.add('on'); if (key === 'shot') PM.screenshot(); else press(key); });
+    const up = () => { el.classList.remove('on'); if (key !== 'shot') release(key); };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
+  }
+  let curDir = null;
+  function setDir(d) { if (d === curDir) return; if (curDir) { release(curDir); els.arrows[curDir].classList.remove('on'); } curDir = d; if (d) { press(d); els.arrows[d].classList.add('on'); } }
+  function buildControls() {
+    tc = document.createElement('div'); tc.id = 'pm-tc'; document.body.appendChild(tc); tc.addEventListener('contextmenu', e => e.preventDefault());
+    // D-pad
+    const pad = g('pad hit', '<i class="u"></i><i class="d"></i><i class="l"></i><i class="r"></i>'); pad.style.pointerEvents = 'auto'; els.pad = pad;
+    els.arrows = { up: pad.querySelector('.u'), down: pad.querySelector('.d'), left: pad.querySelector('.l'), right: pad.querySelector('.r') };
+    const dirOf = e => { const r = pad.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); if (Math.hypot(dx, dy) < r.width * 0.13) return null; return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); };
+    pad.addEventListener('pointerdown', e => { e.preventDefault(); try { pad.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } setDir(dirOf(e)); });
+    pad.addEventListener('pointermove', e => { if (pad.hasPointerCapture && pad.hasPointerCapture(e.pointerId)) setDir(dirOf(e)); });
+    const end = () => setDir(null); pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end); pad.addEventListener('lostpointercapture', end);
+    // face buttons (Switch layout: X top, Y left, A right, B bottom)
+    const face = g('face'); face.style.pointerEvents = 'none'; els.face = face;
+    els.fx = btn(face, 'b fx', 'X', 'x'); els.fy = btn(face, 'b fy', 'Y', 'y'); els.fa = btn(face, 'b fa', 'A', 'a'); els.fb = btn(face, 'b fb', 'B', 'b');
+    // minus / plus / camera
+    els.minus = g('mn'); btn(els.minus, 'pill', '&minus;', 'minus'); els.minus.style.pointerEvents = 'none';
+    els.plus = g('pl'); btn(els.plus, 'pill', '+', 'plus'); els.plus.style.pointerEvents = 'none';
+    els.cam = g('cam'); btn(els.cam, 'pill cam', '<svg viewBox="0 0 24 24" fill="none" stroke="#eef1ff" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>', 'shot'); els.cam.style.pointerEvents = 'none';
+  }
+
+  // ---------------------------------------------------------------- battle command buttons (outside the main screen)
+  // POKéMON + BAG on the left, FIGHT + RUN on the right; shown only while a battle asks "What will X do?"
+  const BH = { geo: null, els: [] };
+  const HEXD = {
+    0: ['#ff8c50', '#d22c18', '<path d="M110 90 C70 74 78 44 98 22 C100 42 114 44 118 24 C140 44 150 72 110 90Z" fill="rgba(255,226,140,.38)"/><path d="M150 86 C128 76 132 58 144 46 C146 58 156 58 158 50 C170 62 172 78 150 86Z" fill="rgba(255,226,140,.3)"/>'],
+    1: ['#f6dc50', '#b48a14', '<rect x="82" y="34" width="58" height="48" rx="12" fill="rgba(255,255,255,.3)"/><path d="M92 36 C92 14 130 14 130 36" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="7"/><rect x="104" y="52" width="14" height="10" rx="3" fill="rgba(0,0,0,.18)"/>'],
+    2: ['#4cdc7c', '#168a3a', '<circle cx="110" cy="50" r="36" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="7"/><path d="M74 50 H146" stroke="rgba(255,255,255,.3)" stroke-width="7"/><circle cx="110" cy="50" r="11" fill="rgba(255,255,255,.3)"/>'],
+    3: ['#5ad8f4', '#1c72c4', '<g fill="rgba(255,255,255,.3)"><ellipse cx="90" cy="62" rx="11" ry="16"/><circle cx="82" cy="36" r="5"/><circle cx="91" cy="34" r="5"/><circle cx="100" cy="37" r="5"/><ellipse cx="136" cy="44" rx="11" ry="16"/><circle cx="128" cy="18" r="5"/><circle cx="137" cy="16" r="5"/><circle cx="146" cy="19" r="5"/></g>'],
+  };
+  function hexSvg(i) {
+    const d = HEXD[i], P = '0,50 30,6 190,6 220,50 190,94 30,94', Q = '9,50 34,12 186,12 211,50 186,88 34,88';
+    return '<svg viewBox="0 0 220 100" preserveAspectRatio="none"><defs><linearGradient id="hg' + i + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + d[0] + '"/><stop offset="1" stop-color="' + d[1] + '"/></linearGradient><clipPath id="hc' + i + '"><polygon points="' + Q + '"/></clipPath></defs>' +
+      '<polygon points="' + P + '" transform="translate(0 4)" fill="rgba(0,0,0,.4)"/>' +
+      '<polygon points="' + P + '" fill="#171b28" stroke="#171b28" stroke-width="10" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+      '<polygon points="' + P + '" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+      '<polygon points="' + Q + '" fill="url(#hg' + i + ')" stroke="' + d[1] + '" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+      '<g clip-path="url(#hc' + i + ')">' + d[2] + '<path d="M0 12 H220 V46 C150 56 70 38 0 52Z" fill="rgba(255,255,255,.2)"/></g></svg>';
+  }
+  function buildBattleHud() {
+    const root = document.createElement('div'); root.id = 'pm-bh'; document.body.appendChild(root); BH.root = root;
+    const lab = ['FIGHT', 'BAG', 'PARTY', 'RUN'];
+    lab.forEach((t, i) => {
+      const w = document.createElement('div'); w.className = 'bw c' + i + (i === 0 || i === 3 ? ' R' : ' L');
+      w.innerHTML = hexSvg(i) + '<div class="tx">' + t + '</div><img class="ar" src="graphics/battle_scene/battle_arrow.png" alt="" onerror="this.parentNode.classList.add(\'noar\')">';
+      root.appendChild(w); BH.els[i] = w;
+      w.addEventListener('pointerdown', e => { e.preventDefault(); try { if (window.PMBattle) window.PMBattle.choose(i); } catch (x) { /* ignore */ } });
+    });
+    setInterval(() => {
+      const st = window.PMBattle && window.PMBattle.state && window.PMBattle.state(), on = !!(st && st.on && st.mode === 'cmd' && PM.landscape && BH.geo);
+      root.style.display = BH.geo && PM.landscape ? 'block' : 'none'; root.classList.toggle('on', on); if (!on) return;
+      BH.els.forEach((w, i) => w.classList.toggle('sel', st.cmd === i));
+    }, 70);
+  }
+  // docked to the main screen's edge (flat side against it, pointed side outward): POKéMON over BAG on the left, FIGHT over RUN on the right, all the same size
+  // full hexagons tucked ~20% behind the main screen's edge (the screen covers that part): POKéMON over BAG on the left, FIGHT over RUN on the right, all one size
+  function placeBattleHud(vx, vw, avail, y0, y1) {
+    BH.geo = null; PM.hudOk = false; if (!BH.root) return;
+    const zh = y1 - y0, W0 = Math.min(210, avail / .8), gap = 6, bh = Math.min(W0 * .58, (zh - gap) / 2), Wf = Math.min(W0, bh * 2.4);
+    if (zh < 70 || W0 < 70 || bh < 30) return;
+    BH.geo = 1; PM.hudOk = true;
+    const ty = y0 + (zh - (bh * 2 + gap)) / 2, tuck = Wf * .2;
+    const put = (el, x, y) => { Object.assign(el.style, { left: Math.round(x) + 'px', top: Math.round(y) + 'px', width: Math.round(Wf) + 'px', height: Math.round(bh) + 'px' }); el.style.setProperty('--fs', Math.max(10, Math.min(22, bh * .3)) + 'px'); };
+    const lx = vx - Wf + tuck, rx = vx + vw - tuck;
+    put(BH.els[2], lx, ty); put(BH.els[1], lx, ty + bh + gap); put(BH.els[0], rx, ty); put(BH.els[3], rx, ty + bh + gap);
+  }
+
+  // ---------------------------------------------------------------- layout maths
+  function apply() {
+    if (!view) return;
+    const vv = window.visualViewport, W = Math.round(vv ? vv.width : innerWidth), H = Math.round(vv ? vv.height : innerHeight);
+    const cs = getComputedStyle(document.documentElement);
+    const saf = n => parseFloat(getComputedStyle(document.body).getPropertyValue('--sa-' + n)) || 0;
+    const R = document.createElement('div'); R.style.cssText = 'position:fixed;visibility:hidden;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'; document.body.appendChild(R);
+    const rs = getComputedStyle(R), si = { t: parseFloat(rs.paddingTop) || 0, r: parseFloat(rs.paddingRight) || 0, b: parseFloat(rs.paddingBottom) || 0, l: parseFloat(rs.paddingLeft) || 0 }; R.remove(); void cs; void saf;
+    const portraitPhone = H > W * 1.1;
+    let s, vx, vy;
+    if (portraitPhone) { s = (W - si.l - si.r) / 480; vx = si.l; vy = si.t + 6; }
+    else { s = Math.min((H - si.t - si.b) / 320, (W - si.l - si.r) / 480); vx = Math.round((W - 480 * s) / 2); vy = Math.round((H - 320 * s) / 2); }
+    const cap = parseFloat(qs.get('maxscale')) || (isTouch ? 99 : 2); if (!portraitPhone && s > cap) { s = cap; vx = Math.round((W - 480 * s) / 2); vy = Math.round((H - 320 * s) / 2); }
+    s = Math.max(.5, s); PM.scale = s;
+    const vw = Math.round(480 * s), vh = Math.round(320 * s);
+    Object.assign(view.style, { left: vx + 'px', top: vy + 'px', width: vw + 'px', height: vh + 'px' });
+    const gc = document.getElementById('game-container'); Object.assign(gc.style, { width: vw + 'px', height: Math.round(vw * 620 / 480) + 'px' });
+    // let Phaser re-read the parent size and the canvas position (pointer mapping)
+    try { if (window.game && window.game.scale) { window.game.scale.refresh(); window.game.scale.updateBounds && window.game.scale.updateBounds(); } } catch (e) { /* ignore */ }
+    { const swap = cfg.hand === 'left', L = swap ? gripR : gripL, Rr = swap ? gripL : gripR; void L; void Rr;
+      if (portraitPhone) { const top = vy + vh + 10, hh = H - top; Object.assign(gripL.style, { left: '0px', top: top + 'px', width: Math.round(W / 2) + 'px', height: hh + 'px', borderRadius: '0 40px 0 0' }); Object.assign(gripR.style, { left: Math.round(W / 2) + 'px', top: top + 'px', width: Math.round(W / 2) + 'px', height: hh + 'px', borderRadius: '40px 0 0 0' }); }
+      else { Object.assign(gripL.style, { left: '0px', top: '0px', width: vx + 'px', height: H + 'px', borderRadius: '0 46px 46px 0' }); Object.assign(gripR.style, { left: (vx + vw) + 'px', top: '0px', width: Math.max(0, W - vx - vw) + 'px', height: H + 'px', borderRadius: '46px 0 0 46px' }); } }
+    if (!tc) return;
+    tc.style.setProperty('--op', cfg.opacity);
+    let u = Math.max(54, Math.min(portraitPhone ? 80 : 70, (portraitPhone ? W * .2 : Math.min(H * .24, (vx + 90)))) ) * cfg.size;
+    if (!portraitPhone) { const gut = Math.min(vx - si.l, W - si.r - vx - vw); u = Math.max(40, Math.min(u, (gut + 14) / 2.5)); }   // phones: keep the button clusters inside the side gutters
+    const padS = Math.round(u * 1.85), left = cfg.hand === 'left';
+    const edge = 12, bot = si.b + 12;
+    const place = (el, x, y, w, h) => { Object.assign(el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' }); el.style.setProperty('--u', u + 'px'); };
+    const dpadSide = left ? 'right' : 'left';   // 'hand: left' swaps the two groups
+    let yMid, padX, faceX, fW = Math.round(u * 2.5), fH = fW;
+    if (portraitPhone) { // controls under the screen
+      const top = vy + vh + 14 + Math.round(u * .46) + 8, avail = H - top - si.b;
+      yMid = top + Math.max(6, (avail - padS) / 2);
+      padX = si.l + edge; faceX = W - si.r - edge - fW;
+    } else {
+      yMid = H - bot - padS - Math.round(H * .04);
+      padX = si.l + Math.max(edge, (vx - si.l - padS) / 2); faceX = W - si.r - fW - Math.max(edge, (vx - si.r - fW) / 2);
+    }
+    if (dpadSide === 'right') { const t = padX; padX = W - si.r - edge - padS; faceX = si.l + edge; void t; }
+    place(els.pad, padX, yMid, padS, padS); els.pad.style.setProperty('--p', padS + 'px');
+    place(els.face, faceX, yMid + Math.round((padS - fH) / 2) - Math.round(u * .0), fW, fH);
+    const bs = Math.round(u * .98); const pos = { fx: [(fW - bs) / 2, 0], fb: [(fW - bs) / 2, fH - bs], fy: [0, (fH - bs) / 2], fa: [fW - bs, (fH - bs) / 2] };
+    for (const k in pos) { const e = els[k]; Object.assign(e.style, { left: Math.round(pos[k][0]) + 'px', top: Math.round(pos[k][1]) + 'px', width: bs + 'px', height: bs + 'px' }); e.style.setProperty('--u', u + 'px'); e.style.pointerEvents = 'auto'; }
+    // pills: minus above the d-pad side, plus above the face side, camera near plus
+    const pw = Math.round(u * 1.0), ph = Math.round(u * .46);
+    const topRow = portraitPhone ? yMid - ph - 6 : Math.max(vy + 8, si.t + 10);
+    const padCx = padX + padS / 2 - pw / 2, faceCx = faceX + fW / 2 - pw / 2;
+    const setPill = (el, x, y, w, h) => { place(el, x, y, w, h); const p = el.firstChild; p.style.cssText = 'position:absolute;inset:0;pointer-events:auto'; };
+    if (portraitPhone) { const py = vy + vh + 14; setPill(els.minus, W / 2 - pw * 1.5 - 12, py, pw, ph); setPill(els.cam, W / 2 - pw / 2, py, pw, ph); setPill(els.plus, W / 2 + pw / 2 + 12, py, pw, ph); }
+    else { const tl = dpadSide === 'left'; setPill(els.minus, tl ? padCx : faceCx, topRow, pw, ph); setPill(els.plus, tl ? faceCx : padCx, topRow, pw, ph); setPill(els.cam, tl ? faceCx : padCx, topRow + ph + 8, pw, ph); }
+    { const yTop = topRow + ph * 2 + 14, yBot = yMid - 6;
+      if (portraitPhone) { BH.geo = null; PM.hudOk = false; }   // no room beside the screen when the phone is held upright: the battle then draws its own menu on the screen
+      else placeBattleHud(vx, vw, Math.min(vx - si.l - 4, W - si.r - vx - vw - 4), yTop, yBot); }
+    // the d-pad / face groups keep their own hit areas
+  }
+
+  // ---------------------------------------------------------------- screenshot of the MAIN screen only
+  function say(t) { if (!toast) return; toast.textContent = t; toast.style.opacity = 1; clearTimeout(say.t); say.t = setTimeout(() => { toast.style.opacity = 0; }, 1800); }
+  PM.toast = say;
+  function save(canvas) {
+    const name = 'pokemon-micron-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.png';
+    canvas.toBlob(async blob => {
+      if (!blob) { say('Screenshot failed'); return; }
+      try { const f = new File([blob], name, { type: 'image/png' }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'Pokémon Micron' }); say('Screenshot ready'); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+      try { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); say('Screenshot saved'); }
+      catch (e) { say('Screenshot failed'); }
+    }, 'image/png');
+  }
+  PM.screenshot = function () {
+    flash.style.transition = 'none'; flash.style.opacity = .7; requestAnimationFrame(() => { flash.style.transition = 'opacity .35s'; flash.style.opacity = 0; });
+    const G = window.game; if (!G) return;
+    const out = (src, sx, sy, sw, sh) => { const c = document.createElement('canvas'); c.width = 480; c.height = 320; const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(src, sx, sy, sw, sh, 0, 0, 480, 320); save(c); };
+    try {
+      const r = G.renderer;
+      if (r && r.snapshotArea) { r.snapshotArea(0, 0, 480, 320, img => { const go = () => out(img, 0, 0, img.width, img.height); if (img.complete !== false && img.width) go(); else img.onload = go; }); return; }
+    } catch (e) { /* fall through */ }
+    G.events.once('postrender', () => out(G.canvas, 0, 0, G.canvas.width, Math.round(G.canvas.width * 320 / 480)));
+  };
+
+  if (document.body) build(); else document.addEventListener('DOMContentLoaded', build);
+})();
