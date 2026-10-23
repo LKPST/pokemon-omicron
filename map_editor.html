@@ -70,6 +70,10 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 .tdit canvas{width:36px;height:36px;background:repeating-conic-gradient(#2a2a2a 0 25%,#222 0 50%) 0 0/8px 8px;image-rendering:pixelated;flex:none}.tdit b{display:block}.tdit small{color:#888}
 #tdCvWrap{flex:1;min-height:120px;position:relative;background:#0b0b0b;border:1px solid #333}#tdCv{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
 .frow{display:flex;gap:6px}.frow label{flex:1}.help{color:#888;font-size:11px}
+/* ---- github commit ---- */
+#ghm{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:80;display:flex;align-items:center;justify-content:center}#ghm[hidden]{display:none}
+#ghBox{background:#1b1b1b;border:1px solid #444;border-radius:8px;padding:14px;width:min(560px,94vw);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.ghf{display:grid;grid-template-columns:1fr;gap:2px;background:#151515;border:1px solid #2d2d2d;border-radius:5px;padding:5px 7px}.ghf small{color:#ffb74d}
 </style></head><body>
 <div id="side">
   <div class="row"><select id="mapSel" style="flex:1"></select><button id="newMap">+ Map</button></div>
@@ -87,7 +91,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 <div id="main">
   <div id="bar">
     <button id="undoB">↶ Undo</button><button id="redoB">↷ Redo</button>
-    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button>
+    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="ghBtn" title="commit the changed files straight to the repository">⬆ Commit to GitHub</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="gridT" checked> Grid</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="sprT" checked> Sprites</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="borT" checked> Border</label>
@@ -99,7 +103,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 <div id="ted" hidden>
   <div id="tedHead"><b>🧱 Tiles</b><span id="tdCount" class="help"></span><span id="tedSt"></span>
     <button id="tdLoadT" title="pick your tiles.js if it was not found next to this page">Load tiles.js…</button>
-    <button id="tdSave" class="on">💾 Save tiles.js</button><button id="tdCopy">Copy</button><button id="tdZipB" title="new/replaced tile images at their project paths + tiles.js">⬇ New images (ZIP)</button><button id="tdClose">✕ Close</button></div>
+    <button id="tdSave" class="on">💾 Save tiles.js</button><button id="tdCopy">Copy</button><button id="tdZipB" title="new/replaced tile images at their project paths + tiles.js">⬇ New images (ZIP)</button><button id="tdCommit" title="commit tiles.js and the new images to GitHub">⬆ Commit</button><button id="tdClose">✕ Close</button></div>
   <div id="tedBody">
     <div id="tdL"><input type="text" id="tdQ" placeholder="search id / name / image…"><div id="tdList"></div>
       <div class="row"><button id="tdNewImg" class="on" style="flex:1">+ New from image(s)…</button></div>
@@ -116,6 +120,17 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
   </div>
   <input type="file" id="tdFI" accept="image/*" multiple hidden><input type="file" id="tdFR" accept="image/*" hidden><input type="file" id="tdFS" accept="image/*" multiple hidden><input type="file" id="tdFT" accept=".js,text/javascript" hidden>
 </div>
+<div id="ghm" hidden><div id="ghBox">
+  <b style="color:#00acc1;font-size:14px">⬆ Commit to GitHub</b>
+  <div class="help">Needs a fine-grained token limited to this repository with “Contents: Read and write” (<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" style="color:#00acc1">create one</a>). It stays only in this browser.</div>
+  <label>Token<input type="password" id="ghTok" autocomplete="off" placeholder="github_pat_…"></label>
+  <div class="frow"><label>Owner<input type="text" id="ghOwn"></label><label>Repository<input type="text" id="ghRepo"></label><label>Branch<input type="text" id="ghBr" placeholder="(default)"></label></div>
+  <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="ghRem"> remember the token in this browser</label>
+  <label>Commit message<input type="text" id="ghMsg" placeholder="(automatic if empty)"></label>
+  <div class="help">Files to commit (one commit):</div><div id="ghFiles" style="display:flex;flex-direction:column;gap:4px"></div>
+  <div id="ghOut" class="help"></div>
+  <div class="row"><button id="ghGo" class="on" style="flex:1">Commit</button><button id="ghCancel" style="flex:1">Close</button></div>
+</div></div>
 <datalist id="musicList"></datalist><datalist id="dlFlag"></datalist><datalist id="dlVar"></datalist><datalist id="dlLabel"></datalist><datalist id="dlTarget"></datalist>
 <div id="sed">
   <div id="seHead"><b>Scripts</b><span id="seName"></span><span id="seUse" class="help"></span><span style="flex:1"></span><span id="seDirty"></span><button id="seSave" class="on">💾 Save overworld_scripts.js</button><button id="seClose">✕ Close</button></div>
@@ -488,10 +503,10 @@ function bfill(b,x,y,pat){const g=b['tileData_'+layer],t=g[y][x],seen=new Set([y
   while(q.length){const[cx,cy]=q.pop();cells.push([cx,cy]);for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=cx+dx,ny=cy+dy;
     if(nx<0||ny<0||nx>=b.width||ny>=b.height||seen.has(ny*b.width+nx)||g[ny][nx]!==t)continue;seen.add(ny*b.width+nx);q.push([nx,ny])}}
   const ph=pat.length,pw=pat[0].length;for(const[cx,cy]of cells){const v=pat[((cy-y)%ph+ph)%ph][((cx-x)%pw+pw)%pw];bset(b,layer,cy,cx,v?setPass(v,1):v)}}
-function drawBorderEd(){const c=$('bcv');if(!c)return;const m=repo[active],b=m&&m.borderData;if(!b)return;const cs=c.width/b.width,g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);g.imageSmoothingEnabled=false;
+function drawBorderEd(){const c=$('bcv');if(!c)return;const m=repo[active];if(m&&!m.borderData)fitBorder(m);const b=m&&m.borderData;if(!b)return;const cs=c.width/b.width,g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);g.imageSmoothingEnabled=false;
   for(let l=1;l<=5;l++)for(let r=0;r<b.height;r++)for(let q=0;q<b.width;q++){const v=b['tileData_'+l][r][q];if(v){g.globalAlpha=l===layer?1:.55;drawTile(g,v,q*cs,r*cs,cs)}}
   g.globalAlpha=1;g.strokeStyle='rgba(255,255,255,.35)';g.lineWidth=1;g.beginPath();for(let q=0;q<=b.width;q++){g.moveTo(q*cs+.5,0);g.lineTo(q*cs+.5,c.height)}for(let r=0;r<=b.height;r++){g.moveTo(0,r*cs+.5);g.lineTo(c.width,r*cs+.5)}g.stroke()}
-function buildBorder(){const U=$('borderUI');if(!U)return;U.innerHTML='';const m=repo[active];if(!m)return;const b=m.borderData;if(!b)return;
+function buildBorder(){const U=$('borderUI');if(!U)return;U.innerHTML='';const m=repo[active];if(!m)return;if(!m.borderData)fitBorder(m);const b=m.borderData;
   const n=document.createElement('div');n.style.cssText='color:#9ab;line-height:1.4';n.innerHTML='Border block for <b>'+active+'</b>. It repeats over the black space around the maps and is always impassable. Pick tiles in the palette below, then paint the pattern here. Faded tiles belong to other layers.';U.appendChild(n);
   const wh=document.createElement('div');wh.className='row';U.appendChild(wh);
   rowTo(wh,'Width (1-16)',inp('num',b.width,v=>fitBorder(m,bclamp(v),b.height)));rowTo(wh,'Height (1-16)',inp('num',b.height,v=>fitBorder(m,b.width,bclamp(v))));
@@ -825,7 +840,7 @@ $('copyB').onclick=()=>navigator.clipboard.writeText(out());
 $('gridT').onchange=e=>{showGrid=e.target.checked;redraw()};$('sprT').onchange=e=>{showSpr=e.target.checked;redraw()};
 $('mapSel').onchange=e=>{active=e.target.value;focus(active);refreshAll()};
 $('newMap').onclick=()=>{let n=prompt('New map name:','Route_X');if(!n||repo[n])return;commit(()=>{repo[n]={map:n,bank:0,dimensions:{width:10,height:10,blockSize:8},mapType:'Route',weather:'Normal',isFlyable:true,isRunning:true,
-  music:repo[active]?.music||'',connections:{up:null,down:null,left:null,right:null},events:{},wildData:{morning:[],afternoon:[],night:[],dawn:[]},tileData:[]};fit(repo[n]);active=n});focus(n)};
+  music:repo[active]?.music||'',connections:{up:null,down:null,left:null,right:null},events:{},wildData:{morning:[],afternoon:[],night:[],dawn:[]},tileData:[]};if(repo[active]?.borderData)repo[n].borderData=clone(repo[active].borderData);fit(repo[n]);fitBorder(repo[n]);active=n});focus(n)};
 $('assetBase').value=assetBase;$('assetBase').onchange=e=>{assetBase=e.target.value.trim();try{localStorage.edAssets=assetBase}catch(x){}for(const k in imgs)delete imgs[k];for(const k in sprs)delete sprs[k];buildPalette();redraw()};
 if(window.__missing&&window.__missing.length)setTimeout(()=>{$('status').textContent='Not found (optional unless it is a table): '+window.__missing.join(', ')},100);
 window.addEventListener('resize',redraw);window.addEventListener('beforeunload',e=>{if(unsaved||sDirty){e.preventDefault();e.returnValue=''}});
@@ -1029,6 +1044,56 @@ async function tdOpen(){$('ted').hidden=false;document.body.style.overflow='hidd
   tdSheetSel();tdList();tdForm();tdFit();tdUseSheet(TD.sheet,true);if(!TD.srcText)tdMsg('tiles.js text not found next to this page: use “Load tiles.js…” so unchanged tiles keep your exact text.')}
 function tdClose(){$('ted').hidden=true;document.body.style.overflow='';buildPalette();redraw()}
 $('tilesB').onclick=tdOpen;$('tdClose').onclick=tdClose;new ResizeObserver(()=>{if(!$('ted').hidden)tdFit()}).observe($('tdCvWrap'));
+
+// =====================================================================================================================
+//  COMMIT TO GITHUB: writes the changed files straight into the repo (one commit) through the GitHub API.
+// =====================================================================================================================
+const GH={cfg:{owner:'lkpst',repo:'pokemon-omicron',branch:'',token:'',remember:true,paths:{},msg:''}};
+try{Object.assign(GH.cfg,JSON.parse(localStorage.edGH||'{}'))}catch(e){}
+const ghStore=()=>{try{const c={...GH.cfg};if(!c.remember)c.token='';localStorage.edGH=JSON.stringify(c)}catch(e){}};
+const ghDefaults={'Overworld_map.js':'js/Overworld_map.js','overworld_scripts.js':'js/overworld_scripts.js','tiles.js':'tables/tiles.js'};
+function ghPath(name){if(GH.cfg.paths[name])return GH.cfg.paths[name];let m={};try{m=JSON.parse(localStorage.edPaths||'{}')}catch(e){}
+  const k=Object.keys(m).find(x=>x.toLowerCase()===name.toLowerCase()),p=k&&m[k];if(p&&!/^(https?:|\/|\.\.)/.test(p))return p.replace(/^\.\//,'');return ghDefaults[name]}
+async function ghApi(path,method='GET',body){const c=GH.cfg,r=await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}${path}`,{method,headers:{Authorization:'Bearer '+c.token,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  let j=null;try{j=await r.json()}catch(e){}
+  if(!r.ok){const m=(j&&j.message)||r.statusText;throw new Error(r.status===401?'Token rejected (401). Check the token.':r.status===403||r.status===404?`${m} (${r.status}). The token needs access to ${c.owner}/${c.repo} with “Contents: Read and write”.`:`${m} (${r.status})`)}
+  return j}
+const ghB64=blob=>new Promise(res=>{const f=new FileReader();f.onload=()=>res(String(f.result).split(',')[1]);f.readAsDataURL(blob)});
+function ghItems(){const it=[];
+  it.push({key:'map',name:'Overworld_map.js',on:!!unsaved,note:unsaved?'unsaved changes':'',get:async()=>({text:out()}),done:()=>{unsaved=false;status()}});
+  if(typeof SE!=='undefined'&&SE&&window.OverworldScriptSource!==undefined)it.push({key:'scr',name:'overworld_scripts.js',on:!!sDirty,note:sDirty?'unsaved changes':'',get:async()=>({text:SHEAD+'\nwindow.OverworldScriptSource = String.raw`\n'+seText().replace(/`/g,"'").replace(/\$\{/g,'$ {')+'`;\n'}),done:()=>{sDirty=false;$('seDirty').textContent='✓ committed'}});
+  if(TD.tiles.length){const mod=TD.tiles.some(t=>t.mod);
+    it.push({key:'til',name:'tiles.js',on:mod,note:mod?TD.tiles.filter(t=>t.mod).length+' tile(s) edited':'',get:async()=>({text:tdOut()}),done:()=>{for(const t of TD.tiles)if(t.mod){t.block=tdBlock(t);t.mod=false}tdList();tdForm()}});
+    const seen=new Set();for(const t of TD.tiles)if(t.canvas&&t.mod&&t.d.tileImage&&!seen.has(t.d.tileImage)){seen.add(t.d.tileImage);
+      it.push({key:'img:'+t.d.tileImage,name:t.d.tileImage,fixed:true,on:true,note:'new tile image',get:async()=>({b64:await ghB64(await new Promise(r=>t.canvas.toBlob(r,'image/png')))})})}}
+  for(const x of it){x.path=x.fixed?x.name:ghPath(x.name)||x.name}return it}
+let ghList=[];
+function ghOpen(pre){ghList=ghItems();const c=GH.cfg;$('ghTok').value=c.token||'';$('ghOwn').value=c.owner;$('ghRepo').value=c.repo;$('ghBr').value=c.branch||'';$('ghRem').checked=c.remember!==false;
+  $('ghMsg').value=c.msg||'';$('ghOut').textContent='';$('ghOut').className='help';
+  const L=$('ghFiles');L.innerHTML='';ghList.forEach((x,i)=>{const r=document.createElement('div');r.className='ghf';
+    r.innerHTML=`<label style="flex-direction:row;align-items:center;gap:6px;margin:0"><input type="checkbox" ${(pre?pre.includes(x.key)||x.key.startsWith('img:')&&pre.includes('til'):x.on)?'checked':''} data-i="${i}"> <b>${tdE(x.name)}</b></label><input type="text" value="${tdE(x.path)}" data-p="${i}" ${x.fixed?'readonly':''} title="path inside the repository"><small>${tdE(x.note)}</small>`;L.appendChild(r)});
+  $('ghm').hidden=false}
+$('ghGo').onclick=async()=>{const c=GH.cfg;c.token=$('ghTok').value.trim();c.owner=$('ghOwn').value.trim();c.repo=$('ghRepo').value.trim();c.branch=$('ghBr').value.trim();c.remember=$('ghRem').checked;c.msg=$('ghMsg').value;
+  const picked=[...document.querySelectorAll('#ghFiles input[data-i]')].filter(i=>i.checked).map(i=>ghList[+i.dataset.i]);
+  picked.forEach(x=>{const i=ghList.indexOf(x),p=document.querySelector(`#ghFiles input[data-p="${i}"]`).value.trim().replace(/^\/+/,'');x.path=p;if(!x.fixed)c.paths[x.name]=p});ghStore();
+  const o=$('ghOut'),say=(t,cls)=>{o.textContent=t;o.className='help '+(cls||'')};
+  if(!c.token||!c.owner||!c.repo)return say('Fill in the token, owner and repository.','bad');if(!picked.length)return say('Tick at least one file.','bad');
+  const msg=c.msg.trim()||('Update '+picked.map(x=>x.name.split('/').pop()).slice(0,3).join(', ')+(picked.length>3?' …':'')+' (editor)');
+  $('ghGo').disabled=true;
+  try{say('Checking the repository…');const info=await ghApi('');const br=c.branch||info.default_branch;
+    say('Reading branch '+br+'…');const ref=await ghApi('/git/ref/heads/'+encodeURIComponent(br)),parent=ref.object.sha,pc=await ghApi('/git/commits/'+parent);
+    const tree=[];let n=0;for(const x of picked){say(`Uploading ${++n}/${picked.length}: ${x.path}`);const f=await x.get();
+      const b=await ghApi('/git/blobs','POST',f.b64?{content:f.b64,encoding:'base64'}:{content:f.text,encoding:'utf-8'});tree.push({path:x.path,mode:'100644',type:'blob',sha:b.sha})}
+    say('Building the commit…');const nt=await ghApi('/git/trees','POST',{base_tree:pc.tree.sha,tree});
+    if(nt.sha===pc.tree.sha){say('Nothing to commit: the repository already has these exact files.','ok');$('ghGo').disabled=false;return}
+    const cm=await ghApi('/git/commits','POST',{message:msg,tree:nt.sha,parents:[parent]});
+    await ghApi('/git/refs/heads/'+encodeURIComponent(br),'PATCH',{sha:cm.sha});
+    picked.forEach(x=>x.done&&x.done());c.msg='';ghStore();
+    o.className='help ok';o.innerHTML=`✓ Committed ${picked.length} file(s) to <b>${tdE(br)}</b>: <a href="https://github.com/${tdE(c.owner)}/${tdE(c.repo)}/commit/${cm.sha}" target="_blank" style="color:#76ff03">${cm.sha.slice(0,7)}</a>. GitHub Pages updates in a minute or two.`;
+    try{tdMsg('Committed to GitHub: '+cm.sha.slice(0,7))}catch(e){}
+  }catch(e){say('Could not commit: '+e.message,'bad')}
+  $('ghGo').disabled=false};
+$('ghCancel').onclick=()=>{$('ghm').hidden=true};$('ghBtn').onclick=()=>ghOpen();$('tdCommit').onclick=()=>ghOpen(['til']);
 
 seInit();load();buildPalette();setLayer(1);changed();setTab('env');
 });
