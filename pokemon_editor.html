@@ -158,6 +158,7 @@ button.dirty{outline:2px solid #ffd166}
       <input type="text" id="spQ" placeholder="search name, key or number">
       <select id="spT"><option value="">any type</option></select>
       <label class="in" style="margin-bottom:6px"><input type="checkbox" id="spPh"> only entries with no base stats yet</label>
+      <select id="spA"><option value="">any sprites</option><option value="either">missing battle sprite or icon</option><option value="battle">missing battle sprite</option><option value="icon">missing icon</option><option value="both">missing both</option><option value="cry">missing cry</option></select>
       <div class="edrows" id="spRows"></div>
       <div class="hint" id="spCount" style="margin:6px 0 0"></div>
       <div class="row" style="margin:8px 0 0"><input type="text" id="spNew" placeholder="SPECIES_NEW_KEY" style="flex:1;min-width:0"><button id="spAdd">New</button></div>
@@ -583,6 +584,7 @@ function spMatches(k,e,q,t,ph){
   if(k==='SPECIES_NONE')return false;
   if(t&&e.type1!==t&&e.type2!==t)return false;
   if(ph&&(e.baseHP||e.baseAttack||e.baseSpeed))return false;
+  if(window.PMA&&!window.PMA.ok(k,e))return false;
   if(!q)return true;const s=(k+' '+(e.name||'')+' '+dexOf(e)).toLowerCase();return q.split(/\s+/).every(w=>s.includes(w))}
 function renderSpList(){
   const box=$('spRows');box.innerHTML='';if(!ED.db){$('spCount').textContent='';return}
@@ -821,6 +823,7 @@ window.ED=ED;window.edDirty=dirty;
 })();
 {const t=(location.hash||'').replace('#','');showTab(['pokemon','moves','ow'].includes(t)?t:'sprites')}
 refreshLists();renderStats();
+window.PMFiles=files;window.PMImgs=IMGS;window.renderSpList=renderSpList;
 })();
 
 </script>
@@ -1109,4 +1112,144 @@ document.querySelectorAll('.tabs button:not([data-tab="ow"])').forEach(b=>b.addE
 if((location.hash||'')==='#ow')tabBtn.click();
 offUI();
 })();
-</script></body></html>
+</script><script>
+// =====================================================================================================================
+//  ASSETS TAB: cry renamer + "what is missing" finder (battle sprite / icon / cry), capture only the missing files
+//  (uses $, msg, dl, buildZip, PMFiles, PMImgs from the other scripts and window.ED)
+// =====================================================================================================================
+(()=>{
+'use strict';
+const E=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const bn=p=>String(p||'').split('/').pop(),stemOf=n=>bn(n).replace(/\.[a-z0-9]+$/i,''),extOf=n=>{const m=/\.([a-z0-9]+)$/i.exec(n);return m?m[1].toLowerCase():''};
+const AUD=/\.(wav|ogg|mp3|m4a|flac)$/i,IMG=/\.(png|gif|webp|bmp)$/i;
+const norm=s=>String(s).replace(/\.[a-z0-9]+$/i,'').replace(/^g(?:Cry|IconSprite|(?:Front|Back)?(?:Shiny)?Sprite)/i,'').replace(/^[\s_\-.]*\d+[\s_\-.]*/,'').replace(/[^a-z0-9]/gi,'').toLowerCase();
+const DIR={battle:'graphics/pokemon_battle_sprites/battle/',icon:'graphics/pokemon_battle_sprites/icons/',cry:'audio/cries/'};
+const KL={battle:'battle sprite',icon:'icon sprite',cry:'cry'};
+const species=()=>{const db=window.ED&&window.ED.db;return db?Object.entries(db).filter(([k,e])=>k!=='SPECIES_NONE'&&k!=='SPECIES_'&&e&&e.name).map(([k,e])=>({k,e})):[]};
+const pathOf=(kind,s)=>kind==='battle'?(s.e.battleSprite||''):kind==='icon'?(s.e.iconSprite||''):(s.e.cry||(DIR.cry+'gCry'+s.e.name+'.wav'));
+const have=(kind,s)=>{const p=pathOf(kind,s);if(!p)return false;if(PMFiles.has(bn(p).toLowerCase()))return true;return kind!=='cry'&&PMImgs.has(s.k+'|'+kind)};
+const dexId=s=>{const m=/gSprite(\d+)/.exec(s.e.battleSprite||'');return m?+m[1]:0};
+function index(){const bk=new Map(),bnm=new Map(),add=(m,k,s)=>{if(!k)return;if(!m.has(k))m.set(k,[]);m.get(k).push(s)};
+  for(const s of species()){add(bk,norm(s.k.replace(/^SPECIES_/,'')),s);add(bnm,norm(s.e.name),s)}return{bk,bnm}}
+function find(name,ix){const st=stemOf(name),tries=[norm(name)];if(/_\d+$/.test(st))tries.push(norm(st.replace(/_\d+$/,'')));
+  for(const t of tries)for(const m of[ix.bk,ix.bnm]){const l=m.get(t);if(l&&l.length===1)return{s:l[0]};if(l&&l.length>1)return{amb:l}}return null}
+const swapExt=(path,ext)=>path.replace(/\.[a-z0-9]+$/i,'')+'.'+ext;
+
+// ---- the tab
+const tabs=document.querySelector('.tabs'),btn=document.createElement('button');btn.dataset.tab='assets';btn.textContent='Assets (cries / missing)';tabs.appendChild(btn);
+const tab=document.createElement('div');tab.id='tab-assets';tab.hidden=true;
+tab.innerHTML=`
+<div class="owbox"><h3>0 · Is the project folder loaded?</h3>
+  <div class="hint" id="asSt" style="margin:0"></div>
+  <div class="hint">Use <b>Choose project folder</b> at the top (the whole repo). Only file names are read. Without it every file counts as missing. <code>PokemonDatabase.js</code> must be loaded as well.</div></div>
+
+<div class="owbox"><h3>1 · Cry renamer</h3>
+  <div class="hint">Choose the folder with your cries. File names only need to contain the Pokémon name or key, e.g. <code>Bulbasaur.wav</code>, <code>001 Bulbasaur.ogg</code>, <code>BULBASAUR_1.wav</code>. Each match is renamed to <code>gCry&lt;Name&gt;.wav</code> using the name in PokemonDatabase. The audio is not converted: a non-wav file keeps its own extension.</div>
+  <div class="row"><button class="pri" id="asCrD">Choose cry folder</button><button id="asCrF">Choose files</button><button id="asCrC">Clear</button>
+    <label class="in"><input type="checkbox" id="asCrOnly"> only cries missing from the project</label>
+    <input type="file" id="asCrDi" webkitdirectory multiple hidden><input type="file" id="asCrFi" accept="audio/*" multiple hidden></div>
+  <div class="stats" id="asCrSt"></div>
+  <div class="row"><button class="ok" id="asCrZip" disabled>Download renamed cries (ZIP)</button></div>
+  <div class="tw" style="max-height:300px;overflow:auto"><table><thead><tr><th>Your file</th><th>New name</th><th>Status</th></tr></thead><tbody id="asCrTb"></tbody></table></div></div>
+
+<div class="owbox"><h3>2 · Missing sprites, icons and cries</h3>
+  <div class="row">
+    <label class="in"><input type="checkbox" id="asFB" checked> no battle sprite</label>
+    <label class="in"><input type="checkbox" id="asFI" checked> no icon</label>
+    <label class="in"><input type="checkbox" id="asFC"> no cry</label>
+    <input type="text" id="asQ" placeholder="search" style="width:140px"><button id="asScan">Refresh</button><button id="asCsv">Download list (CSV)</button></div>
+  <div class="stats" id="asMsSt"></div>
+  <div class="tw" style="max-height:300px;overflow:auto"><table><thead><tr><th>#</th><th>Pokémon</th><th>Battle</th><th>Icon</th><th>Cry</th></tr></thead><tbody id="asMsTb"></tbody></table></div></div>
+
+<div class="owbox"><h3>3 · Upload a folder, capture only what is missing</h3>
+  <div class="hint">Choose a folder with any mix of battle sheets (<code>gSprite…</code>), icon sheets (<code>gIconSprite…</code>) and cries (wav/ogg…). Files are matched to Pokémon by name and kept only when the project is missing that file. Cries are renamed as above. Files with no prefix and no <code>battle</code>/<code>icons</code> folder are treated as:
+    <select id="asDef"><option value="battle">battle sprites</option><option value="icon">icons</option></select></div>
+  <div class="row"><button class="pri" id="asUpD">Choose folder</button><button id="asUpC">Clear</button><input type="file" id="asUpDi" webkitdirectory multiple hidden></div>
+  <div class="stats" id="asUpSt"></div>
+  <div class="row"><button class="ok" id="asUpZip" disabled>Download only the missing files (ZIP)</button></div>
+  <div class="hint">The ZIP keeps the project paths (<code>graphics/pokemon_battle_sprites/battle/…</code>, <code>audio/cries/…</code>): unzip it on top of the repo.</div>
+  <div class="tw" style="max-height:300px;overflow:auto"><table><thead><tr><th>Your file</th><th>Goes to</th><th>Status</th></tr></thead><tbody id="asUpTb"></tbody></table></div></div>`;
+document.getElementById('tab-ow').after(tab);
+const g=id=>document.getElementById(id);
+function show(){for(const id of['sprites','pokemon','moves','ow'])g('tab-'+id).hidden=true;tab.hidden=false;g('edcommon').hidden=false;
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b===btn));try{location.hash='assets'}catch(e){}refresh()}
+btn.onclick=show;
+document.querySelectorAll('.tabs button').forEach(b=>{if(b!==btn)b.addEventListener('click',()=>{tab.hidden=true})});
+
+// ---- 1 cry renamer
+let cr=[];
+function crBuild(list){const ix=index(),only=g('asCrOnly').checked,seen=new Set();cr=[];
+  for(const f of[...list].filter(f=>AUD.test(f.name))){
+    const r=find(f.name,ix),it={f,s:null,nn:'',st:''};
+    if(!r)it.st='no Pokémon with that name';
+    else if(r.amb)it.st='ambiguous: '+r.amb.map(x=>x.e.name).join(' / ');
+    else{it.s=r.s;it.nn=swapExt(bn(pathOf('cry',r.s)),extOf(f.name));
+      if(only&&have('cry',r.s))it.st='skipped, already in the project',it.skip=true;
+      else if(seen.has(r.s.k))it.st='duplicate (another file already uses '+it.nn+')',it.skip=true;
+      else{seen.add(r.s.k);it.st='ok';it.ok=true}}
+    cr.push(it)}
+  crShow()}
+function crShow(){const ok=cr.filter(x=>x.ok).length;
+  g('asCrSt').textContent=cr.length?`${cr.length} audio files · ${ok} will be renamed · ${cr.filter(x=>x.skip).length} skipped · ${cr.filter(x=>!x.ok&&!x.skip).length} not matched`:'No cries loaded.';
+  g('asCrTb').innerHTML=cr.slice(0,600).map(x=>`<tr><td>${E(x.f.name)}</td><td>${E(x.nn)}</td><td style="color:${x.ok?'#6fe3a0':x.skip?'#ffd166':'#ff8a8a'}">${E(x.st)}</td></tr>`).join('');
+  g('asCrZip').disabled=!ok}
+g('asCrD').onclick=()=>g('asCrDi').click();g('asCrF').onclick=()=>g('asCrFi').click();
+for(const id of['asCrDi','asCrFi'])g(id).onchange=e=>{const l=[...e.target.files];e.target.value='';crBuild(l);crLast=l};
+let crLast=[];g('asCrOnly').onchange=()=>crLast.length&&crBuild(crLast);
+g('asCrC').onclick=()=>{cr=[];crLast=[];crShow()};
+g('asCrZip').onclick=async()=>{const l=cr.filter(x=>x.ok).map(x=>({name:x.nn,blob:x.f}));if(!l.length)return;msg('Packing…');dl(await buildZip(l),'renamed_cries.zip');msg(l.length+' cries downloaded.')};
+
+// ---- 2 missing list
+function missing(){const f={battle:g('asFB').checked,icon:g('asFI').checked,cry:g('asFC').checked},q=g('asQ').value.trim().toLowerCase();
+  const out=[];for(const s of species()){const m={battle:!have('battle',s),icon:!have('icon',s),cry:!have('cry',s)};
+    if(!(f.battle&&m.battle||f.icon&&m.icon||f.cry&&m.cry))continue;
+    if(q&&!(s.k+' '+s.e.name+' '+dexId(s)).toLowerCase().includes(q))continue;out.push({s,m})}
+  out.sort((a,b)=>dexId(a.s)-dexId(b.s)||a.s.k.localeCompare(b.s.k));return out}
+const mark=(miss,s,kind)=>miss?'<span style="color:#ff8a8a">missing</span>':'<span style="color:#6fe3a0">ok</span>';
+function msShow(){const all=species(),out=missing();
+  g('asSt').textContent=!window.ED||!window.ED.db?'PokemonDatabase.js is not loaded.':PMFiles.size?`${PMFiles.size} files from the project folder, ${all.length} species.`:'No project folder loaded yet: everything will show as missing.';
+  const c=k=>all.filter(s=>!have(k,s)).length;
+  g('asMsSt').textContent=`${all.length} species · no battle sprite: ${c('battle')} · no icon: ${c('icon')} · no cry: ${c('cry')} · showing ${out.length}`;
+  g('asMsTb').innerHTML=out.slice(0,500).map(({s,m})=>`<tr><td>${dexId(s)||'—'}</td><td>${E(s.e.name)}</td><td>${mark(m.battle)}</td><td>${mark(m.icon)}</td><td>${mark(m.cry)}</td></tr>`).join('')+(out.length>500?`<tr><td colspan="5" class="hint">first 500 shown, narrow the search</td></tr>`:'')}
+for(const id of['asFB','asFI','asFC','asQ'])g(id).addEventListener('input',msShow);g('asScan').onclick=()=>{msShow();window.renderSpList&&0};
+g('asCsv').onclick=()=>{const rows=[['dex','key','name','battle','icon','cry']];for(const{s,m}of missing())rows.push([dexId(s),s.k,s.e.name,m.battle?'missing':'ok',m.icon?'missing':'ok',m.cry?'missing':'ok']);
+  dl(new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}),'missing_assets.csv')};
+
+// ---- 3 capture only missing
+let up=[];
+function upBuild(list){const ix=index(),seen=new Set();up=[];
+  for(const f of list){const isA=AUD.test(f.name),isI=IMG.test(f.name);if(!isA&&!isI)continue;
+    const rel=(f.webkitRelativePath||'').toLowerCase(),nm=f.name;
+    let kind=isA?'cry':/^gIconSprite/i.test(nm)?'icon':/^g(?:Front|Back)?(?:Shiny)?Sprite/i.test(nm)?'battle':/\/icons?\//.test(rel)?'icon':/\/battle\//.test(rel)?'battle':g('asDef').value;
+    const it={f,kind,dest:'',st:''},r=find(nm,ix);up.push(it);
+    if(!r){it.st='no Pokémon with that name';continue}if(r.amb){it.st='ambiguous: '+r.amb.map(x=>x.e.name).join(' / ');continue}
+    const s=r.s;it.s=s;
+    if(have(kind,s)){it.st='already in the project';it.skip=true;continue}
+    let p=pathOf(kind,s);
+    if(kind==='cry')p=swapExt(p,extOf(nm));
+    else if(!p){if(/^g(?:Icon)?Sprite/i.test(nm))p=DIR[kind]+nm;else{it.st='this Pokémon has no sprite path set in the database';continue}}
+    const key=s.k+'|'+kind;if(seen.has(key)){it.st='duplicate';it.skip=true;continue}
+    seen.add(key);it.dest=p;it.st='missing → will be captured';it.ok=true}
+  upShow()}
+function upShow(){const ok=up.filter(x=>x.ok).length;
+  g('asUpSt').textContent=up.length?`${up.length} files · ${ok} captured (missing in project) · ${up.filter(x=>x.skip).length} skipped · ${up.filter(x=>!x.ok&&!x.skip).length} not matched`:'No folder loaded.';
+  g('asUpTb').innerHTML=up.slice(0,600).map(x=>`<tr><td>${E(x.f.name)}</td><td>${E(x.dest)}</td><td style="color:${x.ok?'#6fe3a0':x.skip?'#ffd166':'#ff8a8a'}">${E(x.st)} <small>(${KL[x.kind]})</small></td></tr>`).join('');
+  g('asUpZip').disabled=!ok}
+g('asUpD').onclick=()=>g('asUpDi').click();
+g('asUpDi').onchange=e=>{const l=[...e.target.files];e.target.value='';upLast=l;upBuild(l)};let upLast=[];
+g('asDef').onchange=()=>upLast.length&&upBuild(upLast);
+g('asUpC').onclick=()=>{up=[];upLast=[];upShow()};
+g('asUpZip').onclick=async()=>{const l=up.filter(x=>x.ok).map(x=>({name:x.dest,blob:x.f}));if(!l.length)return;msg('Packing…');dl(await buildZip(l),'missing_assets.zip');msg(l.length+' files downloaded.')};
+
+function refresh(){msShow();crLast.length&&crBuild(crLast);upLast.length&&upBuild(upLast)}
+
+// ---- filter in the Pokémon tab list: no sprites / no icons
+const sel=g('spA');
+window.PMA={ok(k,e){const v=sel&&sel.value;if(!v)return true;const s={k,e};
+  if(v==='battle')return!have('battle',s);if(v==='icon')return!have('icon',s);if(v==='either')return!have('battle',s)||!have('icon',s);if(v==='both')return!have('battle',s)&&!have('icon',s);if(v==='cry')return!have('cry',s);return true}};
+if(sel)sel.addEventListener('input',()=>{window.renderSpList&&renderSpList()});
+document.getElementById('edfFolder').addEventListener('change',()=>setTimeout(()=>{if(!tab.hidden)refresh();if(sel&&sel.value)renderSpList()},700));
+if((location.hash||'')==='#assets')setTimeout(show,150);
+})();
+</script>
+</body></html>
