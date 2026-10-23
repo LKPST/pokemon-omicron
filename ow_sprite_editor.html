@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Overworld Sprite Editor</title>
+<style>
+:root{--bg:#10131b;--p:#171c28;--p2:#1e2433;--line:#2c3448;--fg:#e6e9f2;--mut:#8a93a6;--acc:#5aa0ff;--ok:#4fd18b;--bad:#ff7b7b}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:13px/1.35 system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+button,select,input,textarea{font:inherit;color:var(--fg);background:var(--p2);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}button.pri{background:#274a7d;border-color:#3b6fb5}button.ok{background:#1f5a3d;border-color:#2f8a5d}button.on{background:#274a7d;border-color:var(--acc)}
+button.sm{padding:2px 6px}input[type=number]{width:64px}input[type=text]{min-width:0}input[type=color]{padding:0;width:34px;height:26px}
+input[type=range]{padding:0;vertical-align:middle}
+header{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 10px;background:var(--p);border-bottom:1px solid var(--line)}
+header h1{font-size:15px;margin:0 8px 0 0}header .sp{flex:1}
+#st{color:var(--mut);font-size:12px;max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{flex:1;display:grid;grid-template-columns:270px 1fr 300px;min-height:0}
+aside{background:var(--p);overflow:auto;padding:8px;min-height:0}
+aside.l{border-right:1px solid var(--line)}aside.r{border-left:1px solid var(--line)}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:12px 0 6px}h3:first-child{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:4px 0}
+.row label{color:var(--mut);font-size:12px}
+.row.f label{width:74px}.row.f input[type=text],.row.f select{flex:1}
+.list{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px}
+.it{padding:4px 8px;cursor:pointer;display:flex;justify-content:space-between;gap:6px;border-bottom:1px solid var(--line)}
+.it:last-child{border:0}.it.sel{background:#274a7d}.it small{color:var(--mut)}.it .w{color:var(--bad)}
+#cv{flex:1;min-width:0;position:relative;background:#0b0d13}
+#cv canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#hud{position:absolute;left:8px;bottom:6px;background:#000a;padding:2px 8px;border-radius:5px;color:#cfd6ea;font-size:12px;pointer-events:none}
+.tools{display:flex;flex-wrap:wrap;gap:4px}.tools button{min-width:36px}
+#sw{display:flex;flex-wrap:wrap;gap:3px;max-height:180px;overflow:auto;margin-top:4px}
+#sw div{width:22px;height:22px;border:1px solid #000;border-radius:3px;cursor:pointer;position:relative}
+#sw div:hover{outline:2px solid var(--acc)}
+.hint{color:var(--mut);font-size:12px}
+dialog{background:var(--p);color:var(--fg);border:1px solid var(--line);border-radius:10px;max-width:520px}
+dialog::backdrop{background:#000a}
+#prev{background:repeating-conic-gradient(#2a2f40 0 25%,#222735 0 50%) 0 0/16px 16px;border:1px solid var(--line);border-radius:6px;image-rendering:pixelated}
+.warn{color:var(--bad);font-size:12px;margin:4px 0}
+@media(max-width:1000px){main{grid-template-columns:230px 1fr 250px}}
+</style></head><body>
+<header>
+  <h1>Overworld Sprite Editor</h1>
+  <button class="pri" id="bSheet">Import sprite sheet</button>
+  <button id="bBlank">New blank sheet</button>
+  <button id="bPngs">Import PNGs as NPCs</button>
+  <button id="bTable">Load ow_table.js</button>
+  <button id="bMan">Load manifest</button>
+  <span class="sp"></span><span id="st"></span>
+  <button id="bUndo" title="Ctrl+Z">Undo</button><button id="bRedo" title="Ctrl+Y">Redo</button>
+  <button class="ok" id="bZip">Download ZIP</button>
+  <input type="file" id="fSheet" accept="image/*" hidden><input type="file" id="fPngs" accept="image/png" multiple hidden>
+  <input type="file" id="fTable" accept=".js,.txt" hidden><input type="file" id="fMan" accept=".json" hidden><input type="file" id="fPal" accept=".pal,.png,.gif,image/*,.txt" hidden>
+</header>
+<main>
+<aside class="l">
+  <h3>NPCs / trainers</h3>
+  <div class="list" id="list"></div>
+  <div class="row"><button id="eAdd">+ New</button><button id="eDup">Duplicate</button><button id="eDel">Delete</button><button id="eBulk">Bulk add…</button></div>
+  <div class="warn" id="warns"></div>
+  <h3>Selected</h3>
+  <div id="form"></div>
+</aside>
+<div id="cv"><canvas id="c"></canvas><div id="hud"></div></div>
+<aside class="r">
+  <h3>Tools</h3>
+  <div class="tools" id="tools"></div>
+  <div class="row"><label>Brush</label><input type="range" id="brush" min="1" max="6" value="1"><span id="brushV">1</span>
+    <label>Colour</label><input type="color" id="col" value="#ff0000"><input type="text" id="colA" value="255" style="width:46px" title="alpha 0-255"></div>
+  <div class="row"><label>Scope</label><select id="scope"><option value="npc">selected NPC</option><option value="frame">current frame</option><option value="sheet">whole sheet</option></select>
+    <label>View bg</label><select id="bgm"><option value="chk">checker</option><option value="#101010">dark</option><option value="#d0d0d0">light</option><option value="#ff00ff">magenta</option></select>
+    <label><input type="checkbox" id="gridOn" checked> grid</label></div>
+  <h3>Palette grabber</h3>
+  <div class="row"><button id="pGrab" class="pri">Grab palette (scope)</button><button id="pSave">Export .pal</button><button id="pLoad">Import palette…</button><button id="pMap">Remap to imported</button></div>
+  <div class="hint" id="pInfo">Click a swatch to pick it. Change its colour box to swap that colour everywhere in the scope.</div>
+  <div id="sw"></div>
+  <h3>Colour swapper</h3>
+  <div class="row"><label>From</label><input type="color" id="swFrom" value="#00ff00"><button class="sm" id="swPick">pick</button>
+    <label>To</label><input type="color" id="swTo" value="#ff0000"><button class="sm" id="swPickT">pick</button></div>
+  <div class="row"><label>Tolerance</label><input type="range" id="swTol" min="0" max="120" value="0"><span id="swTolV">0</span>
+    <button id="swGo" class="pri">Swap</button><button id="swKey">Make transparent</button></div>
+  <h3>Filters (scope)</h3>
+  <div class="row"><label>Hue</label><input type="range" id="fH" min="-180" max="180" value="0"><span id="fHv">0</span></div>
+  <div class="row"><label>Saturation</label><input type="range" id="fS" min="-100" max="100" value="0"><span id="fSv">0</span></div>
+  <div class="row"><label>Brightness</label><input type="range" id="fB" min="-100" max="100" value="0"><span id="fBv">0</span></div>
+  <div class="row"><label>Contrast</label><input type="range" id="fC" min="-100" max="100" value="0"><span id="fCv">0</span></div>
+  <div class="row"><button id="fApply" class="pri">Apply HSL</button><button id="fReset" class="sm">reset sliders</button>
+    <label><input type="checkbox" id="fLim"> only colours near “From”</label></div>
+  <div class="row"><button id="fGray">Grayscale</button><button id="fInv">Invert</button><button id="fSepia">Sepia</button>
+    <label>levels</label><input type="number" id="fPL" value="4" min="2" max="32"><button id="fPost">Posterize</button></div>
+  <div class="row"><button id="fOut">Outline (colour)</button><button id="fFlipH">Flip H</button><button id="fFlipV">Flip V</button>
+    <button id="sL">◀</button><button id="sR">▶</button><button id="sU">▲</button><button id="sD">▼</button><span class="hint">shift pixels</span></div>
+  <div class="row"><label>Mirror frame</label><input type="number" id="mSrc" value="1" min="0"><span>→</span><input type="number" id="mDst" value="2" min="0"><button id="mGo">Copy flipped</button></div>
+  <h3>Animation preview</h3>
+  <canvas id="prev" width="128" height="160"></canvas>
+  <div class="row"><button class="sm" data-d="up">▲</button><button class="sm" data-d="down">▼</button><button class="sm" data-d="left">◀</button><button class="sm" data-d="right">▶</button>
+    <button class="sm on" id="pvPlay">play</button><label>zoom</label><select id="pvZ"><option>2</option><option selected>3</option><option>4</option></select></div>
+</aside>
+</main>
+
+<dialog id="dBulk"><h3 style="margin-top:0">Bulk add NPCs from the sheet</h3>
+  <div class="hint">Creates a block of equally sized NPCs laid out in a grid on the sheet (each NPC is cols × rows frames).</div>
+  <div class="row f"><label>Name prefix</label><input type="text" id="bkName" value="Trainer"></div>
+  <div class="row f"><label>Start x,y</label><input type="number" id="bkX" value="0"><input type="number" id="bkY" value="0"></div>
+  <div class="row f"><label>Frame size</label><input type="number" id="bkW" value="32"><span>×</span><input type="number" id="bkH" value="48"></div>
+  <div class="row f"><label>Cols × rows</label><input type="number" id="bkC" value="4"><span>×</span><input type="number" id="bkR" value="4"> <span class="hint">frames per NPC</span></div>
+  <div class="row f"><label>NPCs across</label><input type="number" id="bkA" value="4"><label style="width:auto">total</label><input type="number" id="bkN" value="8"></div>
+  <div class="row"><button class="pri" id="bkGo">Create</button><button id="bkX2">Cancel</button></div>
+</dialog>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const status=t=>{$('st').textContent=t;$('st').title=t};
+const FIELD_ORDER=['spriteID','frames','genderBased','owType','owDimension','trueDimension','isRunning','isFishing','isSurfing','isCycling','owSprite','shinySprite'];
+const FLAGS=['genderBased','isRunning','isFishing','isSurfing','isCycling'];
+const DEFAULT_SUFFIX=`
+
+// Helper utility to get frame indices based on direction and animation step
+window.getOverworldFrame = function(direction, step = 0) {
+  // direction: 'down', 'left', 'right', 'up'
+  // step: 0 (standing), 1 (walk step 1), 2 (walk step 2)
+
+  const rowMap = {
+    'down': 0,  // Row 0
+    'left': 1,  // Row 1
+    'right': 2, // Row 2
+    'up': 3     // Row 3
+  };
+
+  const row = rowMap[direction] !== undefined ? rowMap[direction] : 0;
+  let col = 0;
+
+  // Custom column mapping based on your exact sequence rules
+  if (direction === 'up') {
+    // Up uses walking right/left frames from columns 1 and 3
+    if (step === 1) col = 1; // walking right frame
+    else if (step === 2) col = 3; // walking left frame
+    else col = 0; // standing
+  } else if (direction === 'right') {
+    // Right uses columns 1 and 2/3 for proper right/left stepping
+    if (step === 1) col = 1;
+    else if (step === 2) col = 2;
+    else col = 0;
+  } else {
+    // Standard sequence for Down and Left
+    if (step === 1) col = 1; // walking right 1
+    else if (step === 2) col = 3; // walking left 1
+    else col = 0; // standing
+  }
+
+  // 4 columns total per row
+  return (row * 4) + col;
+};
+`;
+// ---------------------------------------------------------------- state
+const S={sheet:null,sx:null,W:0,H:0,sheetName:'trainers_sheet.png',entries:[],sel:-1,frame:0,tool:'pencil',
+  z:4,ox:20,oy:20,undo:[],redo:[],tablePrefix:'',tableSuffix:DEFAULT_SUFFIX,tableLoaded:false,pal:null,imported:null,dirty:true};
+function newSheet(w,h,keep){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});
+  if(keep&&S.sheet)x.drawImage(S.sheet,0,0);S.sheet=c;S.sx=x;S.W=w;S.H=h;S.undo=[];S.redo=[];redraw()}
+// ---------------------------------------------------------------- entries
+const parseDim=s=>{const m=/^\s*(\d+)\s*[x×]\s*(\d+)\s*$/i.exec(String(s||''));return m?[+m[1],+m[2]]:null};
+const slug=n=>String(n).trim().replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').toLowerCase()||'sprite';
+function mkEntry(name,f,rect,cols,rows){const e={name,fields:Object.assign({spriteID:slug(name)+'_ow',frames:12,genderBased:false,owType:'NPC',owDimension:'16x32',trueDimension:'32x48',
+  isRunning:false,isFishing:false,isSurfing:false,isCycling:false,owSprite:'graphics/overworld/'+slug(name)+'.png'},f||{}),rect:rect||null,cols:cols||4,rows:rows||4};return e}
+const cell=e=>parseDim(e.fields.trueDimension)||[32,48];
+const cur=()=>S.entries[S.sel]||null;
+function rectOf(e){if(!e.rect)return null;const[cw,ch]=cell(e);return{x:e.rect.x,y:e.rect.y,w:e.cols*cw,h:e.rows*ch,cw,ch}}
+function scopeRect(){const sc=$('scope').value,e=cur();
+  if(sc==='sheet'||!e||!rectOf(e))return{x:0,y:0,w:S.W,h:S.H,cw:S.W,ch:S.H,frames:[{x:0,y:0,w:S.W,h:S.H}]};
+  const r=rectOf(e);const fr=(i)=>({x:r.x+(i%e.cols)*r.cw,y:r.y+Math.floor(i/e.cols)*r.ch,w:r.cw,h:r.ch});
+  if(sc==='frame'){const f=fr(Math.min(S.frame,e.cols*e.rows-1));return{...f,cw:f.w,ch:f.h,frames:[f]}}
+  const all=[];for(let i=0;i<e.cols*e.rows;i++)all.push(fr(i));return{...r,frames:all}}
+function renderList(){const l=$('list');l.innerHTML='';
+  S.entries.forEach((e,i)=>{const d=document.createElement('div');d.className='it'+(i===S.sel?' sel':'');
+    d.innerHTML=`<span>${esc(e.name)} <small>${esc(e.fields.owType||'')}</small></span>${e.rect?`<small>${e.cols}×${e.rows}</small>`:'<small class="w" title="no region on the sheet yet">⚠ unplaced</small>'}`;
+    d.onclick=()=>{S.sel=i;S.frame=0;renderList();renderForm();redraw()};l.append(d)});
+  const w=[];const ids={};for(const e of S.entries){const id=e.fields.spriteID;ids[id]=(ids[id]||0)+1}
+  for(const id in ids)if(ids[id]>1)w.push('Duplicate spriteID: '+id);
+  const paths={};for(const e of S.entries){const p=e.fields.owSprite;if(e.rect){paths[p]=(paths[p]||0)+1}}for(const p in paths)if(paths[p]>1)w.push('Same PNG path used twice: '+p);
+  for(const e of S.entries){const r=rectOf(e);if(r&&(r.x+r.w>S.W||r.y+r.h>S.H))w.push(e.name+': region goes past the sheet edge')}
+  $('warns').innerHTML=w.map(esc).join('<br>')}
+function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="hint">Pick or create an NPC.</div>';return}
+  const F=e.fields,[cw,ch]=cell(e),r=e.rect||{x:'',y:''};
+  f.innerHTML=`
+  <div class="row f"><label>Name</label><input type="text" id="fn" value="${esc(e.name)}"></div>
+  <div class="row f"><label>spriteID</label><input type="text" id="fid" value="${esc(F.spriteID)}"></div>
+  <div class="row f"><label>owType</label><input type="text" id="fty" list="tyl" value="${esc(F.owType)}"><datalist id="tyl"><option>NPC<option>Pokemon<option>Building<option>Trainer</datalist></div>
+  <div class="row f"><label>owSprite</label><input type="text" id="fsp" value="${esc(F.owSprite)}"></div>
+  <div class="row f"><label>shinySprite</label><input type="text" id="fsh" value="${esc(F.shinySprite||'')}" placeholder="(optional)"></div>
+  <div class="row f"><label>owDimension</label><input type="text" id="fod" value="${esc(F.owDimension)}" style="width:80px"><span class="hint">collision box</span></div>
+  <div class="row f"><label>Frame size</label><input type="number" id="fcw" value="${cw}"><span>×</span><input type="number" id="fch" value="${ch}"><span class="hint">= trueDimension</span></div>
+  <div class="row f"><label>Cols × rows</label><input type="number" id="fco" value="${e.cols}" min="1"><span>×</span><input type="number" id="fro" value="${e.rows}" min="1"></div>
+  <div class="row f"><label>frames</label><input type="number" id="ffr" value="${F.frames}" min="1"><button class="sm" id="ffrA">= cols×rows</button></div>
+  <div class="row f"><label>Sheet x,y</label><input type="number" id="fx" value="${r.x}"><input type="number" id="fy" value="${r.y}"><button class="sm" id="fdraw" title="then drag on the sheet">draw region</button></div>
+  <div class="row">${FLAGS.map(k=>`<label><input type="checkbox" data-fl="${k}" ${F[k]?'checked':''}> ${k}</label>`).join('')}</div>`;
+  const nm=$('fn');nm.oninput=()=>{const old=slug(e.name);e.name=nm.value;if(F.spriteID===old+'_ow')F.spriteID=slug(e.name)+'_ow',$('fid').value=F.spriteID;
+    if(F.owSprite==='graphics/overworld/'+old+'.png')F.owSprite='graphics/overworld/'+slug(e.name)+'.png',$('fsp').value=F.owSprite;renderList()};
+  const bind=(id,fn)=>{$(id).oninput=()=>{fn($(id).value);renderList();redraw()}};
+  bind('fid',v=>F.spriteID=v);bind('fty',v=>F.owType=v);bind('fsp',v=>F.owSprite=v);bind('fod',v=>F.owDimension=v);
+  bind('fsh',v=>{if(v)F.shinySprite=v;else delete F.shinySprite});
+  const sz=()=>{F.trueDimension=Math.max(1,+$('fcw').value||1)+'x'+Math.max(1,+$('fch').value||1);redraw()};$('fcw').oninput=sz;$('fch').oninput=sz;
+  $('fco').oninput=()=>{e.cols=Math.max(1,+$('fco').value||1);redraw()};$('fro').oninput=()=>{e.rows=Math.max(1,+$('fro').value||1);redraw()};
+  $('ffr').oninput=()=>{F.frames=Math.max(1,+$('ffr').value||1)};$('ffrA').onclick=()=>{F.frames=e.cols*e.rows;$('ffr').value=F.frames};
+  const xy=()=>{const x=$('fx').value,y=$('fy').value;if(x===''||y==='')return;e.rect={x:+x,y:+y};renderList();redraw()};$('fx').oninput=xy;$('fy').oninput=xy;
+  $('fdraw').onclick=()=>setTool('region');
+  f.querySelectorAll('[data-fl]').forEach(c=>c.onchange=()=>{F[c.dataset.fl]=c.checked});}
+$('eAdd').onclick=()=>{let n=1;while(S.entries.some(e=>e.name==='New_NPC_'+n))n++;const e=mkEntry('New_NPC_'+n,{},{x:0,y:0},4,4);
+  const free=findFree(e);e.rect=free;S.entries.push(e);S.sel=S.entries.length-1;renderList();renderForm();redraw()};
+function findFree(e){const[cw,ch]=cell(e),w=e.cols*cw,h=e.rows*ch;let y=0;for(const o of S.entries){const r=rectOf(o);if(r)y=Math.max(y,r.y+r.h)}
+  if(y+h>S.H)newSheet(Math.max(S.W,w),y+h,true);return{x:0,y}}
+$('eDup').onclick=()=>{const e=cur();if(!e)return;const c=mkEntry(e.name+'_copy',JSON.parse(JSON.stringify(e.fields)),null,e.cols,e.rows);c.fields.spriteID=slug(c.name)+'_ow';c.fields.owSprite='graphics/overworld/'+slug(c.name)+'.png';
+  c.rect=findFree(c);const r=rectOf(e);if(r){S.sx.drawImage(S.sheet,r.x,r.y,r.w,r.h,c.rect.x,c.rect.y,r.w,r.h)}S.entries.push(c);S.sel=S.entries.length-1;renderList();renderForm();redraw()};
+$('eDel').onclick=()=>{if(S.sel<0)return;S.entries.splice(S.sel,1);S.sel=Math.min(S.sel,S.entries.length-1);renderList();renderForm();redraw()};
+$('eBulk').onclick=()=>$('dBulk').showModal();$('bkX2').onclick=()=>$('dBulk').close();
+$('bkGo').onclick=()=>{const v=id=>+$(id).value||0,nm=$('bkName').value||'Trainer',x0=v('bkX'),y0=v('bkY'),w=v('bkW'),h=v('bkH'),c=v('bkC'),r=v('bkR'),a=Math.max(1,v('bkA')),n=v('bkN');
+  let first=S.entries.length;for(let i=0;i<n;i++){const nn=nm+'_'+(i+1);const e=mkEntry(nn,{trueDimension:w+'x'+h,frames:12},{x:x0+(i%a)*c*w,y:y0+Math.floor(i/a)*r*h},c,r);
+    if(e.cols*e.rows<12)e.fields.frames=e.cols*e.rows;S.entries.push(e)}
+  const need=y0+Math.ceil(n/a)*r*h,needW=x0+Math.min(a,n)*c*w;if(need>S.H||needW>S.W)newSheet(Math.max(S.W,needW),Math.max(S.H,need),true);
+  S.sel=first;$('dBulk').close();renderList();renderForm();redraw();status(n+' NPCs added.')};
+// ---------------------------------------------------------------- canvas view
+const cv=$('c'),cx=cv.getContext('2d');let need=false;
+function redraw(){if(need)return;need=true;requestAnimationFrame(draw)}
+function fit(){const b=$('cv').getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,b.width*d|0);cv.height=Math.max(1,b.height*d|0);redraw()}
+addEventListener('resize',fit);
+function draw(){need=false;const d=devicePixelRatio||1,w=cv.width,h=cv.height;cx.setTransform(1,0,0,1,0,0);cx.clearRect(0,0,w,h);
+  const z=S.z*d,ox=S.ox*d,oy=S.oy*d;cx.imageSmoothingEnabled=false;
+  const bg=$('bgm').value;
+  if(bg==='chk'){cx.save();cx.beginPath();cx.rect(ox,oy,S.W*z,S.H*z);cx.clip();const t=Math.max(8*d,z);for(let y=0;y*t<S.H*z;y++)for(let x=0;x*t<S.W*z;x++){cx.fillStyle=(x+y)&1?'#232838':'#1a1e2b';cx.fillRect(ox+x*t,oy+y*t,t,t)}cx.restore()}
+  else{cx.fillStyle=bg;cx.fillRect(ox,oy,S.W*z,S.H*z)}
+  cx.drawImage(S.sheet,ox,oy,S.W*z,S.H*z);
+  cx.strokeStyle='#5aa0ff55';cx.lineWidth=1;cx.strokeRect(ox-.5,oy-.5,S.W*z+1,S.H*z+1);
+  const showGrid=$('gridOn').checked;
+  S.entries.forEach((e,i)=>{const r=rectOf(e);if(!r)return;const sel=i===S.sel;
+    cx.strokeStyle=sel?'#ffd24a':'#ffffff55';cx.lineWidth=sel?2:1;cx.strokeRect(ox+r.x*z+.5,oy+r.y*z+.5,r.w*z,r.h*z);
+    if(showGrid&&sel){cx.strokeStyle='#ffd24a66';cx.lineWidth=1;cx.beginPath();for(let c=1;c<e.cols;c++){cx.moveTo(ox+(r.x+c*r.cw)*z+.5,oy+r.y*z);cx.lineTo(ox+(r.x+c*r.cw)*z+.5,oy+(r.y+r.h)*z)}
+      for(let rr=1;rr<e.rows;rr++){cx.moveTo(ox+r.x*z,oy+(r.y+rr*r.ch)*z+.5);cx.lineTo(ox+(r.x+r.w)*z,oy+(r.y+rr*r.ch)*z+.5)}cx.stroke();
+      const f=Math.min(S.frame,e.cols*e.rows-1),fx=r.x+(f%e.cols)*r.cw,fy=r.y+Math.floor(f/e.cols)*r.ch;cx.strokeStyle='#4fd18b';cx.lineWidth=2;cx.strokeRect(ox+fx*z+1,oy+fy*z+1,r.cw*z-1,r.ch*z-1)}
+    cx.fillStyle=sel?'#ffd24a':'#ffffffaa';cx.font=(11*d)+'px system-ui';cx.fillText(e.name,ox+r.x*z+3,oy+r.y*z-4*d)});
+  if(S.z>=8&&showGrid){cx.strokeStyle='#ffffff14';cx.lineWidth=1;cx.beginPath();const x0=Math.max(0,Math.floor(-S.ox/S.z)),y0=Math.max(0,Math.floor(-S.oy/S.z)),x1=Math.min(S.W,Math.ceil((w/d-S.ox)/S.z)),y1=Math.min(S.H,Math.ceil((h/d-S.oy)/S.z));
+    for(let x=x0;x<=x1;x++){cx.moveTo(ox+x*z+.5,oy+y0*z);cx.lineTo(ox+x*z+.5,oy+y1*z)}for(let y=y0;y<=y1;y++){cx.moveTo(ox+x0*z,oy+y*z+.5);cx.lineTo(ox+x1*z,oy+y*z+.5)}cx.stroke()}
+  if(drag&&drag.kind==='region'){cx.strokeStyle='#4fd18b';cx.lineWidth=2;const a=drag.a,b=drag.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),ww=Math.abs(a.x-b.x)+1,hh=Math.abs(a.y-b.y)+1;cx.strokeRect(ox+x*z,oy+y*z,ww*z,hh*z)}
+  if(hover&&(S.tool==='pencil'||S.tool==='eraser')){const bs=+$('brush').value;cx.strokeStyle='#fff';cx.lineWidth=1;cx.strokeRect(ox+hover.x*z+.5,oy+hover.y*z+.5,bs*z,bs*z)}}
+['bgm','gridOn','scope'].forEach(id=>$(id).addEventListener('input',()=>redraw()));
+// ---------------------------------------------------------------- tools
+const TOOLS=[['select','V','Select NPC / frame'],['pencil','B','Pencil'],['eraser','E','Eraser'],['fill','G','Fill'],['pick','I','Eyedropper'],['region','R','Draw region']];
+function setTool(t){S.tool=t;[...$('tools').children].forEach(b=>b.classList.toggle('on',b.dataset.t===t));cv.style.cursor=t==='select'?'default':'crosshair'}
+TOOLS.forEach(([t,k,n])=>{const b=document.createElement('button');b.dataset.t=t;b.textContent=n.split(' ')[0];b.title=n+' ('+k+')';b.onclick=()=>setTool(t);$('tools').append(b)});setTool('pencil');
+$('brush').oninput=()=>{$('brushV').textContent=$('brush').value};
+const hex2=c=>{const n=parseInt(c.slice(1),16);return[n>>16&255,n>>8&255,n&255]};
+const toHex=(r,g,b)=>'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+const primary=()=>{const[r,g,b]=hex2($('col').value);return[r,g,b,Math.max(0,Math.min(255,+$('colA').value||0))]};
+let drag=null,hover=null,panning=null,space=false;
+const toPx=ev=>{const b=cv.getBoundingClientRect();return{x:Math.floor((ev.clientX-b.left-S.ox)/S.z),y:Math.floor((ev.clientY-b.top-S.oy)/S.z)}};
+const inb=p=>p.x>=0&&p.y>=0&&p.x<S.W&&p.y<S.H;
+function pushUndo(){const b=S.W*S.H*4,mx=Math.max(5,Math.floor(2.5e8/b));S.undo.push({w:S.W,h:S.H,d:S.sx.getImageData(0,0,S.W,S.H)});if(S.undo.length>mx)S.undo.shift();S.redo=[]}
+function restore(st){const cur={w:S.W,h:S.H,d:S.sx.getImageData(0,0,S.W,S.H)};newSheetKeepStacks(st.w,st.h);S.sx.putImageData(st.d,0,0);return cur}
+function newSheetKeepStacks(w,h){const u=S.undo,r=S.redo;newSheet(w,h,false);S.undo=u;S.redo=r}
+function undo(){const st=S.undo.pop();if(!st)return;S.redo.push(restore(st));afterEdit()}
+function redo(){const st=S.redo.pop();if(!st)return;S.undo.push(restore(st));afterEdit()}
+$('bUndo').onclick=undo;$('bRedo').onclick=redo;
+function afterEdit(){redraw();renderList();renderForm();previewDirty=true}
+function dot(x,y,rgba,erase){const bs=+$('brush').value;const id=S.sx.createImageData(1,1);
+  for(let j=0;j<bs;j++)for(let i=0;i<bs;i++){const px=x+i,py=y+j;if(px<0||py<0||px>=S.W||py>=S.H)continue;
+    if(erase)S.sx.clearRect(px,py,1,1);else{id.data.set(rgba);S.sx.putImageData(id,px,py)}}}
+function line(a,b,rgba,erase){let x0=a.x,y0=a.y;const dx=Math.abs(b.x-x0),dy=-Math.abs(b.y-y0),sx=x0<b.x?1:-1,sy=y0<b.y?1:-1;let er=dx+dy;
+  for(;;){dot(x0,y0,rgba,erase);if(x0===b.x&&y0===b.y)break;const e2=2*er;if(e2>=dy){er+=dy;x0+=sx}if(e2<=dx){er+=dx;y0+=sy}}}
+function flood(x,y,rgba){const id=S.sx.getImageData(0,0,S.W,S.H),d=id.data,W=S.W,H=S.H,i0=(y*W+x)*4,t=[d[i0],d[i0+1],d[i0+2],d[i0+3]];
+  if(t[0]===rgba[0]&&t[1]===rgba[1]&&t[2]===rgba[2]&&t[3]===rgba[3])return;
+  const sr=scopeRect(),lim=$('scope').value!=='sheet'?sr:{x:0,y:0,w:W,h:H};
+  const same=i=>d[i]===t[0]&&d[i+1]===t[1]&&d[i+2]===t[2]&&d[i+3]===t[3],st=[x,y];
+  while(st.length){const yy=st.pop(),xx=st.pop();if(xx<lim.x||yy<lim.y||xx>=lim.x+lim.w||yy>=lim.y+lim.h)continue;const i=(yy*W+xx)*4;if(!same(i))continue;
+    d[i]=rgba[0];d[i+1]=rgba[1];d[i+2]=rgba[2];d[i+3]=rgba[3];st.push(xx+1,yy,xx-1,yy,xx,yy+1,xx,yy-1)}
+  S.sx.putImageData(id,0,0)}
+function pickAt(p){if(!inb(p))return null;const d=S.sx.getImageData(p.x,p.y,1,1).data;return[d[0],d[1],d[2],d[3]]}
+function setPrimary(c){if(!c)return;$('col').value=toHex(c[0],c[1],c[2]);$('colA').value=c[3]}
+let pickTarget='col';
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('mousedown',ev=>{const p=toPx(ev);
+  if(ev.button===1||ev.button===2||space){panning={sx:ev.clientX,sy:ev.clientY,ox:S.ox,oy:S.oy};return}
+  if(ev.button!==0)return;
+  if(pickTarget!=='col'){const c=pickAt(p);if(c){$(pickTarget).value=toHex(c[0],c[1],c[2])}pickTarget='col';cv.style.cursor='crosshair';return}
+  if(S.tool==='select'){let hit=-1;S.entries.forEach((e,i)=>{const r=rectOf(e);if(r&&p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h)hit=i});
+    if(hit>=0){S.sel=hit;const e=S.entries[hit],r=rectOf(e);S.frame=Math.floor((p.y-r.y)/r.ch)*e.cols+Math.floor((p.x-r.x)/r.cw);renderList();renderForm();redraw();previewDirty=true}return}
+  if(S.tool==='region'){if(!cur()){status('Create an NPC first (+ New).');return}drag={kind:'region',a:{x:Math.max(0,p.x),y:Math.max(0,p.y)},b:{x:Math.max(0,p.x),y:Math.max(0,p.y)}};return}
+  if(S.tool==='pick'){setPrimary(pickAt(p));return}
+  if(!inb(p))return;
+  if(S.tool==='fill'){pushUndo();flood(p.x,p.y,primary());afterEdit();return}
+  pushUndo();drag={kind:'draw',last:p};dot(p.x,p.y,primary(),S.tool==='eraser');redraw()});
+addEventListener('mousemove',ev=>{if(panning){S.ox=panning.ox+ev.clientX-panning.sx;S.oy=panning.oy+ev.clientY-panning.sy;redraw();return}
+  const p=toPx(ev);hover=p;$('hud').textContent=inb(p)?`x ${p.x}  y ${p.y}  ·  ${S.W}×${S.H}  ·  ${Math.round(S.z*100)}%`:`${S.W}×${S.H}  ·  ${Math.round(S.z*100)}%`;
+  if(drag&&drag.kind==='draw'){line(drag.last,p,primary(),S.tool==='eraser');drag.last=p;previewDirty=true}
+  else if(drag&&drag.kind==='region'){drag.b={x:Math.max(0,p.x),y:Math.max(0,p.y)}}redraw()});
+addEventListener('mouseup',()=>{panning=null;
+  if(drag&&drag.kind==='region'){const e=cur(),a=drag.a,b=drag.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;
+    if(e&&w>1&&h>1){e.rect={x,y};const[cw0,ch0]=cell(e);
+      // keep cols/rows when the drag matches the old size; otherwise derive the frame size from the drag
+      e.fields.trueDimension=Math.max(1,Math.round(w/e.cols))+'x'+Math.max(1,Math.round(h/e.rows));status(`Region ${w}×${h} at ${x},${y} → frame ${e.fields.trueDimension}`)}
+    drag=null;renderList();renderForm();redraw()}
+  else if(drag){drag=null;previewDirty=true;renderList()}});
+cv.addEventListener('wheel',ev=>{ev.preventDefault();const b=cv.getBoundingClientRect(),mx=ev.clientX-b.left,my=ev.clientY-b.top,old=S.z;
+  S.z=Math.max(.5,Math.min(48,old*(ev.deltaY<0?1.2:1/1.2)));if(S.z>4)S.z=Math.round(S.z*2)/2;S.ox=mx-(mx-S.ox)*S.z/old;S.oy=my-(my-S.oy)*S.z/old;redraw()},{passive:false});
+addEventListener('keydown',ev=>{if(/INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)&&ev.target.type!=='range')return;
+  if(ev.code==='Space'){space=true;ev.preventDefault();return}
+  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();ev.shiftKey?redo():undo();return}
+  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'){ev.preventDefault();redo();return}
+  const t={v:'select',b:'pencil',e:'eraser',g:'fill',i:'pick',r:'region'}[ev.key.toLowerCase()];if(t&&!ev.ctrlKey)setTool(t);
+  if(ev.key==='+'||ev.key==='='){S.z=Math.min(48,S.z*1.25);redraw()}if(ev.key==='-'){S.z=Math.max(.5,S.z/1.25);redraw()}});
+addEventListener('keyup',ev=>{if(ev.code==='Space')space=false});
+// ---------------------------------------------------------------- pixel ops on the scope
+function mapScope(fn){const sr=scopeRect();pushUndo();const lim=$('fLim').checked?{c:hex2($('swFrom').value),t:+$('swTol').value}:null;
+  const id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),d=id.data;let n=0;
+  for(let i=0;i<d.length;i+=4){if(d[i+3]===0)continue;
+    if(lim){const dr=d[i]-lim.c[0],dg=d[i+1]-lim.c[1],db=d[i+2]-lim.c[2];if(Math.sqrt(dr*dr+dg*dg+db*db)>lim.t)continue}
+    const o=fn(d[i],d[i+1],d[i+2],d[i+3]);if(o){d[i]=o[0];d[i+1]=o[1];d[i+2]=o[2];d[i+3]=o[3];n++}}
+  S.sx.putImageData(id,sr.x,sr.y);afterEdit();return n}
+function rgb2hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b);let h=0,s=0;const l=(mx+mn)/2;
+  if(mx!==mn){const d=mx-mn;s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;h*=60}return[h,s,l]}
+function hsl2rgb(h,s,l){h=((h%360)+360)%360/360;if(s===0){const v=Math.round(l*255);return[v,v,v]}
+  const q=l<.5?l*(1+s):l+s-l*s,p=2*l-q,f=t=>{t=(t+1)%1;return t<1/6?p+(q-p)*6*t:t<.5?q:t<2/3?p+(q-p)*(2/3-t)*6:p};
+  return[f(h+1/3),f(h),f(h-1/3)].map(v=>Math.round(v*255))}
+const clamp=v=>Math.max(0,Math.min(255,Math.round(v)));
+for(const[i,v]of[['fH','fHv'],['fS','fSv'],['fB','fBv'],['fC','fCv'],['swTol','swTolV']])$(i).oninput=()=>{$(v).textContent=$(i).value};
+$('fReset').onclick=()=>{for(const[i,v]of[['fH','fHv'],['fS','fSv'],['fB','fBv'],['fC','fCv']]){$(i).value=0;$(v).textContent=0}};
+$('fApply').onclick=()=>{const H=+$('fH').value,Sa=+$('fS').value/100,B=+$('fB').value/100,C=+$('fC').value/100,cf=(259*(C*255+255))/(255*(259-C*255));
+  const n=mapScope((r,g,b,a)=>{let[h,s,l]=rgb2hsl(r,g,b);h+=H;s=Math.max(0,Math.min(1,Sa>=0?s+(1-s)*Sa:s*(1+Sa)));l=Math.max(0,Math.min(1,B>=0?l+(1-l)*B:l*(1+B)));
+    let o=hsl2rgb(h,s,l);if(C)o=o.map(v=>clamp(cf*(v-128)+128));return[o[0],o[1],o[2],a]});status(n+' pixels changed.')};
+$('fGray').onclick=()=>mapScope((r,g,b,a)=>{const y=clamp(.299*r+.587*g+.114*b);return[y,y,y,a]});
+$('fInv').onclick=()=>mapScope((r,g,b,a)=>[255-r,255-g,255-b,a]);
+$('fSepia').onclick=()=>mapScope((r,g,b,a)=>[clamp(.393*r+.769*g+.189*b),clamp(.349*r+.686*g+.168*b),clamp(.272*r+.534*g+.131*b),a]);
+$('fPost').onclick=()=>{const L=Math.max(2,+$('fPL').value||4),q=v=>clamp(Math.round(v/255*(L-1))/(L-1)*255);mapScope((r,g,b,a)=>[q(r),q(g),q(b),a])};
+$('swGo').onclick=()=>{const f=hex2($('swFrom').value),t=hex2($('swTo').value),tol=+$('swTol').value;
+  const n=(()=>{const sr=scopeRect();pushUndo();const id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),d=id.data;let n=0;
+    for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;const dr=d[i]-f[0],dg=d[i+1]-f[1],db=d[i+2]-f[2];if(Math.sqrt(dr*dr+dg*dg+db*db)<=tol){d[i]=t[0];d[i+1]=t[1];d[i+2]=t[2];n++}}
+    S.sx.putImageData(id,sr.x,sr.y);afterEdit();return n})();status(n+' pixels swapped.')};
+$('swKey').onclick=()=>{const f=hex2($('swFrom').value),tol=+$('swTol').value;const sr=scopeRect();pushUndo();const id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),d=id.data;let n=0;
+  for(let i=0;i<d.length;i+=4){const dr=d[i]-f[0],dg=d[i+1]-f[1],db=d[i+2]-f[2];if(d[i+3]&&Math.sqrt(dr*dr+dg*dg+db*db)<=tol){d[i+3]=0;n++}}
+  S.sx.putImageData(id,sr.x,sr.y);afterEdit();status(n+' pixels made transparent.')};
+$('swPick').onclick=()=>{pickTarget='swFrom';cv.style.cursor='copy';status('Click a pixel on the sheet to set “From”.')};
+$('swPickT').onclick=()=>{pickTarget='swTo';cv.style.cursor='copy';status('Click a pixel on the sheet to set “To”.')};
+function eachFrame(fn){const sr=scopeRect();pushUndo();for(const f of sr.frames){const w=Math.min(f.w,S.W-f.x),h=Math.min(f.h,S.H-f.y);if(w<=0||h<=0)continue;const id=S.sx.getImageData(f.x,f.y,w,h);fn(id,w,h);S.sx.putImageData(id,f.x,f.y)}afterEdit()}
+const flip=(id,w,h,v)=>{const d=id.data,o=new Uint8ClampedArray(d);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const sx=v?x:w-1-x,sy=v?h-1-y:y,a=(y*w+x)*4,b=(sy*w+sx)*4;d[a]=o[b];d[a+1]=o[b+1];d[a+2]=o[b+2];d[a+3]=o[b+3]}};
+$('fFlipH').onclick=()=>eachFrame((id,w,h)=>flip(id,w,h,false));$('fFlipV').onclick=()=>eachFrame((id,w,h)=>flip(id,w,h,true));
+function shift(dx,dy){eachFrame((id,w,h)=>{const d=id.data,o=new Uint8ClampedArray(d);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const sx=(x-dx+w)%w,sy=(y-dy+h)%h,a=(y*w+x)*4,b=(sy*w+sx)*4;d[a]=o[b];d[a+1]=o[b+1];d[a+2]=o[b+2];d[a+3]=o[b+3]}})}
+$('sL').onclick=()=>shift(-1,0);$('sR').onclick=()=>shift(1,0);$('sU').onclick=()=>shift(0,-1);$('sD').onclick=()=>shift(0,1);
+$('fOut').onclick=()=>{const c=primary();eachFrame((id,w,h)=>{const d=id.data,o=new Uint8ClampedArray(d),op=(x,y)=>x>=0&&y>=0&&x<w&&y<h&&o[(y*w+x)*4+3]>0;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(o[i+3]===0&&(op(x-1,y)||op(x+1,y)||op(x,y-1)||op(x,y+1))){d[i]=c[0];d[i+1]=c[1];d[i+2]=c[2];d[i+3]=255}}})};
+$('mGo').onclick=()=>{const e=cur(),r=e&&rectOf(e);if(!r)return status('Select a placed NPC first.');const a=+$('mSrc').value,b=+$('mDst').value,n=e.cols*e.rows;if(a>=n||b>=n||a<0||b<0)return status('Frame numbers go 0 to '+(n-1)+'.');
+  pushUndo();const fr=i=>({x:r.x+(i%e.cols)*r.cw,y:r.y+Math.floor(i/e.cols)*r.ch}),A=fr(a),B=fr(b),id=S.sx.getImageData(A.x,A.y,r.cw,r.ch);flip(id,r.cw,r.ch,false);S.sx.clearRect(B.x,B.y,r.cw,r.ch);S.sx.putImageData(id,B.x,B.y);afterEdit();status(`Frame ${a} copied flipped to ${b}.`)};
+// ---------------------------------------------------------------- palette
+function grab(){const sr=scopeRect(),id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),d=id.data,m=new Map();
+  for(let i=0;i<d.length;i+=4){if(d[i+3]<8)continue;const k=d[i]<<16|d[i+1]<<8|d[i+2];m.set(k,(m.get(k)||0)+1)}
+  const arr=[...m.entries()].sort((a,b)=>b[1]-a[1]);S.palList=arr.map(([k,n])=>({rgb:[k>>16&255,k>>8&255,k&255],n}));renderPal()}
+function renderPal(){const sw=$('sw');sw.innerHTML='';const L=S.palList||[];$('pInfo').textContent=L.length?`${L.length} colours in the scope. Click = pick, right-click = set as “From”, double-click = swap this colour for the primary colour.`:'Click a swatch to pick it. Double-click swaps it for the primary colour.';
+  L.slice(0,400).forEach((p,i)=>{const d=document.createElement('div');d.style.background=toHex(...p.rgb);d.title=`${toHex(...p.rgb)} · ${p.n} px`;
+    d.onclick=()=>setPrimary([...p.rgb,255]);d.oncontextmenu=ev=>{ev.preventDefault();$('swFrom').value=toHex(...p.rgb)};
+    d.ondblclick=()=>{const to=hex2($('col').value),from=p.rgb;const sr=scopeRect();pushUndo();const id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),dd=id.data;
+      for(let j=0;j<dd.length;j+=4)if(dd[j+3]&&dd[j]===from[0]&&dd[j+1]===from[1]&&dd[j+2]===from[2]){dd[j]=to[0];dd[j+1]=to[1];dd[j+2]=to[2]}S.sx.putImageData(id,sr.x,sr.y);afterEdit();grab()};
+    sw.append(d)})}
+$('pGrab').onclick=grab;
+$('pSave').onclick=()=>{if(!S.palList||!S.palList.length)grab();const L=S.palList.slice(0,256);dl(new Blob(['JASC-PAL\r\n0100\r\n'+L.length+'\r\n'+L.map(p=>p.rgb.join(' ')).join('\r\n')+'\r\n'],{type:'text/plain'}),'palette.pal')};
+$('pLoad').onclick=()=>$('fPal').click();
+$('fPal').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(/\.(pal|txt)$/i.test(f.name)){const L=(await f.text()).split(/\r?\n/).map(s=>s.trim().split(/\s+/).map(Number)).filter(a=>a.length===3&&a.every(n=>n>=0&&n<=255));S.imported=L}
+  else{const c=await bitmapCanvas(f),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,m=new Map();for(let i=0;i<d.length;i+=4)if(d[i+3]>8)m.set(d[i]<<16|d[i+1]<<8|d[i+2],1);S.imported=[...m.keys()].map(k=>[k>>16&255,k>>8&255,k&255])}
+  S.palList=(S.imported||[]).map(rgb=>({rgb,n:0}));renderPal();status((S.imported||[]).length+' colours imported. “Remap to imported” snaps the scope to them.')};
+$('pMap').onclick=()=>{const P=S.imported;if(!P||!P.length)return status('Import a palette first.');
+  const n=mapScope((r,g,b,a)=>{let best=P[0],bd=1e9;for(const p of P){const d=(p[0]-r)**2+(p[1]-g)**2+(p[2]-b)**2;if(d<bd){bd=d;best=p}}return[best[0],best[1],best[2],a]});status('Remapped '+n+' pixels.')};
+// ---------------------------------------------------------------- preview
+let previewDirty=true,pvDir='down',pvPlay=true,pvT=0;
+const rowMap={down:0,left:1,right:2,up:3};
+function frameIdx(dir,step){const row=rowMap[dir]??0;let col=0;if(dir==='up'){col=step===1?1:step===2?3:0}else if(dir==='right'){col=step===1?1:step===2?2:0}else{col=step===1?1:step===2?3:0}return{row,col}}
+document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{pvDir=b.dataset.d;previewDirty=true});
+$('pvPlay').onclick=()=>{pvPlay=!pvPlay;$('pvPlay').classList.toggle('on',pvPlay)};
+setInterval(()=>{pvT++;const e=cur(),r=e&&rectOf(e),pc=$('prev'),px=pc.getContext('2d');if(!r){px.clearRect(0,0,pc.width,pc.height);return}
+  const z=+$('pvZ').value,seq=[0,1,0,2],step=pvPlay?seq[pvT%4]:0,{row,col}=frameIdx(pvDir,step);
+  const c=Math.min(col,e.cols-1),rr=Math.min(row,e.rows-1);const W=r.cw*z,H=r.ch*z;if(pc.width!==Math.max(W,64)||pc.height!==Math.max(H,64)){pc.width=Math.max(W,64);pc.height=Math.max(H,64)}
+  px.imageSmoothingEnabled=false;px.clearRect(0,0,pc.width,pc.height);px.drawImage(S.sheet,r.x+c*r.cw,r.y+rr*r.ch,r.cw,r.ch,0,0,W,H)},180);
+// ---------------------------------------------------------------- load / import
+const bitmapCanvas=async f=>{const bm=await createImageBitmap(f),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;c.getContext('2d').drawImage(bm,0,0);return c};
+$('bSheet').onclick=()=>$('fSheet').click();
+$('fSheet').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const c=await bitmapCanvas(f);pushUndoSafe();
+  newSheet(c.width,c.height,false);S.sx.drawImage(c,0,0);S.sheetName=f.name;S.z=Math.max(1,Math.min(8,Math.floor(Math.min(($('cv').clientWidth-40)/c.width,($('cv').clientHeight-40)/c.height))||1));S.ox=20;S.oy=20;
+  renderList();redraw();status(`Sheet loaded: ${c.width}×${c.height}. Use Bulk add or + New, then set each NPC's frame size, columns and rows.`)};
+function pushUndoSafe(){try{pushUndo()}catch(e){}}
+$('bBlank').onclick=()=>{const w=+prompt_('Sheet width',256),h=+prompt_('Sheet height',512);if(w>0&&h>0){newSheet(w,h,false);redraw()}};
+function prompt_(t,d){const v=window.prompt(t,d);return v==null?d:v}
+$('bPngs').onclick=()=>$('fPngs').click();
+$('fPngs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name));e.target.value='';if(!fs.length)return;
+  const items=[];for(const f of fs)items.push({f,c:await bitmapCanvas(f)});
+  const W=Math.max(256,...items.map(i=>i.c.width));let y=0;const place=[];for(const it of items){place.push({...it,x:0,y});y+=it.c.height}
+  newSheet(W,y,false);for(const p of place)S.sx.drawImage(p.c,p.x,p.y);S.entries=[];
+  const tbl=S.tableEntries||{};
+  for(const p of place){const base=p.f.name.replace(/\.png$/i,'');let key=Object.keys(tbl).find(k=>(tbl[k].owSprite||'').split('/').pop().toLowerCase()===p.f.name.toLowerCase())||Object.keys(tbl).find(k=>slug(k)===slug(base));
+    const nm=key||base.replace(/_ow$/,'');const F=key?JSON.parse(JSON.stringify(tbl[key])):{trueDimension:'32x48',owSprite:'graphics/overworld/'+p.f.name,spriteID:slug(nm)+'_ow'};
+    const[cw,ch]=parseDim(F.trueDimension)||[32,48];const cols=Math.max(1,Math.round(p.c.width/cw)),rows=Math.max(1,Math.round(p.c.height/ch));
+    S.entries.push(mkEntry(nm,F,{x:p.x,y:p.y},cols,rows))}
+  if(S.tableEntries)for(const k of Object.keys(S.tableEntries))if(!S.entries.some(e=>e.name===k))S.entries.push(mkEntry(k,JSON.parse(JSON.stringify(S.tableEntries[k])),null,4,4));
+  S.sel=0;S.z=2;renderList();renderForm();redraw();status(`${place.length} PNGs packed into one sheet (${W}×${y}).`)};
+// ow_table.js reading: keep the text before/after the table untouched, parse the object literal
+function findTable(src){const m=/window\s*\.\s*OverworldTable\s*=\s*\{/.exec(src)||/(?:const|let|var)\s+OverworldTable\s*=\s*\{/.exec(src);if(!m)return null;
+  const start=m.index+m[0].length-1;let depth=0,i=start,str=null;
+  for(;i<src.length;i++){const ch=src[i],nx=src[i+1];
+    if(str){if(ch==='\\')i++;else if(ch===str)str=null;continue}
+    if(ch==='/'&&nx==='/'){while(i<src.length&&src[i]!=='\n')i++;continue}
+    if(ch==='/'&&nx==='*'){i=src.indexOf('*/',i+2);if(i<0)return null;i++;continue}
+    if(ch==="'"||ch==='"'||ch==='`'){str=ch;continue}
+    if(ch==='{')depth++;else if(ch==='}'){depth--;if(depth===0)break}}
+  if(depth!==0)return null;let end=i+1;while(src[end]===' '||src[end]===';')end++;
+  return{prefix:src.slice(0,m.index),literal:src.slice(start,i+1),suffix:src.slice(end),head:m[0].replace(/\{$/,'')}}
+function loadTableText(src,from){const t=findTable(src);if(!t){status('Could not find window.OverworldTable = { … } in '+from);return false}
+  let obj;try{obj=(new Function('return ('+t.literal+')'))()}catch(e){status('Could not read the table in '+from+': '+e.message);return false}
+  S.tablePrefix=t.prefix;S.tableSuffix=t.suffix||DEFAULT_SUFFIX;S.tableEntries=obj;S.tableLoaded=true;
+  const prev=S.entries;S.entries=[];
+  for(const k of Object.keys(obj)){const old=prev.find(e=>e.name===k);const F=JSON.parse(JSON.stringify(obj[k]));
+    const e=mkEntry(k,F,old?old.rect:null,old?old.cols:4,old?old.rows:4);e.fields=Object.assign({},F);S.entries.push(e)}
+  for(const e of prev)if(!S.entries.some(x=>x.name===e.name))S.entries.push(e);
+  S.sel=S.entries.length?0:-1;renderList();renderForm();redraw();
+  status(`${Object.keys(obj).length} entries loaded from ${from}. ${S.entries.some(e=>e.rect)?'':'Import the sheet (or the existing PNGs) to place them.'}`);return true}
+$('bTable').onclick=()=>$('fTable').click();
+$('fTable').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)loadTableText(await f.text(),f.name)};
+(async()=>{if(location.protocol==='file:')return;for(const b of['','public/','../','../public/']){try{const r=await fetch(b+'js/ow_table.js',{cache:'no-store'});if(!r.ok)continue;const t=await r.text();if(/^\s*<(!doctype|html)/i.test(t))continue;
+  if(loadTableText(t,b+'js/ow_table.js')){S.autoBase=b;tryLoadPngs(b);return}}catch(e){}}})();
+async function tryLoadPngs(b){ // when served from the project: pull the existing PNGs of the table entries into one sheet
+  const list=S.entries.filter(e=>e.fields.owSprite);const imgs=[];
+  for(const e of list){try{const r=await fetch(b+e.fields.owSprite,{cache:'no-store'});if(!r.ok)continue;const bl=await r.blob();imgs.push({e,c:await bitmapCanvas(bl)})}catch(x){}}
+  if(!imgs.length)return;const W=Math.max(256,...imgs.map(i=>i.c.width));let y=0;for(const i of imgs){i.y=y;y+=i.c.height}
+  newSheet(W,y,false);for(const i of imgs){S.sx.drawImage(i.c,0,i.y);const[cw,ch]=cell(i.e);i.e.rect={x:0,y:i.y};i.e.cols=Math.max(1,Math.round(i.c.width/cw));i.e.rows=Math.max(1,Math.round(i.c.height/ch))}
+  S.z=2;renderList();renderForm();redraw();status(`Loaded ${list.length} entries from the project and ${imgs.length} existing PNGs into the sheet.`)}
+$('bMan').onclick=()=>$('fMan').click();
+$('fMan').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const m=JSON.parse(await f.text());const sp=m.sprites||{};
+  if(m.sheetSize&&(m.sheetSize[0]>S.W||m.sheetSize[1]>S.H))newSheet(Math.max(S.W,m.sheetSize[0]),Math.max(S.H,m.sheetSize[1]),true);
+  for(const k of Object.keys(sp)){const s=sp[k];let e=S.entries.find(x=>x.name===k);const F=Object.assign({},s.fields||{});
+    if(!e){e=mkEntry(k,F,null,s.cols,s.rows);S.entries.push(e)}else{Object.assign(e.fields,F)}
+    e.rect={x:s.rect[0],y:s.rect[1]};e.cols=s.cols;e.rows=s.rows;if(s.frame)e.fields.trueDimension=s.frame[0]+'x'+s.frame[1]}
+  S.sel=S.entries.length?0:-1;renderList();renderForm();redraw();status('Manifest loaded: '+Object.keys(sp).length+' regions. Now import the sheet PNG that goes with it.')}catch(x){status('Could not read the manifest: '+x.message)}};
+// ---------------------------------------------------------------- export
+const q=s=>"'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";
+function fieldsOrdered(F){const out=[];const seen=new Set();for(const k of FIELD_ORDER)if(k in F&&F[k]!==undefined&&!(k==='shinySprite'&&!F[k])){out.push(k);seen.add(k)}for(const k of Object.keys(F))if(!seen.has(k))out.push(k);return out}
+const valStr=v=>typeof v==='string'?q(v):typeof v==='object'&&v!==null?JSON.stringify(v):String(v);
+function tableJs(){const body=S.entries.map(e=>{const F=e.fields,ks=fieldsOrdered(F);
+  return`  ${/^[A-Za-z_$][\w$]*$/.test(e.name)?e.name:q(e.name)}: {\n`+ks.map((k,i)=>`    ${k}: ${valStr(F[k])}${i<ks.length-1?',':''}`).join('\n')+'\n  }'}).join(',\n');
+  return S.tablePrefix+'window.OverworldTable = {\n'+body+'\n};'+(S.tableSuffix.startsWith('\n')?'':'\n')+S.tableSuffix}
+function manifest(){const sp={};for(const e of S.entries){const r=rectOf(e);if(!r)continue;sp[e.name]={fields:e.fields,file:e.fields.owSprite,rect:[r.x,r.y,r.w,r.h],frame:[r.cw,r.ch],cols:e.cols,rows:e.rows,frames:e.fields.frames}}
+  return JSON.stringify({version:1,sheet:'graphics/overworld/'+S.sheetName,sheetSize:[S.W,S.H],sprites:sp},null,2)}
+function cutPng(e){const r=rectOf(e),c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(S.sheet,r.x,r.y,r.w,r.h,0,0,r.w,r.h);return new Promise(res=>c.toBlob(res,'image/png'))}
+const sheetBlob=()=>new Promise(res=>S.sheet.toBlob(res,'image/png'));
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=u=>{let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+async function buildZip(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;const now=new Date(),dt=((now.getFullYear()-1980)<<9|(now.getMonth()+1)<<5|now.getDate()),tm=(now.getHours()<<11|now.getMinutes()<<5|now.getSeconds()>>1);
+  for(const f of files){const data=new Uint8Array(await f.blob.arrayBuffer()),size=data.length,crc=crc32(data),nm=enc.encode(f.name),h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);h.setUint32(14,crc,true);h.setUint32(18,size,true);h.setUint32(22,size,true);h.setUint16(26,nm.length,true);parts.push(h.buffer,nm,data);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);c.setUint32(16,crc,true);c.setUint32(20,size,true);c.setUint32(24,size,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);cd.push(c.buffer,nm);off+=30+nm.length+size}
+  let cs=0;for(const p of cd)cs+=p.byteLength;parts.push(...cd);const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,files.length,true);z.setUint16(10,files.length,true);z.setUint32(12,cs,true);z.setUint32(16,off,true);parts.push(z.buffer);return new Blob(parts,{type:'application/zip'})}
+$('bZip').onclick=async()=>{if(!S.entries.length)return status('Nothing to export yet.');status('Packing…');const files=[];
+  files.push({name:'js/ow_table.js',blob:new Blob([tableJs()],{type:'text/javascript'})});
+  files.push({name:'graphics/overworld/ow_manifest.json',blob:new Blob([manifest()],{type:'application/json'})});
+  files.push({name:'graphics/overworld/'+S.sheetName,blob:await sheetBlob()});
+  let n=0;const used=new Set();for(const e of S.entries){if(!rectOf(e))continue;const p=e.fields.owSprite;if(!p||used.has(p))continue;used.add(p);files.push({name:p,blob:await cutPng(e)});n++}
+  dl(await buildZip(files),'ow_sprites_export.zip');status(`ZIP ready: ow_table.js, manifest, sheet and ${n} sprite PNG(s). Unzip it on top of the repo.`)};
+// ---------------------------------------------------------------- go
+newSheet(256,256);new ResizeObserver(fit).observe($('cv'));fit();renderList();renderForm();
+window.OWED=S;
+</script></body></html>
