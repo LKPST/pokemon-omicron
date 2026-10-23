@@ -21,7 +21,7 @@ window.OverworldMaps = {
     "events": {
       "NPC_Portia": {
         "eventType": "NPC",
-        "owID": "Portia",
+        "owID": "Trainer_2",
         "script": "portia_battle_trigger",
         "movementType": "MOVEMENT_TYPE_HOP_AROUND",
         "isTrainer": true,
@@ -44,7 +44,7 @@ window.OverworldMaps = {
         "eventType": "NPC",
         "xPos": 11,
         "yPos": 13,
-        "owID": "Portia",
+        "owID": "Trainer_69",
         "script": "roxanne_gym_leader",
         "movementType": "MOVEMENT_TYPE_SPIN_COUNTER_CLOCKWISE",
         "isTrainer": true,
@@ -55,7 +55,7 @@ window.OverworldMaps = {
         "eventType": "NPC",
         "xPos": 4,
         "yPos": 12,
-        "owID": "Lily",
+        "owID": "Trainer_1",
         "script": "new_script",
         "movementType": "MOVEMENT_TYPE_WALK_IN_PLACE_DOWN",
         "isTrainer": false,
@@ -311,7 +311,7 @@ window.OverworldMaps = {
     "events": {
       "Lily": {
         "eventType": "NPC",
-        "owID": "Lily",
+        "owID": "Trainer_9",
         "script": "portia_battle_trigger",
         "movementType": "MOVEMENT_TYPE_WANDER_UP_AND_DOWN",
         "isTrainer": true,
@@ -349,7 +349,8 @@ window.OverworldMaps = {
           "appearanceRate": 20
         }
       ],
-      "afternoon": [{
+      "afternoon": [
+        {
           "pokemonName": "Yamper",
           "levelRange": [7, 10],
           "appearanceRate": 20
@@ -373,8 +374,10 @@ window.OverworldMaps = {
           "pokemonName": "Shinx",
           "levelRange": [5, 7],
           "appearanceRate": 20
-        }],
-      "night": [{
+        }
+      ],
+      "night": [
+        {
           "pokemonName": "Yamper",
           "levelRange": [7, 10],
           "appearanceRate": 20
@@ -398,8 +401,10 @@ window.OverworldMaps = {
           "pokemonName": "Shinx",
           "levelRange": [5, 7],
           "appearanceRate": 20
-        }],
-      "dawn": [{
+        }
+      ],
+      "dawn": [
+        {
           "pokemonName": "Yamper",
           "levelRange": [7, 10],
           "appearanceRate": 20
@@ -423,7 +428,8 @@ window.OverworldMaps = {
           "pokemonName": "Shinx",
           "levelRange": [5, 7],
           "appearanceRate": 20
-        }]
+        }
+      ]
     },
     "borderData": {
       "width": 2,
