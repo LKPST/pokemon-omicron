@@ -57,6 +57,15 @@ dialog::backdrop{background:#000a}
   <div class="warn" id="warns"></div>
   <h3>Selected</h3>
   <div id="form"></div>
+  <h3>Frames &amp; roles</h3>
+  <div class="hint">Click a frame (here or on the sheet with <b>Select</b>). <b>Shift</b> = range, <b>Ctrl</b> = add one. Then pick animation, facing and step and press Assign.</div>
+  <div id="fgrid"></div>
+  <div class="row"><select id="rAnim"><option>walk</option><option>run</option><option>cycle</option><option>surf</option><option>fish</option><option>fly</option></select>
+    <select id="rDir"><option>down</option><option>left</option><option>right</option><option>up</option></select>
+    <select id="rSlot"><option value="auto">auto 0,1,2… (selection order)</option><option value="0">0 · stand / idle</option><option value="1">1 · step 1</option><option value="2">2 · step 2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select></div>
+  <div class="row"><button class="pri" id="rAssign">Assign to selected</button><button id="rClear">Clear selected</button><button id="rClearA">Clear this animation</button></div>
+  <div class="row"><button id="rAuto">Auto-assign walk from layout</button><button id="rAll">Apply roles to all NPCs</button><label><input type="checkbox" id="rSame" checked> only same grid</label></div>
+  <div class="hint" id="rInfo"></div>
 </aside>
 <div id="cv"><canvas id="c"></canvas><div id="hud"></div></div>
 <aside class="r">
@@ -91,7 +100,7 @@ dialog::backdrop{background:#000a}
   <h3>Animation preview</h3>
   <canvas id="prev" width="128" height="160"></canvas>
   <div class="row"><button class="sm" data-d="up">▲</button><button class="sm" data-d="down">▼</button><button class="sm" data-d="left">◀</button><button class="sm" data-d="right">▶</button>
-    <button class="sm on" id="pvPlay">play</button><label>zoom</label><select id="pvZ"><option>2</option><option selected>3</option><option>4</option></select></div>
+    <select id="pvA"><option>walk</option><option>run</option><option>cycle</option><option>surf</option><option>fish</option><option>fly</option></select><button class="sm on" id="pvPlay">play</button><label>zoom</label><select id="pvZ"><option>2</option><option selected>3</option><option>4</option></select></div>
 </aside>
 </main>
 
@@ -101,6 +110,7 @@ dialog::backdrop{background:#000a}
   <div class="row f"><label>Start x,y</label><input type="number" id="bkX" value="0"><input type="number" id="bkY" value="0"></div>
   <div class="row f"><label>Frame size</label><input type="number" id="bkW" value="32"><span>×</span><input type="number" id="bkH" value="48"></div>
   <div class="row f"><label>Cols × rows</label><input type="number" id="bkC" value="4"><span>×</span><input type="number" id="bkR" value="4"> <span class="hint">frames per NPC</span></div>
+  <div class="row f"><label>Layout</label><select id="bkL"><option value="game4x4">Game 4×4</option><option value="custom3x4">Your 3×4 sheet</option></select></div>
   <div class="row f"><label>NPCs across</label><input type="number" id="bkA" value="4"><label style="width:auto">total</label><input type="number" id="bkN" value="8"></div>
   <div class="row"><button class="pri" id="bkGo">Create</button><button id="bkX2">Cancel</button></div>
 </dialog>
@@ -110,8 +120,8 @@ dialog::backdrop{background:#000a}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const status=t=>{$('st').textContent=t;$('st').title=t};
-const FIELD_ORDER=['spriteID','frames','genderBased','owType','owDimension','trueDimension','isRunning','isFishing','isSurfing','isCycling','owSprite','shinySprite'];
-const FLAGS=['genderBased','isRunning','isFishing','isSurfing','isCycling'];
+const FIELD_ORDER=['spriteID','frames','genderBased','owType','owDimension','trueDimension','isRunning','isFishing','isSurfing','isCycling','isFlying','owSprite','shinySprite'];
+const FLAGS=['genderBased','isRunning','isFishing','isSurfing','isCycling','isFlying'];
 const DEFAULT_SUFFIX=`
 
 // Helper utility to get frame indices based on direction and animation step
@@ -152,30 +162,51 @@ window.getOverworldFrame = function(direction, step = 0) {
 };
 `;
 // ---------------------------------------------------------------- state
-const S={sheet:null,sx:null,W:0,H:0,sheetName:'trainers_sheet.png',entries:[],sel:-1,frame:0,tool:'pencil',
+const S={fsel:[],sheet:null,sx:null,W:0,H:0,sheetName:'trainers_sheet.png',entries:[],sel:-1,frame:0,tool:'pencil',
   z:4,ox:20,oy:20,undo:[],redo:[],tablePrefix:'',tableSuffix:DEFAULT_SUFFIX,tableLoaded:false,pal:null,imported:null,dirty:true};
 function newSheet(w,h,keep){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});
   if(keep&&S.sheet)x.drawImage(S.sheet,0,0);S.sheet=c;S.sx=x;S.W=w;S.H=h;S.undo=[];S.redo=[];redraw()}
 // ---------------------------------------------------------------- entries
 const parseDim=s=>{const m=/^\s*(\d+)\s*[x×]\s*(\d+)\s*$/i.exec(String(s||''));return m?[+m[1],+m[2]]:null};
+// frame layouts. custom3x4 = 3 columns x 4 rows read left-to-right, top-to-bottom (index = row*3+col)
+const L3NAMES=['face up','face right','walk up (L foot)','walk left (R foot)','walk right (R foot)','face down','face left','walk right (L foot)','walk down (R foot)','walk left (L foot)','walk up (R foot)','walk down (L foot)'];
+const L3SHORT=['U','R','U·L','L·R','R·R','D','L','R·L','D·R','L·L','U·R','D·L'];
+const L3DIR={down:[5,8,11],left:[6,3,9],right:[1,4,7],up:[0,10,2]};   // [stand, step1 (R foot), step2 (L foot)]
+// game 4x4: rows down/left/right/up; step1 -> col 1, step2 -> col 3 (right: col 2), as in getOverworldFrame
+const L3TO4=(()=>{const m={};for(const[dir,row]of[['down',0],['left',1],['right',2],['up',3]]){const[st,a,b]=L3DIR[dir];m[row*4+0]=st;m[row*4+1]=a;m[row*4+2]=dir==='right'?b:st;m[row*4+3]=dir==='right'?st:b}return m})();
+// ---- frame roles: which frame is which animation / facing / step. One frame can have several roles.
+const ANIMS=['walk','run','cycle','surf','fish','fly'],DIRS=['down','left','right','up'];
+const AL={walk:'W',run:'R',cycle:'C',surf:'S',fish:'F',fly:'Y'},DA={down:'↓',left:'←',right:'→',up:'↑'};
+const ANIM_FLAG={run:'isRunning',cycle:'isCycling',surf:'isSurfing',fish:'isFishing',fly:'isFlying'};
+function buildFrameMap(e){const n=e.cols*e.rows,out={};
+  for(const a of ANIMS)for(const d of DIRS){const rs=(e.roles||[]).filter(x=>x.anim===a&&x.dir===d&&x.f<n&&x.f>=0);if(!rs.length)continue;
+    const by={};let mx=0;for(const x of rs){by[x.slot]=x.f;mx=Math.max(mx,x.slot)}const arr=[];
+    for(let i=0;i<=mx;i++)arr.push(by[i]!==undefined?by[i]:(arr.length?arr[arr.length-1]:rs[0].f));
+    (out[a]=out[a]||{})[d]=arr}
+  return out}
+function mapToRoles(fm){const out=[];if(!fm||typeof fm!=='object')return out;for(const a of Object.keys(fm))for(const d of Object.keys(fm[a]||{})){const arr=fm[a][d];if(Array.isArray(arr))arr.forEach((f,i)=>out.push({f:+f,anim:a,dir:d,slot:i}))}return out}
+function takeFrameMap(e){if(e.fields.frameMap){e.roles=mapToRoles(e.fields.frameMap);delete e.fields.frameMap}}
+function roleLabel(e,f){const rs=(e.roles||[]).filter(x=>x.f===f);if(!rs.length)return'';const x=rs[0];return(AL[x.anim]||'?')+(DA[x.dir]||'')+x.slot+(rs.length>1?'+':'')}
+function walkPreset(e){const g=e.layout==='custom3x4'?L3DIR:{down:[0,1,3],left:[4,5,7],right:[8,9,10],up:[12,13,15]};const out=[];for(const d of DIRS)g[d].forEach((f,i)=>out.push({f,anim:'walk',dir:d,slot:i}));return out}
 const slug=n=>String(n).trim().replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').toLowerCase()||'sprite';
 function mkEntry(name,f,rect,cols,rows){const e={name,fields:Object.assign({spriteID:slug(name)+'_ow',frames:12,genderBased:false,owType:'NPC',owDimension:'16x32',trueDimension:'32x48',
-  isRunning:false,isFishing:false,isSurfing:false,isCycling:false,owSprite:'graphics/overworld/'+slug(name)+'.png'},f||{}),rect:rect||null,cols:cols||4,rows:rows||4};return e}
+  isRunning:false,isFishing:false,isSurfing:false,isCycling:false,owSprite:'graphics/overworld/'+slug(name)+'.png'},f||{}),rect:rect||null,cols:cols||4,rows:rows||4,layout:'game4x4',roles:[]};takeFrameMap(e);return e}
 const cell=e=>parseDim(e.fields.trueDimension)||[32,48];
 const cur=()=>S.entries[S.sel]||null;
 function rectOf(e){if(!e.rect)return null;const[cw,ch]=cell(e);return{x:e.rect.x,y:e.rect.y,w:e.cols*cw,h:e.rows*ch,cw,ch}}
 function scopeRect(){const sc=$('scope').value,e=cur();
   if(sc==='sheet'||!e||!rectOf(e))return{x:0,y:0,w:S.W,h:S.H,cw:S.W,ch:S.H,frames:[{x:0,y:0,w:S.W,h:S.H}]};
   const r=rectOf(e);const fr=(i)=>({x:r.x+(i%e.cols)*r.cw,y:r.y+Math.floor(i/e.cols)*r.ch,w:r.cw,h:r.ch});
-  if(sc==='frame'){const f=fr(Math.min(S.frame,e.cols*e.rows-1));return{...f,cw:f.w,ch:f.h,frames:[f]}}
+  if(sc==='frame'){const sel=(S.fsel.length?S.fsel:[S.frame]).filter(i=>i<e.cols*e.rows),fl=(sel.length?sel:[0]).map(fr),f=fl[0];return{...f,cw:f.w,ch:f.h,frames:fl}}
   const all=[];for(let i=0;i<e.cols*e.rows;i++)all.push(fr(i));return{...r,frames:all}}
 function renderList(){const l=$('list');l.innerHTML='';
   S.entries.forEach((e,i)=>{const d=document.createElement('div');d.className='it'+(i===S.sel?' sel':'');
     d.innerHTML=`<span>${esc(e.name)} <small>${esc(e.fields.owType||'')}</small></span>${e.rect?`<small>${e.cols}×${e.rows}</small>`:'<small class="w" title="no region on the sheet yet">⚠ unplaced</small>'}`;
-    d.onclick=()=>{S.sel=i;S.frame=0;renderList();renderForm();redraw()};l.append(d)});
+    d.onclick=()=>{S.sel=i;S.frame=0;S.fsel=[];renderList();renderForm();renderFrames();redraw()};l.append(d)});
   const w=[];const ids={};for(const e of S.entries){const id=e.fields.spriteID;ids[id]=(ids[id]||0)+1}
   for(const id in ids)if(ids[id]>1)w.push('Duplicate spriteID: '+id);
   const paths={};for(const e of S.entries){const p=e.fields.owSprite;if(e.rect){paths[p]=(paths[p]||0)+1}}for(const p in paths)if(paths[p]>1)w.push('Same PNG path used twice: '+p);
+  for(const e of S.entries)if(e.layout==='custom3x4'&&e.rect&&!(e.cols===3&&e.rows===4))w.push(e.name+': “Your 3×4 sheet” needs 3 cols × 4 rows');
   for(const e of S.entries){const r=rectOf(e);if(r&&(r.x+r.w>S.W||r.y+r.h>S.H))w.push(e.name+': region goes past the sheet edge')}
   $('warns').innerHTML=w.map(esc).join('<br>')}
 function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="hint">Pick or create an NPC.</div>';return}
@@ -189,6 +220,8 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   <div class="row f"><label>owDimension</label><input type="text" id="fod" value="${esc(F.owDimension)}" style="width:80px"><span class="hint">collision box</span></div>
   <div class="row f"><label>Frame size</label><input type="number" id="fcw" value="${cw}"><span>×</span><input type="number" id="fch" value="${ch}"><span class="hint">= trueDimension</span></div>
   <div class="row f"><label>Cols × rows</label><input type="number" id="fco" value="${e.cols}" min="1"><span>×</span><input type="number" id="fro" value="${e.rows}" min="1"></div>
+  <div class="row f"><label>Layout</label><select id="flo"><option value="game4x4">Game 4×4 (rows = down/left/right/up)</option><option value="custom3x4">Your 3×4 sheet</option></select></div>
+  <div class="row f"><label></label><button class="sm" id="fconv" title="rearranges the frames in the sheet into the game's 4×4 layout">Convert to game 4×4</button><span class="hint">PNG is converted on export anyway</span></div>
   <div class="row f"><label>frames</label><input type="number" id="ffr" value="${F.frames}" min="1"><button class="sm" id="ffrA">= cols×rows</button></div>
   <div class="row f"><label>Sheet x,y</label><input type="number" id="fx" value="${r.x}"><input type="number" id="fy" value="${r.y}"><button class="sm" id="fdraw" title="then drag on the sheet">draw region</button></div>
   <div class="row">${FLAGS.map(k=>`<label><input type="checkbox" data-fl="${k}" ${F[k]?'checked':''}> ${k}</label>`).join('')}</div>`;
@@ -201,18 +234,48 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   $('fco').oninput=()=>{e.cols=Math.max(1,+$('fco').value||1);redraw()};$('fro').oninput=()=>{e.rows=Math.max(1,+$('fro').value||1);redraw()};
   $('ffr').oninput=()=>{F.frames=Math.max(1,+$('ffr').value||1)};$('ffrA').onclick=()=>{F.frames=e.cols*e.rows;$('ffr').value=F.frames};
   const xy=()=>{const x=$('fx').value,y=$('fy').value;if(x===''||y==='')return;e.rect={x:+x,y:+y};renderList();redraw()};$('fx').oninput=xy;$('fy').oninput=xy;
+  $('flo').value=e.layout||'game4x4';$('flo').onchange=()=>{e.layout=$('flo').value;if(e.layout==='custom3x4'&&e.cols===4&&e.rows===4){e.cols=3;e.rows=4}else if(e.layout==='game4x4'&&e.cols===3&&e.rows===4){e.cols=4;e.rows=4}renderForm();renderList();redraw();previewDirty=true};
+  $('fconv').onclick=()=>convertEntry(e);
   $('fdraw').onclick=()=>setTool('region');
   f.querySelectorAll('[data-fl]').forEach(c=>c.onchange=()=>{F[c.dataset.fl]=c.checked});}
+function selectFrame(i,ev){const e=cur();if(!e)return;const n=e.cols*e.rows;i=Math.max(0,Math.min(n-1,i));
+  if(ev&&ev.shiftKey&&S.fsel.length){const a=S.fsel[S.fsel.length-1],lo=Math.min(a,i),hi=Math.max(a,i);for(let k=lo;k<=hi;k++)if(!S.fsel.includes(k))S.fsel.push(k)}
+  else if(ev&&(ev.ctrlKey||ev.metaKey)){const k=S.fsel.indexOf(i);if(k>=0)S.fsel.splice(k,1);else S.fsel.push(i)}
+  else S.fsel=[i];
+  S.frame=i;renderFrames();redraw();previewDirty=true}
+function renderFrames(){const g=$('fgrid'),e=cur();g.innerHTML='';const r=e&&rectOf(e);if(!r){$('rInfo').textContent='';return}
+  g.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;max-height:300px;overflow:auto';
+  const n=Math.min(e.cols*e.rows,96),sc=Math.max(1,Math.min(52/r.cw,64/r.ch));
+  for(let i=0;i<n;i++){const w=document.createElement('div'),on=S.fsel.includes(i);w.style.cssText='position:relative;border:2px solid '+(on?'#4fd18b':'var(--line)')+';border-radius:5px;cursor:pointer;background:#0b0d13;line-height:0';
+    const c=document.createElement('canvas');c.width=r.cw;c.height=r.ch;c.style.cssText=`width:${Math.round(r.cw*sc)}px;height:${Math.round(r.ch*sc)}px;image-rendering:pixelated`;
+    const x=c.getContext('2d');x.drawImage(S.sheet,r.x+(i%e.cols)*r.cw,r.y+Math.floor(i/e.cols)*r.ch,r.cw,r.ch,0,0,r.cw,r.ch);w.append(c);
+    const t=document.createElement('div');t.style.cssText='position:absolute;left:1px;top:0;font:9px/11px system-ui;color:#ffd24a;text-shadow:0 0 2px #000,0 0 2px #000';t.textContent=i+(roleLabel(e,i)?' '+roleLabel(e,i):'');w.append(t);
+    w.title=(e.roles||[]).filter(q=>q.f===i).map(q=>`${q.anim} ${q.dir} #${q.slot}`).join('\n')||'no role yet';
+    w.onclick=ev=>selectFrame(i,ev);g.append(w)}
+  const last=S.fsel[S.fsel.length-1],rs=(e.roles||[]).filter(q=>q.f===last);
+  $('rInfo').textContent=S.fsel.length?`Selected: ${S.fsel.join(', ')}.`+(S.fsel.length===1?(rs.length?' Roles: '+rs.map(q=>`${q.anim} ${q.dir} #${q.slot}`).join('; '):' No role yet.'):''):'No frame selected.'}
+function setRole(e,f,anim,dir,slot){e.roles=(e.roles||[]).filter(x=>!(x.anim===anim&&x.dir===dir&&x.slot===slot));e.roles.push({f,anim,dir,slot});const fl=ANIM_FLAG[anim];if(fl)e.fields[fl]=true}
+$('rAssign').onclick=()=>{const e=cur();if(!e)return;if(!S.fsel.length)return status('Select one or more frames first.');
+  const anim=$('rAnim').value,dir=$('rDir').value,sl=$('rSlot').value;
+  if(sl!=='auto'&&S.fsel.length>1)return status('Several frames are selected: choose “auto” so they get steps 0, 1, 2… in the order you selected them.');
+  S.fsel.forEach((f,i)=>setRole(e,f,anim,dir,sl==='auto'?i:+sl));renderFrames();renderForm();redraw();status(`${S.fsel.length} frame(s) → ${anim} ${dir}.`)};
+$('rClear').onclick=()=>{const e=cur();if(!e)return;e.roles=(e.roles||[]).filter(x=>!S.fsel.includes(x.f));renderFrames();redraw()};
+$('rClearA').onclick=()=>{const e=cur();if(!e)return;const a=$('rAnim').value;e.roles=(e.roles||[]).filter(x=>x.anim!==a);renderFrames();redraw();status('Cleared all “'+a+'” frames.')};
+$('rAuto').onclick=()=>{const e=cur();if(!e)return;e.roles=(e.roles||[]).filter(x=>x.anim!=='walk').concat(walkPreset(e));renderFrames();redraw();status('Walk frames assigned from the '+(e.layout==='custom3x4'?'3×4':'game 4×4')+' layout.')};
+$('rAll').onclick=()=>{const e=cur();if(!e)return;const same=$('rSame').checked;let n=0;
+  for(const o of S.entries){if(o===e)continue;if(same&&(o.cols!==e.cols||o.rows!==e.rows))continue;o.roles=JSON.parse(JSON.stringify(e.roles||[]));for(const x of o.roles){const fl=ANIM_FLAG[x.anim];if(fl)o.fields[fl]=true}n++}
+  status(`Roles copied to ${n} other NPC(s)`+(same?' with the same grid.':'.'))};
 $('eAdd').onclick=()=>{let n=1;while(S.entries.some(e=>e.name==='New_NPC_'+n))n++;const e=mkEntry('New_NPC_'+n,{},{x:0,y:0},4,4);
   const free=findFree(e);e.rect=free;S.entries.push(e);S.sel=S.entries.length-1;renderList();renderForm();redraw()};
 function findFree(e){const[cw,ch]=cell(e),w=e.cols*cw,h=e.rows*ch;let y=0;for(const o of S.entries){const r=rectOf(o);if(r)y=Math.max(y,r.y+r.h)}
   if(y+h>S.H)newSheet(Math.max(S.W,w),y+h,true);return{x:0,y}}
-$('eDup').onclick=()=>{const e=cur();if(!e)return;const c=mkEntry(e.name+'_copy',JSON.parse(JSON.stringify(e.fields)),null,e.cols,e.rows);c.fields.spriteID=slug(c.name)+'_ow';c.fields.owSprite='graphics/overworld/'+slug(c.name)+'.png';
+$('eDup').onclick=()=>{const e=cur();if(!e)return;const c=mkEntry(e.name+'_copy',JSON.parse(JSON.stringify(e.fields)),null,e.cols,e.rows);c.fields.spriteID=slug(c.name)+'_ow';c.fields.owSprite='graphics/overworld/'+slug(c.name)+'.png';c.layout=e.layout;c.roles=JSON.parse(JSON.stringify(e.roles||[]));
   c.rect=findFree(c);const r=rectOf(e);if(r){S.sx.drawImage(S.sheet,r.x,r.y,r.w,r.h,c.rect.x,c.rect.y,r.w,r.h)}S.entries.push(c);S.sel=S.entries.length-1;renderList();renderForm();redraw()};
 $('eDel').onclick=()=>{if(S.sel<0)return;S.entries.splice(S.sel,1);S.sel=Math.min(S.sel,S.entries.length-1);renderList();renderForm();redraw()};
+$('bkL').onchange=()=>{const c=$('bkL').value==='custom3x4';$('bkC').value=c?3:4;$('bkR').value=4};
 $('eBulk').onclick=()=>$('dBulk').showModal();$('bkX2').onclick=()=>$('dBulk').close();
 $('bkGo').onclick=()=>{const v=id=>+$(id).value||0,nm=$('bkName').value||'Trainer',x0=v('bkX'),y0=v('bkY'),w=v('bkW'),h=v('bkH'),c=v('bkC'),r=v('bkR'),a=Math.max(1,v('bkA')),n=v('bkN');
-  let first=S.entries.length;for(let i=0;i<n;i++){const nn=nm+'_'+(i+1);const e=mkEntry(nn,{trueDimension:w+'x'+h,frames:12},{x:x0+(i%a)*c*w,y:y0+Math.floor(i/a)*r*h},c,r);
+  let first=S.entries.length;for(let i=0;i<n;i++){const nn=nm+'_'+(i+1);const e=mkEntry(nn,{trueDimension:w+'x'+h,frames:12},{x:x0+(i%a)*c*w,y:y0+Math.floor(i/a)*r*h},c,r);e.layout=$('bkL').value;
     if(e.cols*e.rows<12)e.fields.frames=e.cols*e.rows;S.entries.push(e)}
   const need=y0+Math.ceil(n/a)*r*h,needW=x0+Math.min(a,n)*c*w;if(need>S.H||needW>S.W)newSheet(Math.max(S.W,needW),Math.max(S.H,need),true);
   S.sel=first;$('dBulk').close();renderList();renderForm();redraw();status(n+' NPCs added.')};
@@ -233,7 +296,8 @@ function draw(){need=false;const d=devicePixelRatio||1,w=cv.width,h=cv.height;cx
     cx.strokeStyle=sel?'#ffd24a':'#ffffff55';cx.lineWidth=sel?2:1;cx.strokeRect(ox+r.x*z+.5,oy+r.y*z+.5,r.w*z,r.h*z);
     if(showGrid&&sel){cx.strokeStyle='#ffd24a66';cx.lineWidth=1;cx.beginPath();for(let c=1;c<e.cols;c++){cx.moveTo(ox+(r.x+c*r.cw)*z+.5,oy+r.y*z);cx.lineTo(ox+(r.x+c*r.cw)*z+.5,oy+(r.y+r.h)*z)}
       for(let rr=1;rr<e.rows;rr++){cx.moveTo(ox+r.x*z,oy+(r.y+rr*r.ch)*z+.5);cx.lineTo(ox+(r.x+r.w)*z,oy+(r.y+rr*r.ch)*z+.5)}cx.stroke();
-      const f=Math.min(S.frame,e.cols*e.rows-1),fx=r.x+(f%e.cols)*r.cw,fy=r.y+Math.floor(f/e.cols)*r.ch;cx.strokeStyle='#4fd18b';cx.lineWidth=2;cx.strokeRect(ox+fx*z+1,oy+fy*z+1,r.cw*z-1,r.ch*z-1)}
+      for(const f of(S.fsel.length?S.fsel:[Math.min(S.frame,e.cols*e.rows-1)])){const fx=r.x+(f%e.cols)*r.cw,fy=r.y+Math.floor(f/e.cols)*r.ch;cx.strokeStyle='#4fd18b';cx.lineWidth=2;cx.strokeRect(ox+fx*z+1,oy+fy*z+1,r.cw*z-1,r.ch*z-1)}}
+    if(sel&&S.z>=2){cx.fillStyle='#ffd24acc';cx.font=(9*d)+'px system-ui';const hasR=(e.roles||[]).length;for(let k=0;k<e.cols*e.rows&&k<96;k++){const t=hasR?roleLabel(e,k):(e.layout==='custom3x4'?L3SHORT[k]||'':'');if(t)cx.fillText(t,ox+(r.x+(k%e.cols)*r.cw)*z+3*d,oy+(r.y+Math.floor(k/e.cols)*r.ch)*z+11*d)}}
     cx.fillStyle=sel?'#ffd24a':'#ffffffaa';cx.font=(11*d)+'px system-ui';cx.fillText(e.name,ox+r.x*z+3,oy+r.y*z-4*d)});
   if(S.z>=8&&showGrid){cx.strokeStyle='#ffffff14';cx.lineWidth=1;cx.beginPath();const x0=Math.max(0,Math.floor(-S.ox/S.z)),y0=Math.max(0,Math.floor(-S.oy/S.z)),x1=Math.min(S.W,Math.ceil((w/d-S.ox)/S.z)),y1=Math.min(S.H,Math.ceil((h/d-S.oy)/S.z));
     for(let x=x0;x<=x1;x++){cx.moveTo(ox+x*z+.5,oy+y0*z);cx.lineTo(ox+x*z+.5,oy+y1*z)}for(let y=y0;y<=y1;y++){cx.moveTo(ox+x0*z,oy+y*z+.5);cx.lineTo(ox+x1*z,oy+y*z+.5)}cx.stroke()}
@@ -257,7 +321,7 @@ function newSheetKeepStacks(w,h){const u=S.undo,r=S.redo;newSheet(w,h,false);S.u
 function undo(){const st=S.undo.pop();if(!st)return;S.redo.push(restore(st));afterEdit()}
 function redo(){const st=S.redo.pop();if(!st)return;S.undo.push(restore(st));afterEdit()}
 $('bUndo').onclick=undo;$('bRedo').onclick=redo;
-function afterEdit(){redraw();renderList();renderForm();previewDirty=true}
+function afterEdit(){redraw();renderList();renderForm();renderFrames();previewDirty=true}
 function dot(x,y,rgba,erase){const bs=+$('brush').value;const id=S.sx.createImageData(1,1);
   for(let j=0;j<bs;j++)for(let i=0;i<bs;i++){const px=x+i,py=y+j;if(px<0||py<0||px>=S.W||py>=S.H)continue;
     if(erase)S.sx.clearRect(px,py,1,1);else{id.data.set(rgba);S.sx.putImageData(id,px,py)}}}
@@ -279,7 +343,7 @@ cv.addEventListener('mousedown',ev=>{const p=toPx(ev);
   if(ev.button!==0)return;
   if(pickTarget!=='col'){const c=pickAt(p);if(c){$(pickTarget).value=toHex(c[0],c[1],c[2])}pickTarget='col';cv.style.cursor='crosshair';return}
   if(S.tool==='select'){let hit=-1;S.entries.forEach((e,i)=>{const r=rectOf(e);if(r&&p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h)hit=i});
-    if(hit>=0){S.sel=hit;const e=S.entries[hit],r=rectOf(e);S.frame=Math.floor((p.y-r.y)/r.ch)*e.cols+Math.floor((p.x-r.x)/r.cw);renderList();renderForm();redraw();previewDirty=true}return}
+    if(hit>=0){const changed=hit!==S.sel;S.sel=hit;const e=S.entries[hit],r=rectOf(e);if(changed)S.fsel=[];const fi=Math.floor((p.y-r.y)/r.ch)*e.cols+Math.floor((p.x-r.x)/r.cw);renderList();renderForm();selectFrame(fi,ev);if(e.layout==='custom3x4'&&L3NAMES[fi]&&!(e.roles||[]).length)status('Frame '+fi+': '+L3NAMES[fi])}return}
   if(S.tool==='region'){if(!cur()){status('Create an NPC first (+ New).');return}drag={kind:'region',a:{x:Math.max(0,p.x),y:Math.max(0,p.y)},b:{x:Math.max(0,p.x),y:Math.max(0,p.y)}};return}
   if(S.tool==='pick'){setPrimary(pickAt(p));return}
   if(!inb(p))return;
@@ -295,7 +359,7 @@ addEventListener('mouseup',()=>{panning=null;
       // keep cols/rows when the drag matches the old size; otherwise derive the frame size from the drag
       e.fields.trueDimension=Math.max(1,Math.round(w/e.cols))+'x'+Math.max(1,Math.round(h/e.rows));status(`Region ${w}×${h} at ${x},${y} → frame ${e.fields.trueDimension}`)}
     drag=null;renderList();renderForm();redraw()}
-  else if(drag){drag=null;previewDirty=true;renderList()}});
+  else if(drag){drag=null;previewDirty=true;renderList();renderFrames()}});
 cv.addEventListener('wheel',ev=>{ev.preventDefault();const b=cv.getBoundingClientRect(),mx=ev.clientX-b.left,my=ev.clientY-b.top,old=S.z;
   S.z=Math.max(.5,Math.min(48,old*(ev.deltaY<0?1.2:1/1.2)));if(S.z>4)S.z=Math.round(S.z*2)/2;S.ox=mx-(mx-S.ox)*S.z/old;S.oy=my-(my-S.oy)*S.z/old;redraw()},{passive:false});
 addEventListener('keydown',ev=>{if(/INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)&&ev.target.type!=='range')return;
@@ -306,12 +370,12 @@ addEventListener('keydown',ev=>{if(/INPUT|SELECT|TEXTAREA/.test(ev.target.tagNam
   if(ev.key==='+'||ev.key==='='){S.z=Math.min(48,S.z*1.25);redraw()}if(ev.key==='-'){S.z=Math.max(.5,S.z/1.25);redraw()}});
 addEventListener('keyup',ev=>{if(ev.code==='Space')space=false});
 // ---------------------------------------------------------------- pixel ops on the scope
-function mapScope(fn){const sr=scopeRect();pushUndo();const lim=$('fLim').checked?{c:hex2($('swFrom').value),t:+$('swTol').value}:null;
-  const id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),d=id.data;let n=0;
-  for(let i=0;i<d.length;i+=4){if(d[i+3]===0)continue;
+function eachScopeData(cb,write=true){const sr=scopeRect();for(const f of sr.frames){const w=Math.min(f.w,S.W-f.x),h=Math.min(f.h,S.H-f.y);if(w<=0||h<=0)continue;const id=S.sx.getImageData(f.x,f.y,w,h);cb(id.data);if(write)S.sx.putImageData(id,f.x,f.y)}}
+function mapScope(fn){pushUndo();const lim=$('fLim').checked?{c:hex2($('swFrom').value),t:+$('swTol').value}:null;let n=0;
+  eachScopeData(d=>{for(let i=0;i<d.length;i+=4){if(d[i+3]===0)continue;
     if(lim){const dr=d[i]-lim.c[0],dg=d[i+1]-lim.c[1],db=d[i+2]-lim.c[2];if(Math.sqrt(dr*dr+dg*dg+db*db)>lim.t)continue}
-    const o=fn(d[i],d[i+1],d[i+2],d[i+3]);if(o){d[i]=o[0];d[i+1]=o[1];d[i+2]=o[2];d[i+3]=o[3];n++}}
-  S.sx.putImageData(id,sr.x,sr.y);afterEdit();return n}
+    const o=fn(d[i],d[i+1],d[i+2],d[i+3]);if(o){d[i]=o[0];d[i+1]=o[1];d[i+2]=o[2];d[i+3]=o[3];n++}}});
+  afterEdit();return n}
 function rgb2hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b);let h=0,s=0;const l=(mx+mn)/2;
   if(mx!==mn){const d=mx-mn;s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;h*=60}return[h,s,l]}
 function hsl2rgb(h,s,l){h=((h%360)+360)%360/360;if(s===0){const v=Math.round(l*255);return[v,v,v]}
@@ -328,12 +392,9 @@ $('fInv').onclick=()=>mapScope((r,g,b,a)=>[255-r,255-g,255-b,a]);
 $('fSepia').onclick=()=>mapScope((r,g,b,a)=>[clamp(.393*r+.769*g+.189*b),clamp(.349*r+.686*g+.168*b),clamp(.272*r+.534*g+.131*b),a]);
 $('fPost').onclick=()=>{const L=Math.max(2,+$('fPL').value||4),q=v=>clamp(Math.round(v/255*(L-1))/(L-1)*255);mapScope((r,g,b,a)=>[q(r),q(g),q(b),a])};
 $('swGo').onclick=()=>{const f=hex2($('swFrom').value),t=hex2($('swTo').value),tol=+$('swTol').value;
-  const n=(()=>{const sr=scopeRect();pushUndo();const id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),d=id.data;let n=0;
-    for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;const dr=d[i]-f[0],dg=d[i+1]-f[1],db=d[i+2]-f[2];if(Math.sqrt(dr*dr+dg*dg+db*db)<=tol){d[i]=t[0];d[i+1]=t[1];d[i+2]=t[2];n++}}
-    S.sx.putImageData(id,sr.x,sr.y);afterEdit();return n})();status(n+' pixels swapped.')};
-$('swKey').onclick=()=>{const f=hex2($('swFrom').value),tol=+$('swTol').value;const sr=scopeRect();pushUndo();const id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),d=id.data;let n=0;
-  for(let i=0;i<d.length;i+=4){const dr=d[i]-f[0],dg=d[i+1]-f[1],db=d[i+2]-f[2];if(d[i+3]&&Math.sqrt(dr*dr+dg*dg+db*db)<=tol){d[i+3]=0;n++}}
-  S.sx.putImageData(id,sr.x,sr.y);afterEdit();status(n+' pixels made transparent.')};
+  pushUndo();let n=0;eachScopeData(d=>{for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;const dr=d[i]-f[0],dg=d[i+1]-f[1],db=d[i+2]-f[2];if(Math.sqrt(dr*dr+dg*dg+db*db)<=tol){d[i]=t[0];d[i+1]=t[1];d[i+2]=t[2];n++}}});afterEdit();status(n+' pixels swapped.')};
+$('swKey').onclick=()=>{const f=hex2($('swFrom').value),tol=+$('swTol').value;pushUndo();let n=0;
+  eachScopeData(d=>{for(let i=0;i<d.length;i+=4){const dr=d[i]-f[0],dg=d[i+1]-f[1],db=d[i+2]-f[2];if(d[i+3]&&Math.sqrt(dr*dr+dg*dg+db*db)<=tol){d[i+3]=0;n++}}});afterEdit();status(n+' pixels made transparent.')};
 $('swPick').onclick=()=>{pickTarget='swFrom';cv.style.cursor='copy';status('Click a pixel on the sheet to set “From”.')};
 $('swPickT').onclick=()=>{pickTarget='swTo';cv.style.cursor='copy';status('Click a pixel on the sheet to set “To”.')};
 function eachFrame(fn){const sr=scopeRect();pushUndo();for(const f of sr.frames){const w=Math.min(f.w,S.W-f.x),h=Math.min(f.h,S.H-f.y);if(w<=0||h<=0)continue;const id=S.sx.getImageData(f.x,f.y,w,h);fn(id,w,h);S.sx.putImageData(id,f.x,f.y)}afterEdit()}
@@ -346,14 +407,14 @@ $('fOut').onclick=()=>{const c=primary();eachFrame((id,w,h)=>{const d=id.data,o=
 $('mGo').onclick=()=>{const e=cur(),r=e&&rectOf(e);if(!r)return status('Select a placed NPC first.');const a=+$('mSrc').value,b=+$('mDst').value,n=e.cols*e.rows;if(a>=n||b>=n||a<0||b<0)return status('Frame numbers go 0 to '+(n-1)+'.');
   pushUndo();const fr=i=>({x:r.x+(i%e.cols)*r.cw,y:r.y+Math.floor(i/e.cols)*r.ch}),A=fr(a),B=fr(b),id=S.sx.getImageData(A.x,A.y,r.cw,r.ch);flip(id,r.cw,r.ch,false);S.sx.clearRect(B.x,B.y,r.cw,r.ch);S.sx.putImageData(id,B.x,B.y);afterEdit();status(`Frame ${a} copied flipped to ${b}.`)};
 // ---------------------------------------------------------------- palette
-function grab(){const sr=scopeRect(),id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),d=id.data,m=new Map();
-  for(let i=0;i<d.length;i+=4){if(d[i+3]<8)continue;const k=d[i]<<16|d[i+1]<<8|d[i+2];m.set(k,(m.get(k)||0)+1)}
+function grab(){const m=new Map();
+  eachScopeData(d=>{for(let i=0;i<d.length;i+=4){if(d[i+3]<8)continue;const k=d[i]<<16|d[i+1]<<8|d[i+2];m.set(k,(m.get(k)||0)+1)}},false);
   const arr=[...m.entries()].sort((a,b)=>b[1]-a[1]);S.palList=arr.map(([k,n])=>({rgb:[k>>16&255,k>>8&255,k&255],n}));renderPal()}
 function renderPal(){const sw=$('sw');sw.innerHTML='';const L=S.palList||[];$('pInfo').textContent=L.length?`${L.length} colours in the scope. Click = pick, right-click = set as “From”, double-click = swap this colour for the primary colour.`:'Click a swatch to pick it. Double-click swaps it for the primary colour.';
   L.slice(0,400).forEach((p,i)=>{const d=document.createElement('div');d.style.background=toHex(...p.rgb);d.title=`${toHex(...p.rgb)} · ${p.n} px`;
     d.onclick=()=>setPrimary([...p.rgb,255]);d.oncontextmenu=ev=>{ev.preventDefault();$('swFrom').value=toHex(...p.rgb)};
-    d.ondblclick=()=>{const to=hex2($('col').value),from=p.rgb;const sr=scopeRect();pushUndo();const id=S.sx.getImageData(sr.x,sr.y,Math.min(sr.w,S.W-sr.x),Math.min(sr.h,S.H-sr.y)),dd=id.data;
-      for(let j=0;j<dd.length;j+=4)if(dd[j+3]&&dd[j]===from[0]&&dd[j+1]===from[1]&&dd[j+2]===from[2]){dd[j]=to[0];dd[j+1]=to[1];dd[j+2]=to[2]}S.sx.putImageData(id,sr.x,sr.y);afterEdit();grab()};
+    d.ondblclick=()=>{const to=hex2($('col').value),from=p.rgb;pushUndo();
+      eachScopeData(dd=>{for(let j=0;j<dd.length;j+=4)if(dd[j+3]&&dd[j]===from[0]&&dd[j+1]===from[1]&&dd[j+2]===from[2]){dd[j]=to[0];dd[j+1]=to[1];dd[j+2]=to[2]}});afterEdit();grab()};
     sw.append(d)})}
 $('pGrab').onclick=grab;
 $('pSave').onclick=()=>{if(!S.palList||!S.palList.length)grab();const L=S.palList.slice(0,256);dl(new Blob(['JASC-PAL\r\n0100\r\n'+L.length+'\r\n'+L.map(p=>p.rgb.join(' ')).join('\r\n')+'\r\n'],{type:'text/plain'}),'palette.pal')};
@@ -372,7 +433,9 @@ document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{pvDir=b.dataset.
 $('pvPlay').onclick=()=>{pvPlay=!pvPlay;$('pvPlay').classList.toggle('on',pvPlay)};
 setInterval(()=>{pvT++;const e=cur(),r=e&&rectOf(e),pc=$('prev'),px=pc.getContext('2d');if(!r){px.clearRect(0,0,pc.width,pc.height);return}
   const z=+$('pvZ').value,seq=[0,1,0,2],step=pvPlay?seq[pvT%4]:0,{row,col}=frameIdx(pvDir,step);
-  const c=Math.min(col,e.cols-1),rr=Math.min(row,e.rows-1);const W=r.cw*z,H=r.ch*z;if(pc.width!==Math.max(W,64)||pc.height!==Math.max(H,64)){pc.width=Math.max(W,64);pc.height=Math.max(H,64)}
+  const A=$('pvA').value,arr=((buildFrameMap(e)[A]||{})[pvDir])||null;let roleFrame=-1;
+  if(arr&&arr.length){if(['fish','fly','surf'].includes(A))roleFrame=arr[pvPlay?pvT%arr.length:0];else{const sq=arr.length>=3?[0,1,0,2]:[0,1];roleFrame=arr[pvPlay?sq[pvT%sq.length]%arr.length:0]}}
+  let c=Math.min(col,e.cols-1),rr=Math.min(row,e.rows-1);if(roleFrame>=0){c=roleFrame%e.cols;rr=Math.floor(roleFrame/e.cols)}else if(A!=='walk'&&!((e.roles||[]).length===0)){px.clearRect(0,0,pc.width,pc.height);px.fillStyle='#8a93a6';px.font='11px system-ui';px.fillText('no '+A+' frames for '+pvDir,6,16);return}else if(e.layout==='custom3x4'){const dd=L3DIR[pvDir]||L3DIR.down,fi=dd[step===0?0:step===1?1:2];c=fi%e.cols;rr=Math.floor(fi/e.cols)}const W=r.cw*z,H=r.ch*z;if(pc.width!==Math.max(W,64)||pc.height!==Math.max(H,64)){pc.width=Math.max(W,64);pc.height=Math.max(H,64)}
   px.imageSmoothingEnabled=false;px.clearRect(0,0,pc.width,pc.height);px.drawImage(S.sheet,r.x+c*r.cw,r.y+rr*r.ch,r.cw,r.ch,0,0,W,H)},180);
 // ---------------------------------------------------------------- load / import
 const bitmapCanvas=async f=>{const bm=await createImageBitmap(f),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;c.getContext('2d').drawImage(bm,0,0);return c};
@@ -411,7 +474,7 @@ function loadTableText(src,from){const t=findTable(src);if(!t){status('Could not
   S.tablePrefix=t.prefix;S.tableSuffix=t.suffix||DEFAULT_SUFFIX;S.tableEntries=obj;S.tableLoaded=true;
   const prev=S.entries;S.entries=[];
   for(const k of Object.keys(obj)){const old=prev.find(e=>e.name===k);const F=JSON.parse(JSON.stringify(obj[k]));
-    const e=mkEntry(k,F,old?old.rect:null,old?old.cols:4,old?old.rows:4);e.fields=Object.assign({},F);S.entries.push(e)}
+    const e=mkEntry(k,F,old?old.rect:null,old?old.cols:4,old?old.rows:4);e.fields=Object.assign({},F);takeFrameMap(e);if(old){e.layout=old.layout;if(!e.roles.length)e.roles=old.roles||[]}S.entries.push(e)}
   for(const e of prev)if(!S.entries.some(x=>x.name===e.name))S.entries.push(e);
   S.sel=S.entries.length?0:-1;renderList();renderForm();redraw();
   status(`${Object.keys(obj).length} entries loaded from ${from}. ${S.entries.some(e=>e.rect)?'':'Import the sheet (or the existing PNGs) to place them.'}`);return true}
@@ -430,18 +493,43 @@ $('fMan').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)r
   if(m.sheetSize&&(m.sheetSize[0]>S.W||m.sheetSize[1]>S.H))newSheet(Math.max(S.W,m.sheetSize[0]),Math.max(S.H,m.sheetSize[1]),true);
   for(const k of Object.keys(sp)){const s=sp[k];let e=S.entries.find(x=>x.name===k);const F=Object.assign({},s.fields||{});
     if(!e){e=mkEntry(k,F,null,s.cols,s.rows);S.entries.push(e)}else{Object.assign(e.fields,F)}
-    e.rect={x:s.rect[0],y:s.rect[1]};e.cols=s.cols;e.rows=s.rows;if(s.frame)e.fields.trueDimension=s.frame[0]+'x'+s.frame[1]}
+    e.rect={x:s.rect[0],y:s.rect[1]};e.cols=s.cols;e.rows=s.rows;e.layout=s.layout||'game4x4';if(s.roles)e.roles=s.roles;if(s.frame)e.fields.trueDimension=s.frame[0]+'x'+s.frame[1]}
   S.sel=S.entries.length?0:-1;renderList();renderForm();redraw();status('Manifest loaded: '+Object.keys(sp).length+' regions. Now import the sheet PNG that goes with it.')}catch(x){status('Could not read the manifest: '+x.message)}};
 // ---------------------------------------------------------------- export
 const q=s=>"'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";
 function fieldsOrdered(F){const out=[];const seen=new Set();for(const k of FIELD_ORDER)if(k in F&&F[k]!==undefined&&!(k==='shinySprite'&&!F[k])){out.push(k);seen.add(k)}for(const k of Object.keys(F))if(!seen.has(k))out.push(k);return out}
 const valStr=v=>typeof v==='string'?q(v):typeof v==='object'&&v!==null?JSON.stringify(v):String(v);
-function tableJs(){const body=S.entries.map(e=>{const F=e.fields,ks=fieldsOrdered(F);
-  return`  ${/^[A-Za-z_$][\w$]*$/.test(e.name)?e.name:q(e.name)}: {\n`+ks.map((k,i)=>`    ${k}: ${valStr(F[k])}${i<ks.length-1?',':''}`).join('\n')+'\n  }'}).join(',\n');
-  return S.tablePrefix+'window.OverworldTable = {\n'+body+'\n};'+(S.tableSuffix.startsWith('\n')?'':'\n')+S.tableSuffix}
-function manifest(){const sp={};for(const e of S.entries){const r=rectOf(e);if(!r)continue;sp[e.name]={fields:e.fields,file:e.fields.owSprite,rect:[r.x,r.y,r.w,r.h],frame:[r.cw,r.ch],cols:e.cols,rows:e.rows,frames:e.fields.frames}}
+function fmJs(fm){const as=Object.keys(fm);return'{\n'+as.map(a=>`      ${a}: { `+Object.keys(fm[a]).map(d=>`${d}: [${fm[a][d].join(', ')}]`).join(', ')+' }').join(',\n')+'\n    }'}
+function tableJs(){const body=S.entries.map(e=>{const F=e.fields,ks=fieldsOrdered(F).filter(k=>k!=='frameMap'),fm=buildFrameMap(e),hasFm=Object.keys(fm).length;
+  const lines=ks.map(k=>`    ${k}: ${valStr(F[k])}`);if(hasFm)lines.push('    frameMap: '+fmJs(fm)+' // anim -> facing -> frame numbers [stand, step 1, step 2, …]');
+  return`  ${/^[A-Za-z_$][\w$]*$/.test(e.name)?e.name:q(e.name)}: {\n`+lines.map((l,i)=>i<lines.length-1?l.replace(/( \/\/ .*)?$/,m=>m)+',':l).join('\n')+'\n  }'}).join(',\n');
+  let suf=S.tableSuffix;if(!/getOverworldFrameFor/.test(suf))suf=suf.replace(/\s*$/,'')+`
+
+// Frame lookup that honours each sprite's frameMap (set in the Overworld Sprite Editor).
+// anim: 'walk' | 'run' | 'cycle' | 'surf' | 'fish' | 'fly'   step: 0 = stand, 1.. = animation steps.
+// Falls back to getOverworldFrame (the fixed 4x4 layout) when a sprite has no frameMap for that animation.
+window.getOverworldFrameFor = function(name, anim, direction, step = 0) {
+  const e = window.OverworldTable && window.OverworldTable[name];
+  const m = e && e.frameMap && e.frameMap[anim] && e.frameMap[anim][direction];
+  if (m && m.length) return m[Math.min(step, m.length - 1)];
+  return window.getOverworldFrame(direction, step);
+};
+`;
+  return S.tablePrefix+'window.OverworldTable = {\n'+body+'\n};'+(suf.startsWith('\n')?'':'\n')+suf}
+function manifest(){const sp={};for(const e of S.entries){const r=rectOf(e);if(!r)continue;sp[e.name]={fields:Object.fromEntries(Object.entries(e.fields).filter(([k])=>k!=='frameMap')),file:e.fields.owSprite,rect:[r.x,r.y,r.w,r.h],frame:[r.cw,r.ch],cols:e.cols,rows:e.rows,layout:e.layout||'game4x4',roles:e.roles||[],frames:e.fields.frames}}
   return JSON.stringify({version:1,sheet:'graphics/overworld/'+S.sheetName,sheetSize:[S.W,S.H],sprites:sp},null,2)}
-function cutPng(e){const r=rectOf(e),c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(S.sheet,r.x,r.y,r.w,r.h,0,0,r.w,r.h);return new Promise(res=>c.toBlob(res,'image/png'))}
+function layoutCanvas(e){const r=rectOf(e);
+  if(e.layout!=='custom3x4'||e.cols!==3||e.rows!==4){const c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(S.sheet,r.x,r.y,r.w,r.h,0,0,r.w,r.h);return c}
+  const c=document.createElement('canvas');c.width=4*r.cw;c.height=4*r.ch;const x=c.getContext('2d');
+  for(let k=0;k<16;k++){const src=L3TO4[k];x.drawImage(S.sheet,r.x+(src%3)*r.cw,r.y+Math.floor(src/3)*r.ch,r.cw,r.ch,(k%4)*r.cw,Math.floor(k/4)*r.ch,r.cw,r.ch)}return c}
+function convertEntry(e){const r=rectOf(e);if(!r)return status('Place this NPC on the sheet first.');if(e.layout!=='custom3x4'||e.cols!==3||e.rows!==4)return status('Only a 3×4 “Your 3×4 sheet” NPC can be converted.');
+  const c=layoutCanvas(e);let nx=r.x,ny=r.y;const w=c.width,h=c.height;
+  const hit=S.entries.some(o=>{if(o===e)return false;const q=rectOf(o);return q&&nx<q.x+q.w&&nx+w>q.x&&ny<q.y+q.h&&ny+h>q.y});
+  pushUndo();S.sx.clearRect(r.x,r.y,r.w,r.h);
+  if(hit||nx+w>S.W||ny+h>S.H){let y=0;for(const o of S.entries){if(o===e)continue;const q=rectOf(o);if(q)y=Math.max(y,q.y+q.h)}nx=0;ny=y;if(ny+h>S.H||w>S.W){const u=S.undo,rd=S.redo;newSheet(Math.max(S.W,w),Math.max(S.H,ny+h),true);S.undo=u;S.redo=rd}}
+  {const seen=new Set(),nr=[];for(let k=0;k<16;k++)for(const x of(e.roles||[]))if(x.f===L3TO4[k]){const key=x.anim+'|'+x.dir+'|'+x.slot;if(seen.has(key))continue;seen.add(key);nr.push({...x,f:k})}e.roles=nr}
+  S.sx.drawImage(c,nx,ny);e.rect={x:nx,y:ny};e.cols=4;e.rows=4;e.layout='game4x4';e.fields.frames=12;renderForm();renderList();redraw();previewDirty=true;status(e.name+' converted to the game 4×4 layout'+(hit?' (moved below the others, there was no room)':'')+'.')}
+function cutPng(e){return new Promise(res=>layoutCanvas(e).toBlob(res,'image/png'))}
 const sheetBlob=()=>new Promise(res=>S.sheet.toBlob(res,'image/png'));
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}
 const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
@@ -458,6 +546,6 @@ $('bZip').onclick=async()=>{if(!S.entries.length)return status('Nothing to expor
   let n=0;const used=new Set();for(const e of S.entries){if(!rectOf(e))continue;const p=e.fields.owSprite;if(!p||used.has(p))continue;used.add(p);files.push({name:p,blob:await cutPng(e)});n++}
   dl(await buildZip(files),'ow_sprites_export.zip');status(`ZIP ready: ow_table.js, manifest, sheet and ${n} sprite PNG(s). Unzip it on top of the repo.`)};
 // ---------------------------------------------------------------- go
-newSheet(256,256);new ResizeObserver(fit).observe($('cv'));fit();renderList();renderForm();
+newSheet(256,256);renderFrames();new ResizeObserver(fit).observe($('cv'));fit();renderList();renderForm();
 window.OWED=S;
 </script></body></html>
