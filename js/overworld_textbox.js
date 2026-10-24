@@ -109,17 +109,19 @@ const OW_TEXT = {
     layout(text, vars) {
       const pc = this.parseColors(this.expand(text, vars)), raw = pc.text;
       const big = !!pc.big, bg = big ? 2 : 1, maxLines = big ? 1 : OW_TEXT.maxLines;   // {big}: glyphs twice as large, so half the width and one line per page
-      const pages = [{ lines: [''], cols: [[]], big }];
+      // \n and \l start a new line. The box shows 2 lines (1 with {big}); from the 3rd line on the text SCROLLS UP: after \n at once, after \l when the player presses a button (like the Emerald font).
+      const pages = [{ lines: [''], cols: [[]], brk: [null], big }];
       let i = 0;
       while (i < raw.length) {
         const two = raw.substr(i, 2);
         const page = pages[pages.length - 1];
-        if (two === '\\n' || two === '\\l') { page.lines.push(''); page.cols.push([]); i += 2; continue; }
-        if (two === '\\p') { pages.push({ lines: [''], cols: [[]], big }); i += 2; continue; }
-        if (raw[i] === '\n') { page.lines.push(''); page.cols.push([]); i++; continue; }
+        if (two === '\\n' || two === '\\l') { page.lines.push(''); page.cols.push([]); page.brk.push(two === '\\l' ? 'l' : 'n'); i += 2; continue; }
+        if (two === '\\p') { pages.push({ lines: [''], cols: [[]], brk: [null], big }); i += 2; continue; }
+        if (raw[i] === '\n') { page.lines.push(''); page.cols.push([]); page.brk.push('n'); i++; continue; }
         page.lines[page.lines.length - 1] += raw[i]; page.cols[page.cols.length - 1].push(pc.cols[i]); i++;
       }
       if (pages.length > 1 && pages[pages.length - 1].lines.every(l => l === '')) pages.pop();   // trailing \p
+      pages.forEach(pg => { while (pg.lines.length > 1 && pg.lines[pg.lines.length - 1] === '') { pg.lines.pop(); pg.cols.pop(); pg.brk.pop(); } });   // a \n at the very end of a message
       const warnings = [];
       pages.forEach((pg, p) => {
         pg.lines.forEach((ln, l) => {
@@ -130,9 +132,6 @@ const OW_TEXT = {
           const bad = this.tokens(ln).filter(t => t.ch !== ' ' && !t.gl).map(t => t.ch);
           if (bad.length) warnings.push({ page: p, line: l, type: 'glyph', msg: `Page ${p + 1}, line ${l + 1}: the font has no "${[...new Set(bad)].join('')}".` });
         });
-        if (pg.lines.length > maxLines) {
-          warnings.push({ page: p, line: maxLines, type: 'lines', msg: `Page ${p + 1} has ${pg.lines.length} lines (max ${maxLines}${big ? ' with {big}' : ''}). Use \\p to start a new page.` });
-        }
       });
       return { pages, warnings, big };
     },
@@ -155,10 +154,8 @@ const OW_TEXT = {
           }
           lines.push(cur);
         }
-        // 2 lines per page
-        const pages = [];
-        for (let i = 0; i < lines.length; i += per) pages.push(lines.slice(i, i + per).join('\\n'));
-        return pages.join('\\p');
+        // one page per paragraph: line 2 follows with \n, the next lines scroll up after a button press (\l); \p only where YOU wrote it
+        return lines.map((ln, i) => (i === 0 ? '' : (i < per ? '\\n' : '\\l')) + ln).join('');
       });
       return (big ? '{big}' : '') + outParas.join('\\p');
     },
@@ -259,21 +256,44 @@ const OW_TEXT = {
         scene.input.keyboard.off('keydown', onKey); scene.input.keyboard.off('keyup', onUp); scene.input.off('pointerdown', onPress);
         if (cb) cb();
       };
+      // The page is a list of lines; the box shows `rows` of them (2, or 1 with {big}). When the typing reaches a line past the box, the lines scroll up:
+      // at once after \n, or after a button press after \l.
+      let lineG = [], li = 0, gi = 0, rows = 2, mul = 1, pendingScroll = false;
+      const rowY = r => ty + r * T.lineHeight * sc * mul;
+      const doScroll = () => {   // the shown lines move up by one row; the top one disappears
+        const hide = li - rows; if (hide >= 0 && lineG[hide]) lineG[hide].forEach(g => g.setVisible(false));
+        for (let k = Math.max(0, li - rows + 1); k <= li; k++) { const r = k - (li - rows + 1); lineG[k].forEach(g => { g.y = rowY(r); }); }
+      };
       const startPage = () => {
-        clearGlyphs(); arrow.setVisible(false); waiting = false; revealed = 0;
-        const pg = lay.pages[pageIdx];
-        pg.lines.forEach((ln, i) => { glyphs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc * (pg.big ? 2 : 1), ln, D + 1, pg.cols && pg.cols[i], pg.big ? 2 : 1)); });
-        glyphs.forEach(g => g.setVisible(false));
+        clearGlyphs(); arrow.setVisible(false); waiting = false; pendingScroll = false;
+        const pg = lay.pages[pageIdx]; mul = pg.big ? 2 : 1; rows = pg.big ? 1 : T.maxLines;
+        lineG = pg.lines.map((ln, i) => this.drawLine(scene, tx, rowY(Math.min(i, rows - 1)), ln, D + 1, pg.cols && pg.cols[i], mul));
+        lineG.forEach(a => { a.forEach(g => g.setVisible(false)); glyphs.push(...a); });
+        li = 0; gi = 0;
         if (timer) timer.remove(false);
         timer = scene.time.addEvent({ delay: T.speed, loop: true, callback: () => reveal(fast ? 3 : 1) });
       };
       const reveal = (n) => {
-        revealed = Math.min(glyphs.length, revealed + n);
-        for (let i = 0; i < revealed; i++) glyphs[i].setVisible(true);
-        if (revealed >= glyphs.length) { if (timer) timer.remove(false); timer = null; waiting = true; arrow.setVisible(true); }
+        const pg = lay.pages[pageIdx];
+        while (n > 0) {
+          if (gi >= lineG[li].length) {   // this line is typed out
+            if (li + 1 >= lineG.length) { if (timer) timer.remove(false); timer = null; waiting = true; arrow.setVisible(true); return; }
+            li++; gi = 0;
+            if (li >= rows) {
+              if (pg.brk[li] === 'l') { if (timer) timer.remove(false); timer = null; pendingScroll = true; arrow.setVisible(true); return; }
+              doScroll();
+            }
+            continue;
+          }
+          lineG[li][gi++].setVisible(true); n--;
+        }
       };
       const onPress = () => {
-        if (!waiting) { reveal(glyphs.length); return; }   // first press shows the whole page
+        if (pendingScroll) {   // \l: scroll up now and go on typing
+          pendingScroll = false; arrow.setVisible(false); doScroll();
+          timer = scene.time.addEvent({ delay: T.speed, loop: true, callback: () => reveal(fast ? 3 : 1) }); return;
+        }
+        if (!waiting) { reveal(1e6); return; }   // first press types out the rest (it still stops at a \l)
         if (pageIdx < lay.pages.length - 1) { pageIdx++; startPage(); } else finish();
       };
       const onKey = (ev) => {
@@ -295,7 +315,9 @@ const OW_TEXT = {
       const lay = OverworldText.layout(text, this.vars(scene));
       // show every page but the last normally; the last page stays on screen while the choice is asked
       const pages = lay.pages;
-      const head0 = pages.slice(0, -1).map(p => p.lines.join('\\n')).join('\\p'), head = head0 ? (lay.big ? '{big}' : '') + head0 : '';
+      const lastPg = pages[pages.length - 1], rowsN = lastPg.big ? 1 : T.maxLines, cut = Math.max(0, lastPg.lines.length - rowsN);   // lines above the last ones are shown first
+      const headPages = pages.slice(0, -1).map(p => p.lines.join('\\n')); if (cut) headPages.push(lastPg.lines.slice(0, cut).join('\\n'));
+      const head0 = headPages.join('\\p'), head = head0 ? (lay.big ? '{big}' : '') + head0 : '';
       const ask = () => {
         this.ensureFont(scene, () => {
           const bx = S.x + T.box.x * sc, by = S.y + T.box.y * sc, bw = T.box.w * sc, bh = T.box.h * sc;
@@ -304,7 +326,7 @@ const OW_TEXT = {
           gfx.lineStyle(2, T.border, T.borderAlpha).strokeRoundedRect(bx + 1, by + 1, bw - 2, bh - 2, 8);
           const objs = [gfx];
           const tx = bx + T.textOffset.x * sc, ty = by + T.textOffset.y * sc;
-          pages[pages.length - 1].lines.forEach((ln, i) => objs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc * (lay.big ? 2 : 1), ln, D + 1, pages[pages.length - 1].cols && pages[pages.length - 1].cols[i], lay.big ? 2 : 1)));
+          lastPg.lines.slice(cut).forEach((ln, i) => objs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc * (lay.big ? 2 : 1), ln, D + 1, lastPg.cols && lastPg.cols[cut + i], lay.big ? 2 : 1)));
           // choice box, right side, just above the message box
           const cw = 56 * sc, ch = 40 * sc, cx = bx + bw - cw, cy = by - ch - 4;
           const g2 = scene.add.graphics().setDepth(D + 2).setScrollFactor(0);

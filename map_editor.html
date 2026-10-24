@@ -789,7 +789,7 @@ function drawMsgPage(c,pg,over){const T=OW_TEXT,sc=T.scale,ML=pg.big?1:T.maxLine
   c.width=W;c.height=H+extra*T.lineHeight*sc;const x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);
   x.fillStyle='#456';x.fillRect(0,0,W,H);x.fillStyle='rgba(8,12,24,.72)';x.fillRect(0,0,W,H);x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;x.strokeRect(1,1,W-2,H-2);
   const ox=T.textOffset.x*sc,oy=T.textOffset.y*sc;
-  pg.lines.forEach((ln,i)=>{const gm=pg.big?2:1,y=oy+i*T.lineHeight*sc*gm;if(i>=ML){x.fillStyle='rgba(255,40,40,.25)';x.fillRect(0,y,W,T.lineHeight*sc*gm)}drawLineTo(x,ln,ox,y,sc,T.innerWidth,pg.cols&&pg.cols[i],gm)});
+  pg.lines.forEach((ln,i)=>{const gm=pg.big?2:1,y=oy+i*T.lineHeight*sc*gm;if(i>=ML){x.fillStyle=(pg.brk&&pg.brk[i]==='l')?'rgba(255,190,60,.28)':'rgba(80,140,255,.28)';x.fillRect(0,y,W,T.lineHeight*sc*gm)}drawLineTo(x,ln,ox,y,sc,T.innerWidth,pg.cols&&pg.cols[i],gm)});
   x.setLineDash([4,3]);x.strokeStyle='rgba(255,60,60,.9)';x.beginPath();x.moveTo(ox+T.innerWidth*sc,4);x.lineTo(ox+T.innerWidth*sc,H-4);x.stroke();x.setLineDash([])}
 function msgPreview(host,st){host.innerHTML='';const L=OverworldText.layout(st.args.text||'',{player:'Player',npc:'Npc'});
   const w=el('div','warns');host.appendChild(w);
@@ -963,7 +963,7 @@ function pvDraw(){const c=$('pvCv'),x=c.getContext('2d'),W=PV.vw,H=PV.vh;x.setTr
   if(H>320){x.strokeStyle='rgba(255,255,255,.35)';x.setLineDash([4,4]);x.strokeRect(.5,.5,W-1,319);x.setLineDash([])}
   const m=PV.msg;if(m){const T=OW_TEXT,sc=T.scale,S=T.screen,bx=S.x+T.box.x*sc,by=S.y+T.box.y*sc,bw=T.box.w*sc,bh=T.box.h*sc;
     x.fillStyle='rgba(8,12,24,.72)';x.fillRect(bx,by,bw,bh);x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;x.strokeRect(bx+1,by+1,bw-2,bh-2);
-    const pg=m.pages[m.page];let left=m.shown;pg.lines.forEach((ln,i)=>{const part=ln.slice(0,Math.max(0,left));left-=ln.length;drawLineTo(x,part,bx+T.textOffset.x*sc,by+(T.textOffset.y+i*T.lineHeight*(pg.big?2:1))*sc,sc,T.innerWidth,pg.cols&&pg.cols[i],pg.big?2:1)});
+    const pg=m.pages[m.page],RW=pg.big?1:T.maxLines;let left=m.shown,cur=0;pg.lines.forEach((ln,i)=>{if(left>0||i===0)cur=i;left-=ln.length});const top=Math.max(0,cur-RW+1);left=m.shown;pg.lines.forEach((ln,i)=>{const part=ln.slice(0,Math.max(0,left));left-=ln.length;if(i<top||i>cur)return;drawLineTo(x,part,bx+T.textOffset.x*sc,by+(T.textOffset.y+(i-top)*T.lineHeight*(pg.big?2:1))*sc,sc,T.innerWidth,pg.cols&&pg.cols[i],pg.big?2:1)});
     if(m.waiting&&!(m.yesno&&m.page===m.pages.length-1)){x.fillStyle='#fff';const ax=bx+bw-22,ay=by+bh-18+(Math.sin(performance.now()/160)*3);x.beginPath();x.moveTo(ax,ay);x.lineTo(ax+14,ay);x.lineTo(ax+7,ay+9);x.fill()}
     if(m.waiting&&m.yesno&&m.page===m.pages.length-1){const cw=56*sc,ch=40*sc,cx=bx+bw-cw,cy=by-ch-4;x.fillStyle='rgba(8,12,24,.85)';x.fillRect(cx,cy,cw,ch);x.strokeStyle='rgba(255,255,255,.35)';x.strokeRect(cx+1,cy+1,cw-2,ch-2);
       drawLineTo(x,'Yes',cx+20*sc,cy+6*sc,sc);drawLineTo(x,'No',cx+20*sc,cy+22*sc,sc);x.fillStyle='#fff';const ty=cy+(m.sel===0?14:30)*sc;x.beginPath();x.moveTo(cx+10*sc,ty-7);x.lineTo(cx+10*sc,ty+7);x.lineTo(cx+20*sc,ty);x.fill();
