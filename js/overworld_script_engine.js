@@ -402,5 +402,34 @@ window.OverworldScriptEngine = (() => {
     run.start();
   };
 
+  // Silent run for the level script type "Before Map Load": no text, no movement, no waiting. Flags, variables and hideobject / showobject work at once.
+  // opts.flagOnly = true: the map is not built yet, so hide / show only write the flag (the map build reads it)
+  E.runSilent = function (scene, scriptName, opts) {
+    if (!scriptName) return;
+    E.load();
+    if (!E.getScript(scriptName)) { console.warn(`[ScriptEngine] Script not found: ${scriptName}`); return; }
+    const flagOnly = !!(opts && opts.flagOnly);
+    const find = (spec) => {
+      const s = String(spec), maps = window.OverworldMaps || {}, cur = (opts && opts.mapKey) || scene.currentMapKey;
+      if (maps[cur] && maps[cur].events && maps[cur].events[s]) return { map: cur, key: s };
+      for (const [mk, m] of Object.entries(maps)) if (m.events && m.events[s]) return { map: mk, key: s };
+      return null;
+    };
+    const none = () => { };
+    const host = {
+      setHidden(spec, hide) {
+        const ev = find(spec);
+        if (!ev) { console.warn(`[script] before map load: no event called "${spec}"`); return; }
+        E.setFlag(`HIDDEN:${ev.map}:${ev.key}`, hide);
+        if (flagOnly) return;
+        if (hide) { const n = (scene.npcs || []).find(x => x.eventKey === ev.key && x.mapName === ev.map); if (n) { scene.npcs.splice(scene.npcs.indexOf(n), 1); n.destroy(); } }
+        else if (scene.spawnAllEvents) scene.spawnAllEvents();
+      },
+      end: none, lock: none, note: none,
+    };
+    const h = new Proxy(host, { get: (t, k) => (k in t ? t[k] : (...a) => { const cb = a.find(x => typeof x === 'function'); if (cb) cb(true); }) });
+    E.createRunner(E.getScript, { scene, host: h, preview: false, getFlag: E.getFlag, setFlag: E.setFlag, getVar: E.getVar, setVar: E.setVar }, scriptName, null).start();
+  };
+
   return E;
 })();
