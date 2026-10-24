@@ -69,7 +69,7 @@ window.OverworldMaps = {
         "yPos": 4,
         "owID": "Trainer_22",
         "script": "town_old_couple_woman",
-        "movementType": "MOVEMENT_TYPE_PATROL_UP_DOWN",
+        "movementType": "MOVEMENT_TYPE_FACE_DOWN",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
@@ -104,7 +104,7 @@ window.OverworldMaps = {
         "yPos": 4,
         "owID": "Trainer_21",
         "script": "town_old_couple_man",
-        "movementType": "MOVEMENT_TYPE_PATROL_UP_DOWN",
+        "movementType": "MOVEMENT_TYPE_FACE_DOWN",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
@@ -127,7 +127,7 @@ window.OverworldMaps = {
         "owID": "Trainer_17",
         "script": "town_beauty",
         "movementType": "MOVEMENT_TYPE_WANDER_LEFT_AND_RIGHT",
-        "isTrainer": false,
+        "isTrainer": true,
         "viewRadius": 3,
         "flagID": ""
       },

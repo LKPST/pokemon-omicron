@@ -468,6 +468,25 @@ start: "town_science_fan"
 faceplayer
 msgbox.normal
 {
+Science is simply AMAZING!\p
+Did you know a Poké Ball turns a\n
+Pokémon into pure energy and stores\p
+it inside a tiny capsule?\n
+Incredible!
+}
+msgbox.normal
+{
+Professor {yellow}Beckett{/} in Olenburg City\n
+studies all of it. He's a genius!\p
+One day I'll work in his lab. I'll\n
+bring snacks and lots of notebooks!
+}
+end
+
+start: "town_beauty"
+faceplayer
+msgbox.normal
+{
 Oh! Do you like my hair?\p
 I use a special Pokémon-friendly\n
 shampoo. Even my {pink}Pokémon{/} glows!
@@ -476,23 +495,6 @@ msgbox.normal
 {
 Beauty isn't about winning. It's\n
 about feeling good, sweetie.\p
-Do your best out there, and\n
-remember to smile on your journey!
-}
-end
-
-start: "town_beauty"
-faceplayer
-msgbox.normal
-{
-{pink}Lady{/}: Oh! Do you like my hair?\p
-I use a special Pokémon-friendly\n
-shampoo. Even my {pink}Pokémon{/} glows!
-}
-msgbox.normal
-{
-Beauty isn't about winning.\n
-It's about feeling good, sweetie.\p
 Do your best out there, and\n
 remember to smile on your journey!
 }
