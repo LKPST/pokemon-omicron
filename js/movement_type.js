@@ -49,11 +49,26 @@ window.OverworldMovement = (() => {
     const x0 = e.x, y0 = e.y;
     const t0 = tileOf(e); e.src = { x: t0.x, y: t0.y }; e.dest = { x: t0.x + dx, y: t0.y + dy };   // reserve both tiles until the step is over
     e.stepInfo = { x0, y0, dx, dy, dir, done, force };
+    if (e.monFollower) followStep(e, t0, ms);   // the Pokémon that follows this NPC steps onto the tile the NPC just left
     e.stepTw = s.tweens.addCounter({
       from: 0, to: 1, duration: ms,
       onUpdate: t => { const v = t.getValue(); e.x = x0 + dx * TILE * v; e.y = y0 + dy * TILE * v - (hop ? Math.sin(v * Math.PI) * 14 : 0); },
       onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(e, dir, 0)); e._anim = null; done && done(); },
     });
+  }
+
+  // ---- a Pokémon that follows an NPC (NPC field followMon, see OverworldScene.spawnNpcFollower): it always moves onto the tile the NPC just left
+  function followStep(e, t0, ms) {
+    const f = e.monFollower, s = e.scene, OWS = window.OWSprites; if (!f || !f.scene || !s) return;
+    const tx = t0.x * TILE + 16, ty = t0.y * TILE + 16, fx = f.x, fy = f.y;
+    const ddx = tx - fx, ddy = ty - fy; if (Math.abs(ddx) < 1 && Math.abs(ddy) < 1) return;
+    const dir = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 'right' : 'left') : (ddy > 0 ? 'down' : 'up');
+    f.direction = dir; if (f.moveTw) { try { f.moveTw.stop(); } catch (_) { } }
+    let alt = 0;
+    if (OWS) OWS.setFrame(f, dir, 1, f.owShiny);
+    f.moveTw = s.tweens.addCounter({ from: 0, to: 1, duration: ms,
+      onUpdate: t => { const v = t.getValue(); f.x = fx + ddx * v; f.y = fy + ddy * v; const st = v > 0.5 ? 0 : 1; if (st !== alt) { alt = st; if (OWS) OWS.setFrame(f, dir, st === 0 ? 1 : 0, f.owShiny); } },
+      onComplete: () => { f.x = tx; f.y = ty; f.moveTw = null; if (OWS) OWS.setFrame(f, dir, 0, f.owShiny); } });
   }
 
   // walk in place = ONE step animation on the spot (stand -> step frame -> stand). Use walk_in_place_right*3 for three.
@@ -229,5 +244,53 @@ window.OverworldMovement = (() => {
   }
   function freezeAll(scene) { let n = 0; for (const e of (scene.npcs || [])) if (freeze(e)) n++; return n; }
 
-  return { execute, tick, types, canStep, freeze, freezeAll };
+  // ---- TRAINERS: an NPC with isTrainer + a script + viewRadius spots the player standing in a straight, free line in front of it (within viewRadius tiles).
+  // It shows the ! emote, walks up to the player, then its script runs (the script holds the speech, setflag and trainerbattle).
+  // flagID = the "defeated" flag: while it is ON the trainer does not spot the player any more (set it in the script, before trainerbattle).
+  function seeThrough(scene, e, wx, wy) {
+    const off = scene.getMapWorldOffset(scene.currentMapKey);
+    if (!scene.isPassable(wx - Math.round(off.x / TILE), wy - Math.round(off.y / TILE))) return false;
+    for (const o of (scene.npcs || [])) if (o !== e && scene.npcOccupiesTile && scene.npcOccupiesTile(o, wx, wy)) return false;
+    return true;
+  }
+  function trainerSpot(scene, now) {
+    if (!scene || !scene.player || !scene.npcs || !scene.npcs.length) return;
+    if (scene._tsAt && now - scene._tsAt < 100) return; scene._tsAt = now;
+    if (scene.trainerBusy || scene.isLocked || scene.scriptRunning || scene.warping || scene.evolving || scene.isMoving || scene.playerDest) return;
+    if (scene.scriptEndedAt && scene.time.now - scene.scriptEndedAt < 600) return;
+    if ((window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen())) return;
+    const E = window.OverworldScriptEngine, p = tileOf(scene.player);
+    for (const e of scene.npcs) {
+      const c = e.eventConfig;
+      if (!c || c.isTrainer !== true || !c.script || !e.active || !e.visible || e.stepTw || e.texture.frameTotal < 4) continue;
+      if (c.flagID && E && E.getFlag && E.getFlag(c.flagID)) continue;
+      const R = Number(c.viewRadius) || 0; if (R < 1) continue;
+      const t = tileOf(e), d = e.direction || 'down', [dx, dy] = DIRS[d] || DIRS.down;
+      const rx = p.x - t.x, ry = p.y - t.y;
+      const k = dx !== 0 ? (ry === 0 ? rx * dx : 0) : (rx === 0 ? ry * dy : 0);
+      if (k < 1 || k > R) continue;
+      let clear = true;
+      for (let i = 1; i < k; i++) if (!seeThrough(scene, e, t.x + dx * i, t.y + dy * i)) { clear = false; break; }
+      if (!clear) continue;
+      return spotted(scene, e, k, d);
+    }
+  }
+  function spotted(scene, e, k, d) {
+    const E = window.OverworldScriptEngine, name = e.eventConfig.script;
+    scene.trainerBusy = true; scene.scriptRunning = true;   // nobody moves, the player cannot walk
+    if (freezeAll) freezeAll(scene);
+    e.busy = true; let done = false;
+    const fin = () => {
+      if (done) return; done = true;
+      e.setFrame(frame(e, d, 0)); e.direction = d;
+      const pd = OPP[d]; scene.player.direction = pd; try { scene.player.setFrame(window.getOverworldFrame(pd, 0)); } catch (_) { }
+      e.busy = false; scene.trainerBusy = false; scene.scriptRunning = false; scene.activeNPC = e;
+      if (E) E.runScript(scene, name);
+    };
+    const walk = left => { if (left <= 0 || !e.scene) return fin(); execute(e, 'walk_' + d, () => walk(left - 1), { force: true }); };
+    scene.time.delayedCall(6000 + k * 400, fin);   // fail-safe: never leave the player locked
+    execute(e, 'emote_exclaim', () => walk(k - 1));
+  }
+
+  return { execute, tick, types, canStep, freeze, freezeAll, trainerSpot };
 })();

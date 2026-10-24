@@ -1651,7 +1651,7 @@ window.BattleScene = class BattleScene extends Phaser.Scene {   // assigned (not
     // ---- music
     // music: a plain <audio> element, created (and downloading) as soon as BattleScene.js loads, so it starts at once
     if (window.PMAudio) window.PMAudio.enterBattle();   // also when the battle was started without BattleTransition: the map music is off
-    try { const m = BattleScene.musicEl(); if (m) { m.loop = true; m.volume = 0.5; m.currentTime = 0; BattleScene.musicOn = true; const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a key press */ }); this.battleMusic = m; } } catch (e) { /* no audio */ }
+    try { const m = BattleScene.musicEl(); if (m) { m.loop = true; m.volume = 0.5; if (!(BattleScene.musicEarly && !m.paused)) m.currentTime = 0; BattleScene.musicEarly = false; BattleScene.musicOn = true; const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a key press */ }); this.battleMusic = m; } } catch (e) { /* no audio */ }
 
     // ---- input
     const KEYS = { ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down', ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', z: 'a', Enter: 'a', ' ': (window.PMLayout && window.PMLayout.landscape) ? 'y' : 'a', y: 'y', x: 'b', Escape: 'b', Backspace: 'b' };

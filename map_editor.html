@@ -7,8 +7,8 @@ window.__ready=(async()=>{
   const DIRS=['js/','tables/','','../js/','../tables/','../','data/','../data/','../../js/','../../','src/','src/js/','src/tables/','public/','public/js/','public/tables/','scripts/','js/scripts/','tables/scripts/','game/','assets/','assets/js/','../src/','../public/','../scripts/'];
   const foundDirs=[];
   const FILES=[['ow_table.js','OW_table.js','overworld_table.js','OverworldTable.js'],['Overworld_map.js','overworld_map.js'],['tiles.js','Tiles.js'],
-    ['PokemonDatabase.js','pokemondatabase.js'],['overworld_script_commands.js','scriptsCommands.js','scriptCommands.js','script_commands.js','ScriptsCommands.js','scripts_commands.js'],['overworld_script_engine.js','script_engine.js','scriptEngine.js','ScriptEngine.js'],['overworld_scripts.js','overworldScripts.js','OverworldScripts.js','scripts.js'],['overworld_textbox.js','overworldTextbox.js','OverworldTextbox.js','textbox.js'],['overworld_movement.js','movement_type.js','movement_types.js','movement.js','overworldMovement.js']];
-  const CHECK=[()=>window.OverworldTable,()=>window.OverworldMaps,()=>window.OverworldTiles,null,()=>window.OverworldScriptCommands,()=>window.OverworldScriptEngine&&window.OverworldScriptEngine.parse,()=>window.OverworldScriptSource!==undefined,()=>window.OverworldText&&window.OverworldTextbox,()=>window.OverworldMovement];
+    ['PokemonDatabase.js','pokemondatabase.js'],['overworld_script_commands.js','scriptsCommands.js','scriptCommands.js','script_commands.js','ScriptsCommands.js','scripts_commands.js'],['overworld_script_engine.js','script_engine.js','scriptEngine.js','ScriptEngine.js'],['overworld_scripts.js','overworldScripts.js','OverworldScripts.js','scripts.js'],['overworld_textbox.js','overworldTextbox.js','OverworldTextbox.js','textbox.js'],['overworld_movement.js','movement_type.js','movement_types.js','movement.js','overworldMovement.js'],['TrainerTables.js','trainertables.js']];
+  const CHECK=[()=>window.OverworldTable,()=>window.OverworldMaps,()=>window.OverworldTiles,null,()=>window.OverworldScriptCommands,()=>window.OverworldScriptEngine&&window.OverworldScriptEngine.parse,()=>window.OverworldScriptSource!==undefined,()=>window.OverworldText&&window.OverworldTextbox,()=>window.OverworldMovement,()=>window.TrainerTable];
   window.__loadReport=[];
   let mem={};try{mem=JSON.parse(localStorage.edPaths||'{}')}catch(e){}
   const ovr=(()=>{try{return JSON.parse(sessionStorage.pmOverrides||'{}')}catch(e){return{}}})();
@@ -26,7 +26,7 @@ window.__ready=(async()=>{
 <style>
 *{box-sizing:border-box}body{margin:0;display:flex;height:100vh;background:#111;color:#ddd;font:12px monospace}
 #side{width:330px;overflow-y:auto;padding:10px;background:#1b1b1b;border-right:1px solid #333;display:flex;flex-direction:column;gap:8px}
-#main{flex:1;display:flex;flex-direction:column;min-width:0}#bar{display:flex;gap:6px;padding:6px;background:#1b1b1b;border-bottom:1px solid #333;align-items:center}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}#bar{display:flex;flex-wrap:wrap;gap:6px;padding:6px;background:#1b1b1b;border-bottom:1px solid #333;align-items:center}
 canvas#cv{flex:1;width:100%;min-height:0;display:block;background:#0b0b0b}#status{padding:5px 8px;background:#1b1b1b;border-top:1px solid #333;color:#9ab}
 .row{display:flex;gap:4px;flex-wrap:wrap}button,select,input{background:#262626;color:#eee;border:1px solid #3a3a3a;border-radius:4px;padding:5px 7px;font:inherit}
 button{cursor:pointer}button:hover{background:#333}button.on{background:#00838f;border-color:#00acc1}
@@ -39,7 +39,15 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 #bcv{border:1px solid #444;background:repeating-conic-gradient(#2a2a2a 0 25%,#222 0 50%) 0 0/16px 16px;cursor:crosshair;display:block;max-width:100%}
 .tab{display:none;flex-direction:column;gap:8px}.tab.on{display:flex}
 /* ---- scripts editor ---- */
-#sed{position:fixed;inset:0;background:#101010;z-index:50;display:none;flex-direction:column}#sed.on{display:flex}
+#sed{position:fixed;top:0;right:0;bottom:0;width:var(--sedw,660px);max-width:96vw;background:#101010;z-index:50;display:none;flex-direction:column;border-left:2px solid #00acc1}#sed.on{display:flex}
+#sed.full{inset:0;width:auto;max-width:none;border-left:0}
+#sedGrip{position:absolute;left:-5px;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:2}#sed.full #sedGrip{display:none}
+#sed:not(.full) #seBody{display:flex;flex-direction:column;overflow:auto}
+#sed:not(.full) #seLeft{max-height:150px;flex:none;border-right:0;border-bottom:1px solid #2a2a2a}
+#sed:not(.full) #seMid{flex:none;min-height:360px;border-right:0}
+#sed:not(.full) #seRight{flex:none;border-right:0;border-top:1px solid #2a2a2a}
+#sed:not(.full) #seHead{flex-wrap:wrap}
+body.sedDock #main{margin-right:var(--sedw,660px)}
 #seHead{display:flex;gap:8px;align-items:center;padding:6px 10px;background:#1b1b1b;border-bottom:1px solid #333}#seHead b{color:#00acc1}#seName{color:#ffd600;font-weight:bold}#seDirty{color:#ffb74d}
 #seBody{flex:1;display:grid;grid-template-columns:230px minmax(360px,1fr) 500px;min-height:0}
 #seLeft,#seMid,#seRight{overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px;border-right:1px solid #2a2a2a;min-height:0}
@@ -84,11 +92,24 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 #ghm{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:80;display:flex;align-items:center;justify-content:center}#ghm[hidden]{display:none}
 #ghBox{background:#1b1b1b;border:1px solid #444;border-radius:8px;padding:14px;width:min(560px,94vw);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
 .ghf{display:grid;grid-template-columns:1fr;gap:2px;background:#151515;border:1px solid #2d2d2d;border-radius:5px;padding:5px 7px}.ghf small{color:#ffb74d}
+/* ---- quick trainer editor ---- */
+#trm{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:95;display:flex;align-items:center;justify-content:center}#trm[hidden]{display:none}
+#trBox{background:#1b1b1b;border:1px solid #444;border-radius:8px;width:min(1180px,97vw);height:min(820px,94vh);display:flex;flex-direction:column}
+#trHead{display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #333}#trHead b{color:#00acc1}#trSt{color:#ffb74d}
+#trBody{flex:1;display:grid;grid-template-columns:260px 1fr;min-height:0}#trL{padding:8px;display:flex;flex-direction:column;gap:6px;border-right:1px solid #2a2a2a;min-height:0}#trList{flex:1;overflow:auto;display:flex;flex-direction:column;gap:2px}
+#trForm{padding:10px;overflow:auto;display:flex;flex-direction:column;gap:8px}#trForm textarea{width:100%;background:#0e0e0e;color:#e6e6e6;border:1px solid #3a3a3a;border-radius:4px;padding:6px;font:12px monospace}
+/* ---- tile categories + pixel editor ---- */
+.pcat{margin:3px 0;padding:3px 5px}.pcat>summary{padding:2px 0;font-weight:bold}.pcat>summary.over{background:#00838f;color:#fff}.pcat>.ph{cursor:grab}
+.tdcat{position:sticky;top:0;background:#12303a;color:#7fe3f0;font-weight:bold;padding:3px 6px;border-radius:4px;margin-top:4px;z-index:1}.tdcat.over{background:#00838f;color:#fff}
+#tpx{position:fixed;inset:0;z-index:110;background:#101010;display:flex;flex-direction:column}#tpx[hidden]{display:none}
+#tpxHead{display:flex;gap:8px;align-items:center;padding:6px 10px;background:#1b1b1b;border-bottom:1px solid #333}#tpxHead b{color:#00acc1}
+#tpxBody{flex:1;display:grid;grid-template-columns:230px minmax(300px,1fr) 250px;min-height:0}#tpxL,#tpxR{padding:8px;display:flex;flex-direction:column;gap:6px;overflow:auto;border-right:1px solid #2a2a2a}#tpxM{display:flex;flex-direction:column;min-height:0;padding:6px;gap:4px}
+#tpxWrap{flex:1;min-height:100px;position:relative;background:#0b0b0b;border:1px solid #333}#tpxCv{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
 </style></head><body>
 <div id="side">
   <div class="row"><select id="mapSel" style="flex:1"></select><button id="newMap">+ Map</button></div>
   <div class="tabs" id="tabs"></div>
-  <div class="tab on" id="tab-env"><div class="row" id="layerBtns"></div><div class="row" id="tools"></div><div id="palWrap"><div id="palette"></div><div id="brushInfo"></div></div></div>
+  <div class="tab on" id="tab-env"><div class="row" id="layerBtns"></div><div class="row" id="tools"></div><div id="palWrap"><div class="row" style="align-items:center"><input type="text" id="palQ" placeholder="filter tiles / categories…" style="flex:1"><button id="palAll" title="open all categories">▾</button><button id="palNone" title="close all categories">▸</button></div><div id="palette"></div><div id="brushInfo"></div></div></div>
   <div class="tab" id="tab-border"><div id="borderUI"></div></div>
   <div class="tab" id="tab-events"><div class="row" id="addBtns"></div>
     <div class="row"><button id="dupBtn">Duplicate (Ctrl+D)</button><button id="delBtn">Delete (Del)</button></div><div id="inspector"></div></div>
@@ -102,7 +123,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 <div id="main">
   <div id="bar">
     <button id="undoB">↶ Undo</button><button id="redoB">↷ Redo</button>
-    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="owB" title="open the Overworld Sprite Editor (NPC / trainer sprites) here">🧍 OW Sprites</button><button id="pushB" title="paste or upload new code and push it to GitHub">⚡ Push code</button><button id="ghBtn" title="commit the changed files straight to the repository">⬆ Commit to GitHub</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button>
+    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="owB" title="open the Overworld Sprite Editor (NPC / trainer sprites) here">🧍 OW Sprites</button><button id="pushB" title="paste or upload new code and push it to GitHub">⚡ Push code</button><button id="ghBtn" title="commit the changed files straight to the repository">⬆ Commit to GitHub</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button><button id="trBtn" title="quick trainer editor: create / change trainers and their teams">🎓 Trainers</button>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="gridT" checked> Grid</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="sprT" checked> Sprites</label>
     <label style="flex-direction:row;align-items:center;gap:4px" title="Also list every Pokémon overworld sprite (SPECIES_…) in the owID picker, to use as a normal NPC"><input type="checkbox" id="monT"> Pokémon OWs</label>
@@ -119,7 +140,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
     <button id="tdSave" class="on">💾 Save tiles.js</button><button id="tdCopy">Copy</button><button id="tdZipB" title="new/replaced tile images at their project paths + tiles.js">⬇ New images (ZIP)</button><button id="tdCommit" title="commit tiles.js and the new images to GitHub">⬆ Commit</button><button id="tdClose">✕ Close</button></div>
   <div id="tedBody">
     <div id="tdL"><input type="text" id="tdQ" placeholder="search id / name / image…"><div id="tdList"></div>
-      <div class="row"><button id="tdNewImg" class="on" style="flex:1">+ New from image(s)…</button></div>
+      <div class="row"><button id="tdNewImg" class="on" style="flex:1">+ New from image(s)…</button><button id="tdBlank" style="flex:1" title="draw a new tile from scratch">+ Blank tile…</button></div><div class="row"><select id="tdBulkCat" style="flex:1;width:auto"></select><button id="tdBulk" title="move all the tiles now listed (after the search) to this category">Move listed →</button></div>
       <div class="row"><button id="tdDup" style="flex:1">Duplicate</button><button id="tdDel" style="flex:1">Delete</button></div>
       <div class="help">Uploading an image captures its size and sets Normal (16×16) or Multi-tile with frames and columns. Change anything on the right.</div></div>
     <div id="tdM">
@@ -133,6 +154,8 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
   </div>
   <input type="file" id="tdFI" accept="image/*" multiple hidden><input type="file" id="tdFR" accept="image/*" hidden><input type="file" id="tdFS" accept="image/*" multiple hidden><input type="file" id="tdFT" accept=".js,text/javascript" hidden>
 </div>
+<div id="trm" hidden><div id="trBox"><div id="trHead"><b>🎓 Quick Trainer Editor</b><span id="trSt"></span><span class="help" style="flex:1">Trainers live in TrainerTables.js. Changes stay in memory until you save or commit.</span><button id="trSave" class="on">💾 Save TrainerTables.js</button><button id="trCommit">⬆ Commit</button><button id="trClose">✕ Close</button></div>
+<div id="trBody"><div id="trL"><input type="text" id="trQ" placeholder="search trainers…"><div id="trList"></div><button id="trNew" class="on">+ New trainer</button></div><div id="trForm"></div></div></div></div>
 <div id="owed" hidden><div id="owedHead"><b>🧍 Overworld Sprite Editor</b><span class="help" style="flex:1">Edit NPC / trainer sprites here. Save or commit inside it, then close: the map reloads the sprite table.</span><button id="owedClose">✕ Close</button></div><iframe id="owedFr" title="Overworld Sprite Editor"></iframe></div>
 <div id="pkm" hidden><div id="pkBox">
   <b style="color:#00acc1;font-size:14px">⚡ Push code to GitHub</b>
@@ -163,8 +186,8 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
   <div class="row"><button id="ghGo" class="on" style="flex:1">Commit</button><button id="ghCancel" style="flex:1">Close</button></div>
 </div></div>
 <datalist id="musicList"></datalist><datalist id="dlFlag"></datalist><datalist id="dlVar"></datalist><datalist id="dlLabel"></datalist><datalist id="dlTarget"></datalist>
-<div id="sed">
-  <div id="seHead"><b>Scripts</b><span id="seName"></span><span id="seUse" class="help"></span><span style="flex:1"></span><span id="seDirty"></span><button id="seSave" class="on">💾 Save overworld_scripts.js</button><button id="seCommit" title="commit overworld_scripts.js straight to GitHub">⬆ Commit to GitHub</button><button id="seClose">✕ Close</button></div>
+<div id="sed"><div id="sedGrip" title="drag to resize"></div>
+  <div id="seHead"><b>Scripts</b><span id="seName"></span><span id="seUse" class="help"></span><span style="flex:1"></span><span id="seDirty"></span><button id="seSave" class="on">💾 Save overworld_scripts.js</button><button id="seCommit" title="commit overworld_scripts.js straight to GitHub">⬆ Commit to GitHub</button><button id="seFull" title="switch between the side panel and the full screen editor">⛶ Full view</button><button id="seClose">✕ Close</button></div>
   <div id="seBody">
     <div id="seLeft"><input id="seFind" placeholder="search scripts…"><div class="row"><button id="seNewB">+ New</button><button id="seDupB">Duplicate</button><button id="seRenB">Rename</button><button id="seDelB">Delete</button></div><div id="seList"></div><div class="help">number on the right = events that use the script</div></div>
     <div id="seMid">
@@ -197,6 +220,7 @@ function monEntry(id){const T=monTab(),s=T&&T.species&&T.species[id];if(!s)retur
   const art=MON.art[id];let sc=s.src>=816?2:1;if(art&&art*sc>64)sc=64/art;sc*=(s.scale||1);
   return MON.ent[id]={owType:'Pokemon',mon:true,spriteID:id,trueDimension:s.w+'x'+s.h,owDimension:s.w+'x'+s.h,owScale:sc,owSprite:''}}
 const OT=()=>{const t=window.OverworldTable||{};if(!monTab())return t;if(MON.base!==t){MON.base=t;MON.px=new Proxy(t,{get:(o,k)=>(k in o||typeof k!=='string'||k.slice(0,8)!=='SPECIES_')?o[k]:monEntry(k)})}return MON.px},TL=()=>window.OverworldTiles||{};
+const monIds=()=>{const T=monTab();return T&&T.species?Object.keys(T.species):[]};
 const owIds=()=>{const k=Object.keys(OT()),T=monTab();return MON.on&&T&&T.species?k.concat(Object.keys(T.species)):k};
 let repo={},active='',tool='pencil',brush={tid:0,cells:[['0|0']],frames:new Set([0])},sel=null,cam={x:60,y:60,z:1};
 let hist=[],redoS=[],pending=false,unsaved=false,fileHandle=null,hover=null,stroke=null,rectA=null,drag=null,pan=null,pal=null,spaceDown=false,showGrid=true,showSpr=true,evView='',lastJump=null;
@@ -382,7 +406,9 @@ function fillRect(a,b,pat){const x0=Math.min(a.gx,b.gx),x1=Math.max(a.gx,b.gx),y
 
 // ---------- mouse ----------
 cv.addEventListener('contextmenu',e=>e.preventDefault());
-cv.addEventListener('dblclick',e=>{if(tool!=='select'||!sel)return;const w=toWorld(e.offsetX,e.offsetY);if(eventsAt(w.x,w.y).some(x=>x.map===sel.map&&x.key===sel.key))goWarp(sel)});
+cv.addEventListener('dblclick',e=>{if(tool!=='select'||!sel)return;const w=toWorld(e.offsetX,e.offsetY);if(!eventsAt(w.x,w.y).some(x=>x.map===sel.map&&x.key===sel.key))return;
+  const ev=repo[sel.map]?.events[sel.key];if(ev&&ev.script&&ev.eventType!=='Warp'){seOpenEditor(ev.script);return}   // an event with a script: open that script (side panel)
+  goWarp(sel)});
 cv.addEventListener('mousedown',e=>{cv.focus();
   if(e.button===1||e.button===2||spaceDown){pan={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};return}
   if(tab==='border')return;
@@ -434,7 +460,7 @@ window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.t
 
 // ---------- events: add / duplicate / delete ----------
 const SCHEMA={
-  NPC:[['owID','select','ow'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
+  NPC:[['owID','select','ow'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['followMon','select','mon'],['followShiny','bool'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
   Script:[['script','select','script'],['scriptVar','text'],['varValue','num']],'Script Tile':[['script','select','script'],['scriptVar','text'],['varValue','num']],
   Signpost:[['script','select','script']],Tile:[['tileID','num']],
   Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};
@@ -464,19 +490,19 @@ function owThumb(id){const c=document.createElement('canvas');c.width=c.height=4
   const draw=n=>{const s=spr(id);if(s){let sx=0,sy=0,sw=s.width,sh=s.height;
     if(OT()[id]?.mon){if(!s._bb){try{const d=s.getContext('2d').getImageData(0,0,s.width,s.height).data;let x0=s.width,x1=-1,y0=s.height,y1=-1;for(let yy=0;yy<s.height;yy++)for(let xx=0;xx<s.width;xx++)if(d[(yy*s.width+xx)*4+3]>20){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy}s._bb=x1>=0?[x0,y0,x1-x0+1,y1-y0+1]:[0,0,s.width,s.height]}catch(e){s._bb=[0,0,s.width,s.height]}}[sx,sy,sw,sh]=s._bb}
     const k=Math.min(40/sw,40/sh,3);const w=sw*k,h=sh*k;x.clearRect(0,0,40,40);x.drawImage(s,sx,sy,sw,sh,(40-w)/2,(40-h)/2,w,h)}else if(n<8)setTimeout(()=>draw(n+1),250)};draw(0);return c}
-function owCombo(ev,set){const ids=owIds();const box=document.createElement('div');box.className='owc';
-  const cap=document.createElement('span');cap.textContent='owID';box.appendChild(cap);
+function owCombo(ev,set,field='owID',list){const ids=list||owIds();const none=field!=='owID';const box=document.createElement('div');box.className='owc';
+  const cap=document.createElement('span');cap.textContent=field;box.appendChild(cap);
   const cur=document.createElement('div');cur.className='cur';box.appendChild(cur);
   const pop=document.createElement('div');pop.className='pop';box.appendChild(pop);
   const q=document.createElement('input');q.type='text';q.placeholder='type to filter…';pop.appendChild(q);
   const lst=document.createElement('div');lst.className='lst';pop.appendChild(lst);let hl=0,shown=[];
-  const info=id=>{const e=OT()[id]||{};return`${e.owType||'?'} · ${e.trueDimension||'?'}${e.owScale&&e.owScale!==1?' · ×'+e.owScale:''}`};
-  const showCur=()=>{cur.innerHTML='';const id=ev.owID||'';if(id&&OT()[id])cur.appendChild(owThumb(id));
+  const info=id=>{if(!id)return'';const e=OT()[id]||{};return`${e.owType||'?'} · ${e.trueDimension||'?'}${e.owScale&&e.owScale!==1?' · ×'+e.owScale:''}`};
+  const showCur=()=>{cur.innerHTML='';const id=ev[field]||'';if(id&&OT()[id])cur.appendChild(owThumb(id));
     const b=document.createElement('b');b.textContent=id||'(none)';cur.appendChild(b);const sm=document.createElement('small');sm.textContent=id&&OT()[id]?info(id):(id?'not in table':'');cur.appendChild(sm);const ar=document.createElement('small');ar.textContent='▾';cur.appendChild(ar)};
-  const pick=id=>{box.classList.remove('open');if(id!==(ev.owID||''))commit(()=>set(id));else showCur()};
-  const fill=()=>{const t=q.value.trim().toLowerCase();shown=ids.filter(id=>!t||id.toLowerCase().includes(t)||String(OT()[id].owType||'').toLowerCase().includes(t));lst.innerHTML='';hl=Math.max(0,shown.indexOf(ev.owID));
-    shown.forEach((id,i)=>{const it=document.createElement('div');it.className='it'+(id===ev.owID?' on':'')+(i===hl?' hl':'');it.appendChild(owThumb(id));const d=document.createElement('div');
-      const b=document.createElement('b');b.textContent=id;const sm=document.createElement('small');sm.textContent=info(id);d.append(b,sm);it.appendChild(d);it.onmousedown=e=>{e.preventDefault();pick(id)};lst.appendChild(it)});
+  const pick=id=>{box.classList.remove('open');if(id!==(ev[field]||''))commit(()=>set(id));else showCur()};
+  const fill=()=>{const t=q.value.trim().toLowerCase();shown=(none?['',...ids]:ids).filter(id=>!id?!t:(!t||id.toLowerCase().includes(t)||String((OT()[id]||{}).owType||'').toLowerCase().includes(t)));lst.innerHTML='';hl=Math.max(0,shown.indexOf(ev[field]));
+    shown.forEach((id,i)=>{const it=document.createElement('div');it.className='it'+(id===ev[field]?' on':'')+(i===hl?' hl':'');if(id)it.appendChild(owThumb(id));const d=document.createElement('div');
+      const b=document.createElement('b');b.textContent=id||'(none)';const sm=document.createElement('small');sm.textContent=info(id);d.append(b,sm);it.appendChild(d);it.onmousedown=e=>{e.preventDefault();pick(id)};lst.appendChild(it)});
     if(!shown.length)lst.innerHTML='<div class="it"><small>no match</small></div>'};
   const mark=()=>{[...lst.children].forEach((c,i)=>c.classList.toggle('hl',i===hl));const c=lst.children[hl];if(c&&c.scrollIntoView)c.scrollIntoView({block:'nearest'})};
   cur.onclick=()=>{const open=box.classList.toggle('open');if(open){q.value='';fill();setTimeout(()=>{q.focus();mark()},0)}};
@@ -501,11 +527,13 @@ function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&re
   rowTo(xy,'X',inp('num',ev.xPos,v=>ev.xPos=v??0));rowTo(xy,'Y',inp('num',ev.yPos,v=>ev.yPos=v??0));
   for(const[f,t,o]of SCHEMA[ev.eventType]||[]){
     if(f==='owID'&&o==='ow'){I.appendChild(owCombo(ev,v=>{v===undefined||v===''?delete ev.owID:ev.owID=v}));continue}
+    if(f==='followMon'){I.appendChild(owCombo(ev,v=>{v===undefined||v===''?delete ev.followMon:ev.followMon=v},'followMon',monIds()));continue}
     rowTo(I,({scriptVar:'Var (empty = always runs)',varValue:'Value (runs only when Var = this)'})[f]||f,inp(t==='select'?'text':t,ev[f],v=>{v===undefined||v===''?delete ev[f]:ev[f]=v},o?()=>OPTS[o](ev):null))}
   if((SCHEMA[ev.eventType]||[]).some(x=>x[0]==='script')){const r=document.createElement('div');r.className='row';
     const b1=document.createElement('button');b1.textContent='✎ Open in Scripts editor';b1.onclick=()=>seOpenEditor(ev.script||undefined);
     const b2=document.createElement('button');b2.textContent='+ New script for this event';b2.onclick=()=>{if(!EN()||!window.OverworldScriptCommands){seOpenEditor();return}const nm=seNew();if(nm){commit(()=>{ev.script=nm});seOpenEditor(nm)}};
     r.appendChild(b1);r.appendChild(b2);I.appendChild(r)}
+  if(ev.eventType==='NPC'){const r=document.createElement('div');r.className='row';const b=document.createElement('button');b.textContent='🎓 Trainer editor…';b.title='create / edit trainers and their teams; can write the battle script for this NPC';b.onclick=()=>trOpen();r.appendChild(b);I.appendChild(r)}
   extraInspector(I,ev,m)}
 function renameMap(o,n){if(!n||repo[n])return;const r={};for(const[k,m]of Object.entries(repo))r[k===o?n:k]=m;repo=r;repo[n].map=n;
   for(const m of Object.values(repo)){for(const c of Object.values(m.connections))if(c&&findKey(c[0])===null&&norm(c[0])===norm(o))c[0]=n;
@@ -588,11 +616,6 @@ function buildIssues(){const l=issues();$('issueCount').textContent=l.length?`($
 function setTool(t){tool=t;if($('tselUI'))$('tselUI').hidden=t!=='tsel';document.querySelectorAll('#tools button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));redraw()}
 function info(){const b=brush.cells;$('brushInfo').textContent=`Brush: ${b[0].length}×${b.length} → ${b[0][0]}${b.length*b[0].length>1?' …':''}`}
 function markPalette(){document.querySelectorAll('#palette canvas').forEach(c=>c.classList.toggle('sel',+c.dataset.t===brush.tid&&brush.frames.has(+c.dataset.f)));info()}
-function buildPalette(){const P=$('palette');P.innerHTML='';
-  for(const[t,d]of Object.entries(TL())){const n=d.columns||1,h=document.createElement('div');h.className='ph';h.textContent=`${t}: ${d.tileName} (${d.tileType})`;P.appendChild(h);
-    const g=document.createElement('div');g.className='pg';g.style.gridTemplateColumns=`repeat(${n},34px)`;
-    for(let f=0;f<(d.frames||1);f++){const c=document.createElement('canvas');c.width=c.height=32;drawTile(c.getContext('2d'),`${t}|${f}`,0,0,32);Object.assign(c.dataset,{t,f,n});g.appendChild(c)}P.appendChild(g)}
-  markPalette()}
 function setBrushRect(t,n,a,b){const r0=Math.min(Math.floor(a/n),Math.floor(b/n)),r1=Math.max(Math.floor(a/n),Math.floor(b/n)),c0=Math.min(a%n,b%n),c1=Math.max(a%n,b%n),cells=[],fr=new Set();
   for(let r=r0;r<=r1;r++){const row=[];for(let c=c0;c<=c1;c++){const f=r*n+c;row.push(`${t}|${f}|${pass}`);fr.add(f)}cells.push(row)}brush={tid:+t,cells,frames:fr};markPalette()}
 $('palette').addEventListener('mousedown',e=>{const c=e.target;if(c.tagName!=='CANVAS')return;pal={t:c.dataset.t,n:+c.dataset.n,f0:+c.dataset.f};setBrushRect(pal.t,pal.n,pal.f0,pal.f0);if(tab==='env'&&(tool==='select'||tool==='pick'||tool==='erase'))setTool('pencil');if(tab==='border'&&btool==='erase'){btool='pencil';buildBorder()}});
@@ -841,8 +864,10 @@ async function seSave(){const E=EN();if(!E){alert('The script engine file was no
     sDirty=false;$('seDirty').textContent='✓ saved'}catch(e){if(e.name!=='AbortError'){sFile=null;alert('Could not save: '+e.message)}}}
 function seOpenEditor(name){const miss=[['overworld_script_engine.js (the NEW one, with parse)',EN()&&EN().parse],['overworld_script_commands.js',window.OverworldScriptCommands],['overworld_textbox.js',window.OverworldText],['overworld_scripts.js',window.OverworldScriptSource!==undefined]].filter(x=>!x[1]).map(x=>x[0]);
   if(miss.length){alert('The editor could not find: '+miss.join(', ')+'\n\nThey must be uploaded to your project (same folder as overworld_map.js is best). If they are already there in another folder, use "Load script files" in the Scripts tab and pick them.');return}
-  if(!SE)seLoad();$('sed').classList.add('on');if(name&&SE.scripts[name])sCur=name;seBuildList();seRender();pvSetup(true);pvStart()}
-function seClose(){if(sDirty&&!confirm('There are unsaved script changes. Close anyway? (They stay in memory until you reload.)'))return;$('sed').classList.remove('on');pvStop(true);cancelAnimationFrame(PV.raf);PV.raf=0;buildInspector();buildIssues()}
+  if(!SE)seLoad();$('sed').classList.add('on');sedLayout();if(name&&SE.scripts[name])sCur=name;seBuildList();seRender();pvSetup(true);pvStart()}
+function sedLayout(){const d=$('sed'),on=d.classList.contains('on'),full=sedFull;d.classList.toggle('full',full);document.body.classList.toggle('sedDock',on&&!full);$('seFull').textContent=full?'▣ Side panel':'⛶ Full view';window.dispatchEvent(new Event('resize'))}
+let sedFull=false;try{sedFull=localStorage.edSedFull==='1'}catch(e){}try{const w=+localStorage.edSedW;if(w>=380)document.documentElement.style.setProperty('--sedw',w+'px')}catch(e){}
+function seClose(){if(sDirty&&!confirm('There are unsaved script changes. Close anyway? (They stay in memory until you reload.)'))return;$('sed').classList.remove('on');sedLayout();pvStop(true);cancelAnimationFrame(PV.raf);PV.raf=0;buildInspector();buildIssues()}
 
 // =====================================================================================================
 // PREVIEW  - plays the script on the map, as the game would (top screen)
@@ -949,6 +974,9 @@ function pvDraw(){const c=$('pvCv'),x=c.getContext('2d'),W=PV.vw,H=PV.vh;x.setTr
 function seInit(){
   $('seNewB').onclick=seNew;$('seDupB').onclick=seDup;$('seRenB').onclick=seRename;$('seDelB').onclick=seDel;$('seFind').oninput=seBuildList;
   $('seSave').onclick=seSave;$('seClose').onclick=seClose;
+  $('seFull').onclick=()=>{sedFull=!sedFull;try{localStorage.edSedFull=sedFull?'1':'0'}catch(e){}sedLayout()};
+  {const g=$('sedGrip');g.onmousedown=e=>{e.preventDefault();const mv=ev=>{const w=Math.max(380,Math.min(innerWidth*0.9,innerWidth-ev.clientX));document.documentElement.style.setProperty('--sedw',w+'px');window.dispatchEvent(new Event('resize'))};const up=()=>{removeEventListener('mousemove',mv);removeEventListener('mouseup',up);try{localStorage.edSedW=Math.round(parseFloat(getComputedStyle($('sed')).width))}catch(e){}};addEventListener('mousemove',mv);addEventListener('mouseup',up)}}
+
   $('seTabSteps').onclick=()=>{sView='steps';$('seStepsWrap').style.display='';$('seCodeWrap').style.display='none';$('seTabSteps').classList.add('on');$('seTabText').classList.remove('on')};
   $('seTabText').onclick=()=>{sView='text';$('seStepsWrap').style.display='none';$('seCodeWrap').style.display='';$('seTabText').classList.add('on');$('seTabSteps').classList.remove('on');const S=SE.scripts[sCur];$('seCode').value=S?EN().stringify({header:'',order:[sCur],scripts:SE.scripts}):'';$('seCodeErr').innerHTML=''};
   $('seCode').oninput=seCodeApply;$('seCode').onblur=()=>{seRender()};
@@ -1070,11 +1098,13 @@ function tdCrop(sheet,x,y,w,h){const c=document.createElement('canvas');c.width=
 // ---------- tile list
 function tdThumb(t,sz=36){const c=document.createElement('canvas');c.width=c.height=sz;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
   const draw=n=>{const i=t.canvas||tileImg(t.d);if(i){const w=i.naturalWidth||i.width,h=i.naturalHeight||i.height,k=Math.min(sz/w,sz/h);x.clearRect(0,0,sz,sz);x.drawImage(i,(sz-w*k)/2,(sz-h*k)/2,w*k,h*k)}else if(n<14)setTimeout(()=>draw(n+1),250)};draw(0);return c}
-function tdList(){const l=$('tdList');l.innerHTML='';const q=TD.q.toLowerCase();let n=0;
-  for(const t of TD.tiles){const txt=`${t.id} ${t.d.tileName||''} ${t.d.tileType||''} ${t.d.tileImage||''}`.toLowerCase();if(q&&!txt.includes(q))continue;n++;
-    const r=document.createElement('div');r.className='tdit'+(t===TD.sel?' on':'');r.appendChild(tdThumb(t));
-    const d=document.createElement('div');d.innerHTML=`<b>${tdE(t.id)} · ${tdE(t.d.tileName||'?')}</b><small>${tdE(t.d.tileType||'')} · ${tdE(t.d.tileDimension||'')}${t.mod?' · <i style="color:#ffd600">edited</i>':''}${t.canvas&&t.mod?' · new image':''}</small>`;r.appendChild(d);
-    r.onclick=()=>{TD.sel=t;tdList();tdForm();tdDraw()};l.appendChild(r)}
+function tdList(){const l=$('tdList');l.innerHTML='';const q=TD.q.toLowerCase();let n=0;const groups=new Map();
+  for(const t of TD.tiles){const txt=`${t.id} ${t.d.tileName||''} ${t.d.tileType||''} ${t.d.tileImage||''} ${t.d.category||''}`.toLowerCase();if(q&&!txt.includes(q))continue;n++;const c=catName(t.d);if(!groups.has(c))groups.set(c,[]);groups.get(c).push(t)}
+  for(const c of catSort([...groups.keys()])){const h=document.createElement('div');h.className='tdcat';h.textContent=`${c} (${groups.get(c).length})`;
+    h.ondragover=e=>{e.preventDefault();h.classList.add('over')};h.ondragleave=()=>h.classList.remove('over');h.ondrop=e=>{e.preventDefault();h.classList.remove('over');const id=e.dataTransfer.getData('text/tile');if(id!=='')tdSetCat(id,c)};l.appendChild(h);
+    for(const t of groups.get(c)){const r=document.createElement('div');r.className='tdit'+(t===TD.sel?' on':'');r.draggable=true;r.ondragstart=e=>e.dataTransfer.setData('text/tile',String(t.id));r.appendChild(tdThumb(t));
+      const d=document.createElement('div');d.innerHTML=`<b>${tdE(t.id)} · ${tdE(t.d.tileName||'?')}</b><small>${tdE(t.d.tileType||'')} · ${tdE(t.d.tileDimension||'')}${t.mod?' · <i style="color:#ffd600">edited</i>':''}${t.canvas&&t.mod?' · new image':''}</small>`;r.appendChild(d);
+      r.onclick=()=>{TD.sel=t;tdList();tdForm();tdDraw()};l.appendChild(r)}}
   if(!n)l.innerHTML='<div class="help" style="padding:8px">no tiles match</div>';$('tdCount').textContent=TD.tiles.length+' tiles'}
 // ---------- details form
 function tdForm(){const f=$('tdForm'),t=TD.sel;if(!t){f.innerHTML='<div class="help">Pick a tile on the left, or add one from an image or from the sheet.</div>';return}
@@ -1082,15 +1112,17 @@ function tdForm(){const f=$('tdForm'),t=TD.sel;if(!t){f.innerHTML='<div class="h
   f.innerHTML=`
   <label>tileID<input type="number" id="tfId" value="${tdE(t.id)}" ${use?'disabled title="used on maps, so the ID is locked"':''}></label>
   <label>tileName<input type="text" id="tfName" value="${tdE(d.tileName||'')}"></label>
+  <label>category (groups the tile palette; drag tiles in the list to move them)<input type="text" id="tfCat" list="tdCats" value="${tdE(d.category||'')}" placeholder="Uncategorized"><datalist id="tdCats">${allCats().map(c=>`<option value="${tdE(c)}">`).join('')}</datalist></label>
   <label>tileType<input type="text" id="tfType" list="tdTypes" value="${tdE(d.tileType||'')}"><datalist id="tdTypes"><option>Normal</option><option>Multi-tile</option></datalist></label>
   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="tfAnim" ${d.isAnimated?'checked':''}> isAnimated</label>
   <div class="frow"><label>frames<input type="number" id="tfFr" min="1" value="${tdE(d.frames??1)}"></label><label>columns<input type="number" id="tfCol" min="1" value="${tdE(d.columns??'')}" placeholder="(none)"></label></div>
   <label>tileImage (path in the project)<input type="text" id="tfImg" value="${tdE(d.tileImage||'')}"></label>
   <div class="frow"><label>width<input type="number" id="tfW" min="1" value="${(String(d.tileDimension||'').split('x')[0])||''}"></label><label>height<input type="number" id="tfH" min="1" value="${(String(d.tileDimension||'').split('x')[1])||''}"></label></div>
   <div class="row"><button id="tfDetect" title="read the real size of the image">Detect size${sz?` (${sz.w}×${sz.h})`:''}</button><button id="tfAuto" title="frames = cells of 16×16, columns = width / 16">Auto frames &amp; columns</button></div>
+  <div class="row"><button id="tfPaint" class="on" title="open the pixel editor for this tile's image">🎨 Edit pixels…</button></div>
   <div class="row"><button id="tfRepl">Replace image…</button><button id="tfCrop" ${TD.rect&&TD.sheet?'':'disabled'} title="use the highlighted area of the sheet">Replace from sheet selection</button></div>
   <div class="help">Used on maps: <b>${use}</b> cell(s)${t.canvas&&t.mod?' · this image is new and goes in the ZIP at the path above':''}</div>
-  ${Object.keys(d).filter(k=>!['tileID','tileName','tileType','isAnimated','frames','columns','tileImage','tileDimension'].includes(k)).map(k=>`<div class="help">kept: ${tdE(k)} = ${tdE(JSON.stringify(d[k]))}</div>`).join('')}
+  ${Object.keys(d).filter(k=>!['tileID','tileName','tileType','isAnimated','frames','columns','tileImage','tileDimension','category'].includes(k)).map(k=>`<div class="help">kept: ${tdE(k)} = ${tdE(JSON.stringify(d[k]))}</div>`).join('')}
   <canvas id="tfPrev" style="margin-top:8px"></canvas>`;
   const touch=()=>{t.mod=true;tdApply();tdList();tdPrev()};
   const num=(id,key,del)=>{$(id).oninput=()=>{const v=$(id).value;if(v===''&&del)delete d[key];else if(v!=='')d[key]=Number(v);touch()}};
@@ -1101,7 +1133,7 @@ function tdForm(){const f=$('tdForm'),t=TD.sel;if(!t){f.innerHTML='<div class="h
   if($('tfId'))$('tfId').onchange=()=>{const v=Number($('tfId').value);if(!Number.isFinite(v)||tdById(v)&&tdById(v)!==t){tdMsg('That ID is already taken.');$('tfId').value=t.id;return}t.id=v;d.tileID=v;t.mod=true;TD.tiles.sort((a,b)=>(+a.id)-(+b.id));tdApply();tdList()};
   $('tfDetect').onclick=()=>{const s=tdImgSize(t);if(!s)return tdMsg('The image is not loaded (check the path).');d.tileDimension=s.w+'x'+s.h;t.mod=true;tdApply();tdForm();tdList()};
   $('tfAuto').onclick=()=>{const[w,h]=String(d.tileDimension||'16x16').split('x').map(Number);const c=Math.max(1,Math.ceil((w||16)/16)),r=Math.max(1,Math.ceil((h||16)/16));d.frames=c*r;if(c>1||/^Multi/.test(d.tileType||''))d.columns=c;t.mod=true;tdApply();tdForm();tdList()};
-  $('tfRepl').onclick=()=>$('tdFR').click();
+  $('tfRepl').onclick=()=>$('tdFR').click();$('tfPaint').onclick=()=>pxOpen(t);$('tfCat').onchange=()=>tdSetCat(t.id,$('tfCat').value);
   $('tfCrop').onclick=()=>{if(!TD.rect||!TD.sheet)return;const r=TD.rect;t.canvas=tdCrop(TD.sheet,r.x,r.y,r.w,r.h);t.src={sheet:TD.sheet.name,...r};d.tileDimension=r.w+'x'+r.h;t.mod=true;tdReg(t);tdApply();tdForm();tdList();tdDraw();tdMsg(`Image of “${d.tileName}” replaced from the sheet (${r.w}×${r.h}).`)};
   tdPrev()}
 function tdPrev(){const c=$('tfPrev'),t=TD.sel;if(!c||!t)return;const i=t.canvas||tileImg(t.d);if(!i){c.width=c.height=4;return}
@@ -1204,18 +1236,307 @@ async function tdOpen(){$('ted').hidden=false;document.body.style.overflow='hidd
   if(!TD.tiles.length||!TD.srcText){const ok=await tdLoadSource();if(!ok&&!TD.tiles.length)tdFromLive();else if(!ok)tdMsg('Could not read the tiles.js text; edited tiles will be rewritten from the loaded data.')}
   TD.use=tdUsage();if(!TD.sel)TD.sel=TD.tiles[0]||null;
   if(!TD.sheets.length){const all=await tdIdbAll();for(const[k,b]of Object.entries(all)){try{TD.sheets.push({name:k,canvas:await tdBitmap(b)})}catch(e){}}if(TD.sheets.length)TD.sheet=TD.sheets[0]}
-  tdSheetSel();tdList();tdForm();tdFit();tdUseSheet(TD.sheet,true);if(!TD.srcText)tdMsg('tiles.js text not found next to this page: use “Load tiles.js…” so unchanged tiles keep your exact text.')}
+  tdSheetSel();tdCatBulk();tdList();tdForm();tdFit();tdUseSheet(TD.sheet,true);if(!TD.srcText)tdMsg('tiles.js text not found next to this page: use “Load tiles.js…” so unchanged tiles keep your exact text.')}
 function tdClose(){$('ted').hidden=true;document.body.style.overflow='';buildPalette();redraw()}
+// =====================================================================================================================
+//  TILE CATEGORIES  (tile field `category` in tiles.js; the palette groups by it)  +  TILE PIXEL EDITOR
+// =====================================================================================================================
+const CAT_DEF=['Terrain','Nature','Exteriors','Buildings','Interiors','Props','Water'];
+const catName=d=>(d&&d.category)||'Uncategorized';
+function catSort(list){const u=[...new Set(list)];return u.sort((a,b)=>{if(a==='Uncategorized')return 1;if(b==='Uncategorized')return -1;const ia=CAT_DEF.indexOf(a),ib=CAT_DEF.indexOf(b);if(ia>=0&&ib>=0)return ia-ib;if(ia>=0)return -1;if(ib>=0)return 1;return a.localeCompare(b)})}
+const allCats=()=>catSort([...Object.values(TL()).map(catName),...CAT_DEF]);
+async function tdEnsure(){if(!TD.tiles.length||!TD.srcText){const ok=await tdLoadSource();if(!ok&&!TD.tiles.length)tdFromLive()}}
+function tdSetCat(id,cat){const t=tdById(id);if(!t)return false;cat=String(cat||'').trim();
+  if(!cat||cat==='Uncategorized'){if(!('category' in t.d))return false;delete t.d.category}else{if(t.d.category===cat)return false;t.d.category=cat}
+  t.mod=true;tdApply();if(!$('ted').hidden){tdList();if(TD.sel===t)tdForm()}return true}
+async function paletteSetCat(id,cat){await tdEnsure();if(tdSetCat(id,cat))notify('Tile '+id+' → '+(cat||'Uncategorized')+' (tiles.js changed: save or commit it from 🧱 Tiles)','ok')}
+let catClosed={};try{catClosed=JSON.parse(localStorage.edPalClosed||'{}')}catch(e){}
+function catMenu(x,y,tid){document.querySelectorAll('.catmenu').forEach(m=>m.remove());const m=document.createElement('div');m.className='catmenu';m.style.cssText=`position:fixed;left:${Math.min(x,innerWidth-190)}px;top:${Math.min(y,innerHeight-300)}px;z-index:120;background:#1b1b1b;border:1px solid #555;border-radius:6px;padding:4px;max-height:290px;overflow:auto;min-width:170px;box-shadow:0 6px 20px #000a`;
+  const h=document.createElement('div');h.className='help';h.style.padding='2px 6px';h.textContent='Move tile '+tid+' to…';m.appendChild(h);
+  for(const c of allCats().concat(['+ New category…'])){const b=document.createElement('div');b.textContent=c;b.style.cssText='padding:4px 8px;cursor:pointer;border-radius:4px';b.onmouseenter=()=>b.style.background='#2a3b52';b.onmouseleave=()=>b.style.background='';
+    b.onclick=()=>{m.remove();if(c.startsWith('+')){const n=prompt('Name of the new category:','');if(n&&n.trim())paletteSetCat(tid,n.trim())}else paletteSetCat(tid,c)};m.appendChild(b)}
+  document.body.appendChild(m);setTimeout(()=>addEventListener('mousedown',function f(e){if(!m.contains(e.target)){m.remove();removeEventListener('mousedown',f)}}),0)}
+function buildPalette(){const P=$('palette');P.innerHTML='';const q=(($('palQ')||{}).value||'').trim().toLowerCase();
+  const cats=new Map();for(const[t,d]of Object.entries(TL())){const c=catName(d);if(!cats.has(c))cats.set(c,[]);cats.get(c).push([t,d])}
+  for(const c of catSort([...cats.keys()])){const items=cats.get(c).filter(([t,d])=>!q||`${t} ${d.tileName||''} ${c}`.toLowerCase().includes(q));if(!items.length)continue;
+    const det=document.createElement('details');det.className='pcat';det.dataset.cat=c;det.open=q?true:!catClosed[c];
+    const sm=document.createElement('summary');sm.textContent=`${c} (${items.length})`;det.appendChild(sm);
+    det.addEventListener('toggle',()=>{if(q)return;if(det.open)delete catClosed[c];else catClosed[c]=1;try{localStorage.edPalClosed=JSON.stringify(catClosed)}catch(e){}});
+    const over=e=>{if([...(e.dataTransfer.types||[])].includes('text/tile')){e.preventDefault();sm.classList.add('over')}};sm.ondragover=over;sm.ondragleave=()=>sm.classList.remove('over');
+    sm.ondrop=e=>{e.preventDefault();sm.classList.remove('over');const id=e.dataTransfer.getData('text/tile');if(id!=='')paletteSetCat(id,c)};
+    for(const[t,d]of items){const n=d.columns||1,h=document.createElement('div');h.className='ph';h.textContent=`${t}: ${d.tileName} (${d.tileType})`;h.draggable=true;h.title='drag onto a category to move it · right-click for a menu';
+      h.ondragstart=e=>e.dataTransfer.setData('text/tile',String(t));h.oncontextmenu=e=>{e.preventDefault();catMenu(e.clientX,e.clientY,t)};det.appendChild(h);
+      const g=document.createElement('div');g.className='pg';g.style.gridTemplateColumns=`repeat(${n},34px)`;
+      for(let f=0;f<(d.frames||1);f++){const cv=document.createElement('canvas');cv.width=cv.height=32;drawTile(cv.getContext('2d'),`${t}|${f}`,0,0,32);Object.assign(cv.dataset,{t,f,n});g.appendChild(cv)}det.appendChild(g)}
+    P.appendChild(det)}
+  if(!P.children.length)P.innerHTML='<div class="help">no tiles match</div>';markPalette()}
+$('palQ').oninput=buildPalette;
+$('palAll').onclick=()=>{catClosed={};document.querySelectorAll('#palette details').forEach(d=>d.open=true);try{localStorage.edPalClosed='{}'}catch(e){}};
+$('palNone').onclick=()=>{document.querySelectorAll('#palette details').forEach(d=>{d.open=false;catClosed[d.dataset.cat]=1});try{localStorage.edPalClosed=JSON.stringify(catClosed)}catch(e){}};
+
+// ---------------- pixel editor
+const PXH='<div id="tpxHead"><b>🎨 Tile pixel editor</b><span id="tpxName" style="color:#ffd600"></span><span id="tpxInfo" class="help"></span><span style="flex:1"></span><button id="tpxPng" title="download this image">⬇ PNG</button><button id="tpxApply" class="on">✔ Apply to tile</button><button id="tpxCancel">✕ Cancel</button></div>'+
+'<div id="tpxBody"><div id="tpxL"><b class="ph" style="margin:0">Tools</b><div class="row" id="tpxTools"></div>'+
+'<label>Brush size<select id="tpxSize"><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option></select></label>'+
+'<label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="tpxFill"> filled shapes</label><label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="tpxMirror"> mirror left/right</label>'+
+'<b class="ph" style="margin:6px 0 0">Colour</b><div class="row" style="align-items:center"><input type="color" id="tpxCol" style="width:48px;height:30px;padding:0"><input type="text" id="tpxHex" style="width:92px" value="#000000"></div>'+
+'<label>Opacity <span id="tpxAV">255</span><input type="range" id="tpxAlpha" min="0" max="255" value="255"></label><b class="ph" style="margin:6px 0 0">Colours in this image</b><div id="tpxPal" class="pal"></div><div class="row"><button id="tpxPalR">↻ read again</button></div>'+
+'<b class="ph" style="margin:6px 0 0">Recent</b><div id="tpxRec" class="pal"></div></div>'+
+'<div id="tpxM"><div id="tpxWrap"><canvas id="tpxCv"></canvas></div><div class="help">Left = draw · right / middle drag or Space+drag = pan · wheel = zoom · Ctrl+Z / Ctrl+Y undo / redo · B pencil · E eraser · G fill · I pick · L line · R rect · O ellipse</div></div>'+
+'<div id="tpxR"><b class="ph" style="margin:0">Image</b><div class="row" style="align-items:center">W<input type="number" id="tpxW" min="1" max="1024" style="width:64px">H<input type="number" id="tpxH" min="1" max="1024" style="width:64px"></div>'+
+'<div class="row"><button id="tpxCrop" title="keeps the pixels, adds / cuts at the right and bottom">Resize canvas</button><button id="tpxScale" title="stretch the picture (nearest neighbour)">Scale image</button></div>'+
+'<b class="ph" style="margin:6px 0 0">Transform</b><div class="row"><button id="tpxFH">⇋ Flip H</button><button id="tpxFV">⇅ Flip V</button><button id="tpxRC">⟳ 90°</button><button id="tpxRA">⟲ 90°</button></div>'+
+'<div class="row"><button id="tpxL1">←</button><button id="tpxU1">↑</button><button id="tpxD1">↓</button><button id="tpxR1">→</button><span class="help">shift 1 px (wraps)</span></div>'+
+'<div class="row"><button id="tpxInv">Invert colours</button><button id="tpxClear">Clear</button></div><div class="row"><button id="tpxImp" class="on">Replace from file…</button><input type="file" id="tpxFile" accept="image/*" hidden></div>'+
+'<b class="ph" style="margin:6px 0 0">View</b><label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="tpxGrid" checked> pixel grid</label><label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="tpxG16" checked> 16×16 tile lines</label><label>Zoom<input type="range" id="tpxZ" min="1" max="48" value="8"></label>'+
+'<b class="ph" style="margin:6px 0 0">Tiled preview (2×2)</b><canvas id="tpxPrev" style="border:1px solid #333;image-rendering:pixelated;max-width:100%;background:#0b0b0b"></canvas></div></div>';
+const PX={t:null,cv:null,cx:null,w:0,h:0,z:8,ox:20,oy:20,tool:'pencil',col:[0,0,0,255],hist:[],redo:[],drag:null,pan:null,space:false,hover:null,dirty:false,rec:[]};
+const PXT=[['pencil','✎','Pencil (B)'],['eraser','⌫','Eraser (E)'],['fill','▣','Fill (G)'],['pick','⌖','Pick colour (I)'],['line','╱','Line (L)'],['rect','▭','Rectangle (R)'],['ell','◯','Ellipse (O)'],['repl','⇄','Replace colour: click a pixel, all pixels of that colour take the current colour']];
+(function(){const d=document.createElement('div');d.id='tpx';d.hidden=true;d.innerHTML=PXH;document.body.appendChild(d);
+  PXT.forEach(([k,ic,tt])=>{const b=document.createElement('button');b.textContent=ic;b.title=tt;b.dataset.tool=k;b.style.cssText='font-size:16px;min-width:34px';b.onclick=()=>pxTool(k);$('tpxTools').appendChild(b)})})();
+const pxHex=c=>'#'+[c[0],c[1],c[2]].map(v=>v.toString(16).padStart(2,'0')).join('');
+const pxRGBA=c=>`rgba(${c[0]},${c[1]},${c[2]},${c[3]/255})`;
+function pxTool(k){PX.tool=k;document.querySelectorAll('#tpxTools button').forEach(b=>b.classList.toggle('on',b.dataset.tool===k))}
+function pxSetCol(c,rec){PX.col=c;$('tpxCol').value=pxHex(c);$('tpxHex').value=pxHex(c);$('tpxAlpha').value=c[3];$('tpxAV').textContent=c[3];if(rec&&c[3]){const h=c.join(',');PX.rec=PX.rec.filter(x=>x.join(',')!==h);PX.rec.unshift(c.slice());PX.rec=PX.rec.slice(0,14);pxSwatches()}}
+function pxSwatches(){const mk=(box,list)=>{box.innerHTML='';list.forEach(c=>{const s=document.createElement('i');s.style.cssText=`width:18px;height:18px;display:inline-block;border:1px solid #555;cursor:pointer;background:linear-gradient(${pxRGBA(c)},${pxRGBA(c)}),repeating-conic-gradient(#444 0 25%,#222 0 50%) 0 0/8px 8px`;s.title=pxHex(c)+' α'+c[3];s.onclick=()=>pxSetCol(c.slice());box.appendChild(s)})};
+  mk($('tpxRec'),PX.rec);const cnt=new Map(),d=PX.cx.getImageData(0,0,PX.w,PX.h).data;for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;const k=d[i]+','+d[i+1]+','+d[i+2]+','+d[i+3];cnt.set(k,(cnt.get(k)||0)+1)}
+  mk($('tpxPal'),[...cnt.entries()].sort((a,b)=>b[1]-a[1]).slice(0,60).map(([k])=>k.split(',').map(Number)))}
+function pxSnap(){return PX.cx.getImageData(0,0,PX.w,PX.h)}
+function pxPush(){PX.hist.push(pxSnap());if(PX.hist.length>80)PX.hist.shift();PX.redo=[];PX.dirty=true}
+function pxPut(im){PX.w=im.width;PX.h=im.height;PX.cv.width=PX.w;PX.cv.height=PX.h;PX.cx=PX.cv.getContext('2d',{willReadFrequently:true});PX.cx.putImageData(im,0,0);$('tpxW').value=PX.w;$('tpxH').value=PX.h}
+function pxUndo(){if(!PX.hist.length)return;PX.redo.push(pxSnap());pxPut(PX.hist.pop());pxChanged()}
+function pxRedo(){if(!PX.redo.length)return;PX.hist.push(pxSnap());pxPut(PX.redo.pop());pxChanged()}
+function pxChanged(){pxDraw();pxPrev();$('tpxInfo').textContent=`${PX.w}×${PX.h} px · ${Math.ceil(PX.w/16)}×${Math.ceil(PX.h/16)} cells of 16×16`}
+function pxPrev(){const c=$('tpxPrev'),s=Math.max(1,Math.min(4,Math.floor(200/Math.max(PX.w,PX.h))));c.width=PX.w*2*s;c.height=PX.h*2*s;const x=c.getContext('2d');x.imageSmoothingEnabled=false;for(let i=0;i<2;i++)for(let j=0;j<2;j++)x.drawImage(PX.cv,i*PX.w*s,j*PX.h*s,PX.w*s,PX.h*s)}
+let pxNeed=false;function pxDraw(){if(pxNeed)return;pxNeed=true;requestAnimationFrame(()=>{pxNeed=false;pxPaint()})}
+function pxFit(){const c=$('tpxCv'),b=$('tpxWrap').getBoundingClientRect(),d=devicePixelRatio||1;c.width=Math.max(1,b.width*d|0);c.height=Math.max(1,b.height*d|0);pxDraw()}
+function pxPaint(){const c=$('tpxCv'),x=c.getContext('2d'),d=devicePixelRatio||1,z=PX.z*d,ox=PX.ox*d,oy=PX.oy*d;x.setTransform(1,0,0,1,0,0);x.fillStyle='#0b0b0b';x.fillRect(0,0,c.width,c.height);
+  const W=PX.w*z,H=PX.h*z;x.save();x.beginPath();x.rect(ox,oy,W,H);x.clip();const cs=Math.max(4,Math.round(z>=8?z:8));for(let i=0;i*cs<W;i++)for(let j=0;j*cs<H;j++){x.fillStyle=(i+j)%2?'#2a2a2a':'#202020';x.fillRect(ox+i*cs,oy+j*cs,cs,cs)}x.restore();
+  x.imageSmoothingEnabled=false;x.drawImage(PX.cv,ox,oy,W,H);
+  if(PX.drag&&PX.drag.prev){x.drawImage(PX.drag.prev,ox,oy,W,H)}
+  if($('tpxGrid').checked&&z>=6){x.strokeStyle='rgba(255,255,255,.10)';x.lineWidth=1;x.beginPath();for(let i=0;i<=PX.w;i++){x.moveTo(ox+i*z+.5,oy);x.lineTo(ox+i*z+.5,oy+H)}for(let j=0;j<=PX.h;j++){x.moveTo(ox,oy+j*z+.5);x.lineTo(ox+W,oy+j*z+.5)}x.stroke()}
+  if($('tpxG16').checked){x.strokeStyle='rgba(0,229,255,.45)';x.lineWidth=1;x.beginPath();for(let i=0;i<=PX.w;i+=16){x.moveTo(ox+i*z+.5,oy);x.lineTo(ox+i*z+.5,oy+H)}for(let j=0;j<=PX.h;j+=16){x.moveTo(ox,oy+j*z+.5);x.lineTo(ox+W,oy+j*z+.5)}x.stroke()}
+  x.strokeStyle='#ffd600';x.strokeRect(ox-.5,oy-.5,W+1,H+1);
+  if(PX.hover&&!PX.pan){const s=+$('tpxSize').value||1,k=(PX.tool==='pencil'||PX.tool==='eraser')?s:1;x.strokeStyle='#fff';x.strokeRect(ox+(PX.hover.x-(k>1?Math.floor(k/2):0))*z+.5,oy+(PX.hover.y-(k>1?Math.floor(k/2):0))*z+.5,k*z-1,k*z-1)}}
+const pxPos=e=>{const r=$('tpxCv').getBoundingClientRect();return{x:Math.floor((e.clientX-r.left-PX.ox)/PX.z),y:Math.floor((e.clientY-r.top-PX.oy)/PX.z)}};
+function pxDot(x,y,erase,size){const s=size||+$('tpxSize').value||1,h=Math.floor(s/2),X=x-(s>1?h:0),Y=y-(s>1?h:0);
+  const one=(a,b)=>{if(erase)PX.cx.clearRect(a,b,s,s);else{PX.cx.clearRect(a,b,s,s);PX.cx.fillStyle=pxRGBA(PX.col);PX.cx.fillRect(a,b,s,s)}};one(X,Y);if($('tpxMirror').checked)one(PX.w-X-s,Y)}
+function pxLine(x0,y0,x1,y1,fn){const dx=Math.abs(x1-x0),dy=Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1;let e=dx-dy,x=x0,y=y0;for(let n=0;n<4096;n++){fn(x,y);if(x===x1&&y===y1)break;const e2=2*e;if(e2>-dy){e-=dy;x+=sx}if(e2<dx){e+=dx;y+=sy}}}
+function pxShape(kind,a,b,ctx){const col=pxRGBA(PX.col),fill=$('tpxFill').checked,s=+$('tpxSize').value||1,px=(x,y)=>{if(x<0||y<0||x>=PX.w||y>=PX.h)return;ctx.clearRect(x,y,1,1);ctx.fillStyle=col;ctx.fillRect(x,y,1,1)};
+  const paint=(x,y)=>{const h=Math.floor(s/2);for(let i=0;i<s;i++)for(let j=0;j<s;j++){px(x-h+i,y-h+j);if($('tpxMirror').checked)px(PX.w-1-(x-h+i),y-h+j)}};
+  if(kind==='line')pxLine(a.x,a.y,b.x,b.y,paint);
+  else{const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y);
+    if(kind==='rect'){for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)if(fill||x<x0+s||x>x1-s||y<y0+s||y>y1-s)paint2(x,y)}
+    else{const cx=(x0+x1)/2,cy=(y0+y1)/2,rx=(x1-x0)/2+.5,ry=(y1-y0)/2+.5;for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const inn=((x-cx)/rx)**2+((y-cy)/ry)**2<=1;if(!inn)continue;const ins=((x-cx)/Math.max(.5,rx-s))**2+((y-cy)/Math.max(.5,ry-s))**2<1;if(fill||!ins||rx-s<=.5||ry-s<=.5)paint2(x,y)}}}
+  function paint2(x,y){px(x,y);if($('tpxMirror').checked)px(PX.w-1-x,y)}}
+function pxFloodFill(x,y,col){const im=pxSnap(),d=im.data,w=im.width,h=im.height;if(x<0||y<0||x>=w||y>=h)return;const i0=(y*w+x)*4,t=[d[i0],d[i0+1],d[i0+2],d[i0+3]];
+  if(t[0]===col[0]&&t[1]===col[1]&&t[2]===col[2]&&t[3]===col[3])return;const st=[[x,y]],eq=i=>d[i]===t[0]&&d[i+1]===t[1]&&d[i+2]===t[2]&&d[i+3]===t[3];
+  while(st.length){const[a,b]=st.pop();if(a<0||b<0||a>=w||b>=h)continue;const i=(b*w+a)*4;if(!eq(i))continue;d[i]=col[0];d[i+1]=col[1];d[i+2]=col[2];d[i+3]=col[3];st.push([a+1,b],[a-1,b],[a,b+1],[a,b-1])}
+  PX.cx.putImageData(im,0,0)}
+function pxReplaceColour(x,y,col){const im=pxSnap(),d=im.data,i0=(y*im.width+x)*4,t=[d[i0],d[i0+1],d[i0+2],d[i0+3]];for(let i=0;i<d.length;i+=4)if(d[i]===t[0]&&d[i+1]===t[1]&&d[i+2]===t[2]&&d[i+3]===t[3]){d[i]=col[0];d[i+1]=col[1];d[i+2]=col[2];d[i+3]=col[3]}PX.cx.putImageData(im,0,0)}
+function pxPick(x,y){if(x<0||y<0||x>=PX.w||y>=PX.h)return;const d=PX.cx.getImageData(x,y,1,1).data;pxSetCol([d[0],d[1],d[2],d[3]],true)}
+const pxCv=()=>$('tpxCv');
+pxCv().addEventListener('mousedown',e=>{e.preventDefault();
+  if(e.button===1||e.button===2||PX.space){PX.pan={x:e.clientX,y:e.clientY,ox:PX.ox,oy:PX.oy};return}
+  const p=pxPos(e),t=PX.tool;if(t==='pick'){pxPick(p.x,p.y);return}
+  if(p.x<0||p.y<0||p.x>=PX.w||p.y>=PX.h)return;
+  pxPush();
+  if(t==='fill'){pxFloodFill(p.x,p.y,PX.col);pxSetCol(PX.col,true);pxChanged();return}
+  if(t==='repl'){pxReplaceColour(p.x,p.y,PX.col);pxSetCol(PX.col,true);pxChanged();pxSwatches();return}
+  if(t==='pencil'||t==='eraser'){PX.drag={last:p};pxDot(p.x,p.y,t==='eraser');pxChanged();return}
+  PX.drag={a:p,b:p,prev:document.createElement('canvas')};PX.drag.prev.width=PX.w;PX.drag.prev.height=PX.h;pxShape(t==='ell'?'ell':t,p,p,PX.drag.prev.getContext('2d'));pxDraw()});
+addEventListener('mousemove',e=>{if($('tpx').hidden)return;
+  if(PX.pan){PX.ox=PX.pan.ox+e.clientX-PX.pan.x;PX.oy=PX.pan.oy+e.clientY-PX.pan.y;pxDraw();return}
+  const p=pxPos(e);PX.hover=(p.x>=0&&p.y>=0&&p.x<PX.w&&p.y<PX.h)?p:null;
+  if(PX.drag){if(PX.drag.last){pxLine(PX.drag.last.x,PX.drag.last.y,p.x,p.y,(x,y)=>pxDot(x,y,PX.tool==='eraser'));PX.drag.last=p;pxChanged()}
+    else{PX.drag.b=p;const g=PX.drag.prev.getContext('2d');g.clearRect(0,0,PX.w,PX.h);pxShape(PX.tool,PX.drag.a,p,g);pxDraw()}}else pxDraw()});
+addEventListener('mouseup',()=>{if($('tpx').hidden)return;if(PX.pan){PX.pan=null;return}
+  if(PX.drag){if(PX.drag.prev){PX.cx.drawImage(PX.drag.prev,0,0)}if(PX.col[3])pxSetCol(PX.col,true);PX.drag=null;pxChanged();pxSwatches()}});
+pxCv().addEventListener('contextmenu',e=>e.preventDefault());
+pxCv().addEventListener('wheel',e=>{e.preventDefault();const r=pxCv().getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,z0=PX.z,z1=Math.max(1,Math.min(48,z0*(e.deltaY<0?1.25:0.8)));
+  PX.ox=mx-(mx-PX.ox)*z1/z0;PX.oy=my-(my-PX.oy)*z1/z0;PX.z=z1;$('tpxZ').value=Math.round(z1);pxDraw()},{passive:false});
+$('tpxZ').oninput=e=>{const r=pxCv().getBoundingClientRect(),cx=r.width/2,cy=r.height/2,z0=PX.z,z1=+e.target.value;PX.ox=cx-(cx-PX.ox)*z1/z0;PX.oy=cy-(cy-PX.oy)*z1/z0;PX.z=z1;pxDraw()};
+$('tpxGrid').onchange=$('tpxG16').onchange=pxDraw;
+$('tpxCol').oninput=e=>{const h=e.target.value;pxSetCol([parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16),PX.col[3]])};
+$('tpxHex').onchange=e=>{const m=/^#?([0-9a-f]{6})$/i.exec(e.target.value.trim());if(m){const h=m[1];pxSetCol([parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16),PX.col[3]])}else $('tpxHex').value=pxHex(PX.col);e.target.blur()};
+$('tpxAlpha').oninput=e=>{PX.col[3]=+e.target.value;$('tpxAV').textContent=PX.col[3]};$('tpxPalR').onclick=pxSwatches;
+const pxOp=fn=>{pxPush();fn();pxChanged();pxSwatches()};
+function pxMap(fn,nw,nh){const src=pxSnap(),w=src.width,h=src.height,W=nw||w,H=nh||h,out=new ImageData(W,H);for(let y=0;y<H;y++)for(let x=0;x<W;x++){const[sx,sy]=fn(x,y,w,h);const i=(y*W+x)*4,j=(sy*w+sx)*4;out.data[i]=src.data[j];out.data[i+1]=src.data[j+1];out.data[i+2]=src.data[j+2];out.data[i+3]=src.data[j+3]}pxPut(out)}
+$('tpxFH').onclick=()=>pxOp(()=>pxMap((x,y,w)=>[w-1-x,y]));$('tpxFV').onclick=()=>pxOp(()=>pxMap((x,y,w,h)=>[x,h-1-y]));
+$('tpxRC').onclick=()=>pxOp(()=>{const w=PX.w,h=PX.h;pxMap((x,y)=>[y,h-1-x],h,w)});$('tpxRA').onclick=()=>pxOp(()=>{const w=PX.w,h=PX.h;pxMap((x,y)=>[w-1-y,x],h,w)});
+$('tpxL1').onclick=()=>pxOp(()=>pxMap((x,y,w)=>[(x+1)%w,y]));$('tpxR1').onclick=()=>pxOp(()=>pxMap((x,y,w)=>[(x-1+w)%w,y]));$('tpxU1').onclick=()=>pxOp(()=>pxMap((x,y,w,h)=>[x,(y+1)%h]));$('tpxD1').onclick=()=>pxOp(()=>pxMap((x,y,w,h)=>[x,(y-1+h)%h]));
+$('tpxInv').onclick=()=>pxOp(()=>{const im=pxSnap(),d=im.data;for(let i=0;i<d.length;i+=4){d[i]=255-d[i];d[i+1]=255-d[i+1];d[i+2]=255-d[i+2]}PX.cx.putImageData(im,0,0)});
+$('tpxClear').onclick=()=>pxOp(()=>PX.cx.clearRect(0,0,PX.w,PX.h));
+function pxResize(scale){const w=Math.max(1,Math.min(1024,+$('tpxW').value||PX.w)),h=Math.max(1,Math.min(1024,+$('tpxH').value||PX.h));pxPush();const old=document.createElement('canvas');old.width=PX.w;old.height=PX.h;old.getContext('2d').drawImage(PX.cv,0,0);
+  PX.w=w;PX.h=h;PX.cv.width=w;PX.cv.height=h;PX.cx=PX.cv.getContext('2d',{willReadFrequently:true});PX.cx.imageSmoothingEnabled=false;if(scale)PX.cx.drawImage(old,0,0,w,h);else PX.cx.drawImage(old,0,0);pxChanged();pxSwatches()}
+$('tpxCrop').onclick=()=>pxResize(false);$('tpxScale').onclick=()=>pxResize(true);
+$('tpxImp').onclick=()=>$('tpxFile').click();
+$('tpxFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const bm=await createImageBitmap(f);pxPush();PX.w=bm.width;PX.h=bm.height;PX.cv.width=PX.w;PX.cv.height=PX.h;PX.cx=PX.cv.getContext('2d',{willReadFrequently:true});PX.cx.drawImage(bm,0,0);$('tpxW').value=PX.w;$('tpxH').value=PX.h;pxChanged();pxSwatches();pxFitView()}catch(er){alert('Could not read that image.')}};
+$('tpxPng').onclick=()=>PX.cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(tdSlug(PX.t&&PX.t.d.tileName||'tile'))+'.png';a.click()});
+function pxFitView(){const b=$('tpxWrap').getBoundingClientRect();PX.z=Math.max(1,Math.min(48,Math.floor(Math.min((b.width-30)/PX.w,(b.height-30)/PX.h))||1));$('tpxZ').value=PX.z;PX.ox=Math.round((b.width-PX.w*PX.z)/2);PX.oy=Math.round((b.height-PX.h*PX.z)/2);pxDraw()}
+function pxOpen(t){if(!t)return;PX.t=t;const img=t.canvas||tileImg(t.d);let w=16,h=16;if(img){w=img.naturalWidth||img.width||16;h=img.naturalHeight||img.height||16}
+  PX.cv=document.createElement('canvas');PX.cv.width=PX.w=w;PX.cv.height=PX.h=h;PX.cx=PX.cv.getContext('2d',{willReadFrequently:true});PX.w0=w;PX.h0=h;
+  if(img){try{PX.cx.drawImage(img,0,0)}catch(e){}}
+  PX.hist=[];PX.redo=[];PX.dirty=false;$('tpx').hidden=false;document.body.style.overflow='hidden';$('tpxName').textContent=` ${t.id} · ${t.d.tileName||''}`;$('tpxW').value=w;$('tpxH').value=h;
+  pxTool(PX.tool);pxSetCol(PX.col);pxFit();pxFitView();pxChanged();pxSwatches()}
+function pxClose(ask){if(ask&&PX.dirty&&!confirm('Close without applying the changes to the tile?'))return;$('tpx').hidden=true;document.body.style.overflow=$('ted').hidden?'':'hidden'}
+$('tpxCancel').onclick=()=>pxClose(true);
+$('tpxApply').onclick=()=>{const t=PX.t;if(!t)return;const c=document.createElement('canvas');c.width=PX.w;c.height=PX.h;c.getContext('2d').drawImage(PX.cv,0,0);t.canvas=c;
+  if(PX.w!==PX.w0||PX.h!==PX.h0){const cols=Math.max(1,Math.ceil(PX.w/16)),rows=Math.max(1,Math.ceil(PX.h/16));t.d.frames=cols*rows;if(cols>1||/^Multi/.test(t.d.tileType||''))t.d.columns=cols;else delete t.d.columns}
+  t.d.tileDimension=PX.w+'x'+PX.h;t.mod=true;tdReg(t);tdApply();tdForm();tdList();tdDraw();tdMsg(`Image of “${t.d.tileName}” edited (${PX.w}×${PX.h}). It goes in the ZIP / commit at the path in Tile details.`);pxClose(false)};
+new ResizeObserver(()=>{if(!$('tpx').hidden)pxFit()}).observe($('tpxWrap'));
+addEventListener('keydown',e=>{if($('tpx').hidden)return;const tg=e.target&&e.target.tagName;if(tg==='INPUT'||tg==='SELECT'||tg==='TEXTAREA')return;const k=e.key.toLowerCase();
+  if(e.key===' '){PX.space=true;e.preventDefault();return}
+  if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();e.shiftKey?pxRedo():pxUndo();return}if((e.ctrlKey||e.metaKey)&&k==='y'){e.preventDefault();pxRedo();return}
+  if(e.ctrlKey||e.metaKey)return;const m={b:'pencil',e:'eraser',g:'fill',i:'pick',l:'line',r:'rect',o:'ell'}[k];if(m){pxTool(m);e.preventDefault()}else if(e.key==='Escape')pxClose(true);e.stopPropagation()},true);
+addEventListener('keyup',e=>{if(e.key===' ')PX.space=false});
+// "Edit pixels" + blank tile + bulk category in the tile editor
+$('tdBlank').onclick=async()=>{await tdEnsure();const n=prompt('Name of the new tile:','New tile');if(!n)return;const s=prompt('Size in pixels, width x height (a multiple of 16 for multi-tile pictures):','16x16');const m=/^\s*(\d+)\s*[x×,]\s*(\d+)\s*$/.exec(s||'');if(!m)return;
+  const c=document.createElement('canvas');c.width=Math.max(1,Math.min(1024,+m[1]));c.height=Math.max(1,Math.min(1024,+m[2]));const t=tdMakeTile(c,n.trim());TD.sel=t;tdApply();tdList();tdForm();pxOpen(t)};
+function tdCatBulk(){const s=$('tdBulkCat');s.innerHTML='';allCats().forEach(c=>s.add(new Option(c,c)));s.add(new Option('+ New category…','+new'))}
+$('tdBulk').onclick=()=>{let c=$('tdBulkCat').value;if(c==='+new'){c=(prompt('Name of the new category:','')||'').trim();if(!c)return}
+  const q=TD.q.toLowerCase();const list=TD.tiles.filter(t=>!q||`${t.id} ${t.d.tileName||''} ${t.d.tileType||''} ${t.d.tileImage||''}`.toLowerCase().includes(q));
+  if(!list.length)return;if(list.length>1&&!confirm(`Move ${list.length} listed tile(s) to “${c}”?`))return;let n=0;for(const t of list)if(tdSetCat(t.id,c))n++;tdCatBulk();tdMsg(`${n} tile(s) moved to “${c}”.`)};
+
 $('seCommit').onclick=()=>ghOpen(['scr']);
 $('tilesB').onclick=tdOpen;$('tdClose').onclick=tdClose;new ResizeObserver(()=>{if(!$('ted').hidden)tdFit()}).observe($('tdCvWrap'));
 
 // =====================================================================================================================
 //  COMMIT TO GITHUB: writes the changed files straight into the repo (one commit) through the GitHub API.
 // =====================================================================================================================
+// =====================================================================================================================
+//  QUICK TRAINER EDITOR  (js/TrainerTables.js: TrainerTable + TrainerClassTable)  - a pop-up on top of the map
+// =====================================================================================================================
+const TR={sel:null,dirty:false,src:'',fh:null,q:'',tmp:{before:'',after:''}};
+const trTab=()=>window.TrainerTable||(window.TrainerTable={}),trCls=()=>window.TrainerClassTable||(window.TrainerClassTable={});
+const trE=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const trJ=v=>{if(v===null||v===undefined)return'null';if(typeof v==='string')return"'"+v.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n')+"'";if(typeof v!=='object')return String(v);
+  if(Array.isArray(v))return'['+v.map(trJ).join(', ')+']';return'{ '+Object.entries(v).filter(([,x])=>x!==undefined).map(([k,x])=>(/^[A-Za-z_$][\w$]*$/.test(k)?k:trJ(k))+': '+trJ(x)).join(', ')+' }'};
+const TR_HEAD=`// tables/TrainerTables.js   (load before BattleScene.js, after the species / move tables)
+//
+// One entry per trainer. The key is the trainer ID used in scripts:   trainerbattle Roxanne single
+// The ID is matched loosely: Roxanne, ROXANNE, roxanne and TRAINER_ROXANNE all find TRAINER_ROXANNE.
+//
+//   name          shown in battle ("Roxanne would like to battle!")
+//   class         key of TrainerClassTable below (shown before the name: "Gym Leader Roxanne"); "" = none
+//   frontSprite   battle sprite. Default: graphics/trainer_front_sprites/<id in lower case>.png  (TRAINER_ROXANNE -> roxanne.png)
+//   party         the team, in order. Each: { species, level, moves?, item?, ability?, nature?, nickname?, shiny?, ivs? }
+//   items         the trainer's own bag, used during the battle: ['ITEM_FULL_RESTORE', 'ITEM_POTION'].
+//   bg            battle background: grass | cave | water | indoor | sand  (default grass)
+//   ai            'basic' (default) | 'smart'
+//   money         prize for winning. Default: class money rate x level of the LAST Pokemon
+//
+// (this file is written by the Quick Trainer Editor of the map editor; the speeches are written in the script, see the map editor)
+`;
+const TR_TAIL=`
+// finds a trainer by a loose ID; returns { id, ...entry } or null
+function findTrainer(id) {
+  if (id == null) return null;
+  const n = s => String(s).toUpperCase().replace(/^TRAINER_/, '').replace(/[^A-Z0-9]/g, '');
+  const want = n(id);
+  for (const k of Object.keys(TrainerTable)) if (n(k) === want) return Object.assign({ id: k }, TrainerTable[k]);
+  return null;
+}
+// prize money: the entry's own \`money\`, else class rate x level of the last Pokemon
+function trainerMoney(t) {
+  if (!t) return 0;
+  if (t.money != null) return t.money;
+  const rate = (TrainerClassTable[t.class] || { money: 4 }).money, last = (t.party || [])[(t.party || []).length - 1];
+  return rate * (last ? last.level : 1);
+}
+
+window.TrainerTable = TrainerTable; window.TrainerClassTable = TrainerClassTable; window.findTrainer = findTrainer; window.trainerMoney = trainerMoney;
+`;
+function trEntryText(id,t){const keys=['name','class','frontSprite','bg','ai','money','items'],o=[];
+  for(const k of keys)if(t[k]!==undefined&&t[k]!==''&&!(Array.isArray(t[k])&&!t[k].length))o.push(`${k}: ${trJ(t[k])}`);
+  for(const k of Object.keys(t))if(!keys.includes(k)&&k!=='party'&&t[k]!==undefined)o.push(`${k}: ${trJ(t[k])}`);
+  return`  ${id}: {\n    ${o.join(', ')},\n    party: [\n${(t.party||[]).map(p=>'      '+trJ(p)+',').join('\n')}\n    ],\n  },`}
+function trTablesText(){return`const TrainerClassTable = {\n${Object.entries(trCls()).map(([k,v])=>`  ${trJ(k)}: ${trJ(v)},`).join('\n')}\n};\n\nconst TrainerTable = {\n${Object.entries(trTab()).map(([k,v])=>trEntryText(k,v)).join('\n')}\n};\n`}
+// replace the two tables inside the real file text (keeps your comments and the helper functions); falls back to a complete new file
+function trBlock(src,startRe){const m=startRe.exec(src);if(!m)return null;let i=m.index+m[0].length-1,depth=0,str=null;
+  for(;i<src.length;i++){const c=src[i],n=src[i+1];if(str){if(c==='\\')i++;else if(c===str)str=null;continue}
+    if(c==='/'&&n==='/'){while(i<src.length&&src[i]!=='\n')i++;continue}if(c==='/'&&n==='*'){i=src.indexOf('*/',i+2)+1;continue}
+    if(c==="'"||c==='"'||c==='`'){str=c;continue}if(c==='{')depth++;else if(c==='}'){depth--;if(!depth){let e=i+1;if(src[e]===';')e++;return[m.index,e]}}}return null}
+function trOut(){const body=trTablesText(),src=TR.src;
+  if(src){const a=trBlock(src,/const\s+TrainerClassTable\s*=\s*\{/),b=trBlock(src,/const\s+TrainerTable\s*=\s*\{/);
+    if(a&&b&&a[1]<=b[0]){const mid=src.slice(a[1],b[0]),cls=body.slice(0,body.indexOf('\nconst TrainerTable')).trimEnd(),tab=body.slice(body.indexOf('const TrainerTable')).trimEnd();
+      return src.slice(0,a[0])+cls+mid+tab+src.slice(b[1])}}
+  return TR_HEAD+'\n'+body+TR_TAIL}
+async function trLoadSrc(){if(TR.src)return;let p=null;try{p=JSON.parse(localStorage.edPaths||'{}')['TrainerTables.js']}catch(e){}if(!p&&window.__loadReport){const r=window.__loadReport.find(x=>x.name==='TrainerTables.js');p=r&&r.path}
+  if(p){try{const r=await fetch(p,{cache:'no-store'});if(r.ok)TR.src=await r.text()}catch(e){}}}
+function trNewId(name){let b='TRAINER_'+String(name||'NEW').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,''),id=b,i=2;while(trTab()[id])id=b+'_'+(i++);return id}
+const trSpecies=()=>typeof PokemonDatabase!=='undefined'?Object.keys(PokemonDatabase).filter(k=>k!=='SPECIES_NONE'&&k!=='SPECIES_'):[];
+const trParty=t=>t.party||(t.party=[]);
+function trList(){const L=$('trList');L.innerHTML='';const q=TR.q.toLowerCase();
+  for(const[id,t]of Object.entries(trTab())){if(q&&!(`${id} ${t.name||''} ${t.class||''}`).toLowerCase().includes(q))continue;
+    const d=document.createElement('div');d.className='tdit'+(TR.sel===id?' on':'');d.innerHTML=`<div><b>${trE(t.name||id)}</b><small>${trE(t.class||'')} · ${trParty(t).length} Pokémon · ${trE(id)}</small></div>`;
+    d.onclick=()=>{TR.sel=id;trList();trForm()};L.appendChild(d)}
+  if(!L.children.length)L.innerHTML='<div class="help" style="padding:8px">no trainers</div>'}
+function trTouch(){TR.dirty=true;$('trSt').textContent='● unsaved';}
+function trForm(){const F=$('trForm'),id=TR.sel,t=id&&trTab()[id];
+  if(!t){F.innerHTML='<div class="help">Pick a trainer on the left, or press “+ New trainer”.</div>';return}
+  const sp=trSpecies(),sprites=new Set();for(const x of Object.values(trTab()))if(x.frontSprite)sprites.add(x.frontSprite);if(typeof TrainerSpritesTable!=='undefined')Object.values(TrainerSpritesTable).forEach(v=>sprites.add(v));
+  const evs=Object.entries(repo[active]?.events||{}),npcSel=sel&&repo[sel.map]?.events[sel.key];
+  F.innerHTML=`<datalist id="trDlSp">${sp.map(k=>`<option value="${k}">${trE((PokemonDatabase[k]||{}).name||'')}</option>`).join('')}</datalist>
+  <datalist id="trDlCls">${Object.keys(trCls()).map(k=>`<option value="${trE(k)}">`).join('')}</datalist><datalist id="trDlSpr">${[...sprites].map(k=>`<option value="${trE(k)}">`).join('')}</datalist>
+  <div class="frow"><label>Trainer ID (used in scripts)<input type="text" id="trfId" value="${trE(id)}"></label><label>Name<input type="text" id="trfName" value="${trE(t.name||'')}"></label><label>Class<input type="text" id="trfCls" list="trDlCls" value="${trE(t.class||'')}" placeholder="(none)"></label></div>
+  <div class="frow"><label style="flex:2">Front sprite (battle picture)<input type="text" id="trfSpr" list="trDlSpr" value="${trE(t.frontSprite||'')}" placeholder="graphics/trainer_front_sprites/${trE(id.replace(/^TRAINER_/,'').toLowerCase())}.png"></label><img id="trfImg" style="height:64px;image-rendering:pixelated;background:#222;border:1px solid #333" alt=""></div>
+  <div class="frow"><label>Battle background<select id="trfBg">${['','grass','cave','water','indoor','sand'].map(v=>`<option ${v===(t.bg||'')?'selected':''}>${v}</option>`).join('')}</select></label><label>AI<select id="trfAi">${['','basic','smart'].map(v=>`<option ${v===(t.ai||'')?'selected':''}>${v}</option>`).join('')}</select></label><label>Prize money (empty = automatic)<input type="number" id="trfMoney" value="${t.money==null?'':t.money}"></label></div>
+  <label>Trainer's own bag (comma separated: ITEM_SUPER_POTION, ITEM_FULL_RESTORE)<input type="text" id="trfItems" value="${trE((t.items||[]).join(', '))}"></label>
+  <b style="color:#00acc1">Team</b><div id="trParty"></div><div class="row"><button id="trAddMon" class="on">+ Add Pokémon</button><button id="trDup">Duplicate trainer</button><button id="trDel">Delete trainer</button></div>
+  <details open><summary>Speech + script for an NPC on the map</summary>
+    <div class="help">Writes a ready-made script (talk or walk-in sight: speech, setflag, <code>trainerbattle ${trE(id)}</code>, and a line for after the fight) and links it to the NPC selected on the map: <b>${npcSel&&npcSel.eventType==='NPC'?trE(sel.key):'(select an NPC on the map first)'}</b>.</div>
+    <label>Before the battle<textarea id="trfBefore" rows="3" placeholder="Hey! Our eyes met!&#10;Let's battle!">${trE(TR.tmp.before)}</textarea></label>
+    <label>After the battle (when talked to again)<textarea id="trfAfter" rows="2" placeholder="You were too strong...">${trE(TR.tmp.after)}</textarea></label>
+    <div class="row"><button id="trMk" class="on" ${npcSel&&npcSel.eventType==='NPC'?'':'disabled'}>Create script + make the selected NPC this trainer</button></div>
+    <div class="help">Sets isTrainer ON, a view radius (3 if empty), the script and the “defeated” flag FLAG_DEFEATED_${trE(id.replace(/^TRAINER_/,''))}. In the game the trainer shows “!”, walks up to you and the script runs.</div></details>`;
+  const img=$('trfImg');const showImg=()=>{img.src=t.frontSprite||('graphics/trainer_front_sprites/'+id.replace(/^TRAINER_/,'').toLowerCase()+'.png')};img.onerror=()=>{img.removeAttribute('src')};showImg();
+  const set=(k,v)=>{if(v===''||v===undefined||v===null||(Array.isArray(v)&&!v.length))delete t[k];else t[k]=v;trTouch();trList()};
+  $('trfName').oninput=e=>set('name',e.target.value);$('trfCls').oninput=e=>{set('class',e.target.value)};$('trfSpr').oninput=e=>{set('frontSprite',e.target.value.trim());showImg()};
+  $('trfBg').onchange=e=>set('bg',e.target.value);$('trfAi').onchange=e=>set('ai',e.target.value);$('trfMoney').oninput=e=>set('money',e.target.value===''?'':Number(e.target.value));
+  $('trfItems').oninput=e=>set('items',e.target.value.split(',').map(s=>s.trim()).filter(Boolean));
+  $('trfId').onchange=e=>{let n=e.target.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g,'_');if(!n)return;if(!/^TRAINER_/.test(n))n='TRAINER_'+n;if(n===id)return;if(trTab()[n]){alert('That ID is already used.');e.target.value=id;return}
+    const tab=trTab(),nt={};for(const k of Object.keys(tab))nt[k===id?n:k]=tab[k];window.TrainerTable=nt;TR.sel=n;trTouch();trList();trForm()};
+  const P=$('trParty');
+  const draw=()=>{P.innerHTML='';trParty(t).forEach((m,i)=>{const r=document.createElement('div');r.className='pkit';
+    r.innerHTML=`<b>${i+1}</b><input type="text" list="trDlSp" data-f="species" value="${trE(m.species||'')}" placeholder="SPECIES_…" style="width:190px"><span class="help" style="min-width:70px">${trE((typeof PokemonDatabase!=='undefined'&&PokemonDatabase[m.species]||{}).name||'')}</span>
+      Lv <input type="number" data-f="level" min="1" max="100" value="${m.level||5}" style="width:60px"><input type="text" data-f="moves" value="${trE((m.moves||[]).join(', '))}" placeholder="moves: MOVE_A, MOVE_B (empty = what it learns)" style="flex:1;min-width:200px">
+      <input type="text" data-f="item" value="${trE(m.item||'')}" placeholder="held item" style="width:130px"><input type="text" data-f="nickname" value="${trE(m.nickname||'')}" placeholder="nickname" style="width:90px">
+      <label style="flex-direction:row;align-items:center;gap:3px;margin:0"><input type="checkbox" data-f="shiny" ${m.shiny?'checked':''}>shiny</label><button data-a="up">↑</button><button data-a="dn">↓</button><button data-a="x">✕</button>`;
+    r.querySelectorAll('[data-f]').forEach(el=>el.oninput=el.onchange=()=>{const f=el.dataset.f,v=el.type==='checkbox'?el.checked:el.value;
+      if(f==='level')m.level=Math.max(1,Math.min(100,+v||1));else if(f==='moves'){const a=v.split(',').map(s=>s.trim()).filter(Boolean).slice(0,4);if(a.length)m.moves=a;else delete m.moves}
+      else if(f==='shiny'){if(v)m.shiny=true;else delete m.shiny}else if(v==='')delete m[f];else m[f]=v.trim();trTouch();trList()});
+    r.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{const a=b.dataset.a,arr=trParty(t);if(a==='x')arr.splice(i,1);else if(a==='up'&&i>0)[arr[i-1],arr[i]]=[arr[i],arr[i-1]];else if(a==='dn'&&i<arr.length-1)[arr[i+1],arr[i]]=[arr[i],arr[i+1]];trTouch();draw();trList()});
+    P.appendChild(r)});if(!trParty(t).length)P.innerHTML='<div class="help">No Pokémon yet.</div>'};draw();
+  $('trAddMon').onclick=()=>{trParty(t).push({species:sp[0]||'SPECIES_BULBASAUR',level:5});trTouch();draw();trList()};
+  $('trDup').onclick=()=>{const n=trNewId((t.name||id)+'_COPY');trTab()[n]=clone(t);TR.sel=n;trTouch();trList();trForm()};
+  $('trDel').onclick=()=>{if(!confirm('Delete '+id+'?'))return;delete trTab()[id];TR.sel=Object.keys(trTab())[0]||null;trTouch();trList();trForm()};
+  $('trfBefore').oninput=e=>TR.tmp.before=e.target.value;$('trfAfter').oninput=e=>TR.tmp.after=e.target.value;
+  $('trMk').onclick=()=>trMakeScript(id,t,npcSel)}
+function trSpeech(txt){const paras=String(txt||'').trim().split(/\n\s*\n/).filter(Boolean);
+  return paras.map((p,pi)=>{const ls=p.split('\n').map(s=>s.trim()).filter(Boolean);return ls.map((l,i)=>l+(i<ls.length-1?'\\n':(pi<paras.length-1?'\\p':''))).join('\n')}).join('\n')||'...'}
+function trMakeScript(id,t,ev){const E=EN();if(!ev||ev.eventType!=='NPC')return;
+  if(!E||!window.OverworldScriptCommands||!E.parse){alert('The script engine files were not found, so the script could not be created (see the Scripts tab).');return}
+  const base=id.replace(/^TRAINER_/,''),name='trainer_'+base.toLowerCase(),flag='FLAG_DEFEATED_'+base,lbl='after_'+base.toLowerCase();
+  const text=`start: "${name}"\nlock\nfaceplayer\ngoto_if_set ${flag} ${lbl}\nmsgbox.normal\n{\n${trSpeech(TR.tmp.before||'Our eyes met! Let\'s battle!')}\n}\nsetflag ${flag}\ntrainerbattle ${id} single\nend\nlabel ${lbl}\nmsgbox.normal\n{\n${trSpeech(TR.tmp.after||'You were strong...')}\n}\nrelease\nend\n`;
+  const r=E.parse(text);if(r.errors&&r.errors.length){alert('Script problem: '+r.errors[0].msg);return}
+  ensureSE();const steps=r.scripts[name].steps;if(SE.scripts[name]){if(!confirm('A script called '+name+' already exists. Replace it?'))return;SE.scripts[name].steps=steps;seTouch();seBuildList()}else seNew(name,steps);
+  commit(()=>{ev.isTrainer=true;ev.script=name;ev.flagID=flag;if(!(Number(ev.viewRadius)>0))ev.viewRadius=3});
+  notify('Script "'+name+'" created and linked to '+sel.key+' (isTrainer ON).','ok');trForm()}
+async function trOpen(id){await trLoadSrc();if(id&&trTab()[id])TR.sel=id;else if(!TR.sel||!trTab()[TR.sel])TR.sel=Object.keys(trTab())[0]||null;$('trm').hidden=false;trList();trForm()}
+function trClose(){$('trm').hidden=true;buildInspector&&buildInspector()}
+async function trSave(){const out=trOut();
+  try{if(window.showSaveFilePicker){TR.fh||=await showSaveFilePicker({suggestedName:'TrainerTables.js',types:[{description:'JavaScript',accept:{'text/javascript':['.js']}}]});const w=await TR.fh.createWritable();await w.write(out);await w.close()}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out],{type:'text/javascript'}));a.download='TrainerTables.js';a.click()}
+    TR.dirty=false;$('trSt').textContent='✓ saved'}catch(e){if(e.name!=='AbortError'){TR.fh=null;alert('Could not save: '+e.message)}}}
+$('trBtn').onclick=()=>trOpen();$('trClose').onclick=trClose;$('trSave').onclick=trSave;$('trCommit').onclick=()=>ghOpen(['trn']);
+$('trNew').onclick=()=>{const n=prompt('Trainer name:','New Trainer');if(!n)return;const id=trNewId(n);trTab()[id]={name:n,class:'',party:[{species:trSpecies()[0]||'SPECIES_BULBASAUR',level:5}]};TR.sel=id;trTouch();trList();trForm()};
+$('trQ').oninput=e=>{TR.q=e.target.value;trList()};
+
 const GH={cfg:{owner:'lkpst',repo:'pokemon-omicron',branch:'',token:'',remember:true,paths:{},msg:''}};
 try{Object.assign(GH.cfg,JSON.parse(localStorage.edGH||'{}'))}catch(e){}
 const ghStore=()=>{try{const c={...GH.cfg};if(!c.remember)c.token='';localStorage.edGH=JSON.stringify(c)}catch(e){}};
-const ghDefaults={'Overworld_map.js':'js/Overworld_map.js','overworld_scripts.js':'js/overworld_scripts.js','tiles.js':'tables/tiles.js'};
+const ghDefaults={'TrainerTables.js':'js/TrainerTables.js','Overworld_map.js':'js/Overworld_map.js','overworld_scripts.js':'js/overworld_scripts.js','tiles.js':'tables/tiles.js'};
 function ghPath(name){if(GH.cfg.paths[name])return GH.cfg.paths[name];let m={};try{m=JSON.parse(localStorage.edPaths||'{}')}catch(e){}
   const k=Object.keys(m).find(x=>x.toLowerCase()===name.toLowerCase()),p=k&&m[k];if(p&&!/^(https?:|\/|\.\.)/.test(p))return p.replace(/^\.\//,'');return ghDefaults[name]}
 async function ghApi(path,method='GET',body){const c=GH.cfg,r=await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}${path}`,{method,headers:{Authorization:'Bearer '+c.token,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
@@ -1224,6 +1545,7 @@ async function ghApi(path,method='GET',body){const c=GH.cfg,r=await fetch(`https
   return j}
 const ghB64=blob=>new Promise(res=>{const f=new FileReader();f.onload=()=>res(String(f.result).split(',')[1]);f.readAsDataURL(blob)});
 function ghItems(){const it=[];
+  if(typeof TR!=='undefined'&&window.TrainerTable)it.push({key:'trn',name:'TrainerTables.js',on:!!TR.dirty,note:TR.dirty?'unsaved trainer changes':'',get:async()=>{await trLoadSrc();return{text:trOut()}},done:()=>{TR.dirty=false;$('trSt').textContent='✓ committed'}});
   it.push({key:'map',name:'Overworld_map.js',on:!!unsaved,note:unsaved?'unsaved changes':'',get:async()=>({text:out()}),done:()=>{unsaved=false;status()}});
   if(typeof SE!=='undefined'&&SE&&window.OverworldScriptSource!==undefined)it.push({key:'scr',name:'overworld_scripts.js',on:!!sDirty,note:sDirty?'unsaved changes':'',get:async()=>({text:SHEAD+'\nwindow.OverworldScriptSource = String.raw`\n'+seText().replace(/`/g,"'").replace(/\$\{/g,'$ {')+'`;\n'}),done:()=>{sDirty=false;$('seDirty').textContent='✓ committed'}});
   if(TD.tiles.length){const mod=TD.tiles.some(t=>t.mod);

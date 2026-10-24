@@ -1277,6 +1277,7 @@ class OverworldScene extends Phaser.Scene {
     this.npcs = [];
     this.triggers = [];
     this.signposts = [];
+    (this.npcFollowers || []).forEach(f => { try { f.destroy(); } catch (_) { } }); this.npcFollowers = [];
     this._npcGen = (this._npcGen || 0) + 1;   // Pokémon NPCs load their sprite later: they check this to see they still belong
 
     for (const [mapKey, mapData] of Object.entries(window.OverworldMaps)) {
@@ -1346,6 +1347,7 @@ class OverworldScene extends Phaser.Scene {
 
         this.npcs.push(npcSprite);
         this.npcGroup.add(npcSprite);
+        if (eventData.followMon) this.spawnNpcFollower(npcSprite);   // [NPC POKÉMON]
       }
     }
   }
@@ -1380,8 +1382,44 @@ class OverworldScene extends Phaser.Scene {
       spr._owAttr = this.owAttrOf(ev.owTileAttribute);
       spr.setDepth(this.npcDepth(spr));
       this.npcs.push(spr); this.npcGroup.add(spr);
+      if (ev.followMon) this.spawnNpcFollower(spr);   // [NPC POKÉMON]
     };
     if (OWS.has(this, sp)) make(); else OWS.ensure(this, [sp]).then(make);
+  }
+
+  // A Pokémon that walks behind an NPC like its own partner (NPC field followMon = SPECIES_XXX). It is only a picture: it never blocks anybody.
+  // movement_type.js (followStep) moves it onto the tile the NPC just left every time the NPC steps.
+  spawnNpcFollower(npc) {
+    const OWS = window.OWSprites, ev = npc.eventConfig, sp = ev && ev.followMon;
+    if (!OWS || !sp || !OWS.hasSprite(sp)) { console.warn('[NPC POKÉMON] "' + sp + '" has no entry in tables/OverworldSprites.js: ' + (npc.eventKey || '')); return; }
+    const gen = this._npcGen;
+    const make = () => {
+      if (!this.sys || !this.sys.isActive() || !this.add || gen !== this._npcGen || !npc.scene || npc.monFollower) return;
+      const shiny = !!ev.followShiny, f = OWS.frameName(sp, { dir: 'down', step: 0, shiny });
+      if (!f || !this.textures.exists(f.key)) { console.warn('[NPC POKÉMON] texture for ' + sp + ' was not made'); return; }
+      const d = npc.direction || 'down', back = { up: [0, 1], down: [0, -1], left: [1, 0], right: [-1, 0] }[d] || [0, -1];
+      const nt = { x: Math.round((npc.x - 16) / 32), y: Math.round((npc.y - 16) / 32) };
+      const off = this.getMapWorldOffset(this.currentMapKey);
+      const free = (tx, ty) => this.isPassable(tx - Math.round(off.x / 32), ty - Math.round(off.y / 32));
+      const cand = [back, [1, 0], [-1, 0], [0, 1], [0, -1]].find(([bx, by]) => free(nt.x + bx, nt.y + by)) || [0, 0];
+      const x = (nt.x + cand[0]) * 32 + 16, y = (nt.y + cand[1]) * 32 + 16;
+      const F = window.OWFollower || {}, sc = OWS.fitScale(sp, Number(F.scale) || 2), fh = this.textures.getFrame(f.key, f.frame).height;
+      const spr = this.add.sprite(x, y, f.key, f.frame).setScale(sc).setOrigin(0.5, 1 - 14 / (fh * sc));
+      spr.owSpecies = sp; spr.owShiny = shiny; OWS.retain(sp); spr.direction = d; spr.owner = npc; spr._owAttr = npc._owAttr;
+      OWS.setFrame(spr, d, 0, shiny);
+      spr.setDepth(this.npcDepth(spr));
+      npc.monFollower = spr; (this.npcFollowers = this.npcFollowers || []).push(spr);
+      npc.once('destroy', () => { try { spr.destroy(); } catch (_) { } const i = (this.npcFollowers || []).indexOf(spr); if (i >= 0) this.npcFollowers.splice(i, 1); });
+    };
+    if (OWS.has(this, sp)) make(); else OWS.ensure(this, [sp]).then(make);
+  }
+  updateNpcFollowers() {
+    for (const f of this.npcFollowers) {
+      const n = f.owner; if (!f.scene || !n) continue;
+      f.setDepth(this.npcDepth(f)); f.setVisible(n.visible);
+      // the NPC was moved by something else (a warp, setpos…): bring the Pokémon along
+      if (!n.stepTw && !f.moveTw && (Math.abs(f.x - n.x) > 40 || Math.abs(f.y - n.y) > 40)) { f.x = n.x; f.y = n.y + 32; }
+    }
   }
 
   updateNPCMovement() {
@@ -1869,7 +1907,7 @@ class OverworldScene extends Phaser.Scene {
       } catch (e) { /* ignore */ }
     }
     const menu = (window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen());
-    const legit = menu || this.evolving || this.scriptRunning || this.warping || (window.BattleTransition && window.BattleTransition.busy) || (window.OWWild && window.OWWild.busy);
+    const legit = menu || this.evolving || this.scriptRunning || this.warping || this.trainerBusy || (window.BattleTransition && window.BattleTransition.busy) || (window.OWWild && window.OWWild.busy);
     const stuckMoving = this.isMoving && this.player && this.tweens.getTweensOf(this.player).length === 0;
     if (!legit && (this.isLocked || stuckMoving)) {
       this._lockedMs = (this._lockedMs || 0) + delta;
@@ -1883,6 +1921,8 @@ class OverworldScene extends Phaser.Scene {
     this.tickTileAnim(delta);
     if (window.OWFollower) window.OWFollower.update(this, time, delta);   // [FOLLOWER]
     if (window.OWWild) window.OWWild.update(this, time, delta);           // [WILD] wild Pokémon on grass (behavior 5)
+    if (window.OverworldMovement && window.OverworldMovement.trainerSpot) window.OverworldMovement.trainerSpot(this, time);   // [TRAINER] isTrainer NPCs that see the player
+    if (this.npcFollowers && this.npcFollowers.length) this.updateNpcFollowers();   // [NPC POKÉMON] Pokémon that follow an NPC
 
     // [CHANGED] depth is updated every frame (also while walking), before the early return
     if (this.player && this.player.direction) { this.lastDir = this.player.direction; const sd1 = window.GameStateManager && window.GameStateManager.saveData; if (sd1) sd1.facing = this.lastDir; }

@@ -96,6 +96,8 @@
     if (!T.enabled || !scene.add || !scene.cameras || !scene.cameras.main || typeof Phaser === 'undefined') return go();
     if (T.busy) return; T.busy = true;
     if (window.PMAudio) window.PMAudio.enterBattle();   // the map music stops here and cannot restart until the battle is over
+    // the battle song starts AT ONCE (the moment of the bump / the ! of a trainer), not after the screen effect; BattleScene keeps it playing instead of restarting it
+    try { if (typeof BattleScene !== 'undefined' && BattleScene.musicEl) { const m = BattleScene.musicEl(); if (m) { m.loop = true; m.volume = 0.5; if (m.paused || m.ended) { try { m.currentTime = 0; } catch (e) { /* not ready */ } } BattleScene.musicOn = true; BattleScene.musicEarly = true; const pr = m.play(); if (pr && pr.catch) pr.catch(() => { /* blocked until a key press */ }); } } } catch (e) { /* no audio */ }
     scene.isLocked = true;
     const cam = scene.cameras.main, W = cam.width, H = cam.height, name = T.pick(data);
     let began = false;
