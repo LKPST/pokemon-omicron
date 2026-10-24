@@ -162,7 +162,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 </div></div>
 <datalist id="musicList"></datalist><datalist id="dlFlag"></datalist><datalist id="dlVar"></datalist><datalist id="dlLabel"></datalist><datalist id="dlTarget"></datalist>
 <div id="sed">
-  <div id="seHead"><b>Scripts</b><span id="seName"></span><span id="seUse" class="help"></span><span style="flex:1"></span><span id="seDirty"></span><button id="seSave" class="on">💾 Save overworld_scripts.js</button><button id="seClose">✕ Close</button></div>
+  <div id="seHead"><b>Scripts</b><span id="seName"></span><span id="seUse" class="help"></span><span style="flex:1"></span><span id="seDirty"></span><button id="seSave" class="on">💾 Save overworld_scripts.js</button><button id="seCommit" title="commit overworld_scripts.js straight to GitHub">⬆ Commit to GitHub</button><button id="seClose">✕ Close</button></div>
   <div id="seBody">
     <div id="seLeft"><input id="seFind" placeholder="search scripts…"><div class="row"><button id="seNewB">+ New</button><button id="seDupB">Duplicate</button><button id="seRenB">Rename</button><button id="seDelB">Delete</button></div><div id="seList"></div><div class="help">number on the right = events that use the script</div></div>
     <div id="seMid">
@@ -465,7 +465,7 @@ function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&re
     if(f==='owID'&&o==='ow'){I.appendChild(owCombo(ev,v=>{v===undefined||v===''?delete ev.owID:ev.owID=v}));continue}
     rowTo(I,f,inp(t==='select'?'text':t,ev[f],v=>{v===undefined||v===''?delete ev[f]:ev[f]=v},o?()=>OPTS[o](ev):null))}
   if((SCHEMA[ev.eventType]||[]).some(x=>x[0]==='script')){const r=document.createElement('div');r.className='row';
-    const b1=document.createElement('button');b1.textContent='✎ Edit script';b1.onclick=()=>seOpenEditor(ev.script||undefined);
+    const b1=document.createElement('button');b1.textContent='✎ Open in Scripts editor';b1.onclick=()=>seOpenEditor(ev.script||undefined);
     const b2=document.createElement('button');b2.textContent='+ New script for this event';b2.onclick=()=>{if(!EN()||!window.OverworldScriptCommands){seOpenEditor();return}const nm=seNew();if(nm){commit(()=>{ev.script=nm});seOpenEditor(nm)}};
     r.appendChild(b1);r.appendChild(b2);I.appendChild(r)}}
 function renameMap(o,n){if(!n||repo[n])return;const r={};for(const[k,m]of Object.entries(repo))r[k===o?n:k]=m;repo=r;repo[n].map=n;
@@ -531,9 +531,9 @@ function buildLvl(){const U=$('lvl');if(!U)return;U.innerHTML='';const m=repo[ac
     const mk=(txt,tip,f)=>{const b=document.createElement('button');b.textContent=txt;b.title=tip;b.onclick=f;top.appendChild(b)};
     mk('↑','move up',()=>{if(i)commit(()=>{[L[i-1],L[i]]=[L[i],L[i-1]]})});mk('↓','move down',()=>{if(i<L.length-1)commit(()=>{[L[i+1],L[i]]=[L[i],L[i+1]]})});mk('✕','remove',()=>commit(()=>{L.splice(i,1);if(!L.length)delete m.levelScripts}));
     c.appendChild(top);
-    {const si=inp('text',(l.script||''),v=>l.script=v.trim());si.setAttribute('list','dlLvlScr');si.placeholder='type a script name or pick one';rowTo(c,'script',si)}
+    {const si=inp('text',(l.script||''),v=>l.script=v.trim());si.setAttribute('list','dlLvlScr');si.placeholder='type a script name or pick one';si.title='double-click to open this script';si.ondblclick=()=>{const t=si.value.trim();if(t&&(SE?SE.scripts[t]:true))seOpenEditor(t)};rowTo(c,'script',si)}
     {const t=(l.script||'').trim(),has=t&&(SE?!!SE.scripts[t]:(()=>{try{return scriptNames().includes(t)}catch(e){return false}})());
-     const b=document.createElement('button');b.className='on';b.textContent=has?'✎ Edit this script':(t?'+ Create script “'+t+'”':'+ Create a new script');
+     const b=document.createElement('button');b.className='on';b.textContent=has?'✎ Open in Scripts editor':(t?'+ Create script “'+t+'”':'+ Create a new script');
      b.onclick=()=>{if(!EN()||!window.OverworldScriptCommands){seOpenEditor();return}
        if(has){seOpenEditor(t);return}
        const tpl=l.type==='beforeLoad'?[{cmd:'setflag',args:{flag:'FLAG_EXAMPLE'}},{cmd:'end',args:{}}]:[{cmd:'lock',args:{}},{cmd:'msgbox.normal',args:{text:'Welcome!'}},{cmd:'release',args:{}},{cmd:'end',args:{}}];
@@ -1149,6 +1149,7 @@ async function tdOpen(){$('ted').hidden=false;document.body.style.overflow='hidd
   if(!TD.sheets.length){const all=await tdIdbAll();for(const[k,b]of Object.entries(all)){try{TD.sheets.push({name:k,canvas:await tdBitmap(b)})}catch(e){}}if(TD.sheets.length)TD.sheet=TD.sheets[0]}
   tdSheetSel();tdList();tdForm();tdFit();tdUseSheet(TD.sheet,true);if(!TD.srcText)tdMsg('tiles.js text not found next to this page: use “Load tiles.js…” so unchanged tiles keep your exact text.')}
 function tdClose(){$('ted').hidden=true;document.body.style.overflow='';buildPalette();redraw()}
+$('seCommit').onclick=()=>ghOpen(['scr']);
 $('tilesB').onclick=tdOpen;$('tdClose').onclick=tdClose;new ResizeObserver(()=>{if(!$('ted').hidden)tdFit()}).observe($('tdCvWrap'));
 
 // =====================================================================================================================

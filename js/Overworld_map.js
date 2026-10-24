@@ -1127,7 +1127,7 @@ window.OverworldMaps = {
     "levelScripts": [
       {
         "type": "beforeLoad",
-        "script": ""
+        "script": "start_script"
       }
     ]
   }

@@ -137,4 +137,8 @@ please.
 giveitem ITEM_POKEBALL 5
 release
 end
+
+start: "start_script"
+hideobject NPC_2
+end
 `;
