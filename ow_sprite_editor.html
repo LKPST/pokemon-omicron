@@ -575,7 +575,9 @@ function loadTableText(src,from){const t=findTable(src);if(!t){status('Could not
   status(`${Object.keys(obj).length} entries loaded from ${from}. ${S.entries.some(e=>e.rect)?'':'Import the sheet (or the existing PNGs) to place them.'}`);return true}
 $('bTable').onclick=()=>$('fTable').click();
 $('fTable').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)loadTableText(await f.text(),f.name)};
-(async()=>{if(location.protocol==='file:')return;for(const b of['','public/','../','../public/']){try{const r=await fetch(b+'js/ow_table.js',{cache:'no-store'});if(!r.ok)continue;const t=await r.text();if(/^\s*<(!doctype|html)/i.test(t))continue;
+(async()=>{if(location.protocol==='file:')return;
+  try{const o=JSON.parse(sessionStorage.pmOverrides||'{}'),v=o['js/ow_table.js'];if(v&&Date.now()-v.t<9e5&&loadTableText(v.text,'js/ow_table.js')){S.autoBase='';tryLoadPngs('');return}}catch(e){}   // just pushed from the map editor: use that text (GitHub Pages may still serve the old file)
+  for(const b of['','public/','../','../public/']){try{const r=await fetch(b+'js/ow_table.js',{cache:'no-store'});if(!r.ok)continue;const t=await r.text();if(/^\s*<(!doctype|html)/i.test(t))continue;
   if(loadTableText(t,b+'js/ow_table.js')){S.autoBase=b;tryLoadPngs(b);return}}catch(e){}}})();
 async function tryLoadPngs(b){ // when served from the project: pull the existing PNGs of the table entries into one sheet
   const list=S.entries.filter(e=>e.fields.owSprite);const imgs=[];
@@ -678,5 +680,5 @@ $('ghGo').onclick=async ev=>{ev.preventDefault();GHC.token=$('ghTok').value.trim
     GHC.msg='';ghStore();say(`✓ Committed ${picked.length} file(s) to ${br}: ${cm.sha.slice(0,7)}. GitHub Pages updates in a minute or two.`,'var(--ok)');status('Committed to GitHub: '+cm.sha.slice(0,7));
   }catch(e){say('Could not commit: '+e.message,'var(--bad)')}$('ghGo').disabled=false};
 $('ghClose').onclick=ev=>{ev.preventDefault();$('ghd').close()};$('bGit').onclick=ghOpen;
-window.OWED=S;
+window.OWED=S;window.OWED_API={tableJs,layoutCanvas,rectOf};
 </script></body></html>
