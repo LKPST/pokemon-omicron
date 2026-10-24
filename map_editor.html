@@ -523,7 +523,7 @@ function buildStart(){const U=$('startUI');if(!U)return;U.innerHTML='';
 const LVT=[['beforeLoad','Before Map Load · silent, runs before the map is built (set flags, hide / show objects)'],['mapEnter','Map Enter · always plays (runs first)'],['mapEnterOnce','Map Enter Once · plays once, then never again (runs second)'],['flag','Flag-based · only plays while the flag is ON (runs last)']];
 function buildLvl(){const U=$('lvl');if(!U)return;U.innerHTML='';const m=repo[active];if(!m)return;const L=m.levelScripts||[];
   const n=document.createElement('div');n.className='help';n.style.lineHeight='1.4';n.innerHTML=`Scripts that run when the player <b>enters ${String(active).replace(/[<>&]/g,"")}</b>. Order: <b>Before Map Load</b> (silent, first) → <b>Map Enter</b> → <b>Map Enter Once</b> → <b>Flag-based</b> (inside a type, top to bottom). “Once” remembers itself with the flag <code>LEVELONCE:map:script</code>.`;U.appendChild(n);
-  const sn=()=>{try{return scriptNames()}catch(e){return[]}};
+  {let dl=$('dlLvlScr');if(!dl){dl=document.createElement('datalist');dl.id='dlLvlScr';document.body.appendChild(dl)}const names=uniq([...(()=>{try{return scriptNames()}catch(e){return[]}})(),...Object.values(repo).flatMap(x=>[...Object.values(x.events||{}).map(e=>e.script),...(x.levelScripts||[]).map(l=>l.script)]).filter(Boolean)]);dl.innerHTML=names.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">`).join('')}
   L.forEach((l,i)=>{const c=document.createElement('div');c.className='card';c.style.cssText='background:#171717;border:1px solid #2d2d2d;border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:3px';
     const top=document.createElement('div');top.className='row';top.style.alignItems='center';
     const t=document.createElement('select');t.style.flex='1';LVT.forEach(([v,x])=>t.add(new Option(x,v)));t.value=l.type||'mapEnter';t.onchange=()=>commit(()=>{l.type=t.value;if(l.type!=='flag')delete l.flagID});
@@ -531,7 +531,7 @@ function buildLvl(){const U=$('lvl');if(!U)return;U.innerHTML='';const m=repo[ac
     const mk=(txt,tip,f)=>{const b=document.createElement('button');b.textContent=txt;b.title=tip;b.onclick=f;top.appendChild(b)};
     mk('↑','move up',()=>{if(i)commit(()=>{[L[i-1],L[i]]=[L[i],L[i-1]]})});mk('↓','move down',()=>{if(i<L.length-1)commit(()=>{[L[i+1],L[i]]=[L[i],L[i+1]]})});mk('✕','remove',()=>commit(()=>{L.splice(i,1);if(!L.length)delete m.levelScripts}));
     c.appendChild(top);
-    rowTo(c,'script',inp('text',l.script||'',v=>l.script=v,()=>sn()));
+    {const si=inp('text',(l.script||''),v=>l.script=v.trim());si.setAttribute('list','dlLvlScr');si.placeholder='type a script name or pick one';rowTo(c,'script',si)}
     if(l.type==='flag'){const f=inp('text',l.flagID||'',v=>l.flagID=v.trim());f.setAttribute('list','dlFlag');rowTo(c,'flagID (must be ON)',f)}
     U.appendChild(c)});
   const add=document.createElement('button');add.className='on';add.textContent='+ Add level script';add.onclick=()=>commit(()=>{(m.levelScripts||=[]).push({type:'mapEnter',script:''})});U.appendChild(add);
