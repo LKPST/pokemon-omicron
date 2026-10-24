@@ -686,6 +686,7 @@ class OverworldScene extends Phaser.Scene {
     }
     this.spawnAllEvents();
     this.spawnPlayer();
+    if (window.__owLevelMap !== this.currentMapKey) this.runLevelScripts();   // [LEVEL SCRIPTS] game start / loaded save (not when coming back from a battle)
     if (window.OWFollower) window.OWFollower.attach(this);   // [FOLLOWER] the first party Pokémon walks behind the player
 
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -1316,7 +1317,11 @@ class OverworldScene extends Phaser.Scene {
           ? { w: Math.ceil(frame0.width / 32), h: Math.ceil(frame0.height / 32) }
           : { w: 1, h: 1 };
 
-        npcSprite.direction = 'down';
+        // [FACING] a NPC whose movementType says FACE_RIGHT / WALK_IN_PLACE_LEFT ... (or has facing:) starts out looking that way
+        { const fm = /(?:FACE|WALK_IN_PLACE|LOOK)_(UP|DOWN|LEFT|RIGHT)$/i.exec(String(eventData.movementType || ''));
+          const fd = fm ? fm[1].toLowerCase() : String(eventData.facing || '').toLowerCase();
+          npcSprite.direction = ['up', 'down', 'left', 'right'].includes(fd) ? fd : 'down';
+          if (!isBuilding && npcSprite.direction !== 'down' && window.getOverworldFrame && frame0 && this.textures.getFrame(textureKey, window.getOverworldFrame(npcSprite.direction, 0)) ) npcSprite.setFrame(window.getOverworldFrame(npcSprite.direction, 0)); }
         npcSprite.eventConfig = eventData;
         npcSprite.eventKey = key;   // [SCRIPTS] lets scripts say applymovement NPC_Portia
         npcSprite.mapName = mapKey;
@@ -1632,11 +1637,42 @@ class OverworldScene extends Phaser.Scene {
     this.player.setFrame(window.getOverworldFrame(dir, 0));
   }
 
+  // ===========================================================================
+  // [LEVEL SCRIPTS] scripts of the map that run when the player ENTERS it (map.levelScripts, set in the map editor)
+  //   type 'mapEnter'      always plays                                  (runs first)
+  //   type 'mapEnterOnce'  plays once, then never again (a flag remembers it)   (runs second)
+  //   type 'flag'          plays only while flag `flagID` is ON          (runs last)
+  // ===========================================================================
+  runLevelScripts() {
+    const key = this.currentMapKey, E = window.OverworldScriptEngine, m = this.currentMap;
+    window.__owLevelMap = key;
+    if (!E || !m || !Array.isArray(m.levelScripts) || !m.levelScripts.length) return;
+    const rank = { mapEnter: 0, mapEnterOnce: 1, flag: 2 };
+    const list = m.levelScripts.filter(l => l && l.script && rank[l.type] !== undefined)
+      .map((l, i) => ({ l, i })).sort((a, b) => rank[a.l.type] - rank[b.l.type] || a.i - b.i).map(o => o.l);
+    if (!list.length) return;
+    let tries = 0;
+    const next = () => {
+      if (this.currentMapKey !== key) return;                       // a script moved the player to another map: that map has its own level scripts
+      const l = list.shift(); if (!l) return;
+      if (l.type === 'mapEnterOnce') { const f = `LEVELONCE:${key}:${l.script}`; if (E.getFlag(f)) return next(); E.setFlag(f, true); }
+      else if (l.type === 'flag' && !(l.flagID && E.getFlag(l.flagID))) return next();
+      E.runScript(this, l.script, () => this.time.delayedCall(60, next));
+    };
+    const start = () => {
+      if (!this.sys || !this.sys.isActive() || this.currentMapKey !== key) return;
+      if ((this.scriptRunning || this.warping || this.isMoving || this.isLocked) && tries++ < 100) { this.time.delayedCall(100, start); return; }
+      next();
+    };
+    this.time.delayedCall(250, start);
+  }
+
   finishWarp() {
     this.player.setScale(this.playerScale()).setAlpha(1);
     this.cameras.main.startFollow(this.player, true, 1, 1);
     this.warping = false;
     this.isMoving = false;
+    this.runLevelScripts();   // [LEVEL SCRIPTS]
   }
 
   // Teleport: player spins up and out of the exit map, then spins down into the new map
@@ -1981,6 +2017,7 @@ class OverworldScene extends Phaser.Scene {
         this.isMoving = false;
         this.playerDest = null;
         this.handleTriggers();
+        this.runLevelScripts();   // [LEVEL SCRIPTS]
       }
     });
   }
