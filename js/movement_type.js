@@ -246,12 +246,19 @@ window.OverworldMovement = (() => {
 
   // ---- TRAINERS: an NPC with isTrainer + a script + viewRadius spots the player standing in a straight, free line in front of it (within viewRadius tiles).
   // It shows the ! emote, walks up to the player, then its script runs (the script holds the speech, setflag and trainerbattle).
-  // flagID = the "defeated" flag: while it is ON the trainer does not spot the player any more (set it in the script, before trainerbattle).
+  // Winning the battle sets the flag named after the trainer ID (TRAINER_ROXANNE); while it is ON the trainer does not spot the player any more. (flagID, if filled in, works as an extra "defeated" flag.)
   function seeThrough(scene, e, wx, wy) {
     const off = scene.getMapWorldOffset(scene.currentMapKey);
     if (!scene.isPassable(wx - Math.round(off.x / TILE), wy - Math.round(off.y / TILE))) return false;
     for (const o of (scene.npcs || [])) if (o !== e && scene.npcOccupiesTile && scene.npcOccupiesTile(o, wx, wy)) return false;
     return true;
+  }
+  // the trainer ID of an NPC = the one in the `trainerbattle` command of its script (matched to TrainerTable, e.g. TRAINER_ROXANNE)
+  function trainerIdOf(e) {
+    if (e._trainerId !== undefined) return e._trainerId;
+    let id = null; const E = window.OverworldScriptEngine, sc = E && E.getScript && E.getScript(e.eventConfig && e.eventConfig.script);
+    if (sc && sc.steps) for (const st of sc.steps) if (st.cmd === 'trainerbattle' && st.args && st.args.trainerID) { const raw = String(st.args.trainerID).trim(), tt = typeof findTrainer === 'function' ? findTrainer(raw) : null; id = tt ? tt.id : raw; break; }
+    return e._trainerId = id;
   }
   function trainerSpot(scene, now) {
     if (!scene || !scene.player || !scene.npcs || !scene.npcs.length) return;
@@ -264,6 +271,7 @@ window.OverworldMovement = (() => {
       const c = e.eventConfig;
       if (!c || c.isTrainer !== true || !c.script || !e.active || !e.visible || e.stepTw || e.texture.frameTotal < 4) continue;
       if (c.flagID && E && E.getFlag && E.getFlag(c.flagID)) continue;
+      const tid = trainerIdOf(e); if (tid && E && E.getFlag && E.getFlag(tid)) continue;   // already beaten: the flag is named after the trainer ID
       const R = Number(c.viewRadius) || 0; if (R < 1) continue;
       const t = tileOf(e), d = e.direction || 'down', [dx, dy] = DIRS[d] || DIRS.down;
       const rx = p.x - t.x, ry = p.y - t.y;

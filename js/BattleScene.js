@@ -1704,6 +1704,8 @@ window.BattleScene = class BattleScene extends Phaser.Scene {   // assigned (not
       if (res.result === 'lose') healParty(sv);
       if (gsm) { gsm.lastBattle = res; if (typeof gsm.onBattleEnd === 'function') { try { gsm.onBattleEnd(res.result, res); } catch (e) { console.error('[BattleScene] onBattleEnd threw', e); } } }
     }
+    // winning against a trainer sets the flag named after the trainer's ID (TRAINER_ROXANNE): scripts use goto_if_set TRAINER_ROXANNE ..., and the trainer stops spotting the player
+    if (res && res.result === 'win' && d.trainerID) { try { const E = window.OverworldScriptEngine, tt = typeof findTrainer === 'function' ? findTrainer(d.trainerID) : null; if (E && E.setFlag) E.setFlag(tt ? tt.id : String(d.trainerID), true); } catch (e) { console.warn('[BattleScene] could not set the trainer flag', e); } }
     if (typeof d.onEnd === 'function') { try { d.onEnd(res); } catch (e) { console.error('[BattleScene] onEnd threw', e); } }
     this.teardown();
     if (!d.onEnd || d.returnScene) this.scene.start(d.returnScene || BattleScene.RETURN_SCENE, d.returnData);

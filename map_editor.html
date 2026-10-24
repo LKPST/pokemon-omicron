@@ -1485,11 +1485,11 @@ function trForm(){const F=$('trForm'),id=TR.sel,t=id&&trTab()[id];
   <label>Trainer's own bag (comma separated: ITEM_SUPER_POTION, ITEM_FULL_RESTORE)<input type="text" id="trfItems" value="${trE((t.items||[]).join(', '))}"></label>
   <b style="color:#00acc1">Team</b><div id="trParty"></div><div class="row"><button id="trAddMon" class="on">+ Add Pokémon</button><button id="trDup">Duplicate trainer</button><button id="trDel">Delete trainer</button></div>
   <details open><summary>Speech + script for an NPC on the map</summary>
-    <div class="help">Writes a ready-made script (talk or walk-in sight: speech, setflag, <code>trainerbattle ${trE(id)}</code>, and a line for after the fight) and links it to the NPC selected on the map: <b>${npcSel&&npcSel.eventType==='NPC'?trE(sel.key):'(select an NPC on the map first)'}</b>.</div>
+    <div class="help">Writes a ready-made script (talk or walk-in sight: speech, <code>trainerbattle ${trE(id)}</code>, and a line for after the fight) and links it to the NPC selected on the map: <b>${npcSel&&npcSel.eventType==='NPC'?trE(sel.key):'(select an NPC on the map first)'}</b>.</div>
     <label>Before the battle<textarea id="trfBefore" rows="3" placeholder="Hey! Our eyes met!&#10;Let's battle!">${trE(TR.tmp.before)}</textarea></label>
     <label>After the battle (when talked to again)<textarea id="trfAfter" rows="2" placeholder="You were too strong...">${trE(TR.tmp.after)}</textarea></label>
     <div class="row"><button id="trMk" class="on" ${npcSel&&npcSel.eventType==='NPC'?'':'disabled'}>Create script + make the selected NPC this trainer</button></div>
-    <div class="help">Sets isTrainer ON, a view radius (3 if empty), the script and the “defeated” flag FLAG_DEFEATED_${trE(id.replace(/^TRAINER_/,''))}. In the game the trainer shows “!”, walks up to you and the script runs.</div></details>`;
+    <div class="help">Sets isTrainer ON, a view radius (3 if empty) and the script. Winning the battle sets the flag <b>${trE(id)}</b> by itself (the trainer ID is the flag), so the trainer stops spotting you and the script jumps to the “after” text. In the game the trainer shows “!”, walks up to you and the script runs.</div></details>`;
   const img=$('trfImg');const showImg=()=>{img.src=t.frontSprite||('graphics/trainer_front_sprites/'+id.replace(/^TRAINER_/,'').toLowerCase()+'.png')};img.onerror=()=>{img.removeAttribute('src')};showImg();
   const set=(k,v)=>{if(v===''||v===undefined||v===null||(Array.isArray(v)&&!v.length))delete t[k];else t[k]=v;trTouch();trList()};
   $('trfName').oninput=e=>set('name',e.target.value);$('trfCls').oninput=e=>{set('class',e.target.value)};$('trfSpr').oninput=e=>{set('frontSprite',e.target.value.trim());showImg()};
@@ -1517,11 +1517,11 @@ function trSpeech(txt){const paras=String(txt||'').trim().split(/\n\s*\n/).filte
   return paras.map((p,pi)=>{const ls=p.split('\n').map(s=>s.trim()).filter(Boolean);return ls.map((l,i)=>l+(i<ls.length-1?'\\n':(pi<paras.length-1?'\\p':''))).join('\n')}).join('\n')||'...'}
 function trMakeScript(id,t,ev){const E=EN();if(!ev||ev.eventType!=='NPC')return;
   if(!E||!window.OverworldScriptCommands||!E.parse){alert('The script engine files were not found, so the script could not be created (see the Scripts tab).');return}
-  const base=id.replace(/^TRAINER_/,''),name='trainer_'+base.toLowerCase(),flag='FLAG_DEFEATED_'+base,lbl='after_'+base.toLowerCase();
-  const text=`start: "${name}"\nlock\nfaceplayer\ngoto_if_set ${flag} ${lbl}\nmsgbox.normal\n{\n${trSpeech(TR.tmp.before||'Our eyes met! Let\'s battle!')}\n}\nsetflag ${flag}\ntrainerbattle ${id} single\nend\nlabel ${lbl}\nmsgbox.normal\n{\n${trSpeech(TR.tmp.after||'You were strong...')}\n}\nrelease\nend\n`;
+  const base=id.replace(/^TRAINER_/,''),name='trainer_'+base.toLowerCase(),flag=id,lbl='after_'+base.toLowerCase();
+  const text=`start: "${name}"\nlock\nfaceplayer\ngoto_if_set ${flag} ${lbl}\nmsgbox.normal\n{\n${trSpeech(TR.tmp.before||'Our eyes met! Let\'s battle!')}\n}\ntrainerbattle ${id} single\nend\nlabel ${lbl}\nmsgbox.normal\n{\n${trSpeech(TR.tmp.after||'You were strong...')}\n}\nrelease\nend\n`;
   const r=E.parse(text);if(r.errors&&r.errors.length){alert('Script problem: '+r.errors[0].msg);return}
   ensureSE();const steps=r.scripts[name].steps;if(SE.scripts[name]){if(!confirm('A script called '+name+' already exists. Replace it?'))return;SE.scripts[name].steps=steps;seTouch();seBuildList()}else seNew(name,steps);
-  commit(()=>{ev.isTrainer=true;ev.script=name;ev.flagID=flag;if(!(Number(ev.viewRadius)>0))ev.viewRadius=3});
+  commit(()=>{ev.isTrainer=true;ev.script=name;if(!(Number(ev.viewRadius)>0))ev.viewRadius=3});
   notify('Script "'+name+'" created and linked to '+sel.key+' (isTrainer ON).','ok');trForm()}
 async function trOpen(id){await trLoadSrc();if(id&&trTab()[id])TR.sel=id;else if(!TR.sel||!trTab()[TR.sel])TR.sel=Object.keys(trTab())[0]||null;$('trm').hidden=false;trList();trForm()}
 function trClose(){$('trm').hidden=true;buildInspector&&buildInspector()}
