@@ -87,7 +87,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
     <div class="row"><button id="dupBtn">Duplicate (Ctrl+D)</button><button id="delBtn">Delete (Del)</button></div><div id="inspector"></div></div>
   <div class="tab" id="tab-conn"><div id="conns"></div></div>
   <div class="tab" id="tab-wild"><div id="wild"></div></div>
-  <div class="tab" id="tab-props"><div id="props"></div></div>
+  <div class="tab" id="tab-props"><div id="props"></div><div id="startUI"></div></div>
   <div class="tab" id="tab-lvl"><div id="lvl"></div></div>
   <div class="tab" id="tab-scripts"><div id="seTabInfo"></div><button class="on openSed">✎ Open the Scripts editor</button><label>Script files not found? Load them here<input type="file" id="seLoadFiles" multiple accept=".js"></label><div class="help" id="seInfo">Scripts are written like xSE and saved in overworld_scripts.js. Put the script name in an NPC / Script event and use ✎ in the Events tab to edit it.</div></div>
   <details open><summary>Problems <span id="issueCount"></span></summary><div id="issues"></div></details>
@@ -172,7 +172,8 @@ const EMPTY=l=>l>1?'':'0|0';
 // cell = "tileID|frameID|behavior"  0 passable · 1 blocked · 2 passable, NPC below · 3 surfable · 4 diveable · 5 grass (wild Pokémon roam and fight here; passable)
 const passOf=v=>parseInt((v||'').split('|')[2])||0;
 const setPass=(v,p)=>{const[a,b]=v.split('|');return `${a}|${b||0}|${p}`};
-let pass=0,clip=null;
+let pass=0,clip=null,pickStart=false;
+let startPos=Object.assign({map:'Criscanto Town - Player Room',x:2,y:8,facing:'down'},window.OverworldStart||{});
 // behavior look in the editor: c = overlay colour, w = wall edge, g = glyph, a = tile drawn above NPCs
 const BEHV=(()=>{const o={0:{c:'rgba(0,0,0,0)'},1:{c:'rgba(255,0,0,.35)'},2:{c:'rgba(80,120,255,.35)',a:1},3:{c:'rgba(0,220,220,.35)'},4:{c:'rgba(170,0,255,.35)'},5:{c:'rgba(60,210,60,.38)'}};
   ['n','e','w','s'].forEach((d,i)=>{o[6+i]={c:'rgba(255,170,0,.30)',w:d,g:d.toUpperCase()};o[10+i]={c:'rgba(255,170,0,.30)',w:d,g:d.toUpperCase()+'*',a:1}});
@@ -284,6 +285,9 @@ function draw(){const W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W||cv.hei
       else{const[col,ch]=BADGE[ev.eventType]||['#777','?'];ctx.fillStyle=col;ctx.globalAlpha=.85;ctx.fillRect(R.x+3,R.y+3,TS-6,TS-6);ctx.globalAlpha=1;
         ctx.fillStyle='#fff';ctx.font='bold 16px monospace';ctx.textAlign='center';ctx.fillText(ch,R.x+TS/2,R.y+TS/2+6);ctx.textAlign='left'}
       if(sel&&sel.map===k&&sel.key===ek){ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;ctx.strokeRect(R.x,R.y,R.w,R.h)}}}
+  if(startPos&&L[startPos.map]){const p=L[startPos.map],X=(p.x+startPos.x)*TS,Y=(p.y+startPos.y)*TS,ar={up:'▲',down:'▼',left:'◀',right:'▶'}[startPos.facing]||'▼';
+    ctx.strokeStyle='#00e676';ctx.lineWidth=2/cam.z;ctx.setLineDash([5/cam.z,3/cam.z]);ctx.strokeRect(X+2,Y+2,TS-4,TS-4);ctx.setLineDash([]);
+    ctx.fillStyle='rgba(0,230,118,.25)';ctx.fillRect(X+2,Y+2,TS-4,TS-4);ctx.fillStyle='#00e676';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText('START',X+TS/2,Y+12);ctx.font='bold 13px monospace';ctx.fillText(ar,X+TS/2,Y+TS-6);ctx.textAlign='left'}
   if(hover&&repo[hover.map]){const p=L[hover.map],n=tool==='pencil'?brush.cells:tool==='paste'&&clip?Array.from({length:clip.h},()=>Array(clip.w).fill(0)):[[0]];ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;
     ctx.strokeRect((p.x+hover.gx)*TS,(p.y+hover.gy)*TS,n[0].length*TS,n.length*TS)}
   if(rectA&&hover&&rectA.map===hover.map){const p=L[rectA.map],a=Math.min(rectA.gx,hover.gx),b=Math.min(rectA.gy,hover.gy),
@@ -331,6 +335,7 @@ cv.addEventListener('mousedown',e=>{cv.focus();
   if(e.button===1||e.button===2||spaceDown){pan={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};return}
   if(tab==='border')return;
   const w=toWorld(e.offsetX,e.offsetY),cell=cellAt(w.x,w.y);if(!cell)return;
+  if(pickStart){pickStart=false;cv.style.cursor='';commit(()=>{startPos={map:cell.map,x:cell.gx,y:cell.gy,facing:startPos.facing}});return}
   if(cell.map!==active){active=cell.map;refreshAll()}
   const val=brush.cells,erase=[[EMPTY(layer)]];
   if(tool==='tsel'){if(TSL.map!==cell.map){TSL.map=cell.map;TSL.set.clear()}TSL.last=cell;TSL.drag={map:cell.map,a:cell,b:cell,rm:e.ctrlKey||e.metaKey||e.altKey};redraw();return}
@@ -441,7 +446,7 @@ function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&re
     r.appendChild(b1);r.appendChild(b2);I.appendChild(r)}}
 function renameMap(o,n){if(!n||repo[n])return;const r={};for(const[k,m]of Object.entries(repo))r[k===o?n:k]=m;repo=r;repo[n].map=n;
   for(const m of Object.values(repo)){for(const c of Object.values(m.connections))if(c&&findKey(c[0])===null&&norm(c[0])===norm(o))c[0]=n;
-    for(const e of Object.values(m.events))if(e.map&&norm(e.map)===norm(o))e.map=n}active=n;if(sel?.map===o)sel.map=n}
+    for(const e of Object.values(m.events))if(e.map&&norm(e.map)===norm(o))e.map=n}if(startPos.map===o)startPos.map=n;active=n;if(sel?.map===o)sel.map=n}
 function setConn(dir,name,off){const m=repo[active],old=m.connections[dir],oldT=old&&repo[findKey(old[0])];
   if(oldT&&oldT.connections[OPP[dir]]&&findKey(oldT.connections[OPP[dir]][0])===active)oldT.connections[OPP[dir]]=null;
   if(!name){m.connections[dir]=null;return}const t=repo[findKey(name)];m.connections[dir]=[name,t?.bank??0,off||0];
@@ -474,12 +479,26 @@ function issues(){const out=[];
         else if(e.targetWarp&&!repo[t].events[e.targetWarp])out.push(`${at}: targetWarp "${e.targetWarp}" not in ${t}`)}}
     (m.levelScripts||[]).forEach((l,i)=>{const at=`${k}/levelScript ${i+1}`;if(!l.script)out.push(`${at}: no script chosen`);else{const sn=scriptNames();if(sn.length&&!sn.includes(l.script))out.push(`${at}: script "${l.script}" not found`)}if(l.type==='flag'&&!l.flagID)out.push(`${at}: flag-based but no flagID`)});
     const seen={};for(const[ek,e]of Object.entries(m.events))if(e.eventType==='NPC'){const id=`${e.xPos},${e.yPos}`;if(seen[id])out.push(`${k}: ${ek} and ${seen[id]} share tile ${id}`);seen[id]=ek}}
+  {const sm=repo[startPos.map];if(!sm)out.push(`Start position: map "${startPos.map}" does not exist`);else if(startPos.x>=sm.dimensions.width||startPos.y>=sm.dimensions.height)out.push(`Start position is outside "${startPos.map}"`)}
   if(SE)for(const n of SE.order){const l=sLint[n]||[];if(l.length)out.push(`Script "${n}": ${l.length} problem(s) - open the Scripts editor`)}
   return out}
+// ---------- start position: where a NEW game begins ----------
+function buildStart(){const U=$('startUI');if(!U)return;U.innerHTML='';
+  const h=document.createElement('div');h.textContent='Start position (new game)';h.style.cssText='color:#00acc1;margin-top:10px';U.appendChild(h);
+  const n=document.createElement('div');n.className='help';n.textContent='The player begins here, looking the chosen way, when there is no save. Saved games continue where they were saved. Shown on the map as the green START tile.';U.appendChild(n);
+  rowTo(U,'Map',inp('text',startPos.map,v=>startPos.map=v,()=>Object.keys(repo)));
+  const xy=document.createElement('div');xy.className='row';U.appendChild(xy);
+  rowTo(xy,'xPos',inp('num',startPos.x,v=>startPos.x=Math.max(0,v||0)));rowTo(xy,'yPos',inp('num',startPos.y,v=>startPos.y=Math.max(0,v||0)));
+  rowTo(U,'Facing',inp('text',startPos.facing,v=>startPos.facing=v||'down',()=>['down','up','left','right']));
+  const r=document.createElement('div');r.className='row';U.appendChild(r);
+  const b1=document.createElement('button');b1.className='on';b1.textContent=pickStart?'Click a tile on the map…':'📍 Set by clicking the map';b1.onclick=()=>{pickStart=!pickStart;cv.style.cursor=pickStart?'crosshair':'';buildStart()};r.appendChild(b1);
+  const b2=document.createElement('button');b2.textContent='Go to start';b2.onclick=()=>{if(repo[startPos.map]){active=startPos.map;refreshAll();const L=layout()[startPos.map];if(L){cam.x=cv.clientWidth/2-(L.x+startPos.x+.5)*TS*cam.z;cam.y=cv.clientHeight/2-(L.y+startPos.y+.5)*TS*cam.z;redraw()}}};r.appendChild(b2);
+  const b3=document.createElement('button');b3.textContent='Reset (Player Room 2, 8)';b3.onclick=()=>commit(()=>{startPos={map:'Criscanto Town - Player Room',x:2,y:8,facing:'down'}});r.appendChild(b3)}
+
 // ---------- level scripts: scripts that run when the player enters the map ----------
-const LVT=[['mapEnter','Map Enter · always plays (runs first)'],['mapEnterOnce','Map Enter Once · plays once, then never again (runs second)'],['flag','Flag-based · only plays while the flag is ON (runs last)']];
+const LVT=[['beforeLoad','Before Map Load · silent, runs before the map is built (set flags, hide / show objects)'],['mapEnter','Map Enter · always plays (runs first)'],['mapEnterOnce','Map Enter Once · plays once, then never again (runs second)'],['flag','Flag-based · only plays while the flag is ON (runs last)']];
 function buildLvl(){const U=$('lvl');if(!U)return;U.innerHTML='';const m=repo[active];if(!m)return;const L=m.levelScripts||[];
-  const n=document.createElement('div');n.className='help';n.style.lineHeight='1.4';n.innerHTML=`Scripts that run when the player <b>enters ${String(active).replace(/[<>&]/g,"")}</b>. Order: <b>Map Enter</b> → <b>Map Enter Once</b> → <b>Flag-based</b> (inside a type, top to bottom). “Once” remembers itself with the flag <code>LEVELONCE:map:script</code>.`;U.appendChild(n);
+  const n=document.createElement('div');n.className='help';n.style.lineHeight='1.4';n.innerHTML=`Scripts that run when the player <b>enters ${String(active).replace(/[<>&]/g,"")}</b>. Order: <b>Before Map Load</b> (silent, first) → <b>Map Enter</b> → <b>Map Enter Once</b> → <b>Flag-based</b> (inside a type, top to bottom). “Once” remembers itself with the flag <code>LEVELONCE:map:script</code>.`;U.appendChild(n);
   const sn=()=>{try{return scriptNames()}catch(e){return[]}};
   L.forEach((l,i)=>{const c=document.createElement('div');c.className='card';c.style.cssText='background:#171717;border:1px solid #2d2d2d;border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:3px';
     const top=document.createElement('div');top.className='row';top.style.alignItems='center';
@@ -510,7 +529,7 @@ $('palette').addEventListener('mousedown',e=>{const c=e.target;if(c.tagName!=='C
 $('palette').addEventListener('mouseover',e=>{if(pal&&e.target.tagName==='CANVAS'&&e.target.dataset.t===pal.t)setBrushRect(pal.t,pal.n,pal.f0,+e.target.dataset.f)});
 
 function status(){const L=layout();$('status').textContent=`${active} | ${hover?`${hover.map} (${hover.gx}, ${hover.gy}) ${repo[hover.map]['tileData_'+layer][hover.gy][hover.gx]}`:'—'} | zoom ${Math.round(cam.z*100)}% | undo ${hist.length} redo ${redoS.length}${unsaved?' | ● unsaved':''}`}
-function changed(){buildInspector();buildProps();buildLvl();buildBorder();buildWild();buildIssues();updateSel();status();redraw()}
+function changed(){buildInspector();buildProps();buildStart();buildLvl();buildBorder();buildWild();buildIssues();updateSel();status();redraw()}
 function updateSel(){const s=$('mapSel');s.innerHTML='';Object.keys(repo).forEach(k=>s.add(new Option(k,k)));s.value=active}
 function refreshAll(){changed()}
 function focus(k){const p=layout()[k];if(p){cam.x=60-p.x*TS*cam.z;cam.y=60-p.y*TS*cam.z}}
@@ -519,7 +538,7 @@ function focus(k){const p=layout()[k];if(p){cam.x=60-p.x*TS*cam.z;cam.y=60-p.y*T
 function ser(v,ind=''){if(v===null||typeof v!=='object')return JSON.stringify(v);const n=ind+'  ';
   if(Array.isArray(v)){if(v.every(x=>x===null||typeof x!=='object'))return'['+v.map(x=>JSON.stringify(x)).join(', ')+']';return'[\n'+v.map(x=>n+ser(x,n)).join(',\n')+'\n'+ind+']'}
   const ks=Object.keys(v);if(!ks.length)return'{}';return'{\n'+ks.map(k=>n+JSON.stringify(k)+': '+ser(v[k],n)).join(',\n')+'\n'+ind+'}'}
-const out=()=>'window.OverworldMaps = '+ser(repo)+';\n';
+const out=()=>'window.OverworldMaps = '+ser(repo)+';\n\n// where a NEW game begins (edit it in the map editor: Properties tab -> Start position)\nwindow.OverworldStart = '+JSON.stringify({map:startPos.map,x:startPos.x,y:startPos.y,facing:startPos.facing})+';\n';
 async function save(){const t=out();
   if(window.showSaveFilePicker){try{fileHandle||=await showSaveFilePicker({suggestedName:'Overworld_map.js',types:[{description:'JavaScript',accept:{'text/javascript':['.js']}}]});
     const w=await fileHandle.createWritable();await w.write(t);await w.close();unsaved=false;status();return}catch(e){if(e.name==='AbortError')return;fileHandle=null}}
