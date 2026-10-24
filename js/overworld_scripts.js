@@ -366,6 +366,7 @@ run_left
 run_up
 look_left
 }
+waitmovement
 msgbox.normal
 {
 {red}Mom{/}: $player! I heard a loud bang\n
