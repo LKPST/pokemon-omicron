@@ -835,20 +835,200 @@ road never take no for an answer.
 }
 msgbox.normal
 {
-{red}Hazel{/}: Not that it matters for you\n
-yet, since you don't have a\p
+Not that it matters for us\n
+yet, since we don't have a\p
 Pokémon. But it's good to know\n
-before you get one!
+before we get one!
+}
+applymovement NPC_4
+{
+look_down
 }
 msgbox.normal
 {
 {blue}Wilhelm{/}: Hear that? Even Hazel\n
 agrees with me. Mark the date!
 }
+applymovement NPC_4
+{
+walk_in_place_down
+}
 msgbox.normal
 {
 {red}Hazel{/}: Don't push it, Wilhelm.
 }
+applymovement NPC_5 yes
+{
+walk_down*6
+emote_exclaim
+}
+applymovement NPC_4 yes
+{
+walk_down*6
+emote_exclaim
+}
+applymovement player yes
+{
+walk_down*6
+}
+waitmovement
+applymovement NPC_5
+{
+look_up
+}
+reach arg1=the arg2=city. arg3=This arg4=one arg5=will arg6=save\p
+your arg1=life, arg2=so arg3=listen arg4=up.
+}
+msgbox.normal
+{
+Every Pokémon has a type, and some\n
+types are strong against others.
+}
+msgbox.normal
+{
+Water beats Fire. Fire beats Grass.\n
+Grass beats Water. Hit a Pokémon\p
+with a move it's weak to and it\n
+takes double damage!
+}
+msgbox.normal
+{
+It works the other way too. Use a\n
+move the target resists and you'll\p
+barely scratch it.
+}
+applymovement NPC_5
+{
+emote_question
+}
+msgbox.normal
+{
+Right, Hazel? Go on, tell $player I'm\n
+not making this up.
+}
+applymovement NPC_4
+{
+walk_in_place_down
+}
+msgbox.normal
+{
+{red}Hazel{/}: Ugh... fine. He's right.\n
+Type advantage can decide a whole\p
+battle.
+}
+applymovement NPC_4
+{
+look_up
+}
+msgbox.normal
+{
+Even a Pokémon with a lower level\n
+can win if it has the advantage.\p
+Check the types before you pick a\n
+move!
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: Ha! Two for two. Hazel\n
+agrees with me again!
+}
+applymovement NPC_4
+{
+look_down
+}
+msgbox.normal
+{
+{red}Hazel{/}: Don't get used to it. Come\n
+on, the city is right there.
+}
+applymovement NPC_5 yes
+{
+walk_down*6
+emote_exclaim
+}
+applymovement NPC_4 yes
+{
+walk_down*6
+emote_exclaim
+}
+applymovement player yes
+{
+walk_down*6
+}
+waitmovement
+applymovement NPC_4 yes
+{
+look_up
+}
+applymovement NPC_5 yes
+{
+look_up
+}
+waitmovement
+msgbox.normal
+{
+{blue}Wilhelm{/}: Anyway, enough dreaming.\n
+Olenburg City is right ahead.
+}
+msgbox.normal
+{
+Well, here we are!\n
+Olenburg City, right at the end of\p
+Route 1.
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: This is where we part ways\n
+for now.
+}
+msgbox.normal
+{
+{red}Hazel{/}: I'm heading to the south\n
+side of the city to meet Aster. I\p
+can't wait to finally get my very\n
+first Pokémon!
+}
+msgbox.normal
+{
+{red}Hazel{/}: Maybe one day Aster will\n
+help me track down Mew... imagine\p
+how amazing that would be!
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: Yeah, yeah, good luck with\n
+that. I'm heading west to push\p
+forward on my journey. There are\n
+way bigger challenges waiting for\p
+me out there!
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: As for you, the Pokémon\n
+Lab is right by the city entrance.\p
+You can't miss it.
+}
+msgbox.normal
+{
+{red}Hazel{/}: Good luck with Professor\n
+Beckett, and make sure you deliver\p
+that bag safely! See you both\n
+later!
+}
+applymovement NPC_5 yes
+{
+walk_down*6
+emote_exclaim
+}
+applymovement NPC_4 yes
+{
+walk_down*6
+emote_exclaim
+}
+hideobject NPC_4
+hideobject NPC_5
+setvar 8000 3
+waitmovement
 release
 end
 `;
