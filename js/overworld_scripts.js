@@ -282,13 +282,12 @@ walk_right
 walk_right
 walk_right
 walk_right
-walk_right
 walk_up
 walk_up
 walk_up
 walk_up
 walk_up
-walk_in_place_left
+walk_left
 }
 hideobject NPC_2
 applymovement player
