@@ -172,5 +172,105 @@ look_left
 }
 resetcamera sync=yes
 waitmovement
+msgbox.normal
+{
+{yellow}$player{/}! Oh, thank goodness, you're\n
+awake!\p
+I could hear you tossing and\n
+turning from the hallway.
+}
+applymovement player
+{
+emote_sweat
+}
+msgbox.normal
+{
+Look at you, you're all pale and\n
+sweaty, sweetie.\p
+Was it another bad dream?
+}
+msgbox.normal
+{
+...Hm? Did you hear that?\p
+Something clattered downstairs just\n
+now.\p
+I thought it was only the wind, but\n
+that sounded like {red}something\p
+knocking things over{/}.
+}
+applymovement NPC_2
+{
+look_up
+look_left
+}
+msgbox.normal
+{
+And what's that next to your bed?\p
+I don't remember seeing that {orange}bag{/} in\n
+here before.
+}
+applymovement NPC_1
+{
+jump_in_place
+}
+shakecamera
+applymovement NPC_2 yes
+{
+emote_exclaim
+}
+applymovement player
+{
+emote_exclaim
+}
+waitmovement
+msgbox.normal
+{
+Wait... did that {orange}bag{/} just MOVE?!\p
+$player, did you see that?!
+}
+msgbox.normal
+{
+Well, goodness me! Today of all\n
+days!\p
+Your very first day as Professor\n
+Beckett's aide in Olenburg City,\p
+and you wake up to a mystery.\p
+You have the strangest timing, you\n
+know that?
+}
+msgbox.normal
+{
+Tell you what, you take a good look\n
+at that {orange}bag{/} while I go downstairs.\p
+I'll find out what that noise was\n
+and get {yellow}something to eat{/} ready.\p
+You are not leaving on an empty\n
+stomach, not on my watch!
+}
+msgbox.normal
+{
+And $player... be careful, alright?\p
+I'm {pink}so proud{/} of you.
+}
+applymovement NPC_2
+{
+walk_right
+walk_right
+walk_right
+walk_right
+walk_right
+walk_right
+walk_up
+walk_up
+walk_up
+walk_up
+walk_up
+}
+hideobject NPC_2
+applymovement player
+{
+emote_question
+look_left
+}
 end
 `;
