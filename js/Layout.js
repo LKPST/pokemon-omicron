@@ -130,6 +130,7 @@
         const g = window.game, sc = g && g.scene.getScene('OverworldScene'), W = window.OWWild || {}, OS = window.OWSprites, ctx = g && g.sound && g.sound.context;
         const L = [];
         L.push('wild: ' + (W.why || '-') + '\nslot ' + (W.lastBucket || '-') + ' | list ' + ((W.list || []).length) + ' | grass ' + (W.grass ? W.grass.size : '-') + ' | mons ' + ((W.mons || []).length) + ' | loading ' + (W.loading || 0) + ' | enabled ' + W.enabled);
+        { const E = window.OverworldScriptEngine, m = sc && window.OverworldMaps && window.OverworldMaps[sc.currentMapKey]; L.push('level scripts: ' + (m && m.levelScripts ? m.levelScripts.length : 0) + ' in map | engine.runSilent ' + !!(E && E.runSilent) + (window.__lvlLog && window.__lvlLog.length ? '\n  ' + window.__lvlLog.join('\n  ') : '')); }
         L.push('sprites loaded: ' + (OS && OS.stats ? OS.stats().loaded.length : '-'));
         if (sc) L.push('map ' + sc.currentMapKey + ' | locked ' + sc.isLocked + ' | evolving ' + sc.evolving + ' | script ' + sc.scriptRunning);
         L.push('music: ' + (el ? (el.paused ? 'PAUSED' : 'playing t=' + el.currentTime.toFixed(0)) : 'none') + ' | ctx ' + (ctx && ctx.state) + ' | mode ' + PMAudio.mode + ' | ' + new Date().toTimeString().slice(0, 8));

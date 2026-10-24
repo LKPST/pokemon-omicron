@@ -44,17 +44,15 @@ window.OverworldMovement = (() => {
     });
   }
 
-  function inPlace(e, dir, done, cycles = 3, scripted = false) {
-    const seq = [1, 0, 2, 0]; let i = 0, over = false;
+  // walk in place = ONE step animation on the spot (stand -> step frame -> stand). Use walk_in_place_right*3 for three.
+  function inPlace(e, dir, done, scripted = false) {
     e.direction = dir;
-    const ev = e.scene.time.addEvent({
-      delay: 120, repeat: cycles * 4 - 1,
-      callback: () => {
-        if (over) return;
-        if (!scripted && e.scene.scriptRunning) { over = true; ev.remove(false); e.setFrame(frame(dir, 0)); done && done(); return; }   // a script started: stop the idle animation
-        e.setFrame(frame(dir, seq[i++ % 4]));
-        if (i >= cycles * 4) { e.setFrame(frame(dir, 0)); done && done(); }
-      },
+    e.alt = e.alt === 1 ? 2 : 1;
+    e.setFrame(frame(dir, e.alt));
+    e.scene.time.delayedCall(120, () => {
+      if (!e.scene) return;
+      e.setFrame(frame(dir, 0));
+      e.scene.time.delayedCall(120, () => { done && done(); });
     });
   }
 
@@ -84,7 +82,7 @@ window.OverworldMovement = (() => {
       else if (k === 'walk') step(e, d, onComplete, 240, false, force);
       else if (k === 'run') step(e, d, onComplete, 120, false, force);
       else if (k === 'jump') step(e, d, onComplete, 300, true, force);
-      else inPlace(e, d, onComplete, 3, force);
+      else inPlace(e, d, onComplete, force);
       return;
     }
     // emote bubble above the head: emote_exclaim (!) emote_question (?) emote_heart emote_sweat. Waits until the bubble is gone.

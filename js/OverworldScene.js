@@ -1652,16 +1652,19 @@ class OverworldScene extends Phaser.Scene {
   //   type 'flag'          plays only while flag `flagID` is ON          (runs last)
   // ===========================================================================
   // type 'beforeLoad': silent scripts (flags / variables / hideobject) that run BEFORE the map is built or entered
+  lvlLog(t) { try { const a = (window.__lvlLog = window.__lvlLog || []); a.push(t); if (a.length > 5) a.shift(); console.log('[LEVEL SCRIPTS] ' + t); } catch (e) { } }
+
   runBeforeLoadScripts(mapKey, flagOnly) {
     const E = window.OverworldScriptEngine, m = window.OverworldMaps && window.OverworldMaps[mapKey];
-    if (!E || !E.runSilent || !m || !Array.isArray(m.levelScripts)) return;
-    for (const l of m.levelScripts) if (l && l.type === 'beforeLoad' && l.script) { try { E.runSilent(this, l.script, { flagOnly: !!flagOnly, mapKey }); } catch (e) { console.error('[LEVEL SCRIPTS] before map load failed:', e); } }
+    if (!E || !E.runSilent) { if (m && Array.isArray(m.levelScripts) && m.levelScripts.some(l => l && l.type === 'beforeLoad')) console.warn('[LEVEL SCRIPTS] before map load needs the NEW js/overworld_script_engine.js (it has no runSilent)'); return; }
+    if (!m || !Array.isArray(m.levelScripts)) return;
+    for (const l of m.levelScripts) if (l && l.type === 'beforeLoad' && l.script) { this.lvlLog(`before-load ${mapKey}: ${l.script}`); try { E.runSilent(this, l.script, { flagOnly: !!flagOnly, mapKey }); } catch (e) { console.error('[LEVEL SCRIPTS] before map load failed:', e); } }
   }
 
   runLevelScripts() {
     const key = this.currentMapKey, E = window.OverworldScriptEngine, m = this.currentMap;
     window.__owLevelMap = key;
-    if (!E || !m || !Array.isArray(m.levelScripts) || !m.levelScripts.length) return;
+    if (!E || !m || !Array.isArray(m.levelScripts) || !m.levelScripts.length) { this.lvlLog(`enter ${key}: no level scripts in the map data`); return; }
     const rank = { mapEnter: 0, mapEnterOnce: 1, flag: 2 };
     const list = m.levelScripts.filter(l => l && l.script && rank[l.type] !== undefined)
       .map((l, i) => ({ l, i })).sort((a, b) => rank[a.l.type] - rank[b.l.type] || a.i - b.i).map(o => o.l);
@@ -1670,8 +1673,9 @@ class OverworldScene extends Phaser.Scene {
     const next = () => {
       if (this.currentMapKey !== key) return;                       // a script moved the player to another map: that map has its own level scripts
       const l = list.shift(); if (!l) return;
-      if (l.type === 'mapEnterOnce') { const f = `LEVELONCE:${key}:${l.script}`; if (E.getFlag(f)) return next(); E.setFlag(f, true); }
-      else if (l.type === 'flag' && !(l.flagID && E.getFlag(l.flagID))) return next();
+      if (l.type === 'mapEnterOnce') { const f = `LEVELONCE:${key}:${l.script}`; if (E.getFlag(f)) { this.lvlLog(`once ${l.script}: already played (flag ${f})`); return next(); } E.setFlag(f, true); }
+      else if (l.type === 'flag' && !(l.flagID && E.getFlag(l.flagID))) { this.lvlLog(`flag ${l.script}: ${l.flagID || '(no flag)'} is OFF`); return next(); }
+      this.lvlLog(`run ${l.type}: ${l.script}`);
       E.runScript(this, l.script, () => this.time.delayedCall(60, next));
     };
     const start = () => {
