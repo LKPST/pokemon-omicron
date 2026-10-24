@@ -996,7 +996,7 @@ window.OverworldMaps = {
         "xPos": 0,
         "yPos": 8,
         "owID": "Bag",
-        "script": "",
+        "script": "bag_start",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": "FLAG_BAG_START"
@@ -1030,9 +1030,19 @@ window.OverworldMaps = {
       },
       "Script_1": {
         "eventType": "Script",
-        "xPos": 8,
+        "xPos": 10,
         "yPos": 4,
-        "script": ""
+        "script": "var_8000_1",
+        "scriptVar": "8000",
+        "varValue": 1
+      },
+      "Script_1_copy": {
+        "eventType": "Script",
+        "xPos": 10,
+        "yPos": 5,
+        "script": "var_8000_1",
+        "scriptVar": "8000",
+        "varValue": 1
       }
     },
     "wildData": {

@@ -282,6 +282,143 @@ walk_right
 walk_right
 walk_right
 walk_right
+walk_right
+walk_up
+walk_up
+walk_up
+walk_up
+walk_up
+walk_in_place_left
+}
+hideobject NPC_2
+applymovement player
+{
+emote_question
+look_left
+}
+setvar 8000 1
+end
+
+start: "var_8000_1"
+applymovement player
+{
+emote_question
+}
+msgbox.normal
+{
+{red}Mom{/}: Don't go down yet, honey!\p
+I'm still trying to clean the mess\n
+here.
+}
+applymovement player
+{
+walk_right
+}
+end
+
+start: "bag_start"
+applymovement player
+{
+look_left
+emote_question
+}
+wait 400
+applymovement NPC_1
+{
+jump_in_place
+}
+shakecamera
+applymovement player
+{
+emote_exclaim
+}
+wait 300
+applymovement NPC_1
+{
+jump_in_place
+}
+flashscreen
+shakecamera
+applymovement NPC_1
+{
+jump_in_place
+}
+flashscreen
+wait 600
+showobject NPC_2
+applymovement NPC_2
+{
+emote_exclaim
+run_down
+run_down
+run_down
+run_down
+run_down
+run_left
+run_left
+run_left
+run_left
+run_left
+run_left
+run_up
+look_left
+}
+msgbox.normal
+{
+{red}Mom{/}: $player! I heard a loud bang\n
+up here, are you alright?!
+}
+msgbox.normal
+{
+Oh my goodness... that thing is\n
+shaking AGAIN?!\p
+Honey, step away from it, right\n
+now!
+}
+msgbox.normal
+{
+I've spent all morning sweeping up\n
+that kitchen, and now this!\p
+The whole house is rattling like a\n
+pot lid!
+}
+msgbox.normal
+{
+That {orange}bag{/} has to get to Professor\n
+Beckett right now, before it brings\p
+the whole house down on our heads!
+}
+msgbox.normal
+{
+Oh, and your best friend {cyan}Wilhelm{/}\n
+is taking {pink}Hazel{/} to {yellow}Olenburg City{/}.\p
+She'll get her very first Pokémon\n
+from the gym leader there!
+}
+msgbox.normal
+{
+You tag along with them, okay?\n
+I won't take no for an answer.\p
+It is NOT safe to go through\n
+{green}Route 1{/} without a Pokémon!
+}
+msgbox.normal
+{
+Now pick that {orange}bag{/} up, and don't\n
+you dare drop it.\p
+I'll pack some food for the road.\p
+$player... be safe, my brave little\n
+aide. I love you.
+}
+applymovement NPC_2
+{
+walk_down
+walk_right
+walk_right
+walk_right
+walk_right
+walk_right
+walk_right
 walk_up
 walk_up
 walk_up
@@ -292,9 +429,20 @@ walk_left
 hideobject NPC_2
 applymovement player
 {
-emote_question
 look_left
+delay_400
+walk_in_place_left
 }
-setvar 8000 1
+flashscreen
+hideobject NPC_1
+wait 500
+applymovement player
+{
+emote_exclaim
+delay_300
+look_down
+emote_question
+}
+setvar 8000 2
 end
 `;
