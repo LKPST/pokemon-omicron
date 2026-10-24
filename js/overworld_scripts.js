@@ -597,7 +597,7 @@ end
 start: "ralts_script"
 lock
 faceplayer
-cry arg1=NPC wait=no
+cry npc yes
 msgbox.normal
 {
 Nyaaahhh...
