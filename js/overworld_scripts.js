@@ -149,6 +149,7 @@ applymovement player yes
 walk_right
 }
 movecamera 4 0
+movecamera 0 2
 waitmovement
 showobject NPC_2
 applymovement NPC_2 yes
