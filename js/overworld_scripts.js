@@ -319,7 +319,6 @@ end
 start: "bag_start"
 applymovement player
 {
-look_left
 emote_question
 }
 wait 400
@@ -346,7 +345,11 @@ jump_in_place
 flashscreen
 wait 600
 showobject NPC_2
-applymovement NPC_2
+applymovement player yes
+{
+look_right
+}
+applymovement NPC_2 yes
 {
 emote_exclaim
 run_down
@@ -363,6 +366,7 @@ run_left
 run_up
 look_left
 }
+waitmovement
 msgbox.normal
 {
 {red}Mom{/}: $player! I heard a loud bang\n
@@ -417,21 +421,13 @@ walk_right
 walk_right
 walk_right
 walk_right
-walk_right
-walk_right
-walk_up
-walk_up
-walk_up
-walk_up
-walk_up
-walk_left
 }
 hideobject NPC_2
 applymovement player
 {
-look_left
+look_last_facing
 delay_400
-walk_in_place_left
+walk_last_facing
 }
 flashscreen
 hideobject NPC_1
@@ -440,7 +436,6 @@ applymovement player
 {
 emote_exclaim
 delay_300
-look_down
 emote_question
 }
 setvar 8000 2
