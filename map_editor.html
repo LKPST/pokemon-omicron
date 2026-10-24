@@ -797,6 +797,10 @@ function msgPreview(host,st){host.innerHTML='';const L=OverworldText.layout(st.a
   L.pages.forEach((pg,i)=>{const c=document.createElement('canvas');c.className='mpage';c.title='Page '+(i+1);drawMsgPage(c,pg);host.appendChild(c)});
   if(!getFont()&&fontTry++<12)setTimeout(()=>{if(host.isConnected)msgPreview(host,st)},500)}
 
+// The message box shows the text the way it looks in the game: a new line = \n, a blank line = \p (a new page). \l (wait, then scroll) is written \l and a new line.
+// st.args.text keeps the script form (\n \p \l as characters), so the saved script file does not change.
+const msgToNat=t=>String(t||'').replace(/\\([npl])/g,(m,c)=>c==='p'?'\n\n':c==='n'?'\n':'\\l\n');
+const msgFromNat=t=>String(t||'').replace(/\r\n?/g,'\n').replace(/[ \t]+\n/g,'\n').replace(/^\n+|\n+$/g,'').replace(/\n{2,}/g,'\\p').replace(/\\l\n/g,'\\l').replace(/\n/g,'\\n');
 function stepCard(S,st,i){const C=CM(),sc=C[st.cmd],card=el('div','card'+(i===sSelStep?' sel':''));card.dataset.i=i;
   card.onclick=e=>{if(!/INPUT|SELECT|TEXTAREA|BUTTON/.test(e.target.tagName)){sSelStep=i;document.querySelectorAll('#seSteps .card').forEach(c=>c.classList.toggle('sel',+c.dataset.i===i))}};
   const head=el('div','chead');head.appendChild(el('span','idx',String(i+1)));
@@ -814,13 +818,13 @@ function stepCard(S,st,i){const C=CM(),sc=C[st.cmd],card=el('div','card'+(i===sS
   if(sc.help)body.appendChild(el('div','help',sc.help));
   const row=el('div','frow');body.appendChild(row);
   for(const ag of sc.args){if(sc.block==='text'&&ag.n==='text')continue;const l=el('label');l.appendChild(el('span','',ag.n+(ag.h?'  ('+ag.h+')':'')));l.appendChild(argInput(st,ag));row.appendChild(l)}
-  if(sc.block==='text'){const ta=document.createElement('textarea');ta.rows=3;ta.value=st.args.text||'';ta.spellcheck=false;ta.placeholder='Type the message. \\n = new line, \\p = new paragraph, $player = name';
+  if(sc.block==='text'){const ta=document.createElement('textarea');ta.rows=4;ta.value=msgToNat(st.args.text);ta.spellcheck=false;ta.placeholder='Type the message like it looks in the game. A new line = \\n, a blank line = \\p (new page). $player = name';
     const pv=el('div','mprev');const upd=()=>msgPreview(pv,st);
-    ta.oninput=()=>{st.args.text=ta.value;seTouch();upd()};body.appendChild(ta);
-    const bar=el('div','row');[['\\n','\\n'],['\\p','\\p'],['$player','$player']].forEach(([l,v])=>{const b=el('button','mini',l);b.onclick=()=>{const a=ta.selectionStart;ta.setRangeText(v,a,ta.selectionEnd,'end');ta.focus();ta.oninput()};bar.appendChild(b)});
+    ta.oninput=()=>{st.args.text=msgFromNat(ta.value);seTouch();upd()};body.appendChild(ta);
+    const bar=el('div','row');[['new line','\n'],['new page','\n\n'],['wait + scroll','\\l\n'],['$player','$player']].forEach(([l,v])=>{const b=el('button','mini',l);b.onclick=()=>{const a=ta.selectionStart;ta.setRangeText(v,a,ta.selectionEnd,'end');ta.focus();ta.oninput()};bar.appendChild(b)});
     {const sel=document.createElement('select');sel.className='mini';sel.title='Color the selected text (or start a color at the cursor). {/} ends it.';sel.innerHTML='<option value="">Color…</option>'+Object.keys(OverworldText.colors).filter(k=>k!=='grey').map(k=>`<option value="${k}">${k}</option>`).join('')+'<option value="/">end color {/}</option><option value="big">{big} whole message 200%</option>';
       sel.onchange=()=>{const v=sel.value;sel.value='';if(!v)return;if(v==='big'){ta.value='{big}'+ta.value.replace(/\{big\}/gi,'');ta.oninput();return}const a=ta.selectionStart,b=ta.selectionEnd,s=ta.value.slice(a,b);if(v==='/')ta.setRangeText('{/}',a,b,'end');else if(s)ta.setRangeText('{'+v+'}'+s+'{/}',a,b,'end');else ta.setRangeText('{'+v+'}',a,b,'end');ta.focus();ta.oninput()};bar.appendChild(sel)}
-    const aw=el('button','mini','Auto-wrap (fit the box)');aw.onclick=()=>{ta.value=OverworldText.autoWrap(ta.value);ta.oninput()};bar.appendChild(aw);body.appendChild(bar);body.appendChild(pv);upd()}
+    const aw=el('button','mini','Auto-wrap (fit the box)');aw.onclick=()=>{ta.value=msgToNat(OverworldText.autoWrap(msgFromNat(ta.value)));ta.oninput()};bar.appendChild(aw);body.appendChild(bar);body.appendChild(pv);upd()}
   if(sc.block==='moves'){const ta=document.createElement('textarea');ta.rows=2;ta.value=st.args.moves||'';ta.spellcheck=false;ta.placeholder='walk_down*2 look_left  (click the buttons below)';
     const warn=el('div','bad'),chk=()=>{const bad=EN().expandMoves(ta.value).filter(t=>!TOKEN_OK(t));warn.textContent=bad.length?'⚠ unknown movement: '+[...new Set(bad)].join(', '):''};
     ta.oninput=()=>{st.args.moves=ta.value;seTouch();chk()};body.appendChild(ta);body.appendChild(warn);chk();

@@ -109,7 +109,7 @@ const OW_TEXT = {
     layout(text, vars) {
       const pc = this.parseColors(this.expand(text, vars)), raw = pc.text;
       const big = !!pc.big, bg = big ? 2 : 1, maxLines = big ? 1 : OW_TEXT.maxLines;   // {big}: glyphs twice as large, so half the width and one line per page
-      // \n and \l start a new line. The box shows 2 lines (1 with {big}); from the 3rd line on the text SCROLLS UP: after \n at once, after \l when the player presses a button (like the Emerald font).
+      // \n and \l start a new line. The box shows 2 lines (1 with {big}); from the 3rd line on the text SCROLLS UP after the player presses a button (\n and \l behave the same).
       const pages = [{ lines: [''], cols: [[]], brk: [null], big }];
       let i = 0;
       while (i < raw.length) {
@@ -256,8 +256,7 @@ const OW_TEXT = {
         scene.input.keyboard.off('keydown', onKey); scene.input.keyboard.off('keyup', onUp); scene.input.off('pointerdown', onPress);
         if (cb) cb();
       };
-      // The page is a list of lines; the box shows `rows` of them (2, or 1 with {big}). When the typing reaches a line past the box, the lines scroll up:
-      // at once after \n, or after a button press after \l.
+      // The page is a list of lines; the box shows `rows` of them (2, or 1 with {big}). When the typing reaches a line past the box, it waits for a button press, then the lines scroll up.
       let lineG = [], li = 0, gi = 0, rows = 2, mul = 1, pendingScroll = false;
       const rowY = r => ty + r * T.lineHeight * sc * mul;
       const doScroll = () => {   // the shown lines move up by one row; the top one disappears
@@ -279,10 +278,7 @@ const OW_TEXT = {
           if (gi >= lineG[li].length) {   // this line is typed out
             if (li + 1 >= lineG.length) { if (timer) timer.remove(false); timer = null; waiting = true; arrow.setVisible(true); return; }
             li++; gi = 0;
-            if (li >= rows) {
-              if (pg.brk[li] === 'l') { if (timer) timer.remove(false); timer = null; pendingScroll = true; arrow.setVisible(true); return; }
-              doScroll();
-            }
+            if (li >= rows) { if (timer) timer.remove(false); timer = null; pendingScroll = true; arrow.setVisible(true); return; }   // wait for the button, then scroll (both \n and \l)
             continue;
           }
           lineG[li][gi++].setVisible(true); n--;
