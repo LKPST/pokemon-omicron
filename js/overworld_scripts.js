@@ -601,6 +601,9 @@ end
 
 start: "8000_2"
 lock
+hideobject NPC_1
+hideobject NPC_2
+hideobject NPC_3
 applymovement NPC_4 yes
 {
 look_up
@@ -619,9 +622,32 @@ starting to think you got eaten by\n
 a Slakoth.
 }
 getpos 4000 4001
-call_if_eq arg1=4001 arg2=11 arg3=on_row_11
-call_if_eq arg1=4001 arg2=12 arg3=on_row_12
-call_if_eq arg1=4001 arg2=13 arg3=on_row_13
+goto_if_eq 4001 11 row_11
+goto_if_eq 4001 12 row_12
+goto_if_eq 4001 13 row_13
+goto after_row
+label row_11
+applymovement player
+{
+walk_down
+walk_right
+look_down
+}
+goto after_row
+label row_12
+applymovement player
+{
+walk_down
+}
+goto after_row
+label row_13
+applymovement player
+{
+walk_down
+walk_left
+look_down
+}
+label after_row
 applymovement NPC_4
 {
 look_down
@@ -692,8 +718,7 @@ emote_exclaim
 }
 msgbox.normal
 {
-{blue}Wilhelm{/}: {big}WAIT!{/
-}
+{big}{blue}WAIT!
 }
 applymovement NPC_5
 {
@@ -810,16 +835,16 @@ here.
 }
 msgbox.normal
 {
-The second you walk into\n
-their line of sight, they'll spot\p
+The second you walk into their line\n
+of sight, they'll spot\p
 you and rush right over. Once\n
 they've seen you, there's no\p
 running away!
 }
 msgbox.normal
 {
-So if you don't feel like\n
-battling, stay out of their sight.\p
+So if you don't feel like battling,\n
+stay out of their sight.\p
 And if you do, make sure your team\n
 is ready first.
 }
@@ -835,8 +860,8 @@ road never take no for an answer.
 }
 msgbox.normal
 {
-Not that it matters for us\n
-yet, since we don't have a\p
+Not that it matters for us yet,\n
+since we don't have a\p
 Pokémon. But it's good to know\n
 before we get one!
 }
@@ -876,8 +901,11 @@ applymovement NPC_5
 {
 look_up
 }
-reach arg1=the arg2=city. arg3=This arg4=one arg5=will arg6=save\p
-your arg1=life, arg2=so arg3=listen arg4=up.
+msgbox.normal
+{
+{blue}Wilhelm{/}: Okay, last tip before we\n
+reach the city. This one will save\p
+your life, so listen up.
 }
 msgbox.normal
 {
@@ -903,7 +931,7 @@ emote_question
 }
 msgbox.normal
 {
-Right, Hazel? Go on, tell $player I'm\n
+Right, Hazel? Go on, tell them I'm\n
 not making this up.
 }
 applymovement NPC_4
@@ -972,8 +1000,8 @@ Olenburg City is right ahead.
 }
 msgbox.normal
 {
-Well, here we are!\n
-Olenburg City, right at the end of\p
+Well, here we are! Olenburg City,\n
+right at the end of\p
 Route 1.
 }
 msgbox.normal
@@ -1025,10 +1053,10 @@ applymovement NPC_4 yes
 walk_down*6
 emote_exclaim
 }
+waitmovement
 hideobject NPC_4
 hideobject NPC_5
 setvar 8000 3
-waitmovement
 release
 end
 `;
