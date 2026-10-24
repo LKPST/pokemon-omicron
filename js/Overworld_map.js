@@ -1133,7 +1133,8 @@ window.OverworldMaps = {
         "type": "mapEnterOnce",
         "script": "mom_arrives_in_room"
       }
-    ]
+    ],
+    "banner": false
   }
 };
 
