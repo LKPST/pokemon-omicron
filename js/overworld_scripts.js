@@ -147,6 +147,7 @@ showobject NPC_2
 applymovement NPC_2
 {
 walk_in_place_right
+emote_heart
 }
 end
 `;
