@@ -182,7 +182,9 @@
     if (W.evoPaused) { W.evoPaused = false; W.grace = scene.time.now + 800; for (const q of W.mons) { if (q.tw) { try { q.tw.resume(); } catch (_) { } } if (q.spr && q.spr.anims && q.spr.anims.resume) { try { q.spr.anims.resume(); } catch (_) { } } } }
     if (W.busy) return;
     const menu = (window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen());
-    if (scene.scriptRunning || scene.warping || menu) return;
+    if (scene.warping || menu) return;
+    const scripted = !!(scene.scriptRunning || scene.trainerBusy);   // during a script event the wild Pokémon still spawn and wander, but they cannot bump into the player
+    if (scripted) W.grace = Math.max(W.grace || 0, scene.time.now + 800);   // and for a moment after it, so none touches you the second it ends
 
     // new map -> new grass
     if (W.mapKey !== scene.currentMapKey) {
@@ -235,7 +237,7 @@
     for (const m of W.mons) {
       if (m.dead || !m.spr) continue;
       wander(scene, m, now);
-      if (Math.hypot(m.spr.x - pp.x, (m.spr.y - m.oy) - pp.y) < 20 && now > (W.grace || 0)) { if (healthy(sd)) return encounter(scene, m); why('touched a wild Pokémon, but no party Pokémon can fight'); }
+      if (Math.hypot(m.spr.x - pp.x, (m.spr.y - m.oy) - pp.y) < 20 && now > (W.grace || 0) && !scripted) { if (healthy(sd)) return encounter(scene, m); why('touched a wild Pokémon, but no party Pokémon can fight'); }
     }
   }
 
