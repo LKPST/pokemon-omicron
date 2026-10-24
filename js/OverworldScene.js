@@ -566,9 +566,12 @@ class OverworldScene extends Phaser.Scene {
     this.playerGridY = 1;
     this.isMoving = false;
 
-    this.currentMapKey = window.GameStateManager && window.GameStateManager.saveData && window.GameStateManager.saveData.mapID
-      ? window.GameStateManager.saveData.mapID
-      : Object.keys(window.OverworldMaps)[0];
+    // [START] where a NEW game begins: window.OverworldStart (set in the map editor, saved at the end of Overworld_map.js)
+    const maps = window.OverworldMaps || {}, sd = window.GameStateManager && window.GameStateManager.saveData;
+    const st = Object.assign({ map: 'Criscanto Town - Player Room', x: 2, y: 8, facing: 'down' }, window.OverworldStart || {});
+    this.startCfg = st;
+    if (sd && sd.mapID && maps[sd.mapID]) this.currentMapKey = sd.mapID;
+    else { this._useStart = true; this.currentMapKey = maps[st.map] ? st.map : Object.keys(maps)[0]; }
   }
 
   init() {
@@ -682,8 +685,12 @@ class OverworldScene extends Phaser.Scene {
     if (!this._spawnFromSave) {
       this._spawnFromSave = true;
       const sp = window.SaveSystem && window.SaveSystem.savedPos && window.SaveSystem.savedPos();
-      if (sp && (!sp.map || sp.map === this.currentMapKey)) { this.playerGridX = sp.x; this.playerGridY = sp.y; if (['up', 'down', 'left', 'right'].includes(sp.dir)) this.lastDir = sp.dir; console.log('[SAVE] spawning at the saved position', sp); }
+      if (!sp && this._useStart && this.currentMapKey === this.startCfg.map) {   // [START] a new game
+        this.playerGridX = Number(this.startCfg.x) || 0; this.playerGridY = Number(this.startCfg.y) || 0;
+        if (['up', 'down', 'left', 'right'].includes(this.startCfg.facing)) this.lastDir = this.startCfg.facing;
+      } else if (sp && (!sp.map || sp.map === this.currentMapKey)) { this.playerGridX = sp.x; this.playerGridY = sp.y; if (['up', 'down', 'left', 'right'].includes(sp.dir)) this.lastDir = sp.dir; console.log('[SAVE] spawning at the saved position', sp); }
     }
+    this.runBeforeLoadScripts(this.currentMapKey, true);   // [LEVEL SCRIPTS] before the map is built
     this.spawnAllEvents();
     this.spawnPlayer();
     if (window.__owLevelMap !== this.currentMapKey) this.runLevelScripts();   // [LEVEL SCRIPTS] game start / loaded save (not when coming back from a battle)
@@ -1601,6 +1608,7 @@ class OverworldScene extends Phaser.Scene {
   placePlayerAt(mapKey, gx, gy) {
     this.currentMapKey = mapKey;
     this.currentMap = window.OverworldMaps[mapKey];
+    this.runBeforeLoadScripts(mapKey, false);   // [LEVEL SCRIPTS]
     this.playerGridX = gx;
     this.playerGridY = gy;
 
@@ -1643,6 +1651,13 @@ class OverworldScene extends Phaser.Scene {
   //   type 'mapEnterOnce'  plays once, then never again (a flag remembers it)   (runs second)
   //   type 'flag'          plays only while flag `flagID` is ON          (runs last)
   // ===========================================================================
+  // type 'beforeLoad': silent scripts (flags / variables / hideobject) that run BEFORE the map is built or entered
+  runBeforeLoadScripts(mapKey, flagOnly) {
+    const E = window.OverworldScriptEngine, m = window.OverworldMaps && window.OverworldMaps[mapKey];
+    if (!E || !E.runSilent || !m || !Array.isArray(m.levelScripts)) return;
+    for (const l of m.levelScripts) if (l && l.type === 'beforeLoad' && l.script) { try { E.runSilent(this, l.script, { flagOnly: !!flagOnly, mapKey }); } catch (e) { console.error('[LEVEL SCRIPTS] before map load failed:', e); } }
+  }
+
   runLevelScripts() {
     const key = this.currentMapKey, E = window.OverworldScriptEngine, m = this.currentMap;
     window.__owLevelMap = key;
@@ -1985,6 +2000,7 @@ class OverworldScene extends Phaser.Scene {
     this.isMoving = true;
     this.currentMapKey = transitionData.mapKey;
     this.currentMap = window.OverworldMaps[this.currentMapKey];
+    this.runBeforeLoadScripts(this.currentMapKey, false);   // [LEVEL SCRIPTS]
     this.playerGridX = transitionData.entryX;
     this.playerGridY = transitionData.entryY;
 
