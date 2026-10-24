@@ -999,7 +999,7 @@ window.OverworldMaps = {
         "script": "",
         "isTrainer": false,
         "viewRadius": 3,
-        "flagID": "BAG_START"
+        "flagID": "FLAG_BAG_START"
       },
       "NPC_2": {
         "eventType": "NPC",
@@ -1010,7 +1010,23 @@ window.OverworldMaps = {
         "movementType": "MOVEMENT_TYPE_FACE_RIGHT",
         "isTrainer": false,
         "viewRadius": 3,
-        "flagID": ""
+        "flagID": "FLAG_MOM_START"
+      },
+      "Warp_1": {
+        "eventType": "Warp",
+        "xPos": 10,
+        "yPos": 4,
+        "map": "Criscanto Town",
+        "facing": "Down",
+        "warpType": "Normal"
+      },
+      "Warp_2": {
+        "eventType": "Warp",
+        "xPos": 10,
+        "yPos": 5,
+        "map": "Criscanto Town",
+        "facing": "Down",
+        "warpType": "Normal"
       }
     },
     "wildData": {
