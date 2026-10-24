@@ -590,7 +590,8 @@ start: "criscanto_town"
 msgbox.normal
 {
 {red}Criscanto Town{/}\p
-A quiet town in the heart of the forest, where every journey begins.
+A quiet town in the heart of the\n
+forest, where every journey begins.
 }
 end
 
