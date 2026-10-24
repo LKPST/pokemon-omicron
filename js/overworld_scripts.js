@@ -169,7 +169,6 @@ walk_left
 walk_up
 look_left
 }
-wait 5000
 resetcamera sync=yes
 waitmovement
 end
