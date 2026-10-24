@@ -1566,7 +1566,7 @@ class OverworldScene extends Phaser.Scene {
     if (!targetNPC) {   // [SIGNPOST] nobody there: a signpost on that tile?
       const sp = (this.signposts || []).find(s => s.wx === targetX && s.wy === targetY && s.config.script);
       const E = window.OverworldScriptEngine;
-      if (sp && E && !(sp.config.scriptVar && E.getVar(sp.config.scriptVar) !== (Number(sp.config.varValue) || 0))) { this.activeNPC = null; E.runScript(this, sp.config.script); }
+      if (sp && E) { this.activeNPC = null; E.runScript(this, sp.config.script); }
       return;
     }
 

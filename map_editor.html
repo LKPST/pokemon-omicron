@@ -436,7 +436,7 @@ window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.t
 const SCHEMA={
   NPC:[['owID','select','ow'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
   Script:[['script','select','script'],['scriptVar','text'],['varValue','num']],'Script Tile':[['script','select','script'],['scriptVar','text'],['varValue','num']],
-  Signpost:[['script','select','script'],['scriptVar','text'],['varValue','num']],Tile:[['tileID','num']],
+  Signpost:[['script','select','script']],Tile:[['tileID','num']],
   Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};
 const allEv=()=>Object.values(repo).flatMap(m=>Object.values(m.events));
 const OPTS={ow:()=>owIds(),tileAttr:()=>['None','On Top','Under'],map:()=>Object.keys(repo),
