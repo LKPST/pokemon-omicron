@@ -629,8 +629,8 @@ const MOVE_TYPES=['MOVEMENT_TYPE_LOOK_AROUND','MOVEMENT_TYPE_FACE_PLAYER','MOVEM
   'MOVEMENT_TYPE_JUMP_IN_PLACE','MOVEMENT_TYPE_WALK_IN_PLACE_UP','MOVEMENT_TYPE_WALK_IN_PLACE_DOWN','MOVEMENT_TYPE_WALK_IN_PLACE_LEFT','MOVEMENT_TYPE_WALK_IN_PLACE_RIGHT',
   'MOVEMENT_TYPE_SPIN_CLOCKWISE','MOVEMENT_TYPE_SPIN_COUNTER_CLOCKWISE','MOVEMENT_TYPE_PATROL_LEFT_RIGHT','MOVEMENT_TYPE_PATROL_UP_DOWN','MOVEMENT_TYPE_INVISIBLE'];
 const MOVE_TOKENS=['walk_up','walk_down','walk_left','walk_right','run_up','run_down','run_left','run_right','jump_up','jump_down','jump_left','jump_right',
-  'look_up','look_down','look_left','look_right','look_player','look_random','walk_in_place_up','walk_in_place_down','walk_in_place_left','walk_in_place_right','spin_cw','spin_ccw','jump_in_place','delay_500'];
-const TOKEN_OK=t=>/^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.test(t)||/^(look_random|look_player|spin_cw|spin_ccw|jump_in_place|wait)$/.test(t)||/^delay_\d+$/.test(t);
+  'look_up','look_down','look_left','look_right','look_player','look_random','walk_in_place_up','walk_in_place_down','walk_in_place_left','walk_in_place_right','spin_cw','spin_ccw','jump_in_place','emote_exclaim','emote_question','emote_heart','emote_sweat','delay_500'];
+const TOKEN_OK=t=>/^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.test(t)||/^(look_random|look_player|spin_cw|spin_ccw|jump_in_place|wait|emote_(exclaim|question|heart|sweat))$/.test(t)||/^delay_\d+$/.test(t);
 let SE=null,sDirty=false,sFile=null,sCur='',sView='steps',sSelStep=-1;
 const SHEAD=`// ===========================================================================
 // overworld_scripts.js  -  YOUR SCRIPTS  (xSE style)
@@ -832,6 +832,7 @@ function pvStepTok(e,tok,done){let m=/^delay_(\d+)$/.exec(tok);if(m)return pvTwe
   if(tok==='look_player'){const p=PV.player,dx=p.x-e.x,dy=p.y-e.y;e.dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');return done()}
   if(tok==='look_random'){e.dir=DORD[Math.floor(Math.random()*4)];return done()}
   if(tok==='spin_cw'||tok==='spin_ccw'){let i=DORD.indexOf(e.dir),n=0;const stp=()=>{i=(i+(tok==='spin_cw'?1:3))%4;e.dir=DORD[i];if(++n<4)pvTween(140,null,stp);else done()};return pvTween(140,null,stp)}
+  {const em=/^emote_(exclaim|question|heart|sweat)$/.exec(tok);if(em){e.emote={exclaim:'!',question:'?',heart:'♥',sweat:'💧'}[em[1]];return pvTween(800,null,()=>{e.emote=null;done()})}}
   if(tok==='jump_in_place'){const y0=e.y;return pvTween(280,t=>{e.hop=Math.sin(t*Math.PI)*10},()=>{e.hop=0;done()})}
   done()}
 function pvHost(){const run=PV.run,guard=f=>(...a)=>{if(run===PV.run)f(...a)};
@@ -874,6 +875,8 @@ function pvDraw(){const c=$('pvCv'),x=c.getContext('2d'),W=PV.vw,H=PV.vh;x.setTr
   for(const e of list){const s=spr(e.id),hop=e.hop||0;
     if(s){const sc2=osc(e.id),w=s.width*sc2,h=s.height*sc2;if(e.building)x.drawImage(s,e.x-w/2,e.y-h,w,h);else x.drawImage(s,Math.round(e.x-w/2),Math.round(e.y-h*.85-hop),w,h)}
     else{x.fillStyle=e===PV.player?'#2e7d32':'#c62828';x.fillRect(e.x-10,e.y-26-hop,20,28)}
+    if(e.emote){const bx=Math.round(e.x),by=Math.round(e.y-(s?s.height*osc(e.id)*.85:30)-hop-18);x.fillStyle='#fff';x.strokeStyle='#222';x.lineWidth=2;x.beginPath();x.roundRect?x.roundRect(bx-12,by-13,24,24,6):x.rect(bx-12,by-13,24,24);x.fill();x.stroke();
+      x.beginPath();x.moveTo(bx-4,by+11);x.lineTo(bx+4,by+11);x.lineTo(bx,by+17);x.closePath();x.fill();x.fillStyle=e.emote==='!'?'#e53935':e.emote==='?'?'#1e88e5':'#e91e63';x.font='bold 18px monospace';x.textAlign='center';x.fillText(e.emote,bx,by+6);x.textAlign='left'}
     if(!e.building){const d=e.dir,fx=e.x+(d==='left'?-14:d==='right'?14:0),fy=e.y+(d==='up'?-18:d==='down'?14:0)-hop;x.fillStyle=e===PV.player?'#69f0ae':'#ffd54f';x.beginPath();
       if(d==='up'||d==='down'){const s2=d==='up'?-1:1;x.moveTo(fx-5,fy);x.lineTo(fx+5,fy);x.lineTo(fx,fy+5*s2)}else{const s2=d==='left'?-1:1;x.moveTo(fx,fy-5);x.lineTo(fx,fy+5);x.lineTo(fx+5*s2,fy)}x.fill()}}
   x.restore();
