@@ -299,7 +299,11 @@ window.OverworldScriptEngine = (() => {
     function runToken(e, tok, done) {
       const d = /^delay_(\d+)$/.exec(tok);
       if (d) { scene.time.delayedCall(+d[1], done); return; }
-      OM().execute(e, tok, () => { if (e === scene.player) syncPlayer(); done(); }, { force: true });
+      // failsafe: a step that never reports back (blocked, unknown token, old movement_type.js) must not freeze the script forever
+      let fin = false, tm = null;
+      const fin1 = () => { if (fin) return; fin = true; if (tm) tm.remove(false); if (e === scene.player) syncPlayer(); done(); };
+      tm = scene.time.delayedCall(tokMs(tok) + 2500, () => { if (!fin) console.warn('[script] movement "' + tok + '" never finished; continuing (is movement_type.js up to date?)'); fin1(); });
+      OM().execute(e, tok, fin1, { force: true });
     }
     function findEvent(spec) {   // (mapKey, eventKey) of an event, hidden or not
       const s = String(spec);
