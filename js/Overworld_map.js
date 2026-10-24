@@ -35,7 +35,7 @@ window.OverworldMaps = {
         "map": "Criscanto Player House",
         "bankID": 0,
         "warpNumber": 1,
-        "facing": "Down",
+        "facing": "Left",
         "warpType": "Normal",
         "xPos": 7,
         "yPos": 8,
@@ -72,8 +72,7 @@ window.OverworldMaps = {
         "movementType": "MOVEMENT_TYPE_FACE_DOWN",
         "isTrainer": false,
         "viewRadius": 3,
-        "flagID": "",
-        "owTileAttribute": "On Top"
+        "flagID": ""
       },
       "Warp_2": {
         "eventType": "Warp",
@@ -108,8 +107,7 @@ window.OverworldMaps = {
         "movementType": "MOVEMENT_TYPE_FACE_DOWN",
         "isTrainer": false,
         "viewRadius": 3,
-        "flagID": "",
-        "owTileAttribute": "On Top"
+        "flagID": ""
       },
       "NPC_3_copy_copy": {
         "eventType": "NPC",
@@ -117,7 +115,7 @@ window.OverworldMaps = {
         "yPos": 23,
         "owID": "Trainer_23",
         "script": "town_science_fan",
-        "movementType": "MOVEMENT_TYPE_PATROL_UP_DOWN",
+        "movementType": "MOVEMENT_TYPE_RUN_AROUND",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
@@ -1196,7 +1194,7 @@ window.OverworldMaps = {
         "xPos": 10,
         "yPos": 4,
         "map": "Criscanto Player House",
-        "facing": "Right",
+        "facing": "Down",
         "warpType": "Normal",
         "targetWarp": "Warp_4"
       },
@@ -1205,9 +1203,9 @@ window.OverworldMaps = {
         "xPos": 10,
         "yPos": 5,
         "map": "Criscanto Player House",
-        "facing": "Right",
-        "targetWarp": "Warp_3",
-        "warpType": "Normal"
+        "facing": "Down",
+        "warpType": "Normal",
+        "targetWarp": "Warp_3"
       },
       "Script_1": {
         "eventType": "Script",
@@ -1358,7 +1356,7 @@ window.OverworldMaps = {
         "xPos": 6,
         "yPos": 9,
         "map": "Criscanto Town",
-        "facing": "Up",
+        "facing": "Down",
         "warpType": "Normal",
         "targetWarp": "Warp_1"
       },
@@ -1367,7 +1365,7 @@ window.OverworldMaps = {
         "xPos": 7,
         "yPos": 9,
         "map": "Criscanto Town",
-        "facing": "Up",
+        "facing": "Down",
         "warpType": "Normal"
       },
       "Warp_3": {
@@ -1375,7 +1373,7 @@ window.OverworldMaps = {
         "xPos": 11,
         "yPos": 3,
         "map": "Criscanto Town - Player Room",
-        "facing": "Right",
+        "facing": "Down",
         "warpType": "Normal",
         "targetWarp": "Warp_2"
       },
@@ -1384,7 +1382,7 @@ window.OverworldMaps = {
         "xPos": 11,
         "yPos": 2,
         "map": "Criscanto Town - Player Room",
-        "facing": "Right",
+        "facing": "Down",
         "warpType": "Normal",
         "targetWarp": "Warp_1"
       },
