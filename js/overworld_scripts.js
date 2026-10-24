@@ -143,6 +143,7 @@ hideobject NPC_2
 end
 
 start: "mom_arrives_in_room"
+wait 5000
 showobject NPC_2
 applymovement NPC_2
 {
@@ -151,12 +152,15 @@ walk_down
 walk_down
 walk_down
 walk_down
+walk_down
 walk_left
 walk_left
 walk_left
 walk_left
 walk_left
 walk_left
+walk_up
+look_left
 }
 end
 `;
