@@ -9,6 +9,7 @@
 //     \n   new line          \p   new paragraph (clears the box, waits for a button)
 //     $player   the player's name      $npc   the name of the NPC you are talking to
 //     $anything_else   a script variable set with `setvar` (printed as a number)
+//     {red}colored words{/}   colors: red orange yellow green cyan blue purple pink gray brown white, or {#ff8800}. {/} ends the color.
 //
 // One page = 2 lines of up to 34 characters (GBA box). Change the numbers in OW_TEXT to resize.
 // ===========================================================================
@@ -62,20 +63,36 @@ const OW_TEXT = {
   }
   const owAdv = gl => (gl && typeof gl.adv === 'number') ? gl.adv : (gl && gl.w > 1 ? gl.w * 8 : OW_TEXT.advance);
 
+  // text colors (bright, so they read on the dark box). Use {red}text{/} in a message, or {#rrggbb}.
+  const OW_COLORS = { red: '#ff5a5a', orange: '#ffa24d', yellow: '#ffe14d', green: '#6fe07a', cyan: '#5ee6e6', blue: '#6ab4ff', purple: '#c59bff', pink: '#ff8fd0', gray: '#bdbdbd', grey: '#bdbdbd', brown: '#d2a06b', white: '#ffffff' };
+  const OW_COLOR_RE = /\{(\/|#[0-9a-fA-F]{6}|red|orange|yellow|green|cyan|blue|purple|pink|gray|grey|brown|white)\}/gi;
+
   const OverworldText = {
     get glyphs() { return owGlyphs(); },
+    colors: OW_COLORS,
+    stripColor(s) { return String(s == null ? '' : s).replace(OW_COLOR_RE, ''); },
+    // 'text {red}hi{/}' -> { text:'text hi', cols:[null,null,...,'#ff5a5a','#ff5a5a'] } (one entry per character)
+    parseColors(raw) {
+      raw = String(raw == null ? '' : raw); let text = '', cols = [], cur = null, last = 0, m; OW_COLOR_RE.lastIndex = 0;
+      while ((m = OW_COLOR_RE.exec(raw))) {
+        const seg = raw.slice(last, m.index); text += seg; for (let k = 0; k < seg.length; k++) cols.push(cur);
+        const t = m[1].toLowerCase(); cur = t === '/' ? null : (t[0] === '#' ? t : OW_COLORS[t]); last = m.index + m[0].length;
+      }
+      const seg = raw.slice(last); text += seg; for (let k = 0; k < seg.length; k++) cols.push(cur);
+      return { text, cols };
+    },
 
     // Splits a line into drawable tokens. A single / is a slash; /name/ (closed by another /) is a special glyph (/m/ /f/ /up/ ...).
     tokens(s) {
       s = String(s == null ? '' : s); const G = owGlyphs(), out = []; let i = 0;
       while (i < s.length) {
-        const ch = s[i];
-        if (ch === ' ') { out.push({ ch: ' ', gl: null, adv: OW_TEXT.space, w: 1 }); i++; continue; }
+        const ch = s[i], i0 = i;
+        if (ch === ' ') { out.push({ ch: ' ', gl: null, adv: OW_TEXT.space, w: 1, i0 }); i++; continue; }
         if (ch === '/') {
           const j = s.indexOf('/', i + 1);
-          if (j > 0) { const tag = s.slice(i, j + 1); if (G[tag]) { out.push({ ch: tag, gl: G[tag], adv: owAdv(G[tag]), w: G[tag].w || 1 }); i = j + 1; continue; } }
+          if (j > 0) { const tag = s.slice(i, j + 1); if (G[tag]) { out.push({ ch: tag, gl: G[tag], adv: owAdv(G[tag]), w: G[tag].w || 1, i0 }); i = j + 1; continue; } }
         }
-        const gl = G[ch] || null; out.push({ ch, gl, adv: owAdv(gl), w: (gl && gl.w) || 1 }); i++;
+        const gl = G[ch] || null; out.push({ ch, gl, adv: owAdv(gl), w: (gl && gl.w) || 1, i0 }); i++;
       }
       return out;
     },
@@ -90,16 +107,16 @@ const OW_TEXT = {
   
     // Splits text into pages and lines. Returns { pages:[{lines:[...]}], warnings:[{page,line,type,msg}] }
     layout(text, vars) {
-      const raw = this.expand(text, vars);
-      const pages = [{ lines: [''] }];
+      const pc = this.parseColors(this.expand(text, vars)), raw = pc.text;
+      const pages = [{ lines: [''], cols: [[]] }];
       let i = 0;
       while (i < raw.length) {
         const two = raw.substr(i, 2);
         const page = pages[pages.length - 1];
-        if (two === '\\n' || two === '\\l') { page.lines.push(''); i += 2; continue; }
-        if (two === '\\p') { pages.push({ lines: [''] }); i += 2; continue; }
-        if (raw[i] === '\n') { page.lines.push(''); i++; continue; }
-        page.lines[page.lines.length - 1] += raw[i]; i++;
+        if (two === '\\n' || two === '\\l') { page.lines.push(''); page.cols.push([]); i += 2; continue; }
+        if (two === '\\p') { pages.push({ lines: [''], cols: [[]] }); i += 2; continue; }
+        if (raw[i] === '\n') { page.lines.push(''); page.cols.push([]); i++; continue; }
+        page.lines[page.lines.length - 1] += raw[i]; page.cols[page.cols.length - 1].push(pc.cols[i]); i++;
       }
       if (pages.length > 1 && pages[pages.length - 1].lines.every(l => l === '')) pages.pop();   // trailing \p
       const warnings = [];
@@ -130,7 +147,7 @@ const OW_TEXT = {
           let cur = '';
           for (const word of h.split(/\s+/).filter(Boolean)) {
             const t = cur ? cur + ' ' + word : word;
-            if (this.lineWidth(t) <= OW_TEXT.innerWidth || !cur) cur = t; else { lines.push(cur); cur = word; }
+            if (this.lineWidth(this.stripColor(t)) <= OW_TEXT.innerWidth || !cur) cur = t; else { lines.push(cur); cur = word; }
           }
           lines.push(cur);
         }
@@ -182,7 +199,7 @@ const OW_TEXT = {
     },
   
     // Draws one line of text. Returns the glyph images (so they can be revealed one by one).
-    drawLine(scene, x, y, line, depth) {
+    drawLine(scene, x, y, line, depth, cols) {
       const sc = OW_TEXT.scale, out = [];
       let cx = x;
       for (const t of OverworldText.tokens(line)) {
@@ -190,6 +207,7 @@ const OW_TEXT = {
         if (gl) {
           for (let k = 0; k < t.w; k++) {   // wide glyphs (w > 1) are drawn from w cells side by side
             const im = scene.add.image(cx + k * 8 * sc, y, this.fontKey, gl.r * 32 + gl.c + k).setOrigin(0, 0).setScale(sc).setDepth(depth).setScrollFactor(0);
+            const cc = cols && cols[t.i0]; if (cc) im.setTint(parseInt(cc.slice(1), 16));
             out.push(im);
           }
         }
@@ -240,7 +258,7 @@ const OW_TEXT = {
       const startPage = () => {
         clearGlyphs(); arrow.setVisible(false); waiting = false; revealed = 0;
         const pg = lay.pages[pageIdx];
-        pg.lines.forEach((ln, i) => { glyphs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc, ln, D + 1)); });
+        pg.lines.forEach((ln, i) => { glyphs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc, ln, D + 1, pg.cols && pg.cols[i])); });
         glyphs.forEach(g => g.setVisible(false));
         if (timer) timer.remove(false);
         timer = scene.time.addEvent({ delay: T.speed, loop: true, callback: () => reveal(fast ? 3 : 1) });
@@ -282,7 +300,7 @@ const OW_TEXT = {
           gfx.lineStyle(2, T.border, T.borderAlpha).strokeRoundedRect(bx + 1, by + 1, bw - 2, bh - 2, 8);
           const objs = [gfx];
           const tx = bx + T.textOffset.x * sc, ty = by + T.textOffset.y * sc;
-          pages[pages.length - 1].lines.forEach((ln, i) => objs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc, ln, D + 1)));
+          pages[pages.length - 1].lines.forEach((ln, i) => objs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc, ln, D + 1, pages[pages.length - 1].cols && pages[pages.length - 1].cols[i])));
           // choice box, right side, just above the message box
           const cw = 56 * sc, ch = 40 * sc, cx = bx + bw - cw, cy = by - ch - 4;
           const g2 = scene.add.graphics().setDepth(D + 2).setScrollFactor(0);
