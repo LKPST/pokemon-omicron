@@ -1413,6 +1413,15 @@ class OverworldScene extends Phaser.Scene {
     };
     if (OWS.has(this, sp)) make(); else OWS.ensure(this, [sp]).then(make);
   }
+  // the NPC-follower Pokémon standing on a tile (world tile coordinates). A follower with followPass on its NPC is ignored (walk-through).
+  followerAtTile(tx, ty, ignoreOwner) {
+    for (const f of (this.npcFollowers || [])) {
+      if (!f.scene || !f.visible || !f.owner || f.owner === ignoreOwner) continue;
+      const ec = f.owner.eventConfig; if (ec && ec.followPass) continue;
+      if (Math.round((f.x - 16) / 32) === tx && Math.round((f.y - 16) / 32) === ty) return f;
+    }
+    return null;
+  }
   updateNpcFollowers() {
     for (const f of this.npcFollowers) {
       const n = f.owner; if (!f.scene || !n) continue;
@@ -1551,6 +1560,7 @@ class OverworldScene extends Phaser.Scene {
           return false;
         }
       }
+      if (this.npcFollowers && this.npcFollowers.length && this.followerAtTile(worldTX, worldTY)) return false;   // [NPC POKÉMON] solid
     }
 
     return true;
@@ -1601,7 +1611,18 @@ class OverworldScene extends Phaser.Scene {
     else if (this.player.direction === 'right') targetX += 1;
 
     const targetNPC = (this.npcs || []).find(npc => this.npcOccupiesTile(npc, targetX, targetY));
-    if (!targetNPC) {   // [SIGNPOST] nobody there: a signpost on that tile?
+    if (!targetNPC) {   // [NPC POKÉMON] the Pokémon that follows an NPC: talk to it (followScript, or the built-in lock / cry / release)
+      const fol = this.followerAtTile(targetX, targetY);
+      if (fol && fol.owner && fol.owner.eventConfig) {
+        const ec = fol.owner.eventConfig, E = window.OverworldScriptEngine;
+        if (E) {
+          const dx = this.player.x - fol.x, dy = this.player.y - fol.y, dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+          fol.direction = dir; if (window.OWSprites) window.OWSprites.setFrame(fol, dir, 0, fol.owShiny);
+          this.activeNPC = fol.owner; this.activeFollower = fol;
+          E.runScript(this, ec.followScript || '__follower_default');
+          return;
+        }
+      }   // [SIGNPOST] nobody there: a signpost on that tile?
       const sp = (this.signposts || []).find(s => s.wx === targetX && s.wy === targetY && s.config.script);
       const E = window.OverworldScriptEngine;
       if (sp && E) { this.activeNPC = null; E.runScript(this, sp.config.script); }

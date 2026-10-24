@@ -460,7 +460,7 @@ window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.t
 
 // ---------- events: add / duplicate / delete ----------
 const SCHEMA={
-  NPC:[['owID','select','ow'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['followMon','select','mon'],['followShiny','bool'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
+  NPC:[['owID','select','ow'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['followMon','select','mon'],['followShiny','bool'],['followPass','bool'],['followScript','select','script'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
   Script:[['script','select','script'],['scriptVar','text'],['varValue','num']],'Script Tile':[['script','select','script'],['scriptVar','text'],['varValue','num']],
   Signpost:[['script','select','script']],Tile:[['tileID','num']],
   Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};

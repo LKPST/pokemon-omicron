@@ -201,6 +201,8 @@ window.OverworldScriptEngine = (() => {
       r.order.forEach(n => { if (!E.order.includes(n)) E.order.push(n); });
       r.errors.forEach(e => { E.errors.push(e); console.warn(`[script] line ${e.line}${e.script ? ' in "' + e.script + '"' : ''}: ${e.msg}`); });
     });
+    // built-in script for talking to an NPC's Pokémon (used when the NPC has no followScript): lock, cry, release
+    if (!E.scripts.__follower_default) { const r = E.parse('start: "__follower_default"\nlock\ncry follower yes\nrelease\nend\n'); Object.assign(E.scripts, r.scripts); }
   };
   E.getScript = function (name) {
     E.load();
@@ -297,6 +299,7 @@ window.OverworldScriptEngine = (() => {
       const s = String(spec == null || spec === '' ? 'npc' : spec);
       if (/^player$/i.test(s)) return scene.player;
       if (/^npc$/i.test(s)) return scene.activeNPC;
+      if (/^follower$/i.test(s)) return (scene.activeFollower) || (scene.activeNPC && scene.activeNPC.monFollower) || null;
       const list = scene.npcs || [];
       return list.find(n => n.eventKey === s && n.mapName === scene.currentMapKey) || list.find(n => n.eventKey === s)
         || list.find(n => n.eventConfig && n.eventConfig.owID === s) || null;
@@ -340,7 +343,7 @@ window.OverworldScriptEngine = (() => {
 
       facePlayer(next) {
         const n = scene.activeNPC;
-        if (!n || !scene.player) return next();
+        if (!n || !scene.player || scene.activeFollower) return next();   // talking to an NPC's Pokémon: it already turned to the player
         const dx = scene.player.x - n.x, dy = scene.player.y - n.y;
         const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
         OM().execute(n, `look_${dir}`, next);
@@ -404,7 +407,8 @@ window.OverworldScriptEngine = (() => {
         const db = window.PokemonDatabase || (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null), norm = x => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
         let s = String(spec == null || spec === '' ? 'npc' : spec).trim(), sp = null;
         const gs = window.GameStateManager && window.GameStateManager.saveData;
-        if (/^party$/i.test(s)) { const m = ((gs && gs.party) || []).find(x => x && x.species); sp = m && m.species; }
+        if (/^follower$/i.test(s) || (/^npc$/i.test(s) && scene.activeFollower)) { const f = resolve('follower'); sp = f && f.owSpecies; }   // the Pokémon that follows the NPC you talked to
+        else if (/^party$/i.test(s)) { const m = ((gs && gs.party) || []).find(x => x && x.species); sp = m && m.species; }
         else {
           const ent = (/^npc$/i.test(s) || !db || !(db[s] || db['SPECIES_' + norm(s)])) ? resolve(s) : null;
           if (ent) sp = ent.owSpecies || (ent.eventConfig && /^SPECIES_/.test(ent.eventConfig.owID || '') ? ent.eventConfig.owID : null) || (ent.eventConfig && ent.eventConfig.owID);
@@ -434,7 +438,7 @@ window.OverworldScriptEngine = (() => {
       // called when the script is over (also when it ends by itself without `release`)
       end() {
         if (scene.camMoved) { cam().startFollow(scene.player, true, 1, 1); scene.camMoved = false; }
-        scene.isLocked = false; scene.scriptRunning = false;
+        scene.isLocked = false; scene.scriptRunning = false; scene.activeFollower = null;
         scene.scriptEndedAt = scene.time ? scene.time.now : 0;
       },
     };
