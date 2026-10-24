@@ -319,6 +319,7 @@ end
 start: "bag_start"
 applymovement player
 {
+look_left
 emote_question
 }
 wait 400
@@ -345,11 +346,7 @@ jump_in_place
 flashscreen
 wait 600
 showobject NPC_2
-applymovement player yes
-{
-look_right
-}
-applymovement NPC_2 yes
+applymovement NPC_2
 {
 emote_exclaim
 run_down
@@ -366,7 +363,6 @@ run_left
 run_up
 look_left
 }
-waitmovement
 msgbox.normal
 {
 {red}Mom{/}: $player! I heard a loud bang\n
@@ -421,13 +417,21 @@ walk_right
 walk_right
 walk_right
 walk_right
+walk_right
+walk_right
+walk_up
+walk_up
+walk_up
+walk_up
+walk_up
+walk_left
 }
 hideobject NPC_2
 applymovement player
 {
-look_last_facing
+look_left
 delay_400
-walk_last_facing
+walk_in_place_left
 }
 flashscreen
 hideobject NPC_1
@@ -436,8 +440,31 @@ applymovement player
 {
 emote_exclaim
 delay_300
+look_down
 emote_question
 }
 setvar 8000 2
+end
+
+start: "mom_house"
+faceplayer
+msgbox.normal
+{
+{red}Mom{/}: Oh, $player! You're all set?\p
+Good luck on your journey, sweetie.\n
+I'm so proud of you.
+}
+msgbox.normal
+{
+And please, bring that {orange}bag{/} to\n
+Professor Beckett immediately!\p
+I won't sleep a wink until that\n
+thing is out of this house.
+}
+msgbox.normal
+{
+Now off you go, and call me when you\n
+get to Olenburg City, okay?
+}
 end
 `;
