@@ -1,17 +1,4 @@
 window.OverworldTable = {
-  'pixellab-brown-messenger-bag--clean-sha-1792799756543': {
-    spriteID: 'pixellab_brown_messenger_bag_clean_sha_1792799756543_ow',
-    frames: 12,
-    genderBased: false,
-    owType: 'NPC',
-    owDimension: '16x32',
-    trueDimension: '32x48',
-    isRunning: false,
-    isFishing: false,
-    isSurfing: false,
-    isCycling: false,
-    owSprite: 'graphics/overworld/pixellab-brown-messenger-bag--clean-sha-1792799756543.png'
-  },
   Trainer_1: {
     spriteID: 'trainer_1_ow',
     frames: 12,
