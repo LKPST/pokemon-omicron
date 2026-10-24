@@ -11,7 +11,8 @@ window.__ready=(async()=>{
   const CHECK=[()=>window.OverworldTable,()=>window.OverworldMaps,()=>window.OverworldTiles,null,()=>window.OverworldScriptCommands,()=>window.OverworldScriptEngine&&window.OverworldScriptEngine.parse,()=>window.OverworldScriptSource!==undefined,()=>window.OverworldText&&window.OverworldTextbox,()=>window.OverworldMovement];
   window.__loadReport=[];
   let mem={};try{mem=JSON.parse(localStorage.edPaths||'{}')}catch(e){}
-  const tryLoad=src=>new Promise(r=>{const s=document.createElement('script');s.src=src;s.onload=()=>r(true);s.onerror=()=>{s.remove();r(false)};document.head.appendChild(s)});
+  const ovr=(()=>{try{return JSON.parse(sessionStorage.pmOverrides||'{}')}catch(e){return{}}})();
+  const tryLoad=src=>new Promise(r=>{const s=document.createElement('script');const ok=Object.keys(ovr).find(k=>Date.now()-ovr[k].t<15*60*1000&&(src===k||src.endsWith('/'+k)&&!/^https?:/.test(src)));if(ok){s.textContent=ovr[ok].text;document.head.appendChild(s);s.remove();return r(true)}s.src=src;s.onload=()=>r(true);s.onerror=()=>{s.remove();r(false)};document.head.appendChild(s)});
   window.__missing=[];
   for(let fi=0;fi<FILES.length;fi++){const names=FILES[fi],chk=CHECK[fi];let ok=false;const cand=[];if(mem[names[0]])cand.push(mem[names[0]]);for(const d of [...foundDirs,...DIRS])for(const n of names)cand.push(d+n);
     for(const c of [...new Set(cand)]){if(await tryLoad(c)&&(!chk||chk())){mem[names[0]]=c;ok=true;const d=c.slice(0,c.lastIndexOf('/')+1);if(!foundDirs.includes(d))foundDirs.unshift(d);break}}
@@ -73,6 +74,12 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 /* ---- embedded overworld sprite editor ---- */
 #owed{position:fixed;inset:0;z-index:70;background:#101010;display:flex;flex-direction:column}#owed[hidden]{display:none}
 #owedHead{display:flex;gap:8px;align-items:center;padding:5px 10px;background:#1b1b1b;border-bottom:1px solid #333}#owedHead b{color:#00acc1}#owedFr{flex:1;border:0;width:100%;background:#10131b}
+/* ---- push code ---- */
+#pkm{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:90;display:flex;align-items:center;justify-content:center}#pkm[hidden]{display:none}
+#pkBox{background:#1b1b1b;border:1px solid #444;border-radius:8px;padding:12px;width:min(900px,96vw);max-height:94vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
+#pkText{width:100%;height:220px;background:#0e0e0e;color:#e6e6e6;border:1px solid #3a3a3a;border-radius:4px;padding:6px;font:12px monospace;resize:vertical;white-space:pre}
+.pkit{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:#151515;border:1px solid #2d2d2d;border-radius:5px;padding:5px 7px}
+#newEd{position:fixed;inset:0;z-index:100;background:#101010;display:flex;flex-direction:column}#newEd[hidden]{display:none}#newEdFr{flex:1;border:0;width:100%;background:#111}
 /* ---- github commit ---- */
 #ghm{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:80;display:flex;align-items:center;justify-content:center}#ghm[hidden]{display:none}
 #ghBox{background:#1b1b1b;border:1px solid #444;border-radius:8px;padding:14px;width:min(560px,94vw);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
@@ -95,7 +102,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 <div id="main">
   <div id="bar">
     <button id="undoB">↶ Undo</button><button id="redoB">↷ Redo</button>
-    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="owB" title="open the Overworld Sprite Editor (NPC / trainer sprites) here">🧍 OW Sprites</button><button id="ghBtn" title="commit the changed files straight to the repository">⬆ Commit to GitHub</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button>
+    <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="owB" title="open the Overworld Sprite Editor (NPC / trainer sprites) here">🧍 OW Sprites</button><button id="pushB" title="paste or upload new code and push it to GitHub">⚡ Push code</button><button id="ghBtn" title="commit the changed files straight to the repository">⬆ Commit to GitHub</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="gridT" checked> Grid</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="sprT" checked> Sprites</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="borT" checked> Border</label>
@@ -125,6 +132,23 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
   <input type="file" id="tdFI" accept="image/*" multiple hidden><input type="file" id="tdFR" accept="image/*" hidden><input type="file" id="tdFS" accept="image/*" multiple hidden><input type="file" id="tdFT" accept=".js,text/javascript" hidden>
 </div>
 <div id="owed" hidden><div id="owedHead"><b>🧍 Overworld Sprite Editor</b><span class="help" style="flex:1">Edit NPC / trainer sprites here. Save or commit inside it, then close: the map reloads the sprite table.</span><button id="owedClose">✕ Close</button></div><iframe id="owedFr" title="Overworld Sprite Editor"></iframe></div>
+<div id="pkm" hidden><div id="pkBox">
+  <b style="color:#00acc1;font-size:14px">⚡ Push code to GitHub</b>
+  <div class="help">Paste new code (or upload the file), press <b>Stage</b>, then <b>Push</b>. The syntax is checked first, everything goes in one commit, and an updated editor page opens right away, without waiting for GitHub Pages.</div>
+  <div class="frow"><label>Token<input type="password" id="pkTok" autocomplete="off" placeholder="github_pat_…"></label><label>Owner<input type="text" id="pkOwn"></label><label>Repository<input type="text" id="pkRepo"></label><label>Branch<input type="text" id="pkBr" placeholder="(default)"></label></div>
+  <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="pkRem"> remember the token in this browser</label>
+  <div class="row"><input type="text" id="pkPath" list="pkDl" placeholder="target file path in the repo, e.g. js/OverworldScene.js or map_editor.html" style="flex:1;min-width:240px"><datalist id="pkDl"></datalist><button id="pkLoad" title="read the current version of that file from GitHub into the box to edit it">Load current from GitHub</button><button id="pkTree" title="list the real files of the repository for the path box">List repo files</button></div>
+  <textarea id="pkText" spellcheck="false" placeholder="Paste the code here…"></textarea>
+  <div class="row"><button id="pkStage" class="on">Stage</button><button id="pkUp">Upload file(s)…</button><input type="file" id="pkFiles" multiple hidden accept=".js,.html,.htm,.json,.css,.md,.txt"><span class="help">Uploaded files find their repo path by name.</span></div>
+  <div class="help">Staged files:</div><div id="pkList" style="display:flex;flex-direction:column;gap:4px"></div>
+  <div id="pkPend"></div>
+  <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="pkHotOn" checked> open the updated editor right away after pushing (when I push this editor or the sprite editor)</label>
+  <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="pkForce"> push even with syntax errors</label>
+  <label>Commit message<input type="text" id="pkMsg" placeholder="(automatic if empty)"></label>
+  <div id="pkOut" class="help" style="min-height:16px"></div>
+  <div class="row"><button id="pkGo" class="on" style="flex:1">Push</button><button id="pkClose" style="flex:1">Close</button></div>
+</div></div>
+<div id="newEd" hidden><div id="owedHead"><b>⚡ Updated editor</b><span class="help" style="flex:1">This is the version you just pushed, running now. Your previous page (with its unsaved work) is still behind it.</span><button id="newEdBack">⟵ Back to the previous page</button><button id="newEdReload">↻ Reload this page (after GitHub Pages updates)</button></div><iframe id="newEdFr" title="updated editor"></iframe></div>
 <div id="ghm" hidden><div id="ghBox">
   <b style="color:#00acc1;font-size:14px">⬆ Commit to GitHub</b>
   <div class="help">Needs a fine-grained token limited to this repository with “Contents: Read and write” (<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" style="color:#00acc1">create one</a>). It stays only in this browser.</div>
@@ -1186,6 +1210,85 @@ function owReloadTable(){
   sc.onload=()=>{for(const e of Object.values(OT()))if(e&&e.owSprite)delete imgs[e.owSprite];owRefresh()};sc.onerror=()=>sc.remove();document.head.appendChild(sc)}
 $('owB').onclick=()=>{const f=$('owedFr');if(!f.getAttribute('src'))f.src='ow_sprite_editor.html';$('owed').hidden=false;document.body.style.overflow='hidden'};
 $('owedClose').onclick=()=>{$('owed').hidden=true;document.body.style.overflow='';owReloadTable()};
+// =====================================================================================================================
+//  PUSH CODE: paste code or upload files, check the syntax, push them to GitHub in ONE commit, and the editor updates at once.
+// =====================================================================================================================
+const PK={staged:[],tree:null,known:['map_editor.html','ow_sprite_editor.html','pokemon_editor.html','item_editor.html','hud_editor.html','index.html','js/OverworldScene.js','js/OverworldWild.js','js/Layout.js','js/overworld_script_engine.js','js/overworld_script_commands.js','js/overworld_scripts.js','js/overworld_textbox.js','js/Overworld_map.js','js/ow_table.js','js/movement_type.js','js/OverworldFollower.js','js/OverworldUI.js','js/OverworldSpriteLoader.js','js/StartMenu.js','js/SaveSystem.js','js/BagMenu.js','js/BattleScene.js','js/BattleEngine.js','js/GameStateManagerClass.js','js/config.js','tables/tiles.js','tables/PokemonDatabase.js','tables/MoveTables.js','tables/EvolutionTables.js','tables/LearnsetTables.js','tables/TrainerTables.js','tables/global.js']};
+const pkPaths=()=>PK.tree||PK.known;
+const pkBase=n=>String(n).split('/').pop().toLowerCase();
+function pkGuess(name){const b=pkBase(name),hit=pkPaths().filter(p=>pkBase(p)===b);return hit.length===1?hit[0]:(hit[0]||name)}
+// ---- syntax check (js: as a script; html: every inline <script>)
+function pkCheck(path,text){const errs=[];const chk=(code,label)=>{try{new Function(code)}catch(e){errs.push((label?label+': ':'')+e.message)}};
+  if(/\.js$/i.test(path)){if(/^\s*(import|export)\s/m.test(text))return errs;chk(text,'')}
+  else if(/\.html?$/i.test(path)){const re=/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/gi;let m,i=0;while((m=re.exec(text))){i++;if(/type\s*=\s*["']?(module|application\/json|text\/template)/i.test(m[1]))continue;chk(m[2],'script '+i)}}
+  else if(/\.json$/i.test(path)){try{JSON.parse(text)}catch(e){errs.push(e.message)}}
+  return errs}
+// ---- staging
+function pkStage(path,text,source){let it=PK.staged.find(x=>x.path===path);if(!it){it={path,text,source,on:true,cur:null,errs:[]};PK.staged.push(it)}else{it.text=text;it.source=source;it.on=true}
+  it.errs=pkCheck(path,text);pkDiff(it);pkList()}
+async function pkDiff(it){it.cur=undefined;if(!GH.cfg.token)return pkList();
+  try{const c=GH.cfg,r=await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/contents/${it.path.split('/').map(encodeURIComponent).join('/')}${c.branch?'?ref='+encodeURIComponent(c.branch):''}`,{headers:{Authorization:'Bearer '+c.token,Accept:'application/vnd.github.raw+json'}});
+    if(r.status===404){it.cur=null;it.isNew=true}else if(r.ok){it.cur=await r.text();it.isNew=false}}catch(e){}
+  pkList()}
+function pkLines(a,b){const m=new Map();for(const l of a.split('\n'))m.set(l,(m.get(l)||0)+1);let add=0;for(const l of b.split('\n')){const n=m.get(l);if(n){m.set(l,n-1)}else add++}let del=0;for(const v of m.values())del+=v;return{add,del}}
+function pkList(){const L=$('pkList');L.innerHTML='';if(!PK.staged.length){L.innerHTML='<div class="help">Nothing staged yet. Paste code above and press “Stage”, or upload files.</div>';pkBtn();return}
+  PK.staged.forEach((it,i)=>{const r=document.createElement('div');r.className='pkit';
+    let st='';if(it.cur===undefined)st=GH.cfg.token?'checking…':'enter the token to compare';else if(it.cur===null)st='<span style="color:#76ff03">new file</span>';else if(it.cur===it.text)st='<span style="color:#ffb74d">identical to GitHub, nothing to push</span>';else{const d=pkLines(it.cur,it.text);st=`<span style="color:#76ff03">+${d.add}</span> <span style="color:#ff8a80">−${d.del}</span> lines`}
+    r.innerHTML=`<label style="flex-direction:row;align-items:center;gap:6px;margin:0"><input type="checkbox" data-pk="${i}" ${it.on?'checked':''}></label><input type="text" data-pp="${i}" value="${tdE(it.path)}" list="pkDl" style="flex:1;min-width:140px"><span class="help">${(it.text.length/1024).toFixed(1)} KB · ${it.text.split('\n').length} lines · ${st}</span><button data-pe="${i}" title="edit in the box above">✎</button><button data-px="${i}" title="remove">✕</button>`+
+      (it.errs.length?`<div class="bad" style="flex-basis:100%">⚠ syntax: ${tdE(it.errs.join(' · '))}</div>`:'<span style="color:#76ff03">✓ syntax</span>');L.appendChild(r)});
+  pkBtn()}
+function pkBtn(){const n=PK.staged.filter(x=>x.on).length;$('pkGo').textContent=n?`Push ${n} file(s) to GitHub`:'Push'}
+$('pkList').addEventListener('change',e=>{const t=e.target;if(t.dataset.pk!==undefined){PK.staged[+t.dataset.pk].on=t.checked;pkBtn()}else if(t.dataset.pp!==undefined){const it=PK.staged[+t.dataset.pp];it.path=t.value.trim().replace(/^\/+/,'');it.errs=pkCheck(it.path,it.text);pkDiff(it)}});
+$('pkList').addEventListener('click',e=>{const t=e.target;if(t.dataset.px!==undefined){PK.staged.splice(+t.dataset.px,1);pkList()}else if(t.dataset.pe!==undefined){const it=PK.staged[+t.dataset.pe];$('pkPath').value=it.path;$('pkText').value=it.text}});
+// ---- inputs
+$('pkStage').onclick=()=>{const p=$('pkPath').value.trim().replace(/^\/+/,''),t=$('pkText').value;if(!p)return $('pkOut').textContent='Type the target file path first (for example js/OverworldScene.js).';if(!t.trim())return $('pkOut').textContent='The box is empty.';
+  $('pkOut').textContent='';pkStage(p,t,'paste');$('pkText').value='';$('pkPath').value=''};
+$('pkUp').onclick=()=>$('pkFiles').click();
+$('pkFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';for(const f of fs){if(!/\.(js|html?|json|css|md|txt)$/i.test(f.name)){$('pkOut').textContent='Skipped '+f.name+' (only text files; use the tile / sprite editors for images).';continue}pkStage(pkGuess(f.name),await f.text(),'upload')}};
+$('pkLoad').onclick=async()=>{const p=$('pkPath').value.trim().replace(/^\/+/,'');if(!p)return $('pkOut').textContent='Type the file path first.';if(!GH.cfg.token)return $('pkOut').textContent='Enter the token first (to read the file from GitHub).';
+  try{$('pkOut').textContent='Loading…';const c=GH.cfg,r=await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/contents/${p.split('/').map(encodeURIComponent).join('/')}${c.branch?'?ref='+encodeURIComponent(c.branch):''}`,{headers:{Authorization:'Bearer '+c.token,Accept:'application/vnd.github.raw+json'}});
+    if(!r.ok)throw new Error(r.status===404?'file not found on GitHub':r.statusText);$('pkText').value=await r.text();$('pkOut').textContent='Loaded the current version. Edit it in the box, then Stage.'}catch(e){$('pkOut').textContent='Could not load: '+e.message}};
+$('pkTree').onclick=async()=>{if(!GH.cfg.token)return $('pkOut').textContent='Enter the token first.';
+  try{$('pkOut').textContent='Reading the repository…';const c=GH.cfg,info=await ghApi(''),br=c.branch||info.default_branch,t=await ghApi('/git/trees/'+encodeURIComponent(br)+'?recursive=1');
+    PK.tree=t.tree.filter(x=>x.type==='blob'&&/\.(js|html?|json|css|md)$/i.test(x.path)&&!/^node_modules\//.test(x.path)).map(x=>x.path);$('pkDl').innerHTML=PK.tree.map(p=>`<option value="${tdE(p)}">`).join('');$('pkOut').textContent=PK.tree.length+' files found in the repository; the path box now suggests them.'}catch(e){$('pkOut').textContent='Could not read the repository: '+e.message}};
+// ---- open / close
+function pkOpen(){const c=GH.cfg;$('pkTok').value=c.token||'';$('pkOwn').value=c.owner;$('pkRepo').value=c.repo;$('pkBr').value=c.branch||'';$('pkRem').checked=c.remember!==false;$('pkDl').innerHTML=pkPaths().map(p=>`<option value="${tdE(p)}">`).join('');$('pkOut').textContent='';
+  const pend=ghItems().filter(x=>x.on&&!x.key.startsWith('img:'));$('pkPend').innerHTML=pend.length?`<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="pkPendOn" checked> also commit my unsaved editor data (${pend.map(x=>tdE(x.name)).join(', ')}) so the updated editor shows it</label>`:'';
+  $('pkm').hidden=false;pkList()}
+const pkCfg=()=>{const c=GH.cfg;c.token=$('pkTok').value.trim();c.owner=$('pkOwn').value.trim();c.repo=$('pkRepo').value.trim();c.branch=$('pkBr').value.trim();c.remember=$('pkRem').checked;ghStore()};
+$('pushB').onclick=pkOpen;$('pkClose').onclick=()=>{$('pkm').hidden=true};$('pkTok').onchange=()=>{pkCfg();PK.staged.forEach(pkDiff)};
+// ---- hot update: pushed editor pages are opened straight from the pushed text (no waiting for GitHub Pages)
+const PKO='pmOverrides';
+function pkSetOverrides(files){try{const o=JSON.parse(sessionStorage[PKO]||'{}');const now=Date.now();for(const k in o)if(now-o[k].t>15*60*1000)delete o[k];for(const f of files)o[f.path]={t:now,text:f.text};sessionStorage[PKO]=JSON.stringify(o)}catch(e){}}
+function pkHot(files){const me=(location.pathname.split('/').pop()||'index.html').toLowerCase();let did=[];
+  for(const f of files){const b=pkBase(f.path);
+    if(b==='ow_sprite_editor.html'&&$('owedFr')&&$('owedFr').getAttribute('src')){$('owedFr').srcdoc=f.text;did.push('Overworld Sprite Editor reloaded')}
+    else if(b===me&&/\.html?$/i.test(f.path)){$('newEdFr').srcdoc=f.text;$('newEd').hidden=false;document.body.style.overflow='hidden';did.push('this editor updated')}}
+  return did}
+$('newEdBack').onclick=()=>{$('newEd').hidden=true;document.body.style.overflow='';$('newEdFr').removeAttribute('srcdoc')};$('newEdReload').onclick=()=>location.reload();
+// ---- push
+$('pkGo').onclick=async()=>{pkCfg();const c=GH.cfg,o=$('pkOut'),say=t=>{o.textContent=t};
+  let picked=PK.staged.filter(x=>x.on&&x.path);if(!c.token||!c.owner||!c.repo)return say('Fill in the token, owner and repository.');if(!picked.length)return say('Tick at least one staged file.');
+  const bad=picked.filter(x=>x.errs.length);if(bad.length&&!$('pkForce').checked)return say('Syntax problem in '+bad.map(x=>x.path).join(', ')+'. Fix it, or tick “push even with syntax errors”.');
+  const extra=[];if($('pkPendOn')&&$('pkPendOn').checked){for(const x of ghItems().filter(x=>x.on&&!x.key.startsWith('img:'))){const f=await x.get();extra.push({path:x.path,text:f.text,done:x.done})}}
+  const same=picked.filter(x=>x.cur===x.text);if(same.length===picked.length&&!extra.length)return say('Everything staged is already on GitHub.');
+  const all=[...picked.filter(x=>x.cur!==x.text).map(x=>({path:x.path,text:x.text})),...extra.filter(e=>!picked.some(p=>p.path===e.path))];
+  const msg=($('pkMsg').value.trim())||('Update '+all.map(x=>x.path.split('/').pop()).slice(0,3).join(', ')+(all.length>3?' …':'')+' (pushed from the editor)');
+  $('pkGo').disabled=true;
+  try{say('Checking the repository…');const info=await ghApi(''),br=c.branch||info.default_branch;
+    const ref=await ghApi('/git/ref/heads/'+encodeURIComponent(br)),parent=ref.object.sha,pc=await ghApi('/git/commits/'+parent),tree=[];let n=0;
+    for(const x of all){say(`Uploading ${++n}/${all.length}: ${x.path}`);const b=await ghApi('/git/blobs','POST',{content:x.text,encoding:'utf-8'});tree.push({path:x.path,mode:'100644',type:'blob',sha:b.sha})}
+    say('Building the commit…');const nt=await ghApi('/git/trees','POST',{base_tree:pc.tree.sha,tree});
+    if(nt.sha===pc.tree.sha){say('Nothing changed: GitHub already has these exact files.');$('pkGo').disabled=false;return}
+    const cm=await ghApi('/git/commits','POST',{message:msg,tree:nt.sha,parents:[parent]});await ghApi('/git/refs/heads/'+encodeURIComponent(br),'PATCH',{sha:cm.sha});
+    extra.forEach(e=>e.done&&e.done());pkSetOverrides(all);
+    PK.staged=PK.staged.filter(x=>!all.some(a=>a.path===x.path));pkList();
+    let did=[];if($('pkHotOn').checked)did=pkHot(all);
+    say(`✓ Committed ${all.length} file(s) to ${br}: ${cm.sha.slice(0,7)}. ${did.length?did.join(' · ')+'. ':''}GitHub Pages serves the new files in a minute or two (reload then).`);
+    if(did.length&&!$('newEd').hidden)$('pkm').hidden=true;
+  }catch(e){say('Could not push: '+e.message)}
+  $('pkGo').disabled=false};
+
 seInit();load();buildPalette();setLayer(1);changed();setTab('env');
 });
 </script></body></html>
