@@ -601,9 +601,9 @@ end
 
 start: "8000_2"
 lock
-hideobject NPC_1
-hideobject NPC_2
-hideobject NPC_3
+hideobject Trainer_1
+hideobject Trainer_2
+hideobject Trainer_3
 applymovement NPC_4 yes
 {
 look_up
@@ -622,9 +622,9 @@ starting to think you got eaten by\n
 a Slakoth.
 }
 getpos 4000 4001
-goto_if_eq 4001 11 row_11
-goto_if_eq 4001 12 row_12
-goto_if_eq 4001 13 row_13
+goto_if_eq 4000 11 row_11
+goto_if_eq 4000 12 row_12
+goto_if_eq 4000 13 row_13
 goto after_row
 label row_11
 applymovement player
@@ -681,6 +681,10 @@ msgbox.normal
 You caught one Rockruff last month\n
 and haven't stopped talking about\p
 it since!
+}
+applymovement NPC_4
+{
+look_up
 }
 msgbox.normal
 {
@@ -971,17 +975,17 @@ on, the city is right there.
 }
 applymovement NPC_5 yes
 {
-walk_down*6
+walk_down*9
 emote_exclaim
 }
 applymovement NPC_4 yes
 {
-walk_down*6
+walk_down*9
 emote_exclaim
 }
 applymovement player yes
 {
-walk_down*6
+walk_down*9
 }
 waitmovement
 applymovement NPC_4 yes
