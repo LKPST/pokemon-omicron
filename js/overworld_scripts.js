@@ -189,6 +189,23 @@ Look at you, you're all pale and\n
 sweaty, sweetie.\p
 Was it another bad dream?
 }
+shakecamera
+applymovement NPC_2 yes
+{
+emote_exclaim
+look_right
+}
+applymovement PLAYER yes
+{
+emote_exclaim
+}
+waitmovement
+wait 500
+applymovement NPC_2 yes
+{
+look_left
+}
+waitmovement
 msgbox.normal
 {
 ...Hm? Did you hear that?\p
@@ -200,8 +217,7 @@ knocking things over{/}.
 }
 applymovement NPC_2
 {
-look_up
-look_left
+walk_in_place_left
 }
 msgbox.normal
 {
@@ -221,12 +237,17 @@ emote_exclaim
 applymovement player
 {
 emote_exclaim
+look_left
 }
 waitmovement
 msgbox.normal
 {
 Wait... did that {orange}bag{/} just MOVE?!\p
 $player, did you see that?!
+}
+applymovement player
+{
+look_right
 }
 msgbox.normal
 {
@@ -254,6 +275,8 @@ I'm {pink}so proud{/} of you.
 }
 applymovement NPC_2
 {
+walk_down
+walk_right
 walk_right
 walk_right
 walk_right
@@ -265,6 +288,7 @@ walk_up
 walk_up
 walk_up
 walk_up
+walk_in_place_left
 }
 hideobject NPC_2
 applymovement player
@@ -272,5 +296,6 @@ applymovement player
 emote_question
 look_left
 }
+setvar 8000 1
 end
 `;
