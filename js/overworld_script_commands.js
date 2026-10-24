@@ -101,6 +101,9 @@ window.OverworldScriptCommands = (() => {
   def('warp', 'Screen', 'Move the player to another map',
     [A('map', 'map'), A('x', 'num'), A('y', 'num'), A('facing', 'select', 1, 'down', '', DIRS), A('type', 'select', 1, 'Normal', '', ['Normal', 'Teleport', 'Hole'])],
     (a, ctx, next) => ctx.host.warp(a.map, +a.x || 0, +a.y || 0, a.facing || 'down', a.type || 'Normal', next));
+  def('cry', 'Pokémon', 'Play the cry of a Pokémon: SPECIES_PIKACHU or Pikachu, party (the first Pokémon of the party), npc (the Pokémon NPC you talked to) or a Pokémon NPC by event name (NPC_Pika)',
+    [A('species', 'text', 1, 'npc', 'SPECIES_PIKACHU, Pikachu, party, npc or an event name'), A('wait', 'bool', 1, true, 'wait until the cry has finished (write wait=no to go on at once)')],
+    (a, ctx, next) => { const w = a.wait === undefined || a.wait === '' ? true : !!a.wait; if (ctx.host.cry) ctx.host.cry(a.species, w, next); else next(); });
   def('playse', 'Screen', 'Play a sound that is already loaded (its key)', [A('sound', 'text')], (a, ctx, next) => { ctx.host.sound(a.sound); next(); });
 
   // ------------------------------------------------------------------ pokemon

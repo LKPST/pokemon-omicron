@@ -399,6 +399,26 @@ window.OverworldScriptEngine = (() => {
         const poll = () => { if (scene.warping) scene.time.delayedCall(80, poll); else scene.time.delayedCall(60, next); };
         poll();
       },
+      // cry: species = SPECIES_PIKACHU / Pikachu / party (first Pokémon of the party) / npc (the Pokémon NPC you talked to) / an event name (a Pokémon NPC)
+      cry(spec, wait, next) {
+        const db = window.PokemonDatabase || (typeof PokemonDatabase !== 'undefined' ? PokemonDatabase : null), norm = x => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let s = String(spec == null || spec === '' ? 'npc' : spec).trim(), sp = null;
+        const gs = window.GameStateManager && window.GameStateManager.saveData;
+        if (/^party$/i.test(s)) { const m = ((gs && gs.party) || []).find(x => x && x.species); sp = m && m.species; }
+        else {
+          const ent = (/^npc$/i.test(s) || !db || !(db[s] || db['SPECIES_' + norm(s)])) ? resolve(s) : null;
+          if (ent) sp = ent.owSpecies || (ent.eventConfig && /^SPECIES_/.test(ent.eventConfig.owID || '') ? ent.eventConfig.owID : null) || (ent.eventConfig && ent.eventConfig.owID);
+          else sp = s;
+        }
+        let e = db && sp && (db[sp] || db['SPECIES_' + norm(sp)]);
+        if (!e && db && sp) { const k = Object.keys(db).find(x => norm(x) === norm(sp) || norm(x) === 'SPECIES' + norm(sp) || norm((db[x] || {}).name) === norm(sp)); e = k && db[k]; }
+        if (!e || !e.cry) { console.warn('[script] cry: no cry for "' + spec + '" (' + sp + ')'); return next(); }
+        let a = null; try { a = window.PMAudio ? window.PMAudio.play(e.cry, 1) : (() => { const x = new Audio(e.cry); x.play().catch(() => { }); return x; })(); } catch (er) { /* no audio */ }
+        if (!wait) return next();
+        let fin = false; const go = () => { if (fin) return; fin = true; next(); };
+        if (a && a.addEventListener) a.addEventListener('ended', go, { once: true });
+        scene.time.delayedCall(a && isFinite(a.duration) && a.duration > 0 ? Math.min(4000, a.duration * 1000 + 150) : 1200, go);   // fallback timer
+      },
       sound(key) { if (scene.cache.audio.exists(key)) scene.sound.play(key); else console.warn(`[script] playse: sound "${key}" is not loaded`); },
 
       setHidden(spec, hide) {

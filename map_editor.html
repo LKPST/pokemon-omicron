@@ -887,6 +887,7 @@ function pvHost(){const run=PV.run,guard=f=>(...a)=>{if(run===PV.run)f(...a)};
   return{lock(on){pvLog(on?'· lock':'· release','dim')},wait(ms,next){pvTween(ms,null,guard(next))},note(t){PV.toasts.push({t,life:2200});pvLog('· '+t,'dim')},
     say(text,yesno,cb){const L=OverworldText.layout(text,{player:'Player',npc:PV.ents[PV.actor]?.id||'Npc'});pvLog((yesno?'? ':'💬 ')+text.replace(/\\[nlp]/g,' ').slice(0,70),'');
       PV.msg={pages:L.pages,page:0,shown:0,t:0,yesno,cb:guard(cb),waiting:false,sel:0,L}},
+    cry(spec,wait,next){const t=String(spec||'npc');pvLog('🔊 cry: '+t,'dim');PV.toasts.push({t:'🔊 cry '+t,life:1200});if(wait)pvTween(800,null,guard(next));else next()},
     getPos(spec){const e=pvEnt(spec);if(!e)return null;const o=layout()[PV.map]||{x:0,y:0};return{x:Math.round((e.x-16)/TS-o.x),y:Math.round((e.y-16)/TS-o.y)}},
     facePlayer(next){const n=PV.ents[PV.actor];if(n)pvStepTok(n,'look_player',()=>{});next()},
     move(spec,moves,async,next){const e=pvEnt(spec);if(!e){pvLog('applymovement: nobody called "'+spec+'"','bad');return next()}
