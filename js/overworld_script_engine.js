@@ -276,7 +276,10 @@ window.OverworldScriptEngine = (() => {
 
   E.makeHost = function (scene) {
     const OM = () => window.OverworldMovement;
-    const pending = { n: 0, waiters: [] };
+    const pending = { n: 0, waiters: [], ends: [] };
+    // how long a movement string lasts (ms), so the camera can be timed to the async movements that are running
+    const tokMs = t => { let m; if ((m = /^delay_(\d+)$/.exec(t))) return +m[1]; if (/^run_/.test(t)) return 120; if (/^(walk|walk_in_place)_/.test(t)) return 240; if (/^jump_/.test(t)) return 300; if (/^spin_/.test(t)) return 560; if (/^emote_/.test(t)) return 800; return 0; };
+    const syncMs = fb => { const now = scene.time.now, rem = Math.max(0, ...pending.ends.map(t => t - now)); return rem > 60 ? rem : fb; };
     const flush = () => { if (pending.n === 0) pending.waiters.splice(0).forEach(f => f()); };
     const cam = () => scene.cameras.main;
 
@@ -336,20 +339,22 @@ window.OverworldScriptEngine = (() => {
           const step = () => { if (i >= toks.length) { e.home = null; done(); return; } runToken(e, toks[i++], step); };
           step();
         };
-        if (async) { pending.n++; go(() => { pending.n--; flush(); }); next(); } else go(next);
+        if (async) { const end = scene.time.now + toks.reduce((s, t) => s + tokMs(t), 0); pending.ends.push(end); pending.n++; go(() => { pending.n--; const i = pending.ends.indexOf(end); if (i >= 0) pending.ends.splice(i, 1); flush(); }); next(); } else go(next);
       },
       waitMove(next) { if (pending.n === 0) next(); else pending.waiters.push(next); },
 
-      moveCamera(dx, dy, ms, next) {
+      moveCamera(dx, dy, ms, next, sync) {
+        if (sync) ms = syncMs(ms);
         const c = cam(); c.stopFollow(); scene.camMoved = true;
         const m = c.midPoint, tx = m.x + dx * 32, ty = m.y + dy * 32;
         if (ms <= 0) { c.centerOn(tx, ty); return next(); }
-        c.pan(tx, ty, ms, 'Sine.easeInOut', true, (cc, p) => { if (p === 1) next(); });
+        c.pan(tx, ty, ms, sync ? 'Linear' : 'Sine.easeInOut', true, (cc, p) => { if (p === 1) next(); });
       },
-      resetCamera(ms, next) {
+      resetCamera(ms, next, sync) {
+        if (sync) ms = syncMs(ms);
         const c = cam(), p = scene.player, done = () => { c.startFollow(p, true, 1, 1); scene.camMoved = false; next(); };
         if (ms <= 0) { c.centerOn(p.x, p.y); return done(); }
-        c.pan(p.x, p.y, ms, 'Sine.easeInOut', true, (cc, pr) => { if (pr === 1) done(); });
+        c.pan(p.x, p.y, ms, sync ? 'Linear' : 'Sine.easeInOut', true, (cc, pr) => { if (pr === 1) done(); });
       },
 
       fade(mode, ms, color, next) {

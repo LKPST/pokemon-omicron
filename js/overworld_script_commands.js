@@ -68,10 +68,10 @@ window.OverworldScriptCommands = (() => {
     (a, ctx, next) => ctx.host.move(a.target, a.moves, !!a.async, next), 'moves');
   def('waitmovement', 'Movement', 'Wait until every async movement is finished', [], (a, ctx, next) => ctx.host.waitMove(next));
   def('movecamera', 'Movement', 'Slide the camera by some tiles (dx right, dy down)',
-    [A('dx', 'num', 0, 0, 'tiles right (negative = left)'), A('dy', 'num', 0, 0, 'tiles down (negative = up)'), A('ms', 'num', 1, 800, 'duration')],
-    (a, ctx, next) => ctx.host.moveCamera(+a.dx || 0, +a.dy || 0, a.ms == null || a.ms === '' ? 800 : +a.ms, next));
+    [A('dx', 'num', 0, 0, 'tiles right (negative = left)'), A('dy', 'num', 0, 0, 'tiles down (negative = up)'), A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running: the camera arrives when they finish')],
+    (a, ctx, next) => ctx.host.moveCamera(+a.dx || 0, +a.dy || 0, a.ms == null || a.ms === '' ? 800 : +a.ms, next, !!a.sync));
   def('resetcamera', 'Movement', 'Slide the camera back to the player',
-    [A('ms', 'num', 1, 800, 'duration')], (a, ctx, next) => ctx.host.resetCamera(a.ms == null || a.ms === '' ? 800 : +a.ms, next));
+    [A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running: the camera arrives when they finish')], (a, ctx, next) => ctx.host.resetCamera(a.ms == null || a.ms === '' ? 800 : +a.ms, next, !!a.sync));
   def('hideobject', 'Movement', 'Hide an NPC / event for good (until showobject)', [A('target', 'target', 0, 'npc')], (a, ctx, next) => { ctx.host.setHidden(a.target, true); next(); });
   def('showobject', 'Movement', 'Show a hidden NPC / event again', [A('target', 'target')], (a, ctx, next) => { ctx.host.setHidden(a.target, false); next(); });
 
