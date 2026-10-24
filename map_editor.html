@@ -532,6 +532,12 @@ function buildLvl(){const U=$('lvl');if(!U)return;U.innerHTML='';const m=repo[ac
     mk('↑','move up',()=>{if(i)commit(()=>{[L[i-1],L[i]]=[L[i],L[i-1]]})});mk('↓','move down',()=>{if(i<L.length-1)commit(()=>{[L[i+1],L[i]]=[L[i],L[i+1]]})});mk('✕','remove',()=>commit(()=>{L.splice(i,1);if(!L.length)delete m.levelScripts}));
     c.appendChild(top);
     {const si=inp('text',(l.script||''),v=>l.script=v.trim());si.setAttribute('list','dlLvlScr');si.placeholder='type a script name or pick one';rowTo(c,'script',si)}
+    {const t=(l.script||'').trim(),has=t&&(SE?!!SE.scripts[t]:(()=>{try{return scriptNames().includes(t)}catch(e){return false}})());
+     const b=document.createElement('button');b.className='on';b.textContent=has?'✎ Edit this script':(t?'+ Create script “'+t+'”':'+ Create a new script');
+     b.onclick=()=>{if(!EN()||!window.OverworldScriptCommands){seOpenEditor();return}
+       if(has){seOpenEditor(t);return}
+       const tpl=l.type==='beforeLoad'?[{cmd:'setflag',args:{flag:'FLAG_EXAMPLE'}},{cmd:'end',args:{}}]:[{cmd:'lock',args:{}},{cmd:'msgbox.normal',args:{text:'Welcome!'}},{cmd:'release',args:{}},{cmd:'end',args:{}}];
+       const nm=seNew(t||null,tpl);if(nm){commit(()=>{l.script=nm});seOpenEditor(nm)}};c.appendChild(b)}
     if(l.type==='flag'){const f=inp('text',l.flagID||'',v=>l.flagID=v.trim());f.setAttribute('list','dlFlag');rowTo(c,'flagID (must be ON)',f)}
     U.appendChild(c)});
   const add=document.createElement('button');add.className='on';add.textContent='+ Add level script';add.onclick=()=>commit(()=>{(m.levelScripts||=[]).push({type:'mapEnter',script:''})});U.appendChild(add);
@@ -771,8 +777,8 @@ function seCodeApply(){const E=EN(),r=E.parse($('seCode').value.replace(/^\s*sta
 
 // ---------- toolbar actions ----------
 function ensureSE(){if(!SE)seLoad()}
-function seNew(){ensureSE();let n=prompt('Name of the new script:','new_script');if(!n)return;n=n.trim().replace(/"/g,'');if(!n||SE.scripts[n]){alert('That name is empty or already used.');return}
-  SE.scripts[n]={name:n,steps:[{cmd:'lock',args:{}},{cmd:'faceplayer',args:{}},{cmd:'msgbox.normal',args:{text:'Hello, $player!'}},{cmd:'release',args:{}},{cmd:'end',args:{}}]};SE.order.push(n);seTouch();sCur=n;seBuildList();seRender();pvSetup(true);return n}
+function seNew(pre,steps){ensureSE();let n=pre||prompt('Name of the new script:','new_script');if(!n)return;n=n.trim().replace(/"/g,'');if(!n||SE.scripts[n]){alert('That name is empty or already used.');return}
+  SE.scripts[n]={name:n,steps:steps||[{cmd:'lock',args:{}},{cmd:'faceplayer',args:{}},{cmd:'msgbox.normal',args:{text:'Hello, $player!'}},{cmd:'release',args:{}},{cmd:'end',args:{}}]};SE.order.push(n);seTouch();sCur=n;seBuildList();seRender();pvSetup(true);return n}
 function seDup(){const S=SE.scripts[sCur];if(!S)return;let n=sCur+'_copy',i=1;while(SE.scripts[n])n=sCur+'_copy'+(++i);SE.scripts[n]={name:n,steps:clone(S.steps)};SE.order.splice(SE.order.indexOf(sCur)+1,0,n);sCur=n;seTouch();seBuildList();seRender()}
 function seRename(){const S=SE.scripts[sCur];if(!S)return;let n=prompt('New name:',sCur);if(!n)return;n=n.trim().replace(/"/g,'');if(!n||n===sCur)return;if(SE.scripts[n]){alert('That name is already used.');return}
   const old=sCur;S.name=n;SE.scripts={...Object.fromEntries(SE.order.map(k=>[k===old?n:k,SE.scripts[k]]))};SE.order=SE.order.map(k=>k===old?n:k);
