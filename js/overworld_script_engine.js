@@ -353,9 +353,22 @@ window.OverworldScriptEngine = (() => {
       },
 
       fade(mode, ms, color, next) {
+        if (color === 'last') color = scene._fadeCol || 'black';   // fadedefault: come back from the colour we faded to
+        scene._fadeCol = color;
         const c = cam(), v = color === 'white' ? 255 : 0;
         if (mode === 'in') c.fadeIn(ms, v, v, v); else c.fadeOut(ms, v, v, v);
         scene.time.delayedCall(ms + 30, next);
+      },
+      flash(ms, color, next) {
+        const rgb = { white: [255, 255, 255], black: [0, 0, 0], red: [255, 60, 60], yellow: [255, 235, 80] }[color] || [255, 255, 255];
+        cam().flash(ms, rgb[0], rgb[1], rgb[2]); scene.time.delayedCall(ms + 20, next);
+      },
+      // screen look: CSS filter on the game canvas (works with the WebGL and the Canvas renderer); reset when the scene goes away
+      filter(mode, ms) {
+        const cv = scene.game && scene.game.canvas; if (!cv) return;
+        const css = { sepia: 'sepia(1)', grayscale: 'grayscale(1)', inverted: 'invert(1)' }[mode] || '';
+        cv.style.transition = ms > 0 ? `filter ${ms}ms linear` : 'none'; cv.style.filter = css;
+        if (!scene._fxHook) { scene._fxHook = true; scene.events.once('shutdown', () => { const c2 = scene.game && scene.game.canvas; if (c2) { c2.style.filter = ''; c2.style.transition = ''; } scene._fxHook = false; }); }
       },
       shake(ms, power, next) { cam().shake(ms, power); scene.time.delayedCall(ms + 20, next); },
       weather(name) { if (scene.weather) scene.weather.set(name, false, scene.currentMapKey); },
