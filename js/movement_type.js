@@ -72,7 +72,7 @@ window.OverworldMovement = (() => {
   }
 
   // Actions: look_<dir> walk_<dir> run_<dir> jump_<dir> walk_in_place_<dir> look_random look_player
-  //          spin_cw spin_ccw jump_in_place wait
+  //          spin_cw spin_ccw jump_in_place wait emote_exclaim emote_question emote_heart emote_sweat
   // opts.force = true: scripted movement, walks through anything (no collision, no wander radius)
   function execute(e, action, onComplete, opts) {
     const s = e.scene; if (!s) return;
@@ -85,6 +85,21 @@ window.OverworldMovement = (() => {
       else if (k === 'run') step(e, d, onComplete, 120, false, force);
       else if (k === 'jump') step(e, d, onComplete, 300, true, force);
       else inPlace(e, d, onComplete, 3, force);
+      return;
+    }
+    // emote bubble above the head: emote_exclaim (!) emote_question (?) emote_heart emote_sweat. Waits until the bubble is gone.
+    const em = /^emote_(exclaim|question|heart|sweat)$/.exec(action);
+    if (em) {
+      const SYM = { exclaim: ['!', '#e53935'], question: ['?', '#1e88e5'], heart: ['♥', '#e91e63'], sweat: ['💧', '#039be5'] }[em[1]];
+      const top = e.y - (e.displayHeight || 48) * (e.originY != null ? e.originY : 0.85) - 14;
+      const g = s.add.graphics().setPosition(e.x, top).setDepth(6000);
+      g.fillStyle(0xffffff, 1).lineStyle(2, 0x222222, 1).fillRoundedRect(-12, -14, 24, 24, 7).strokeRoundedRect(-12, -14, 24, 24, 7);
+      g.fillTriangle(-4, 9, 4, 9, 0, 16);
+      const t = s.add.text(e.x, top - 2, SYM[0], { fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: SYM[1] }).setOrigin(0.5).setDepth(6001);
+      const parts = [g, t]; g.setScale(0); t.setScale(0);
+      s.tweens.add({ targets: parts, scale: 1, duration: 140, ease: 'Back.easeOut' });
+      let follow = s.time.addEvent({ delay: 16, loop: true, callback: () => { if (!e.scene || !g.scene) return; const ty = e.y - (e.displayHeight || 48) * (e.originY != null ? e.originY : 0.85) - 14; g.setPosition(e.x, ty); t.setPosition(e.x, ty - 2); } });
+      s.time.delayedCall(800, () => { follow.remove(false); parts.forEach(o => o.destroy()); onComplete && onComplete(); });
       return;
     }
     if (action === 'look_random') return execute(e, 'look_' + pick(Object.keys(DIRS)), onComplete, opts);

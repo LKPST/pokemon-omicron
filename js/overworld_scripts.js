@@ -141,4 +141,12 @@ end
 start: "start_script"
 hideobject NPC_2
 end
+
+start: "mom_arrives_in_room"
+showobject NPC_2
+applymovement NPC_2
+{
+walk_in_place_right
+}
+end
 `;
