@@ -630,8 +630,8 @@ const MOVE_TYPES=['MOVEMENT_TYPE_LOOK_AROUND','MOVEMENT_TYPE_FACE_PLAYER','MOVEM
   'MOVEMENT_TYPE_JUMP_IN_PLACE','MOVEMENT_TYPE_WALK_IN_PLACE_UP','MOVEMENT_TYPE_WALK_IN_PLACE_DOWN','MOVEMENT_TYPE_WALK_IN_PLACE_LEFT','MOVEMENT_TYPE_WALK_IN_PLACE_RIGHT',
   'MOVEMENT_TYPE_SPIN_CLOCKWISE','MOVEMENT_TYPE_SPIN_COUNTER_CLOCKWISE','MOVEMENT_TYPE_PATROL_LEFT_RIGHT','MOVEMENT_TYPE_PATROL_UP_DOWN','MOVEMENT_TYPE_INVISIBLE'];
 const MOVE_TOKENS=['walk_up','walk_down','walk_left','walk_right','run_up','run_down','run_left','run_right','jump_up','jump_down','jump_left','jump_right',
-  'look_up','look_down','look_left','look_right','look_player','look_random','walk_in_place_up','walk_in_place_down','walk_in_place_left','walk_in_place_right','spin_cw','spin_ccw','jump_in_place','emote_exclaim','emote_question','emote_heart','emote_sweat','delay_500'];
-const TOKEN_OK=t=>/^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.test(t)||/^(look_random|look_player|spin_cw|spin_ccw|jump_in_place|wait|emote_(exclaim|question|heart|sweat))$/.test(t)||/^delay_\d+$/.test(t);
+  'look_up','look_down','look_left','look_right','look_player','look_last_facing','walk_last_facing','run_last_facing','jump_last_facing','look_same_as_player','look_random','walk_in_place_up','walk_in_place_down','walk_in_place_left','walk_in_place_right','spin_cw','spin_ccw','jump_in_place','emote_exclaim','emote_question','emote_heart','emote_sweat','delay_500'];
+const TOKEN_OK=t=>/^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.test(t)||/^(look|walk|run|jump|walk_in_place)_(last_facing|same_as_player)$/.test(t)||/^(look_random|look_player|spin_cw|spin_ccw|jump_in_place|wait|emote_(exclaim|question|heart|sweat))$/.test(t)||/^delay_\d+$/.test(t);
 let SE=null,sDirty=false,sFile=null,sCur='',sView='steps',sSelStep=-1;
 const SHEAD=`// ===========================================================================
 // overworld_scripts.js  -  YOUR SCRIPTS  (xSE style)
@@ -821,17 +821,18 @@ function pvSetup(keepPos){const maps=Object.keys(repo);
 function pvReset(){PV.run++;PV.tl=[];PV.msg=null;PV.fade=0;PV.shake=0;PV.flash=0;{const c=$('pvCv');if(c)c.style.filter=''}PV.toasts=[];PV.running=false;PV.camMoved=false;PV.pend=0;PV.waiters=[];PV.ends=[];PV.clock=0;PV.hidden={};
   const L=layout(),off=L[PV.map]||{x:0,y:0},m=repo[PV.map];PV.ents={};
   for(const[k,e]of Object.entries(m?.events||{})){if(e.eventType!=='NPC')continue;const b=isBuilding(e);PV.ents[k]={key:k,ev:e,x:(off.x+e.xPos)*TS+16,y:(off.y+e.yPos)*TS+(b?32:16),dir:'down',building:b,vis:true,id:e.owID}}
-  PV.player={key:'player',x:(off.x+PV.px)*TS+16,y:(off.y+PV.py)*TS+16,dir:PV.pdir,vis:true,id:'Brendan'};
+  PV.player={key:'player',x:(off.x+PV.px)*TS+16,y:(off.y+PV.py)*TS+16,dir:PV.pdir,vis:true,id:'Brendan'};PV.startDir=PV.pdir;
   PV.cam={x:PV.player.x,y:PV.player.y};PV.vw=480;PV.vh=+$('pvScr').value||320;const c=$('pvCv');if(c.width!==PV.vw||c.height!==PV.vh){c.width=PV.vw;c.height=PV.vh}
   PV.flags={};($('pvFlags').value||'').split(/[\s,]+/).filter(Boolean).forEach(f=>PV.flags[f]=true);PV.vars={};$('pvLog').innerHTML=''}
 function pvLog(t,cls){const d=el('div',cls||'',t);$('pvLog').appendChild(d);$('pvLog').scrollTop=1e6}
 const pvTokMs=t=>{let m;if((m=/^delay_(\d+)$/.exec(t)))return +m[1];if(/^run_/.test(t))return 120;if(/^(walk|walk_in_place)_/.test(t))return 240;if(/^jump_/.test(t))return 300;if(/^spin_/.test(t))return 560;if(/^emote_/.test(t))return 800;return 0};
-const pvSpan=toks=>{let t=0,s=null,e=null;for(const k of toks){const d=pvTokMs(k);if(/^(walk|run|jump)_(up|down|left|right)$/.test(k)){if(s===null)s=t;e=t+d}t+=d}return s===null?null:{s,e}};
+const pvSpan=toks=>{let t=0,s=null,e=null;for(const k of toks){const d=pvTokMs(k);if(/^(walk|run|jump)_(up|down|left|right|last_facing|same_as_player)$/.test(k)){if(s===null)s=t;e=t+d}t+=d}return s===null?null:{s,e}};
 const pvSyncPlan=fb=>{const now=PV.clock||0,L=PV.ends||[];if(!L.length)return{wait:0,ms:fb};const s=Math.min(...L.map(x=>x.s)),e=Math.max(...L.map(x=>x.e)),from=Math.max(now,s);return e-from>60?{wait:Math.max(0,s-now),ms:e-from}:{wait:0,ms:fb}};
 function pvTween(ms,fn,done){PV.tl.push({t:0,d:Math.max(1,ms),fn,done,run:PV.run})}
 function pvEnt(spec){const s=String(spec==null||spec===''?'npc':spec);if(/^player$/i.test(s))return PV.player;if(/^npc$/i.test(s))return PV.ents[PV.actor]||null;return PV.ents[s]||Object.values(PV.ents).find(e=>e.id===s)||null}
 const DV={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]},DORD=['down','left','up','right'];
-function pvStepTok(e,tok,done){let m=/^delay_(\d+)$/.exec(tok);if(m)return pvTween(+m[1],null,done);
+function pvStepTok(e,tok,done){{const lf=/^(look|walk|run|jump|walk_in_place)_(last_facing|same_as_player)$/.exec(tok);if(lf)tok=lf[1]+'_'+(lf[2]==='last_facing'?(PV.startDir||'down'):PV.player.dir)}
+  let m=/^delay_(\d+)$/.exec(tok);if(m)return pvTween(+m[1],null,done);
   m=/^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.exec(tok);
   if(m){const[,k,d]=m;e.dir=d;if(k==='look')return done();
     if(k==='walk_in_place')return pvTween(240,null,done);
@@ -847,6 +848,7 @@ function pvHost(){const run=PV.run,guard=f=>(...a)=>{if(run===PV.run)f(...a)};
   return{lock(on){pvLog(on?'· lock':'· release','dim')},wait(ms,next){pvTween(ms,null,guard(next))},note(t){PV.toasts.push({t,life:2200});pvLog('· '+t,'dim')},
     say(text,yesno,cb){const L=OverworldText.layout(text,{player:'Player',npc:PV.ents[PV.actor]?.id||'Npc'});pvLog((yesno?'? ':'💬 ')+text.replace(/\\[nlp]/g,' ').slice(0,70),'');
       PV.msg={pages:L.pages,page:0,shown:0,t:0,yesno,cb:guard(cb),waiting:false,sel:0,L}},
+    getPos(spec){const e=pvEnt(spec);if(!e)return null;const o=layout()[PV.map]||{x:0,y:0};return{x:Math.round((e.x-16)/TS-o.x),y:Math.round((e.y-16)/TS-o.y)}},
     facePlayer(next){const n=PV.ents[PV.actor];if(n)pvStepTok(n,'look_player',()=>{});next()},
     move(spec,moves,async,next){const e=pvEnt(spec);if(!e){pvLog('applymovement: nobody called "'+spec+'"','bad');return next()}
       const toks=EN().expandMoves(moves);pvLog('→ '+spec+': '+toks.join(' '),'');const go=done=>{let i=0;const st=()=>{if(run!==PV.run)return;if(i>=toks.length)return done();pvStepTok(e,toks[i++],st)};st()};

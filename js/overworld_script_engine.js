@@ -276,11 +276,12 @@ window.OverworldScriptEngine = (() => {
 
   E.makeHost = function (scene) {
     const OM = () => window.OverworldMovement;
+    const startFacing = (scene.player && scene.player.direction) || 'down';   // the way the player faced when this script started (look_last_facing)
     const pending = { n: 0, waiters: [], ends: [] };
     // how long a movement string lasts (ms), so the camera can be timed to the async movements that are running
     const tokMs = t => { let m; if ((m = /^delay_(\d+)$/.exec(t))) return +m[1]; if (/^run_/.test(t)) return 120; if (/^(walk|walk_in_place)_/.test(t)) return 240; if (/^jump_/.test(t)) return 300; if (/^spin_/.test(t)) return 560; if (/^emote_/.test(t)) return 800; return 0; };
     // the camera follows only the actual walking: from the first walk/run/jump step to the end of the last one (looks, emotes and delays at the edges don't count)
-    const span = toks => { let t = 0, s = null, e = null; for (const k of toks) { const d = tokMs(k); if (/^(walk|run|jump)_(up|down|left|right)$/.test(k)) { if (s === null) s = t; e = t + d; } t += d; } return s === null ? null : { s, e }; };
+    const span = toks => { let t = 0, s = null, e = null; for (const k of toks) { const d = tokMs(k); if (/^(walk|run|jump)_(up|down|left|right|last_facing|same_as_player)$/.test(k)) { if (s === null) s = t; e = t + d; } t += d; } return s === null ? null : { s, e }; };
     const syncPlan = fb => { const now = scene.time.now, L = pending.ends; if (!L.length) return { wait: 0, ms: fb }; const s = Math.min(...L.map(x => x.s)), e = Math.max(...L.map(x => x.e)), from = Math.max(now, s); return e - from > 60 ? { wait: Math.max(0, s - now), ms: e - from } : { wait: 0, ms: fb }; };
     // synced camera glide: own linear tween (no Phaser pan effect), always finishes, tracks a moving target
     function camTween(x0, y0, target, ms, done, ease) {
@@ -306,6 +307,7 @@ window.OverworldScriptEngine = (() => {
       scene.playerGridY = Math.round((p.y - 16) / 32 - off.y / 32);
     }
     function runToken(e, tok, done) {
+      { const m = /^(look|walk|run|jump|walk_in_place)_(last_facing|same_as_player)$/.exec(tok); if (m) tok = m[1] + '_' + (m[2] === 'last_facing' ? startFacing : ((scene.player && scene.player.direction) || startFacing)); }   // walk_last_facing, run_same_as_player ...
       const d = /^delay_(\d+)$/.exec(tok);
       if (d) { scene.time.delayedCall(+d[1], done); return; }
       // failsafe: a step that never reports back (blocked, unknown token, old movement_type.js) must not freeze the script forever
@@ -325,6 +327,7 @@ window.OverworldScriptEngine = (() => {
 
     return {
       lock(on) { scene.isLocked = !!on; },
+      getPos(spec) { const e = resolve(spec); if (!e) return null; const off = scene.getMapWorldOffset(scene.currentMapKey); return { x: Math.round((e.x - 16) / 32 - off.x / 32), y: Math.round((e.y - 16) / 32 - off.y / 32) }; },
       wait(ms, next) { scene.time.delayedCall(Math.max(0, ms), next); },
       note(t) { console.log('[script]', t); },
 

@@ -1539,19 +1539,25 @@ class OverworldScene extends Phaser.Scene {
     const off = this.getMapWorldOffset(this.currentMapKey);
     const wx = Math.round(off.x / 32) + this.playerGridX;
     const wy = Math.round(off.y / 32) + this.playerGridY;
-    const t = this.triggers.find(tr => tr.wx === wx && tr.wy === wy);
-    if (!t) return;
+    const here = this.triggers.filter(tr => tr.wx === wx && tr.wy === wy);
+    if (!here.length) return;
     if (this.scriptRunning) return;
 
-    if (t.type === 'Warp') {
-      this.runWarp(t.config);
-    } else if (t.type === 'Script' && t.config.script && window.OverworldScriptEngine) {
-      // [SCRIPTS] Script Tile: only runs while the variable `scriptVar` equals `varValue`
-      const sv = t.config.scriptVar;
-      if (sv && window.OverworldScriptEngine.getVar(sv) !== (Number(t.config.varValue) || 0)) return;
+    // A Script tile on the same spot as a Warp goes FIRST and the warp is ignored. A script tile whose Var/Value
+    // condition is not met does not count, so the warp still works then.
+    const E = window.OverworldScriptEngine;
+    const live = here.find(tr => {
+      if (tr.type !== 'Script' || !tr.config.script || !E) return false;
+      const sv = tr.config.scriptVar;
+      return !(sv && E.getVar(sv) !== (Number(tr.config.varValue) || 0));
+    });
+    if (live) {
       this.activeNPC = null;
-      window.OverworldScriptEngine.runScript(this, t.config.script);
+      E.runScript(this, live.config.script);
+      return;
     }
+    const w = here.find(tr => tr.type === 'Warp');
+    if (w) this.runWarp(w.config);
   }
 
   // ===========================================================================

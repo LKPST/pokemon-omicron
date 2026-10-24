@@ -52,6 +52,9 @@ window.OverworldScriptCommands = (() => {
   // ------------------------------------------------------------------ flags / variables
   def('setflag', 'Flags', 'Set a flag (for example FLAG_GOT_STARTER)', [A('flag', 'flag')], (a, ctx, next) => { ctx.setFlag(a.flag, true); next(); });
   def('clearflag', 'Flags', 'Clear a flag', [A('flag', 'flag')], (a, ctx, next) => { ctx.setFlag(a.flag, false); next(); });
+  def('getpos', 'Flags', 'Save the tile position (x, y) of the player or an NPC into two variables. Then use goto_if_eq / goto_if_gt ...',
+    [A('x', 'var', 0, '8001', 'variable that gets the X tile'), A('y', 'var', 0, '8002', 'variable that gets the Y tile'), A('target', 'target', 1, 'player', 'player (default), npc or an event name')],
+    (a, ctx, next) => { const p = ctx.host.getPos(a.target || 'player'); if (p) { ctx.setVar(a.x, p.x); ctx.setVar(a.y, p.y); } else console.warn('[script] getpos: nobody called "' + a.target + '"'); next(); });
   def('setvar', 'Flags', 'Set a variable to a number', [A('var', 'var'), A('value', 'num', 0, 0)], (a, ctx, next) => { ctx.setVar(a.var, +a.value || 0); next(); });
   def('addvar', 'Flags', 'Add a number to a variable', [A('var', 'var'), A('amount', 'num', 0, 1)], (a, ctx, next) => { ctx.setVar(a.var, ctx.getVar(a.var) + (+a.amount || 0)); next(); });
 
