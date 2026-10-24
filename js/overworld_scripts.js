@@ -463,4 +463,124 @@ Now off you go, and call me when you\n
 get to Olenburg City, okay?
 }
 end
+
+start: "town_science_fan"
+faceplayer
+msgbox.normal
+{
+Oh! Do you like my hair?\p
+I use a special Pokémon-friendly\n
+shampoo. Even my {pink}Pokémon{/} glows!
+}
+msgbox.normal
+{
+Beauty isn't about winning. It's\n
+about feeling good, sweetie.\p
+Do your best out there, and\n
+remember to smile on your journey!
+}
+end
+
+start: "town_beauty"
+faceplayer
+msgbox.normal
+{
+{pink}Lady{/}: Oh! Do you like my hair?\p
+I use a special Pokémon-friendly\n
+shampoo. Even my {pink}Pokémon{/} glows!
+}
+msgbox.normal
+{
+Beauty isn't about winning.\n
+It's about feeling good, sweetie.\p
+Do your best out there, and\n
+remember to smile on your journey!
+}
+end
+
+start: "town_lass"
+faceplayer
+msgbox.normal
+{
+Did you hear about{pink}Hazel{/}?\p
+She gets her first Pokémon from the\n
+gym leader in {yellow}Olenburg City{/}!\p
+zSo jealous!
+}
+msgbox.normal
+{
+And {cyan}Wilhelm{/} is escorting her there.\p
+The two of them are always\n
+together. Hehe, don't you think so?
+}
+end
+
+start: "town_youngster"
+faceplayer
+msgbox.normal
+{
+I'm going to be the strongest\n
+trainer in the world!\p
+Just you wait and see!
+}
+msgbox.normal
+{
+...As soon as Mom lets me past\n
+{green}Route 1{/}.\p
+She says it's too dangerous without\n
+a Pokémon. Ugh, so unfair!
+}
+end
+
+start: "town_old_man"
+faceplayer
+msgbox.normal
+{
+Ahh, {yellow}Criscanto Town{/}... Seventy\n
+years here, so few changes.\p
+The cold winds, the quiet mornings,\n
+the smell of fresh bread...\p
+Not a bad place to call home.
+}
+msgbox.normal
+{
+Take my advice, young one.\p
+Explore the world, but never forget\n
+where you came from.
+}
+end
+
+start: "town_old_couple_man"
+faceplayer
+msgbox.normal
+{
+My wife makes the best berry tea in\n
+all of {yellow}Criscanto{/}.\p
+Forty years of marriage, and I\n
+still can't get enough of it!
+}
+msgbox.normal
+{
+Don't tell her I said that. She'll\n
+get a big head about it.
+}
+end
+
+start: "town_old_couple_woman"
+faceplayer
+msgbox.normal
+{
+Oh, hello dear! Did that old fool\n
+tell you about my tea?\p
+He says it every day. Every.\n
+Single. Day.
+}
+msgbox.normal
+{
+Here's a secret: the true recipe is\n
+a pinch of love.\p
+And one extra spoon of honey,\n
+because he likes it sweet.
+}
+end
 `;
