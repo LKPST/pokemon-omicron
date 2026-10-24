@@ -427,6 +427,30 @@ window.OverworldMaps = {
         "xPos": 13,
         "yPos": 24,
         "flagID": "FLAG_LILY_DEFEATED"
+      },
+      "Script_1": {
+        "eventType": "Script",
+        "xPos": 11,
+        "yPos": 0,
+        "script": "",
+        "scriptVar": "8000",
+        "varValue": 2
+      },
+      "Script_1_copy": {
+        "eventType": "Script",
+        "xPos": 12,
+        "yPos": 0,
+        "script": "",
+        "scriptVar": "8000",
+        "varValue": 2
+      },
+      "Script_1_copy_copy": {
+        "eventType": "Script",
+        "xPos": 13,
+        "yPos": 0,
+        "script": "",
+        "scriptVar": "8000",
+        "varValue": 2
       }
     },
     "wildData": {
