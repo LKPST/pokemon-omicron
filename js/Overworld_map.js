@@ -467,7 +467,7 @@ window.OverworldMaps = {
         "eventType": "Script",
         "xPos": 12,
         "yPos": 0,
-        "script": "",
+        "script": "8000_2",
         "scriptVar": "8000",
         "varValue": 2
       },
@@ -475,7 +475,7 @@ window.OverworldMaps = {
         "eventType": "Script",
         "xPos": 13,
         "yPos": 0,
-        "script": "",
+        "script": "8000_2",
         "scriptVar": "8000",
         "varValue": 2
       }
