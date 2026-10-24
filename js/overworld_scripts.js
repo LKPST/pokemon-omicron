@@ -601,12 +601,12 @@ end
 
 start: "8000_2"
 lock
-applymovement npc_4 yes
+applymovement NPC_4 yes
 {
 look_up
 emote_exclaim
 }
-applymovement npc_5 yes
+applymovement NPC_5 yes
 {
 emote_exclaim
 }
@@ -614,14 +614,14 @@ waitmovement
 msgbox.normal
 {
 {blue}Wilhelm{/}: Looks like someone finally\n
-decided to wake up!\p
-We were starting to think you got\n
-eaten by a Slakoth.
+decided to wake up! We were\p
+starting to think you got eaten by\n
+a Slakoth.
 }
 getpos 4000 4001
-call_if_eq arg1=4000 arg2=11 arg3=on_row_11
-call_if_eq arg1=4000 arg2=12 arg3=on_row_12
-call_if_eq arg1=4000 arg2=13 arg3=on_row_13
+call_if_eq arg1=4001 arg2=11 arg3=on_row_11
+call_if_eq arg1=4001 arg2=12 arg3=on_row_12
+call_if_eq arg1=4001 arg2=13 arg3=on_row_13
 applymovement NPC_4
 {
 look_down
@@ -629,25 +629,25 @@ look_down
 msgbox.normal
 {
 Since you're joining us on Route 1,\n
-pay close attention.\p
-I've had my Pokémon for months, so\n
-I know these roads inside and out.
+pay close attention. I've had my\p
+Pokémon for months, so I know these\n
+roads inside and out.
 }
 msgbox.normal
 {
 First rule of wild Pokémon: tall\n
-grass is their playground.\p
-If you step in without a team,\n
-you're just asking for trouble!
+grass is their playground. If you\p
+step in without a team, you're just\n
+asking for trouble!
 }
-applymovement NPC_Wilhelm
+applymovement NPC_5
 {
 emote_question
 }
 msgbox.normal
 {
-Isn't that right, {red}Hazel{/}?\n
-Experience speaks for itself.
+Isn't that right, {red}Hazel{/}? Experience\n
+speaks for itself.
 }
 msgbox.normal
 {
@@ -667,12 +667,12 @@ applymovement NPC_5 yes
 {
 emote_exclaim
 }
+waitmovement
 msgbox.normal
 {
 {blue}Wilhelm{/}: See? I told you! Now,\n
 let's keep moving.
 }
-waitmovement
 applymovement NPC_5 yes
 {
 walk_down*4
@@ -685,9 +685,15 @@ applymovement player yes
 {
 walk_down*4
 }
+waitmovement
+applymovement NPC_5
+{
+emote_exclaim
+}
 msgbox.normal
 {
-{big} WAIT!
+{blue}Wilhelm{/}: {big}WAIT!{/
+}
 }
 applymovement NPC_5
 {
@@ -695,8 +701,8 @@ look_up
 }
 msgbox.normal
 {
-{blue}Wilhelm{/}: Hold up a second!\n
-Look over there in the grass.
+{blue}Wilhelm{/}: Hold up a second! Look\n
+over there in the grass.
 }
 applymovement NPC_5
 {
@@ -705,7 +711,10 @@ look_down
 movecamera 0 6
 msgbox.normal
 {
-{blue}Wilhelm{/}: See those wild Pokémon roaming around out in the open? You can actually spot them before they even spot you.
+{blue}Wilhelm{/}: See those wild Pokémon\n
+roaming around out in the open? You\p
+can actually spot them before they\n
+even spot you.
 }
 resetcamera
 applymovement NPC_5
@@ -714,11 +723,15 @@ look_up
 }
 msgbox.normal
 {
-{blue}Wilhelm{/}: Honestly, I'm surprised a Professor's Aide like you didn't know that already.
+{blue}Wilhelm{/}: Honestly, I'm surprised a\n
+Professor's Aide like you didn't\p
+know that already.
 }
 msgbox.normal
 {
-{blue}Wilhelm{/}: Then again, fetching bags and running errands doesn't really take much battle brain, does it?
+Then again, fetching bags and\n
+running errands doesn't really take\p
+much battle brain, does it?
 }
 applymovement NPC_4
 {
@@ -726,7 +739,9 @@ walk_in_place_down
 }
 msgbox.normal
 {
-{red}Hazel{/}: Wilhelm! Don't be so rude! Being an Aide is a huge responsibility!
+{red}Hazel{/}: Wilhelm! Don't be so rude!\n
+Being an Aide is a huge\p
+responsibility!
 }
 applymovement NPC_4
 {
@@ -734,11 +749,15 @@ look_up
 }
 msgbox.normal
 {
-{red}Hazel{/}: Though... observing how wild Pokémon move before approaching them is pretty solid advice.
+Though... observing how wild\n
+Pokémon move before approaching\p
+them is pretty solid advice.
 }
 msgbox.normal
 {
-{red}Hazel{/}: Just ignore his big mouth. He's just flexing because he has a Poké Ball on his belt.
+Just ignore his big mouth. He's\n
+just flexing because he has a Poké\p
+Ball on his belt.
 }
 applymovement NPC_4
 {
@@ -746,17 +765,90 @@ look_down
 }
 msgbox.normal
 {
-{red}Hazel{/}: If I had a choice, I'd skip all these local Pokémon and start my journey with a Mew!
+If I had a choice, I'd skip all\n
+these local Pokémon and start my\p
+journey with a Mew!
 }
 msgbox.normal
 {
-{red}Hazel{/}: Cute, powerful, and mysterious... Mew is literally the ultimate Pokémon!
+Cute, powerful, and mysterious...\n
+Mew is literally the ultimate\p
+Pokémon!
 }
 msgbox.normal
 {
-{blue}Wilhelm{/}: Dream on, Hazel! Mew is a Mythical Pokémon. You can't just find one hanging out in Route 1 grass!
+{blue}Wilhelm{/}: Dream on, Hazel! Mew is a\n
+Mythical Pokémon. You can't just\p
+find one hanging out in Route 1\n
+grass!
 }
-start: arg1=on_row_11 arg2=applymovement arg3=player arg4="{" arg5=walk_down arg6=walk_right arg7=look_down arg8=) arg9=return arg10=start: arg11=on_row_12 arg12=applymovement arg13=player arg14="{" arg15=walk_down arg16=) arg17=return arg18=start: arg19=on_row_13 arg20=applymovement arg21=player arg22="{" arg23=walk_down arg24=walk_left arg25=look_down arg26=) arg27=return
+applymovement NPC_5 yes
+{
+walk_down*5
+emote_exclaim
 }
+applymovement NPC_4 yes
+{
+walk_down*5
+emote_exclaim
+}
+applymovement player yes
+{
+walk_down*5
+}
+waitmovement
+applymovement NPC_5
+{
+look_up
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: Okay, one more tip before\n
+we get to the city. Pay attention\p
+to the Trainers standing around out\n
+here.
+}
+msgbox.normal
+{
+The second you walk into\n
+their line of sight, they'll spot\p
+you and rush right over. Once\n
+they've seen you, there's no\p
+running away!
+}
+msgbox.normal
+{
+So if you don't feel like\n
+battling, stay out of their sight.\p
+And if you do, make sure your team\n
+is ready first.
+}
+applymovement NPC_4
+{
+look_up
+}
+msgbox.normal
+{
+{red}Hazel{/}: Ugh, I hate to say it, but\n
+he's right again. Trainers on the\p
+road never take no for an answer.
+}
+msgbox.normal
+{
+{red}Hazel{/}: Not that it matters for you\n
+yet, since you don't have a\p
+Pokémon. But it's good to know\n
+before you get one!
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: Hear that? Even Hazel\n
+agrees with me. Mark the date!
+}
+msgbox.normal
+{
+{red}Hazel{/}: Don't push it, Wilhelm.
+}
+release
 end
 `;

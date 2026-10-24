@@ -65,7 +65,7 @@ const OW_TEXT = {
 
   // text colors (bright, so they read on the dark box). Use {red}text{/} in a message, or {#rrggbb}.
   const OW_COLORS = { red: '#ff5a5a', orange: '#ffa24d', yellow: '#ffe14d', green: '#6fe07a', cyan: '#5ee6e6', blue: '#6ab4ff', purple: '#c59bff', pink: '#ff8fd0', gray: '#bdbdbd', grey: '#bdbdbd', brown: '#d2a06b', white: '#ffffff' };
-  const OW_COLOR_RE = /\{(\/|#[0-9a-fA-F]{6}|red|orange|yellow|green|cyan|blue|purple|pink|gray|grey|brown|white)\}/gi;
+  const OW_COLOR_RE = /\{(\/|#[0-9a-fA-F]{6}|red|orange|yellow|green|cyan|blue|purple|pink|gray|grey|brown|white|big)\}/gi;   // {big} = the whole message in 200% text (one line per page, fills the box); it is not a color
 
   const OverworldText = {
     get glyphs() { return owGlyphs(); },
@@ -73,13 +73,13 @@ const OW_TEXT = {
     stripColor(s) { return String(s == null ? '' : s).replace(OW_COLOR_RE, ''); },
     // 'text {red}hi{/}' -> { text:'text hi', cols:[null,null,...,'#ff5a5a','#ff5a5a'] } (one entry per character)
     parseColors(raw) {
-      raw = String(raw == null ? '' : raw); let text = '', cols = [], cur = null, last = 0, m; OW_COLOR_RE.lastIndex = 0;
+      raw = String(raw == null ? '' : raw); let text = '', cols = [], cur = null, last = 0, m, big = false; OW_COLOR_RE.lastIndex = 0;
       while ((m = OW_COLOR_RE.exec(raw))) {
         const seg = raw.slice(last, m.index); text += seg; for (let k = 0; k < seg.length; k++) cols.push(cur);
-        const t = m[1].toLowerCase(); cur = t === '/' ? null : (t[0] === '#' ? t : OW_COLORS[t]); last = m.index + m[0].length;
+        const t = m[1].toLowerCase(); if (t === 'big') big = true; else cur = t === '/' ? null : (t[0] === '#' ? t : OW_COLORS[t]); last = m.index + m[0].length;
       }
       const seg = raw.slice(last); text += seg; for (let k = 0; k < seg.length; k++) cols.push(cur);
-      return { text, cols };
+      return { text, cols, big };
     },
 
     // Splits a line into drawable tokens. A single / is a slash; /name/ (closed by another /) is a special glyph (/m/ /f/ /up/ ...).
@@ -108,13 +108,14 @@ const OW_TEXT = {
     // Splits text into pages and lines. Returns { pages:[{lines:[...]}], warnings:[{page,line,type,msg}] }
     layout(text, vars) {
       const pc = this.parseColors(this.expand(text, vars)), raw = pc.text;
-      const pages = [{ lines: [''], cols: [[]] }];
+      const big = !!pc.big, bg = big ? 2 : 1, maxLines = big ? 1 : OW_TEXT.maxLines;   // {big}: glyphs twice as large, so half the width and one line per page
+      const pages = [{ lines: [''], cols: [[]], big }];
       let i = 0;
       while (i < raw.length) {
         const two = raw.substr(i, 2);
         const page = pages[pages.length - 1];
         if (two === '\\n' || two === '\\l') { page.lines.push(''); page.cols.push([]); i += 2; continue; }
-        if (two === '\\p') { pages.push({ lines: [''], cols: [[]] }); i += 2; continue; }
+        if (two === '\\p') { pages.push({ lines: [''], cols: [[]], big }); i += 2; continue; }
         if (raw[i] === '\n') { page.lines.push(''); page.cols.push([]); i++; continue; }
         page.lines[page.lines.length - 1] += raw[i]; page.cols[page.cols.length - 1].push(pc.cols[i]); i++;
       }
@@ -122,23 +123,26 @@ const OW_TEXT = {
       const warnings = [];
       pages.forEach((pg, p) => {
         pg.lines.forEach((ln, l) => {
-          const w = this.lineWidth(ln);
+          const w = this.lineWidth(ln) * bg;
           if (w > OW_TEXT.innerWidth) {
-            warnings.push({ page: p, line: l, type: 'width', msg: `Page ${p + 1}, line ${l + 1} is too long (${w}/${OW_TEXT.innerWidth} px). It runs out of the box: add \\n.` });
+            warnings.push({ page: p, line: l, type: 'width', msg: `Page ${p + 1}, line ${l + 1} is too long (${w}/${OW_TEXT.innerWidth} px${big ? ', {big} text' : ''}). It runs out of the box: add \\n.` });
           }
           const bad = this.tokens(ln).filter(t => t.ch !== ' ' && !t.gl).map(t => t.ch);
           if (bad.length) warnings.push({ page: p, line: l, type: 'glyph', msg: `Page ${p + 1}, line ${l + 1}: the font has no "${[...new Set(bad)].join('')}".` });
         });
-        if (pg.lines.length > OW_TEXT.maxLines) {
-          warnings.push({ page: p, line: OW_TEXT.maxLines, type: 'lines', msg: `Page ${p + 1} has ${pg.lines.length} lines (max ${OW_TEXT.maxLines}). Use \\p to start a new page.` });
+        if (pg.lines.length > maxLines) {
+          warnings.push({ page: p, line: maxLines, type: 'lines', msg: `Page ${p + 1} has ${pg.lines.length} lines (max ${maxLines}${big ? ' with {big}' : ''}). Use \\p to start a new page.` });
         }
       });
-      return { pages, warnings };
+      return { pages, warnings, big };
     },
   
     // Re-flows text: breaks lines at spaces so that they fit, 2 lines per page, \p between pages.
     // Existing \n and \p are kept as hard breaks.
     autoWrap(text) {
+      const bigRe = /\{big\}/gi, big = bigRe.test(String(text));   // {big}: half the width, one line per page; the tag stays at the start
+      if (big) text = String(text).replace(bigRe, '');
+      const lim = big ? OW_TEXT.innerWidth / 2 : OW_TEXT.innerWidth, per = big ? 1 : OW_TEXT.maxLines;
       const paras = String(text).replace(/\r?\n/g, ' ').split('\\p');
       const outParas = paras.map(par => {
         const hard = par.split(/\\n|\\l/);
@@ -147,16 +151,16 @@ const OW_TEXT = {
           let cur = '';
           for (const word of h.split(/\s+/).filter(Boolean)) {
             const t = cur ? cur + ' ' + word : word;
-            if (this.lineWidth(this.stripColor(t)) <= OW_TEXT.innerWidth || !cur) cur = t; else { lines.push(cur); cur = word; }
+            if (this.lineWidth(this.stripColor(t)) <= lim || !cur) cur = t; else { lines.push(cur); cur = word; }
           }
           lines.push(cur);
         }
         // 2 lines per page
         const pages = [];
-        for (let i = 0; i < lines.length; i += OW_TEXT.maxLines) pages.push(lines.slice(i, i + OW_TEXT.maxLines).join('\\n'));
+        for (let i = 0; i < lines.length; i += per) pages.push(lines.slice(i, i + per).join('\\n'));
         return pages.join('\\p');
       });
-      return outParas.join('\\p');
+      return (big ? '{big}' : '') + outParas.join('\\p');
     },
   };
   
@@ -199,8 +203,8 @@ const OW_TEXT = {
     },
   
     // Draws one line of text. Returns the glyph images (so they can be revealed one by one).
-    drawLine(scene, x, y, line, depth, cols) {
-      const sc = OW_TEXT.scale, out = [];
+    drawLine(scene, x, y, line, depth, cols, mul) {
+      const sc = OW_TEXT.scale * (mul || 1), out = [];
       let cx = x;
       for (const t of OverworldText.tokens(line)) {
         const gl = t.gl;
@@ -258,7 +262,7 @@ const OW_TEXT = {
       const startPage = () => {
         clearGlyphs(); arrow.setVisible(false); waiting = false; revealed = 0;
         const pg = lay.pages[pageIdx];
-        pg.lines.forEach((ln, i) => { glyphs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc, ln, D + 1, pg.cols && pg.cols[i])); });
+        pg.lines.forEach((ln, i) => { glyphs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc * (pg.big ? 2 : 1), ln, D + 1, pg.cols && pg.cols[i], pg.big ? 2 : 1)); });
         glyphs.forEach(g => g.setVisible(false));
         if (timer) timer.remove(false);
         timer = scene.time.addEvent({ delay: T.speed, loop: true, callback: () => reveal(fast ? 3 : 1) });
@@ -291,7 +295,7 @@ const OW_TEXT = {
       const lay = OverworldText.layout(text, this.vars(scene));
       // show every page but the last normally; the last page stays on screen while the choice is asked
       const pages = lay.pages;
-      const head = pages.slice(0, -1).map(p => p.lines.join('\\n')).join('\\p');
+      const head0 = pages.slice(0, -1).map(p => p.lines.join('\\n')).join('\\p'), head = head0 ? (lay.big ? '{big}' : '') + head0 : '';
       const ask = () => {
         this.ensureFont(scene, () => {
           const bx = S.x + T.box.x * sc, by = S.y + T.box.y * sc, bw = T.box.w * sc, bh = T.box.h * sc;
@@ -300,7 +304,7 @@ const OW_TEXT = {
           gfx.lineStyle(2, T.border, T.borderAlpha).strokeRoundedRect(bx + 1, by + 1, bw - 2, bh - 2, 8);
           const objs = [gfx];
           const tx = bx + T.textOffset.x * sc, ty = by + T.textOffset.y * sc;
-          pages[pages.length - 1].lines.forEach((ln, i) => objs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc, ln, D + 1, pages[pages.length - 1].cols && pages[pages.length - 1].cols[i])));
+          pages[pages.length - 1].lines.forEach((ln, i) => objs.push(...this.drawLine(scene, tx, ty + i * T.lineHeight * sc * (lay.big ? 2 : 1), ln, D + 1, pages[pages.length - 1].cols && pages[pages.length - 1].cols[i], lay.big ? 2 : 1)));
           // choice box, right side, just above the message box
           const cw = 56 * sc, ch = 40 * sc, cx = bx + bw - cw, cy = by - ch - 4;
           const g2 = scene.add.graphics().setDepth(D + 2).setScrollFactor(0);

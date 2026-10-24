@@ -779,17 +779,17 @@ function getFont(){if(fontCv)return fontCv;const i=img('graphics/fonts/latin_sho
 // draws one line; chars starting beyond maxPx are tinted red. Returns nothing
 const fontTints={};function fontFor(col){const base=getFont();if(!base||!col)return base;if(fontTints[col]&&fontTints[col].b===base)return fontTints[col].c;const c=document.createElement('canvas');c.width=base.width;c.height=base.height;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(base,0,0);const d=x.getImageData(0,0,c.width,c.height),p=d.data,T=OW_TEXT.textColor,r=parseInt(col.slice(1,3),16),g=parseInt(col.slice(3,5),16),b=parseInt(col.slice(5,7),16);
   for(let k=0;k<p.length;k+=4)if(p[k+3]===255&&p[k]===T[0]&&p[k+1]===T[1]&&p[k+2]===T[2]){p[k]=r;p[k+1]=g;p[k+2]=b}x.putImageData(d,0,0);fontTints[col]={b:base,c};return c}
-function drawLineTo(x,line,px,py,sc,maxPx,cols){let cx=px,w=0;
+function drawLineTo(x,line,px,py,sc0,maxPx,cols,gm){let cx=px,w=0;const sc=sc0*(gm||1);
   for(const t of OverworldText.tokens(line)){const ch=t.ch,g=t.gl,adv=t.adv,f=fontFor(cols&&cols[t.i0]);
     if(g&&f)x.drawImage(f,g.c*8,g.r*16,8*t.w,16,cx,py,8*t.w*sc,16*sc);
     else if(ch!==' '){x.fillStyle='#fff';x.font=`${12*sc}px monospace`;x.fillText(g?ch:'?',cx,py+12*sc)}
-    w+=adv;if(maxPx!=null&&w>maxPx){x.fillStyle='rgba(255,40,40,.6)';x.fillRect(cx,py,adv*sc,16*sc)}
+    w+=adv*(gm||1);if(maxPx!=null&&w>maxPx){x.fillStyle='rgba(255,40,40,.6)';x.fillRect(cx,py,adv*sc,16*sc)}
     cx+=adv*sc}}
-function drawMsgPage(c,pg,over){const T=OW_TEXT,sc=T.scale,extra=Math.max(0,pg.lines.length-T.maxLines),W=T.box.w*sc,H=T.box.h*sc;
+function drawMsgPage(c,pg,over){const T=OW_TEXT,sc=T.scale,ML=pg.big?1:T.maxLines,extra=Math.max(0,pg.lines.length-ML),W=T.box.w*sc,H=T.box.h*sc;
   c.width=W;c.height=H+extra*T.lineHeight*sc;const x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);
   x.fillStyle='#456';x.fillRect(0,0,W,H);x.fillStyle='rgba(8,12,24,.72)';x.fillRect(0,0,W,H);x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;x.strokeRect(1,1,W-2,H-2);
   const ox=T.textOffset.x*sc,oy=T.textOffset.y*sc;
-  pg.lines.forEach((ln,i)=>{const y=oy+i*T.lineHeight*sc;if(i>=T.maxLines){x.fillStyle='rgba(255,40,40,.25)';x.fillRect(0,y,W,T.lineHeight*sc)}drawLineTo(x,ln,ox,y,sc,T.innerWidth,pg.cols&&pg.cols[i])});
+  pg.lines.forEach((ln,i)=>{const gm=pg.big?2:1,y=oy+i*T.lineHeight*sc*gm;if(i>=ML){x.fillStyle='rgba(255,40,40,.25)';x.fillRect(0,y,W,T.lineHeight*sc*gm)}drawLineTo(x,ln,ox,y,sc,T.innerWidth,pg.cols&&pg.cols[i],gm)});
   x.setLineDash([4,3]);x.strokeStyle='rgba(255,60,60,.9)';x.beginPath();x.moveTo(ox+T.innerWidth*sc,4);x.lineTo(ox+T.innerWidth*sc,H-4);x.stroke();x.setLineDash([])}
 function msgPreview(host,st){host.innerHTML='';const L=OverworldText.layout(st.args.text||'',{player:'Player',npc:'Npc'});
   const w=el('div','warns');host.appendChild(w);
@@ -818,8 +818,8 @@ function stepCard(S,st,i){const C=CM(),sc=C[st.cmd],card=el('div','card'+(i===sS
     const pv=el('div','mprev');const upd=()=>msgPreview(pv,st);
     ta.oninput=()=>{st.args.text=ta.value;seTouch();upd()};body.appendChild(ta);
     const bar=el('div','row');[['\\n','\\n'],['\\p','\\p'],['$player','$player']].forEach(([l,v])=>{const b=el('button','mini',l);b.onclick=()=>{const a=ta.selectionStart;ta.setRangeText(v,a,ta.selectionEnd,'end');ta.focus();ta.oninput()};bar.appendChild(b)});
-    {const sel=document.createElement('select');sel.className='mini';sel.title='Color the selected text (or start a color at the cursor). {/} ends it.';sel.innerHTML='<option value="">Color…</option>'+Object.keys(OverworldText.colors).filter(k=>k!=='grey').map(k=>`<option value="${k}">${k}</option>`).join('')+'<option value="/">end color {/}</option>';
-      sel.onchange=()=>{const v=sel.value;sel.value='';if(!v)return;const a=ta.selectionStart,b=ta.selectionEnd,s=ta.value.slice(a,b);if(v==='/')ta.setRangeText('{/}',a,b,'end');else if(s)ta.setRangeText('{'+v+'}'+s+'{/}',a,b,'end');else ta.setRangeText('{'+v+'}',a,b,'end');ta.focus();ta.oninput()};bar.appendChild(sel)}
+    {const sel=document.createElement('select');sel.className='mini';sel.title='Color the selected text (or start a color at the cursor). {/} ends it.';sel.innerHTML='<option value="">Color…</option>'+Object.keys(OverworldText.colors).filter(k=>k!=='grey').map(k=>`<option value="${k}">${k}</option>`).join('')+'<option value="/">end color {/}</option><option value="big">{big} whole message 200%</option>';
+      sel.onchange=()=>{const v=sel.value;sel.value='';if(!v)return;if(v==='big'){ta.value='{big}'+ta.value.replace(/\{big\}/gi,'');ta.oninput();return}const a=ta.selectionStart,b=ta.selectionEnd,s=ta.value.slice(a,b);if(v==='/')ta.setRangeText('{/}',a,b,'end');else if(s)ta.setRangeText('{'+v+'}'+s+'{/}',a,b,'end');else ta.setRangeText('{'+v+'}',a,b,'end');ta.focus();ta.oninput()};bar.appendChild(sel)}
     const aw=el('button','mini','Auto-wrap (fit the box)');aw.onclick=()=>{ta.value=OverworldText.autoWrap(ta.value);ta.oninput()};bar.appendChild(aw);body.appendChild(bar);body.appendChild(pv);upd()}
   if(sc.block==='moves'){const ta=document.createElement('textarea');ta.rows=2;ta.value=st.args.moves||'';ta.spellcheck=false;ta.placeholder='walk_down*2 look_left  (click the buttons below)';
     const warn=el('div','bad'),chk=()=>{const bad=EN().expandMoves(ta.value).filter(t=>!TOKEN_OK(t));warn.textContent=bad.length?'⚠ unknown movement: '+[...new Set(bad)].join(', '):''};
@@ -963,7 +963,7 @@ function pvDraw(){const c=$('pvCv'),x=c.getContext('2d'),W=PV.vw,H=PV.vh;x.setTr
   if(H>320){x.strokeStyle='rgba(255,255,255,.35)';x.setLineDash([4,4]);x.strokeRect(.5,.5,W-1,319);x.setLineDash([])}
   const m=PV.msg;if(m){const T=OW_TEXT,sc=T.scale,S=T.screen,bx=S.x+T.box.x*sc,by=S.y+T.box.y*sc,bw=T.box.w*sc,bh=T.box.h*sc;
     x.fillStyle='rgba(8,12,24,.72)';x.fillRect(bx,by,bw,bh);x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;x.strokeRect(bx+1,by+1,bw-2,bh-2);
-    const pg=m.pages[m.page];let left=m.shown;pg.lines.forEach((ln,i)=>{const part=ln.slice(0,Math.max(0,left));left-=ln.length;drawLineTo(x,part,bx+T.textOffset.x*sc,by+(T.textOffset.y+i*T.lineHeight)*sc,sc,T.innerWidth,pg.cols&&pg.cols[i])});
+    const pg=m.pages[m.page];let left=m.shown;pg.lines.forEach((ln,i)=>{const part=ln.slice(0,Math.max(0,left));left-=ln.length;drawLineTo(x,part,bx+T.textOffset.x*sc,by+(T.textOffset.y+i*T.lineHeight*(pg.big?2:1))*sc,sc,T.innerWidth,pg.cols&&pg.cols[i],pg.big?2:1)});
     if(m.waiting&&!(m.yesno&&m.page===m.pages.length-1)){x.fillStyle='#fff';const ax=bx+bw-22,ay=by+bh-18+(Math.sin(performance.now()/160)*3);x.beginPath();x.moveTo(ax,ay);x.lineTo(ax+14,ay);x.lineTo(ax+7,ay+9);x.fill()}
     if(m.waiting&&m.yesno&&m.page===m.pages.length-1){const cw=56*sc,ch=40*sc,cx=bx+bw-cw,cy=by-ch-4;x.fillStyle='rgba(8,12,24,.85)';x.fillRect(cx,cy,cw,ch);x.strokeStyle='rgba(255,255,255,.35)';x.strokeRect(cx+1,cy+1,cw-2,ch-2);
       drawLineTo(x,'Yes',cx+20*sc,cy+6*sc,sc);drawLineTo(x,'No',cx+20*sc,cy+22*sc,sc);x.fillStyle='#fff';const ty=cy+(m.sel===0?14:30)*sc;x.beginPath();x.moveTo(cx+10*sc,ty-7);x.lineTo(cx+10*sc,ty+7);x.lineTo(cx+20*sc,ty);x.fill();
