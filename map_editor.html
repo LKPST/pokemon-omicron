@@ -139,7 +139,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="pkRem"> remember the token in this browser</label>
   <div class="row"><input type="text" id="pkPath" list="pkDl" placeholder="target file path in the repo, e.g. js/OverworldScene.js or map_editor.html" style="flex:1;min-width:240px"><datalist id="pkDl"></datalist><button id="pkLoad" title="read the current version of that file from GitHub into the box to edit it">Load current from GitHub</button><button id="pkTree" title="list the real files of the repository for the path box">List repo files</button></div>
   <textarea id="pkText" spellcheck="false" placeholder="Paste the code here…"></textarea>
-  <div class="row"><button id="pkStage" class="on">Stage</button><button id="pkUp">Upload file(s)…</button><input type="file" id="pkFiles" multiple hidden accept=".js,.html,.htm,.json,.css,.md,.txt"><span class="help">Uploaded files find their repo path by name.</span></div>
+  <div class="row"><button id="pkStage" class="on">Stage</button><button id="pkUp">Upload file(s)…</button><input type="file" id="pkFiles" multiple hidden accept=".js,.html,.htm,.json,.css,.md,.txt,.zip"><span class="help">Files or a .zip: paths are matched to the repo automatically.</span></div>
   <div class="help">Staged files:</div><div id="pkList" style="display:flex;flex-direction:column;gap:4px"></div>
   <div id="pkPend"></div>
   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="pkHotOn" checked> open the updated editor right away after pushing (when I push this editor or the sprite editor)</label>
@@ -1260,7 +1260,19 @@ $('pkList').addEventListener('click',e=>{const t=e.target;if(t.dataset.px!==unde
 $('pkStage').onclick=()=>{const p=$('pkPath').value.trim().replace(/^\/+/,''),t=$('pkText').value;if(!p)return $('pkOut').textContent='Type the target file path first (for example js/OverworldScene.js).';if(!t.trim())return $('pkOut').textContent='The box is empty.';
   $('pkOut').textContent='';pkStage(p,t,'paste');$('pkText').value='';$('pkPath').value=''};
 $('pkUp').onclick=()=>$('pkFiles').click();
-$('pkFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';for(const f of fs){if(!/\.(js|html?|json|css|md|txt)$/i.test(f.name)){$('pkOut').textContent='Skipped '+f.name+' (only text files; use the tile / sprite editors for images).';continue}pkStage(pkGuess(f.name),await f.text(),'upload')}};
+// ---- zip reader (central directory + native DecompressionStream)
+async function zipRead(buf){const dv=new DataView(buf),u8=new Uint8Array(buf);let e=-1;for(let i=u8.length-22;i>=Math.max(0,u8.length-65600);i--)if(dv.getUint32(i,true)===0x06054b50){e=i;break}
+  if(e<0)throw new Error('not a zip file');const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const out=[],td=new TextDecoder();
+  for(let k=0;k<n;k++){if(dv.getUint32(p,true)!==0x02014b50)break;const meth=dv.getUint16(p+10,true),csz=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true),name=td.decode(u8.subarray(p+46,p+46+nl));p+=46+nl+xl+cl;
+    if(name.endsWith('/'))continue;const ln=dv.getUint16(lo+26,true),lx=dv.getUint16(lo+28,true),st=lo+30+ln+lx,raw=u8.subarray(st,st+csz);let data;
+    if(meth===0)data=raw;else if(meth===8){const ds=new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));data=new Uint8Array(await new Response(ds).arrayBuffer())}else{out.push({name,skip:'unsupported compression'});continue}
+    out.push({name,data})}
+  return out}
+function pkZipPath(name){const hit=pkPaths();if(hit.includes(name))return name;const parts=name.split('/');for(let i=1;i<parts.length;i++){const sub=parts.slice(i).join('/');if(hit.includes(sub))return sub}return pkGuess(name)}
+async function pkZip(f){let n=0,sk=[];try{const ents=await zipRead(await f.arrayBuffer());
+  for(const z of ents){if(/(^|\/)(__MACOSX|\.git|node_modules)\//.test(z.name)||/(^|\/)\.DS_Store$/.test(z.name))continue;if(z.skip||!/\.(js|html?|json|css|md|txt)$/i.test(z.name)){sk.push(z.name);continue}pkStage(pkZipPath(z.name),new TextDecoder().decode(z.data),'zip');n++}
+  $('pkOut').textContent=f.name+': staged '+n+' file(s)'+(sk.length?'; skipped '+sk.length+' non-text ('+sk.slice(0,4).join(', ')+(sk.length>4?'…':'')+')':'')+'.'}catch(er){$('pkOut').textContent='Could not read '+f.name+': '+er.message}}
+$('pkFiles').onchange=async e=>{const fs=[...e.target.files];e.target.value='';for(const f of fs){if(/\.zip$/i.test(f.name)){await pkZip(f);continue}if(!/\.(js|html?|json|css|md|txt)$/i.test(f.name)){$('pkOut').textContent='Skipped '+f.name+' (only text files; use the tile / sprite editors for images).';continue}pkStage(pkGuess(f.name),await f.text(),'upload')}};
 $('pkLoad').onclick=async()=>{const p=$('pkPath').value.trim().replace(/^\/+/,'');if(!p)return $('pkOut').textContent='Type the file path first.';if(!GH.cfg.token)return $('pkOut').textContent='Enter the token first (to read the file from GitHub).';
   try{$('pkOut').textContent='Loading…';const c=GH.cfg,r=await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/contents/${p.split('/').map(encodeURIComponent).join('/')}${c.branch?'?ref='+encodeURIComponent(c.branch):''}`,{headers:{Authorization:'Bearer '+c.token,Accept:'application/vnd.github.raw+json'}});
     if(!r.ok)throw new Error(r.status===404?'file not found on GitHub':r.statusText);$('pkText').value=await r.text();$('pkOut').textContent='Loaded the current version. Edit it in the box, then Stage.'}catch(e){$('pkOut').textContent='Could not load: '+e.message}};
