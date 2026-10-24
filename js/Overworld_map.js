@@ -24,7 +24,7 @@ window.OverworldMaps = {
         "owID": "Trainer_19",
         "script": "town_old_man",
         "movementType": "MOVEMENT_TYPE_WANDER_AROUND",
-        "isTrainer": true,
+        "isTrainer": false,
         "viewRadius": 3,
         "xPos": 24,
         "yPos": 13,
@@ -130,7 +130,7 @@ window.OverworldMaps = {
         "owID": "Trainer_17",
         "script": "town_beauty",
         "movementType": "MOVEMENT_TYPE_WANDER_LEFT_AND_RIGHT",
-        "isTrainer": true,
+        "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
       },
