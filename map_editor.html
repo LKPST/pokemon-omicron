@@ -1192,7 +1192,7 @@ function ghOpen(pre){ghList=ghItems();const c=GH.cfg;$('ghTok').value=c.token||'
 $('ghGo').onclick=async()=>{const c=GH.cfg;c.token=$('ghTok').value.trim();c.owner=$('ghOwn').value.trim();c.repo=$('ghRepo').value.trim();c.branch=$('ghBr').value.trim();c.remember=$('ghRem').checked;c.msg=$('ghMsg').value;
   const picked=[...document.querySelectorAll('#ghFiles input[data-i]')].filter(i=>i.checked).map(i=>ghList[+i.dataset.i]);
   picked.forEach(x=>{const i=ghList.indexOf(x),p=document.querySelector(`#ghFiles input[data-p="${i}"]`).value.trim().replace(/^\/+/,'');x.path=p;if(!x.fixed)c.paths[x.name]=p});ghStore();
-  const o=$('ghOut'),say=(t,cls)=>{o.textContent=t;o.className='help '+(cls||'')};
+  const o=$('ghOut'),say=(t,cls)=>{o.textContent=t;o.className='help '+(cls||'');notify(t,cls)};
   if(!c.token||!c.owner||!c.repo)return say('Fill in the token, owner and repository.','bad');if(!picked.length)return say('Tick at least one file.','bad');
   const msg=c.msg.trim()||('Update '+picked.map(x=>x.name.split('/').pop()).slice(0,3).join(', ')+(picked.length>3?' …':'')+' (editor)');
   $('ghGo').disabled=true;
@@ -1230,6 +1230,12 @@ $('owedClose').onclick=()=>{$('owed').hidden=true;document.body.style.overflow='
 //  PUSH CODE: paste code or upload files, check the syntax, push them to GitHub in ONE commit, and the editor updates at once.
 // =====================================================================================================================
 const PK={staged:[],tree:null,known:['map_editor.html','ow_sprite_editor.html','pokemon_editor.html','item_editor.html','hud_editor.html','index.html','js/OverworldScene.js','js/OverworldWild.js','js/Layout.js','js/overworld_script_engine.js','js/overworld_script_commands.js','js/overworld_scripts.js','js/overworld_textbox.js','js/Overworld_map.js','js/ow_table.js','js/movement_type.js','js/OverworldFollower.js','js/OverworldUI.js','js/OverworldSpriteLoader.js','js/StartMenu.js','js/SaveSystem.js','js/BagMenu.js','js/BattleScene.js','js/BattleEngine.js','js/GameStateManagerClass.js','js/config.js','tables/tiles.js','tables/PokemonDatabase.js','tables/MoveTables.js','tables/EvolutionTables.js','tables/LearnsetTables.js','tables/TrainerTables.js','tables/global.js']};
+// ---- on-screen activity log: shows push / commit / hot-update progress right away (bottom-left, last lines)
+const NLOG=[];function notify(t,kind){try{let el=document.getElementById('nlog');if(!el){el=document.createElement('div');el.id='nlog';el.style.cssText='position:fixed;left:10px;bottom:10px;z-index:200;max-width:min(520px,92vw);font:12px/1.4 monospace;pointer-events:none;display:flex;flex-direction:column;gap:3px';document.body.appendChild(el)}
+  const bad=kind==='bad'||/could not|error|fail|syntax problem|fill in|tick at least/i.test(t),good=kind==='ok'||/^✓|committed|staged|updated/i.test(t);
+  const d=document.createElement('div'),tm=new Date().toLocaleTimeString([],{hour12:false});d.textContent=tm+'  '+(bad?'✗ ':good?'✓ ':'… ')+t;
+  d.style.cssText='padding:5px 9px;border-radius:5px;color:#fff;background:'+(bad?'#b3261e':good?'#1b7a3d':'#37474f')+';box-shadow:0 2px 8px rgba(0,0,0,.5)';
+  el.appendChild(d);NLOG.push(tm+' '+t);while(el.children.length>5)el.firstChild.remove();setTimeout(()=>d.remove(),bad||/^✓|committed/i.test(t)?15000:5000)}catch(e){}}
 const pkPaths=()=>PK.tree||PK.known;
 const pkBase=n=>String(n).split('/').pop().toLowerCase();
 function pkGuess(name){const b=pkBase(name),hit=pkPaths().filter(p=>pkBase(p)===b);return hit.length===1?hit[0]:(hit[0]||name)}
@@ -1240,7 +1246,7 @@ function pkCheck(path,text){const errs=[];const chk=(code,label)=>{try{new Funct
   else if(/\.json$/i.test(path)){try{JSON.parse(text)}catch(e){errs.push(e.message)}}
   return errs}
 // ---- staging
-function pkStage(path,text,source){let it=PK.staged.find(x=>x.path===path);if(!it){it={path,text,source,on:true,cur:null,errs:[]};PK.staged.push(it)}else{it.text=text;it.source=source;it.on=true}
+function pkStage(path,text,source){notify('Staged '+path+' ('+source+')','ok');let it=PK.staged.find(x=>x.path===path);if(!it){it={path,text,source,on:true,cur:null,errs:[]};PK.staged.push(it)}else{it.text=text;it.source=source;it.on=true}
   it.errs=pkCheck(path,text);pkDiff(it);pkList()}
 async function pkDiff(it){it.cur=undefined;if(!GH.cfg.token)return pkList();
   try{const c=GH.cfg,r=await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/contents/${it.path.split('/').map(encodeURIComponent).join('/')}${c.branch?'?ref='+encodeURIComponent(c.branch):''}`,{headers:{Authorization:'Bearer '+c.token,Accept:'application/vnd.github.raw+json'}});
@@ -1295,7 +1301,7 @@ function pkHot(files){const me=(location.pathname.split('/').pop()||'index.html'
   return did}
 $('newEdBack').onclick=()=>{$('newEd').hidden=true;document.body.style.overflow='';$('newEdFr').removeAttribute('srcdoc')};$('newEdReload').onclick=()=>location.reload();
 // ---- push
-$('pkGo').onclick=async()=>{pkCfg();const c=GH.cfg,o=$('pkOut'),say=t=>{o.textContent=t};
+$('pkGo').onclick=async()=>{pkCfg();const c=GH.cfg,o=$('pkOut'),say=t=>{o.textContent=t;notify(t)};
   let picked=PK.staged.filter(x=>x.on&&x.path);if(!c.token||!c.owner||!c.repo)return say('Fill in the token, owner and repository.');if(!picked.length)return say('Tick at least one staged file.');
   const bad=picked.filter(x=>x.errs.length);if(bad.length&&!$('pkForce').checked)return say('Syntax problem in '+bad.map(x=>x.path).join(', ')+'. Fix it, or tick “push even with syntax errors”.');
   const extra=[];if($('pkPendOn')&&$('pkPendOn').checked){for(const x of ghItems().filter(x=>x.on&&!x.key.startsWith('img:'))){const f=await x.get();extra.push({path:x.path,text:f.text,done:x.done})}}

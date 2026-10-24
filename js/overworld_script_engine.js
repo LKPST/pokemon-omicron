@@ -280,6 +280,13 @@ window.OverworldScriptEngine = (() => {
     // how long a movement string lasts (ms), so the camera can be timed to the async movements that are running
     const tokMs = t => { let m; if ((m = /^delay_(\d+)$/.exec(t))) return +m[1]; if (/^run_/.test(t)) return 120; if (/^(walk|walk_in_place)_/.test(t)) return 240; if (/^jump_/.test(t)) return 300; if (/^spin_/.test(t)) return 560; if (/^emote_/.test(t)) return 800; return 0; };
     const syncMs = fb => { const now = scene.time.now, rem = Math.max(0, ...pending.ends.map(t => t - now)); return rem > 60 ? rem : fb; };
+    // synced camera glide: own linear tween (no Phaser pan effect), always finishes, tracks a moving target
+    function camTween(x0, y0, target, ms, done) {
+      const c = cam(); let fin = false;
+      const end = () => { if (fin) return; fin = true; const t = target(); c.centerOn(t.x, t.y); done(); };
+      scene.tweens.addCounter({ from: 0, to: 1, duration: ms, onUpdate: tw => { if (fin) return; const k = tw.getValue(), t = target(); c.centerOn(x0 + (t.x - x0) * k, y0 + (t.y - y0) * k); }, onComplete: end });
+      scene.time.delayedCall(ms + 600, end);
+    }
     const flush = () => { if (pending.n === 0) pending.waiters.splice(0).forEach(f => f()); };
     const cam = () => scene.cameras.main;
 
@@ -352,13 +359,15 @@ window.OverworldScriptEngine = (() => {
         const c = cam(); c.stopFollow(); scene.camMoved = true;
         const m = c.midPoint, tx = m.x + dx * 32, ty = m.y + dy * 32;
         if (ms <= 0) { c.centerOn(tx, ty); return next(); }
-        c.pan(tx, ty, ms, sync ? 'Linear' : 'Sine.easeInOut', true, (cc, p) => { if (p === 1) next(); });
+        if (sync) return camTween(m.x, m.y, () => ({ x: tx, y: ty }), ms, next);
+        c.pan(tx, ty, ms, 'Sine.easeInOut', true, (cc, p) => { if (p === 1) next(); });
       },
       resetCamera(ms, next, sync) {
         if (sync) ms = syncMs(ms);
         const c = cam(), p = scene.player, done = () => { c.startFollow(p, true, 1, 1); scene.camMoved = false; next(); };
         if (ms <= 0) { c.centerOn(p.x, p.y); return done(); }
-        c.pan(p.x, p.y, ms, sync ? 'Linear' : 'Sine.easeInOut', true, (cc, pr) => { if (pr === 1) done(); });
+        if (sync) return camTween(c.midPoint.x, c.midPoint.y, () => ({ x: p.x, y: p.y }), ms, done);
+        c.pan(p.x, p.y, ms, 'Sine.easeInOut', true, (cc, pr) => { if (pr === 1) done(); });
       },
 
       fade(mode, ms, color, next) {
