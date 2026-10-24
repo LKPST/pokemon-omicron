@@ -597,11 +597,9 @@ end
 start: "ralts_script"
 lock
 faceplayer
+cry arg1=NPC wait=no
 msgbox.normal
 {
-
-}
-cry arg1=NPC wait=no
 Nyaaahhh...
 }
 release
