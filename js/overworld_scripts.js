@@ -147,7 +147,16 @@ showobject NPC_2
 applymovement NPC_2
 {
 walk_in_place_right
-emote_heart
+walk_down
+walk_down
+walk_down
+walk_down
+walk_left
+walk_left
+walk_left
+walk_left
+walk_left
+walk_left
 }
 end
 `;
