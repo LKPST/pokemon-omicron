@@ -260,7 +260,7 @@ window.OverworldScriptEngine = (() => {
 
   // ------------------------------------------------------------------ the game's "host": how things look in Phaser
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-  const MOVE_ALIAS = [[/^walk_fast_/, 'run_'], [/^face_/, 'look_'], [/^walk_slow_/, 'walk_'], [/^step_/, 'walk_'], [/^hop_/, 'jump_']];
+  const MOVE_ALIAS = [[/^(exclaim|exclamation|alert)$/, 'emote_exclaim'], [/^(question|confused)$/, 'emote_question'], [/^heart$/, 'emote_heart'], [/^sweat$/, 'emote_sweat'], [/^walk_fast_/, 'run_'], [/^face_/, 'look_'], [/^walk_slow_/, 'walk_'], [/^step_/, 'walk_'], [/^hop_/, 'jump_']];
 
   // "walk_down*3 look_left" -> ['walk_down','walk_down','walk_down','look_left']
   E.expandMoves = function (text) {
