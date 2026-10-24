@@ -1016,22 +1016,22 @@ for now.
 msgbox.normal
 {
 {red}Hazel{/}: I'm heading to the south\n
-side of the city to meet Aster. I\p
+side of the city to meet Aster. I\n
 can't wait to finally get my very\n
 first Pokémon!
 }
 msgbox.normal
 {
 {red}Hazel{/}: Maybe one day Aster will\n
-help me track down Mew... imagine\p
+help me track down Mew... imagine\n
 how amazing that would be!
 }
 msgbox.normal
 {
 {blue}Wilhelm{/}: Yeah, yeah, good luck with\n
-that. I'm heading west to push\p
+that. I'm heading west to push\n
 forward on my journey. There are\n
-way bigger challenges waiting for\p
+way bigger challenges waiting for\n
 me out there!
 }
 msgbox.normal
@@ -1043,7 +1043,7 @@ You can't miss it.
 msgbox.normal
 {
 {red}Hazel{/}: Good luck with Professor\n
-Beckett, and make sure you deliver\p
+Beckett, and make sure you deliver\n
 that bag safely! See you both\n
 later!
 }
