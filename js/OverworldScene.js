@@ -1560,7 +1560,7 @@ class OverworldScene extends Phaser.Scene {
           return false;
         }
       }
-      if (this.npcFollowers && this.npcFollowers.length && this.followerAtTile(worldTX, worldTY)) return false;   // [NPC POKÉMON] solid
+      if (dir && this.npcFollowers && this.npcFollowers.length && this.followerAtTile(worldTX, worldTY)) return false;   // [NPC POKÉMON] solid for the PLAYER only (the player's moves pass dir); NPCs and wild Pokémon walk through it
     }
 
     return true;

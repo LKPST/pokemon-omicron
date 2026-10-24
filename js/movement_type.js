@@ -28,8 +28,7 @@ window.OverworldMovement = (() => {
     if (p.x === nx && p.y === ny) return false;
     // the tile the player is walking INTO is taken too (set by OverworldScene.movePlayerTo for the whole step)
     const pd = scene.playerDest; if (pd && pd.x === nx && pd.y === ny) return false;
-    if (window.OWFollower && window.OWFollower.occupies && window.OWFollower.occupies(nx, ny)) return false;
-    if (scene.followerAtTile && scene.followerAtTile(nx, ny, e)) return false;   // another NPC's Pokémon is there   // the player's follower Pokémon is there
+    if (window.OWFollower && window.OWFollower.occupies && window.OWFollower.occupies(nx, ny)) return false;   // the player's follower Pokémon is there
     // another NPC that is stepping onto it (its source and destination tiles stay reserved for the whole step)
     for (const o of (scene.npcs || [])) { if (o === e) continue; if ((o.dest && o.dest.x === nx && o.dest.y === ny) || (o.src && o.src.x === nx && o.src.y === ny)) return false; }
     if (e.home && !e.noRadius) {
@@ -264,10 +263,10 @@ window.OverworldMovement = (() => {
   function trainerSpot(scene, now) {
     if (!scene || !scene.player || !scene.npcs || !scene.npcs.length) return;
     if (scene._tsAt && now - scene._tsAt < 100) return; scene._tsAt = now;
-    if (scene.trainerBusy || scene.isLocked || scene.scriptRunning || scene.warping || scene.evolving || scene.isMoving || scene.playerDest) return;
+    if (scene.trainerBusy || scene.isLocked || scene.scriptRunning || scene.warping || scene.evolving) return;   // (a step in progress does NOT block it: a trainer sees you while you keep walking)
     if (scene.scriptEndedAt && scene.time.now - scene.scriptEndedAt < 600) return;
     if ((window.PokemonSummary && window.PokemonSummary.isOpen()) || (window.BagMenu && window.BagMenu.isOpen()) || (window.StartMenu && window.StartMenu.isOpen())) return;
-    const E = window.OverworldScriptEngine, p = tileOf(scene.player);
+    const E = window.OverworldScriptEngine, p = scene.playerDest ? { x: scene.playerDest.x, y: scene.playerDest.y } : tileOf(scene.player);   // while walking, the tile you are stepping onto counts
     for (const e of scene.npcs) {
       const c = e.eventConfig;
       if (!c || c.isTrainer !== true || !c.script || !e.active || !e.visible || e.stepTw || e.texture.frameTotal < 4) continue;
@@ -290,14 +289,16 @@ window.OverworldMovement = (() => {
     if (freezeAll) freezeAll(scene);
     e.busy = true; let done = false;
     const fin = () => {
-      if (done) return; done = true;
+      if (done) return;
+      if (scene.isMoving && !fin.force) { scene.time.delayedCall(40, fin); return; }   // let the step the player is in finish first
+      done = true;
       e.setFrame(frame(e, d, 0)); e.direction = d;
       const pd = OPP[d]; scene.player.direction = pd; try { scene.player.setFrame(window.getOverworldFrame(pd, 0)); } catch (_) { }
       e.busy = false; scene.trainerBusy = false; scene.scriptRunning = false; scene.activeNPC = e;
       if (E) E.runScript(scene, name);
     };
     const walk = left => { if (left <= 0 || !e.scene) return fin(); execute(e, 'walk_' + d, () => walk(left - 1), { force: true }); };
-    scene.time.delayedCall(6000 + k * 400, fin);   // fail-safe: never leave the player locked
+    scene.time.delayedCall(6000 + k * 400, () => { fin.force = true; fin(); });   // fail-safe: never leave the player locked
     execute(e, 'emote_exclaim', () => walk(k - 1));
   }
 
