@@ -146,7 +146,8 @@ window.OverworldMaps = {
         "movementType": "MOVEMENT_TYPE_WALK_IN_PLACE_DOWN",
         "isTrainer": false,
         "viewRadius": 3,
-        "flagID": ""
+        "flagID": "",
+        "owTileAttribute": "On Top"
       },
       "NPC_5": {
         "eventType": "NPC",
@@ -157,7 +158,8 @@ window.OverworldMaps = {
         "movementType": "MOVEMENT_TYPE_WALK_IN_PLACE_DOWN",
         "isTrainer": false,
         "viewRadius": 3,
-        "flagID": ""
+        "flagID": "",
+        "owTileAttribute": "On Top"
       },
       "NPC_6": {
         "eventType": "NPC",
