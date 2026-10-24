@@ -822,7 +822,8 @@ function pvReset(){PV.run++;PV.tl=[];PV.msg=null;PV.fade=0;PV.shake=0;PV.flash=0
   PV.flags={};($('pvFlags').value||'').split(/[\s,]+/).filter(Boolean).forEach(f=>PV.flags[f]=true);PV.vars={};$('pvLog').innerHTML=''}
 function pvLog(t,cls){const d=el('div',cls||'',t);$('pvLog').appendChild(d);$('pvLog').scrollTop=1e6}
 const pvTokMs=t=>{let m;if((m=/^delay_(\d+)$/.exec(t)))return +m[1];if(/^run_/.test(t))return 120;if(/^(walk|walk_in_place)_/.test(t))return 240;if(/^jump_/.test(t))return 300;if(/^spin_/.test(t))return 560;if(/^emote_/.test(t))return 800;return 0};
-const pvSyncMs=fb=>{const now=PV.clock||0,rem=Math.max(0,...(PV.ends||[]).map(t=>t-now));return rem>60?rem:fb};
+const pvSpan=toks=>{let t=0,s=null,e=null;for(const k of toks){const d=pvTokMs(k);if(/^(walk|run|jump)_(up|down|left|right)$/.test(k)){if(s===null)s=t;e=t+d}t+=d}return s===null?null:{s,e}};
+const pvSyncPlan=fb=>{const now=PV.clock||0,L=PV.ends||[];if(!L.length)return{wait:0,ms:fb};const s=Math.min(...L.map(x=>x.s)),e=Math.max(...L.map(x=>x.e)),from=Math.max(now,s);return e-from>60?{wait:Math.max(0,s-now),ms:e-from}:{wait:0,ms:fb}};
 function pvTween(ms,fn,done){PV.tl.push({t:0,d:Math.max(1,ms),fn,done,run:PV.run})}
 function pvEnt(spec){const s=String(spec==null||spec===''?'npc':spec);if(/^player$/i.test(s))return PV.player;if(/^npc$/i.test(s))return PV.ents[PV.actor]||null;return PV.ents[s]||Object.values(PV.ents).find(e=>e.id===s)||null}
 const DV={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]},DORD=['down','left','up','right'];
@@ -845,11 +846,11 @@ function pvHost(){const run=PV.run,guard=f=>(...a)=>{if(run===PV.run)f(...a)};
     facePlayer(next){const n=PV.ents[PV.actor];if(n)pvStepTok(n,'look_player',()=>{});next()},
     move(spec,moves,async,next){const e=pvEnt(spec);if(!e){pvLog('applymovement: nobody called "'+spec+'"','bad');return next()}
       const toks=EN().expandMoves(moves);pvLog('→ '+spec+': '+toks.join(' '),'');const go=done=>{let i=0;const st=()=>{if(run!==PV.run)return;if(i>=toks.length)return done();pvStepTok(e,toks[i++],st)};st()};
-      if(async){const end=(PV.clock||0)+toks.reduce((s,t)=>s+pvTokMs(t),0);(PV.ends=PV.ends||[]).push(end);PV.pend++;go(()=>{PV.pend--;const i=PV.ends.indexOf(end);if(i>=0)PV.ends.splice(i,1);if(!PV.pend)PV.waiters.splice(0).forEach(f=>f())});next()}else go(guard(next))},
+      if(async){const sp=pvSpan(toks),rec=sp&&{s:(PV.clock||0)+sp.s,e:(PV.clock||0)+sp.e};if(rec)(PV.ends=PV.ends||[]).push(rec);PV.pend++;go(()=>{PV.pend--;const i=rec?PV.ends.indexOf(rec):-1;if(i>=0)PV.ends.splice(i,1);if(!PV.pend)PV.waiters.splice(0).forEach(f=>f())});next()}else go(guard(next))},
     waitMove(next){if(!PV.pend)next();else PV.waiters.push(guard(next))},
-    moveCamera(dx,dy,ms,next,sync){if(sync)ms=pvSyncMs(ms);PV.camMoved=true;const x0=PV.cam.x,y0=PV.cam.y;pvLog(`📷 camera ${dx},${dy}`,'');if(ms<=0){PV.cam.x+=dx*TS;PV.cam.y+=dy*TS;return next()}
+    moveCamera(dx,dy,ms,next,sync){if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.moveCamera(dx,dy,pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}PV.camMoved=true;const x0=PV.cam.x,y0=PV.cam.y;pvLog(`📷 camera ${dx},${dy}`,'');if(ms<=0){PV.cam.x+=dx*TS;PV.cam.y+=dy*TS;return next()}
       pvTween(ms,t=>{const k=sync?t:t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+dx*TS*k;PV.cam.y=y0+dy*TS*k},guard(next))},
-    resetCamera(ms,next,sync){if(sync)ms=pvSyncMs(ms);const x0=PV.cam.x,y0=PV.cam.y;PV.camMoved=false;pvTween(Math.max(1,ms),t=>{const k=sync?t:t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+(PV.player.x-x0)*k;PV.cam.y=y0+(PV.player.y-y0)*k},guard(next))},
+    resetCamera(ms,next,sync){if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.resetCamera(pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}const x0=PV.cam.x,y0=PV.cam.y;PV.camMoved=false;pvTween(Math.max(1,ms),t=>{const k=sync?t:t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+(PV.player.x-x0)*k;PV.cam.y=y0+(PV.player.y-y0)*k},guard(next))},
     fade(mode,ms,color,next){if(color==='last')color=PV.lastFade||'black';PV.lastFade=color;PV.fadeCol=color==='white'?'#fff':'#000';const a=PV.fade,b=mode==='out'?1:0;pvLog('🌓 fade '+mode,'dim');pvTween(Math.max(1,ms),t=>{PV.fade=a+(b-a)*t},guard(next))},
     flash(ms,color,next){PV.flashCol={white:'#fff',black:'#000',red:'#ff3c3c',yellow:'#ffeb50'}[color]||'#fff';pvLog('✨ flash '+color,'dim');pvTween(Math.max(1,ms),t=>{PV.flash=1-t},()=>{PV.flash=0;guard(next)()})},
     filter(mode,ms){const css={sepia:'sepia(1)',grayscale:'grayscale(1)',inverted:'invert(1)'}[mode]||'';pvLog('🎨 filter '+mode,'dim');const c=$('pvCv');c.style.transition=ms>0?`filter ${ms}ms linear`:'none';c.style.filter=css},

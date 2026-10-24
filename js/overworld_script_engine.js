@@ -279,7 +279,9 @@ window.OverworldScriptEngine = (() => {
     const pending = { n: 0, waiters: [], ends: [] };
     // how long a movement string lasts (ms), so the camera can be timed to the async movements that are running
     const tokMs = t => { let m; if ((m = /^delay_(\d+)$/.exec(t))) return +m[1]; if (/^run_/.test(t)) return 120; if (/^(walk|walk_in_place)_/.test(t)) return 240; if (/^jump_/.test(t)) return 300; if (/^spin_/.test(t)) return 560; if (/^emote_/.test(t)) return 800; return 0; };
-    const syncMs = fb => { const now = scene.time.now, rem = Math.max(0, ...pending.ends.map(t => t - now)); return rem > 60 ? rem : fb; };
+    // the camera follows only the actual walking: from the first walk/run/jump step to the end of the last one (looks, emotes and delays at the edges don't count)
+    const span = toks => { let t = 0, s = null, e = null; for (const k of toks) { const d = tokMs(k); if (/^(walk|run|jump)_(up|down|left|right)$/.test(k)) { if (s === null) s = t; e = t + d; } t += d; } return s === null ? null : { s, e }; };
+    const syncPlan = fb => { const now = scene.time.now, L = pending.ends; if (!L.length) return { wait: 0, ms: fb }; const s = Math.min(...L.map(x => x.s)), e = Math.max(...L.map(x => x.e)), from = Math.max(now, s); return e - from > 60 ? { wait: Math.max(0, s - now), ms: e - from } : { wait: 0, ms: fb }; };
     // synced camera glide: own linear tween (no Phaser pan effect), always finishes, tracks a moving target
     function camTween(x0, y0, target, ms, done) {
       const c = cam(); let fin = false;
@@ -350,12 +352,12 @@ window.OverworldScriptEngine = (() => {
           const step = () => { if (i >= toks.length) { e.home = null; done(); return; } runToken(e, toks[i++], step); };
           step();
         };
-        if (async) { const end = scene.time.now + toks.reduce((s, t) => s + tokMs(t), 0); pending.ends.push(end); pending.n++; go(() => { pending.n--; const i = pending.ends.indexOf(end); if (i >= 0) pending.ends.splice(i, 1); flush(); }); next(); } else go(next);
+        if (async) { const sp = span(toks), rec = sp && { s: scene.time.now + sp.s, e: scene.time.now + sp.e }; if (rec) pending.ends.push(rec); pending.n++; go(() => { pending.n--; const i = rec ? pending.ends.indexOf(rec) : -1; if (i >= 0) pending.ends.splice(i, 1); flush(); }); next(); } else go(next);
       },
       waitMove(next) { if (pending.n === 0) next(); else pending.waiters.push(next); },
 
       moveCamera(dx, dy, ms, next, sync) {
-        if (sync) ms = syncMs(ms);
+        if (sync) { const pl = syncPlan(ms); if (pl.wait > 0) return scene.time.delayedCall(pl.wait, () => this.moveCamera(dx, dy, pl.ms, next, 'go')); if (sync !== 'go') ms = pl.ms; }
         const c = cam(); c.stopFollow(); scene.camMoved = true;
         const m = c.midPoint, tx = m.x + dx * 32, ty = m.y + dy * 32;
         if (ms <= 0) { c.centerOn(tx, ty); return next(); }
@@ -363,7 +365,7 @@ window.OverworldScriptEngine = (() => {
         c.pan(tx, ty, ms, 'Sine.easeInOut', true, (cc, p) => { if (p === 1) next(); });
       },
       resetCamera(ms, next, sync) {
-        if (sync) ms = syncMs(ms);
+        if (sync) { const pl = syncPlan(ms); if (pl.wait > 0) return scene.time.delayedCall(pl.wait, () => this.resetCamera(pl.ms, next, 'go')); if (sync !== 'go') ms = pl.ms; }
         const c = cam(), p = scene.player, done = () => { c.startFollow(p, true, 1, 1); scene.camMoved = false; next(); };
         if (ms <= 0) { c.centerOn(p.x, p.y); return done(); }
         if (sync) return camTween(c.midPoint.x, c.midPoint.y, () => ({ x: p.x, y: p.y }), ms, done);
