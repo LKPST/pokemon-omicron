@@ -990,7 +990,29 @@ window.OverworldMaps = {
       "left": null,
       "right": null
     },
-    "events": {},
+    "events": {
+      "NPC_1": {
+        "eventType": "NPC",
+        "xPos": 0,
+        "yPos": 8,
+        "owID": "Bag",
+        "script": "",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": "BAG_START"
+      },
+      "NPC_2": {
+        "eventType": "NPC",
+        "xPos": 10,
+        "yPos": 4,
+        "owID": "Trainer_71",
+        "script": "",
+        "movementType": "MOVEMENT_TYPE_FACE_RIGHT",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": ""
+      }
+    },
     "wildData": {
       "morning": [],
       "afternoon": [],
