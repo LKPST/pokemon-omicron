@@ -617,7 +617,7 @@ waitmovement
 msgbox.normal
 {
 {blue}Wilhelm{/}: Looks like someone finally\n
-decided to wake up! We were\p
+decided to wake up! We were\n
 starting to think you got eaten by\n
 a Slakoth.
 }
@@ -655,16 +655,16 @@ look_down
 msgbox.normal
 {
 Since you're joining us on Route 1,\n
-pay close attention. I've had my\p
-Pokémon for months, so I know these\n
-roads inside and out.
+pay close attention.\p
+I've had my Pokémon for months, so\n
+I know these roads inside and out.
 }
 msgbox.normal
 {
 First rule of wild Pokémon: tall\n
-grass is their playground. If you\p
-step in without a team, you're just\n
-asking for trouble!
+grass is their playground.\p
+If youvstep in without a team,\n
+you're just asking for trouble!
 }
 applymovement NPC_5
 {
@@ -679,7 +679,7 @@ msgbox.normal
 {
 {red}Hazel{/}: Experience?\p
 You caught one Rockruff last month\n
-and haven't stopped talking about\p
+and haven't stopped talking about\n
 it since!
 }
 applymovement NPC_4
@@ -741,9 +741,9 @@ movecamera 0 6
 msgbox.normal
 {
 {blue}Wilhelm{/}: See those wild Pokémon\n
-roaming around out in the open? You\p
-can actually spot them before they\n
-even spot you.
+roaming around out in the open?\p
+You can actually spot them before\n
+they even spot you.
 }
 resetcamera
 applymovement NPC_5
@@ -753,13 +753,13 @@ look_up
 msgbox.normal
 {
 {blue}Wilhelm{/}: Honestly, I'm surprised a\n
-Professor's Aide like you didn't\p
+Professor's Aide like you didn't\n
 know that already.
 }
 msgbox.normal
 {
 Then again, fetching bags and\n
-running errands doesn't really take\p
+running errands doesn't really take\n
 much battle brain, does it?
 }
 applymovement NPC_4
@@ -769,7 +769,7 @@ walk_in_place_down
 msgbox.normal
 {
 {red}Hazel{/}: Wilhelm! Don't be so rude!\n
-Being an Aide is a huge\p
+Being an Aide is a huge\n
 responsibility!
 }
 applymovement NPC_4
@@ -779,13 +779,13 @@ look_up
 msgbox.normal
 {
 Though... observing how wild\n
-Pokémon move before approaching\p
+Pokémon move before approaching\n
 them is pretty solid advice.
 }
 msgbox.normal
 {
 Just ignore his big mouth. He's\n
-just flexing because he has a Poké\p
+just flexing because he has a Poké\n
 Ball on his belt.
 }
 applymovement NPC_4
@@ -795,21 +795,21 @@ look_down
 msgbox.normal
 {
 If I had a choice, I'd skip all\n
-these local Pokémon and start my\p
+these local Pokémon and start my\n
 journey with a Mew!
 }
 msgbox.normal
 {
-Cute, powerful, and mysterious...\n
-Mew is literally the ultimate\p
+Cute, powerful, and mysterious...\p
+Mew is literally the ultimate\n
 Pokémon!
 }
 msgbox.normal
 {
 {blue}Wilhelm{/}: Dream on, Hazel! Mew is a\n
-Mythical Pokémon. You can't just\p
-find one hanging out in Route 1\n
-grass!
+Mythical Pokémon.\p
+You can't just find one hanging out\n
+in Route 1 grass!
 }
 applymovement NPC_5 yes
 {
@@ -833,16 +833,16 @@ look_up
 msgbox.normal
 {
 {blue}Wilhelm{/}: Okay, one more tip before\n
-we get to the city. Pay attention\p
-to the Trainers standing around out\n
-here.
+we get to the city.\p
+Pay attention to the Trainers\n
+standing around out here.
 }
 msgbox.normal
 {
 The second you walk into their line\n
-of sight, they'll spot\p
-you and rush right over. Once\n
-they've seen you, there's no\p
+of sight, they'll spot\n
+you and rush right over.\p
+Once they've seen you, there's no\n
 running away!
 }
 msgbox.normal
@@ -859,15 +859,17 @@ look_up
 msgbox.normal
 {
 {red}Hazel{/}: Ugh, I hate to say it, but\n
-he's right again. Trainers on the\p
-road never take no for an answer.
+he's right again.\p
+Trainers on the road never take no\n
+for an answer.
 }
 msgbox.normal
 {
 Not that it matters for us yet,\n
-since we don't have a\p
-Pokémon. But it's good to know\n
-before we get one!
+since we don't have a\n
+Pokémon.\p
+But it's good to know before we get\n
+one!
 }
 applymovement NPC_4
 {
@@ -908,8 +910,9 @@ look_up
 msgbox.normal
 {
 {blue}Wilhelm{/}: Okay, last tip before we\n
-reach the city. This one will save\p
-your life, so listen up.
+reach the city.\p
+This one will save your life, so\n
+listen up.
 }
 msgbox.normal
 {
@@ -918,15 +921,15 @@ types are strong against others.
 }
 msgbox.normal
 {
-Water beats Fire. Fire beats Grass.\n
-Grass beats Water. Hit a Pokémon\p
-with a move it's weak to and it\n
-takes double damage!
+{blue}Water{/} beats {orange}Fire{/}. {orange}Fire{/} beats {green}Grass{/}.\n
+{green}Grass{/} beats {blue}Water{/}.\p
+Hit a Pokémon with a move it's weak\n
+to and it takes double damage!
 }
 msgbox.normal
 {
 It works the other way too. Use a\n
-move the target resists and you'll\p
+move the target resists and you'll\n
 barely scratch it.
 }
 applymovement NPC_5
@@ -945,7 +948,7 @@ walk_in_place_down
 msgbox.normal
 {
 {red}Hazel{/}: Ugh... fine. He's right.\n
-Type advantage can decide a whole\p
+Type advantage can decide a whole\n
 battle.
 }
 applymovement NPC_4
@@ -1005,7 +1008,7 @@ Olenburg City is right ahead.
 msgbox.normal
 {
 Well, here we are! Olenburg City,\n
-right at the end of\p
+right at the end of\n
 Route 1.
 }
 msgbox.normal
@@ -1030,9 +1033,9 @@ msgbox.normal
 {
 {blue}Wilhelm{/}: Yeah, yeah, good luck with\n
 that. I'm heading west to push\n
-forward on my journey. There are\n
-way bigger challenges waiting for\n
-me out there!
+forward on my journey. \p
+There are way bigger challenges\n
+waiting for me out there!
 }
 msgbox.normal
 {
@@ -1044,8 +1047,8 @@ msgbox.normal
 {
 {red}Hazel{/}: Good luck with Professor\n
 Beckett, and make sure you deliver\n
-that bag safely! See you both\n
-later!
+that bag safely!\p
+See you both later!
 }
 applymovement NPC_5 yes
 {
