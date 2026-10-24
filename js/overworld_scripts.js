@@ -590,8 +590,20 @@ start: "criscanto_town"
 msgbox.normal
 {
 {red}Criscanto Town{/}\p
-A quiet town in the heart of the
-forest, where every journey begins.
+A quiet town in the heart of the forest, where every journey begins.
 }
+end
+
+start: "ralts_script"
+lock
+faceplayer
+msgbox.normal
+{
+
+}
+cry arg1=NPC wait=no
+Nyaaahhh...
+}
+release
 end
 `;
