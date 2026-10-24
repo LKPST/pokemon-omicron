@@ -400,7 +400,7 @@ window.OverworldMaps = {
     "weather": "Normal",
     "isFlyable": true,
     "isRunning": true,
-    "music": "audio/music/criscanto_town.mp3",
+    "music": "audio/music/route_1.mp3",
     "connections": {
       "up": ["Criscanto Town", 0, -4],
       "down": ["Olenburg City", 0, 0],
