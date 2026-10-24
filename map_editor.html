@@ -407,7 +407,7 @@ window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.t
 // ---------- events: add / duplicate / delete ----------
 const SCHEMA={
   NPC:[['owID','select','ow'],['script','select','script'],['movementType','select','move'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
-  Script:[['script','select','script']],'Script Tile':[['script','select','script'],['scriptVar','text'],['varValue','num']],
+  Script:[['script','select','script'],['scriptVar','text'],['varValue','num']],'Script Tile':[['script','select','script'],['scriptVar','text'],['varValue','num']],
   Signpost:[['script','select','script']],Tile:[['tileID','num']],
   Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};
 const allEv=()=>Object.values(repo).flatMap(m=>Object.values(m.events));
@@ -463,7 +463,7 @@ function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&re
   rowTo(xy,'X',inp('num',ev.xPos,v=>ev.xPos=v??0));rowTo(xy,'Y',inp('num',ev.yPos,v=>ev.yPos=v??0));
   for(const[f,t,o]of SCHEMA[ev.eventType]||[]){
     if(f==='owID'&&o==='ow'){I.appendChild(owCombo(ev,v=>{v===undefined||v===''?delete ev.owID:ev.owID=v}));continue}
-    rowTo(I,f,inp(t==='select'?'text':t,ev[f],v=>{v===undefined||v===''?delete ev[f]:ev[f]=v},o?()=>OPTS[o](ev):null))}
+    rowTo(I,({scriptVar:'Var (empty = always runs)',varValue:'Value (runs only when Var = this)'})[f]||f,inp(t==='select'?'text':t,ev[f],v=>{v===undefined||v===''?delete ev[f]:ev[f]=v},o?()=>OPTS[o](ev):null))}
   if((SCHEMA[ev.eventType]||[]).some(x=>x[0]==='script')){const r=document.createElement('div');r.className='row';
     const b1=document.createElement('button');b1.textContent='✎ Open in Scripts editor';b1.onclick=()=>seOpenEditor(ev.script||undefined);
     const b2=document.createElement('button');b2.textContent='+ New script for this event';b2.onclick=()=>{if(!EN()||!window.OverworldScriptCommands){seOpenEditor();return}const nm=seNew();if(nm){commit(()=>{ev.script=nm});seOpenEditor(nm)}};

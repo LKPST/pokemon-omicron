@@ -1027,6 +1027,12 @@ window.OverworldMaps = {
         "map": "Criscanto Town",
         "facing": "Down",
         "warpType": "Normal"
+      },
+      "Script_1": {
+        "eventType": "Script",
+        "xPos": 8,
+        "yPos": 4,
+        "script": ""
       }
     },
     "wildData": {
