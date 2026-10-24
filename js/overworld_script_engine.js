@@ -283,10 +283,10 @@ window.OverworldScriptEngine = (() => {
     const span = toks => { let t = 0, s = null, e = null; for (const k of toks) { const d = tokMs(k); if (/^(walk|run|jump)_(up|down|left|right)$/.test(k)) { if (s === null) s = t; e = t + d; } t += d; } return s === null ? null : { s, e }; };
     const syncPlan = fb => { const now = scene.time.now, L = pending.ends; if (!L.length) return { wait: 0, ms: fb }; const s = Math.min(...L.map(x => x.s)), e = Math.max(...L.map(x => x.e)), from = Math.max(now, s); return e - from > 60 ? { wait: Math.max(0, s - now), ms: e - from } : { wait: 0, ms: fb }; };
     // synced camera glide: own linear tween (no Phaser pan effect), always finishes, tracks a moving target
-    function camTween(x0, y0, target, ms, done) {
-      const c = cam(); let fin = false;
+    function camTween(x0, y0, target, ms, done, ease) {
+      const c = cam(); let fin = false; const ez = ease ? (k => -(Math.cos(Math.PI * k) - 1) / 2) : (k => k);
       const end = () => { if (fin) return; fin = true; const t = target(); c.centerOn(t.x, t.y); done(); };
-      scene.tweens.addCounter({ from: 0, to: 1, duration: ms, onUpdate: tw => { if (fin) return; const k = tw.getValue(), t = target(); c.centerOn(x0 + (t.x - x0) * k, y0 + (t.y - y0) * k); }, onComplete: end });
+      scene.tweens.addCounter({ from: 0, to: 1, duration: ms, onUpdate: tw => { if (fin) return; const k = ez(tw.getValue()), t = target(); c.centerOn(x0 + (t.x - x0) * k, y0 + (t.y - y0) * k); }, onComplete: end });
       scene.time.delayedCall(ms + 600, end);
     }
     const flush = () => { if (pending.n === 0) pending.waiters.splice(0).forEach(f => f()); };
@@ -361,15 +361,13 @@ window.OverworldScriptEngine = (() => {
         const c = cam(); c.stopFollow(); scene.camMoved = true;
         const m = c.midPoint, tx = m.x + dx * 32, ty = m.y + dy * 32;
         if (ms <= 0) { c.centerOn(tx, ty); return next(); }
-        if (sync) return camTween(m.x, m.y, () => ({ x: tx, y: ty }), ms, next);
-        c.pan(tx, ty, ms, 'Sine.easeInOut', true, (cc, p) => { if (p === 1) next(); });
+        return camTween(m.x, m.y, () => ({ x: tx, y: ty }), ms, next, !sync);   // own tween: Phaser's pan effect swallows a pan started from the previous pan's callback
       },
       resetCamera(ms, next, sync) {
         if (sync) { const pl = syncPlan(ms); if (pl.wait > 0) return scene.time.delayedCall(pl.wait, () => this.resetCamera(pl.ms, next, 'go')); if (sync !== 'go') ms = pl.ms; }
         const c = cam(), p = scene.player, done = () => { c.startFollow(p, true, 1, 1); scene.camMoved = false; next(); };
         if (ms <= 0) { c.centerOn(p.x, p.y); return done(); }
-        if (sync) return camTween(c.midPoint.x, c.midPoint.y, () => ({ x: p.x, y: p.y }), ms, done);
-        c.pan(p.x, p.y, ms, 'Sine.easeInOut', true, (cc, pr) => { if (pr === 1) done(); });
+        return camTween(c.midPoint.x, c.midPoint.y, () => ({ x: p.x, y: p.y }), ms, done, !sync);
       },
 
       fade(mode, ms, color, next) {
