@@ -105,6 +105,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
     <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="owB" title="open the Overworld Sprite Editor (NPC / trainer sprites) here">🧍 OW Sprites</button><button id="pushB" title="paste or upload new code and push it to GitHub">⚡ Push code</button><button id="ghBtn" title="commit the changed files straight to the repository">⬆ Commit to GitHub</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="gridT" checked> Grid</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="sprT" checked> Sprites</label>
+    <label style="flex-direction:row;align-items:center;gap:4px" title="Also list every Pokémon overworld sprite (SPECIES_…) in the owID picker, to use as a normal NPC"><input type="checkbox" id="monT"> Pokémon OWs</label>
     <select id="evView" title="Which events to show and click (when several are on the same tile)"><option value="">All events</option><option value="NPC">NPCs only</option><option value="Warp">Warps only</option><option value="Script">Scripts only</option><option value="Signpost">Signposts only</option><option value="none">No events</option></select>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="borT" checked> Border</label>
     <input id="assetBase" placeholder="asset root (auto)" title="Folder that contains graphics/ , relative to this page. Found automatically; type ../ or similar to force it." style="width:120px">
@@ -189,7 +190,14 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
 <script>
 window.__ready.then(()=>{
 const TS=32,$=id=>document.getElementById(id),clone=o=>JSON.parse(JSON.stringify(o)),uniq=a=>[...new Set(a)];
-const OT=()=>window.OverworldTable||{},TL=()=>window.OverworldTiles||{};
+// ---- Pokémon overworld sprites as NPCs: owID SPECIES_XXX (tables/OverworldSprites.js + graphics/overworld/mons/manifest.json + ow_NN.png)
+const MON={on:false,man:null,tried:false,ent:{},art:{},base:null,px:null,dir:'graphics/overworld/mons/'};try{MON.on=localStorage.edMon==='1'}catch(e){}
+const monTab=()=>typeof OverworldSprites!=='undefined'?OverworldSprites:(window.OverworldSprites||null);
+function monEntry(id){const T=monTab(),s=T&&T.species&&T.species[id];if(!s)return undefined;let e=MON.ent[id];if(e)return e;
+  const art=MON.art[id];let sc=s.src>=816?2:1;if(art&&art*sc>64)sc=64/art;sc*=(s.scale||1);
+  return MON.ent[id]={owType:'Pokemon',mon:true,spriteID:id,trueDimension:s.w+'x'+s.h,owDimension:s.w+'x'+s.h,owScale:sc,owSprite:''}}
+const OT=()=>{const t=window.OverworldTable||{};if(!monTab())return t;if(MON.base!==t){MON.base=t;MON.px=new Proxy(t,{get:(o,k)=>(k in o||typeof k!=='string'||k.slice(0,8)!=='SPECIES_')?o[k]:monEntry(k)})}return MON.px},TL=()=>window.OverworldTiles||{};
+const owIds=()=>{const k=Object.keys(OT()),T=monTab();return MON.on&&T&&T.species?k.concat(Object.keys(T.species)):k};
 let repo={},active='',tool='pencil',brush={tid:0,cells:[['0|0']],frames:new Set([0])},sel=null,cam={x:60,y:60,z:1};
 let hist=[],redoS=[],pending=false,unsaved=false,fileHandle=null,hover=null,stroke=null,rectA=null,drag=null,pan=null,pal=null,spaceDown=false,showGrid=true,showSpr=true,evView='',lastJump=null;
 const evShown=ev=>!evView||(evView==='none'?false:evView==='Script'?/^Script/.test(ev.eventType):ev.eventType===evView);
@@ -243,7 +251,17 @@ const sprs={};
 const FROW={down:0,left:1,right:2,up:3};
 // the way an NPC looks when it stands there: from its movementType (FACE_RIGHT, WALK_IN_PLACE_LEFT ...) or a facing field
 function facingOf(ev){const m=/(?:FACE|WALK_IN_PLACE|LOOK)_(UP|DOWN|LEFT|RIGHT)$/i.exec(String((ev&&ev.movementType)||''));const d=m?m[1].toLowerCase():String((ev&&ev.facing)||'').toLowerCase();return FROW[d]!==undefined?d:'down'}
-function spr(id,dir='down'){const e=OT()[id];if(!e)return null;const ck=dir==='down'?id:id+'|'+dir;if(sprs[ck])return sprs[ck];const i=img(e.owSprite);if(!i)return null;
+function monSpr(id,dir){const ck=dir==='down'?id:id+'|'+dir;if(sprs[ck])return sprs[ck];const T=monTab(),s=T&&T.species[id],m=MON.man&&MON.man[id];if(!s||!m)return null;const i=img(MON.dir+m[0]);if(!i)return null;
+  const w=s.w,h=s.h,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.imageSmoothingEnabled=false;x.drawImage(i,m[1],m[2]+(FROW[dir]||0)*h,w,h,0,0,w,h);
+  if(MON.art[id]===undefined){try{const t=document.createElement('canvas');t.width=2*w;t.height=4*h;const tx=t.getContext('2d',{willReadFrequently:true});tx.drawImage(i,m[1],m[2],2*w,4*h,0,0,2*w,4*h);const d=tx.getImageData(0,0,2*w,4*h).data;let big=0;
+    for(let dd=0;dd<4;dd++)for(let st=0;st<2;st++){let x0=w,x1=-1,y0=h,y1=-1;for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++)if(d[(((dd*h+yy)*2*w)+st*w+xx)*4+3]>20){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy}if(x1>=0)big=Math.max(big,x1-x0+1,y1-y0+1)}
+    MON.art[id]=big||Math.max(w,h)}catch(er){MON.art[id]=Math.max(w,h)}delete MON.ent[id];redraw()}
+  return sprs[ck]=c}
+function monLoad(){if(MON.tried)return;MON.tried=true;const bases=uniq([assetBase,'','../']);
+  const getScript=async()=>{if(monTab())return;for(const b of bases){const ok=await new Promise(r=>{const s=document.createElement('script');s.src=b+'tables/OverworldSprites.js';s.onload=()=>r(true);s.onerror=()=>{s.remove();r(false)};document.head.appendChild(s)});if(ok&&monTab())return}};
+  const getMan=async()=>{for(const b of bases){try{const r=await fetch(b+MON.dir+'manifest.json');if(r.ok){MON.man=(await r.json()).species;return}}catch(e){}}};
+  Promise.all([getScript(),getMan()]).then(()=>{redraw();try{buildInspector()}catch(e){}})}
+function spr(id,dir='down'){const e=OT()[id];if(!e)return null;if(e.mon)return monSpr(id,dir);const ck=dir==='down'?id:id+'|'+dir;if(sprs[ck])return sprs[ck];const i=img(e.owSprite);if(!i)return null;
   const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),c=document.createElement('canvas');c.width=w;c.height=h;
   const row=(FROW[dir]||0)*h+h<=i.naturalHeight?(FROW[dir]||0):0;
   const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(i,0,row*h,w,h,0,0,w,h);
@@ -279,7 +297,7 @@ function isBuilding(ev){return OT()[ev.owID]?.owType==='Building'}
 const osc=id=>{const v=Number((OT()[id]||{}).owScale);return v>0?v:1};   // per-sprite display scale (owScale in ow_table.js)
 function evRect(p,ev){const ox=p.x*TS,oy=p.y*TS,e=OT()[ev.owID];
   if(showSpr&&e&&ev.eventType==='NPC'){const sc=osc(ev.owID),[w0,h0]=(e.trueDimension||'32x32').split('x').map(Number),w=w0*sc,h=h0*sc,cx=ox+ev.xPos*TS+16;
-    return isBuilding(ev)?{x:cx-w/2,y:oy+(ev.yPos+1)*TS-h,w,h}:{x:cx-w/2,y:oy+ev.yPos*TS+16-h*.85,w,h}}
+    return isBuilding(ev)?{x:cx-w/2,y:oy+(ev.yPos+1)*TS-h,w,h}:e.mon?{x:cx-w/2,y:oy+ev.yPos*TS+30-h,w,h}:{x:cx-w/2,y:oy+ev.yPos*TS+16-h*.85,w,h}}
   return{x:ox+ev.xPos*TS,y:oy+ev.yPos*TS,w:TS,h:TS}}
 function footprint(ev){const e=OT()[ev.owID];if(!e||!isBuilding(ev))return null;const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),fw=Math.ceil(w/32),fh=Math.ceil(h/32);
   return{x0:ev.xPos-Math.floor((fw-1)/2),x1:ev.xPos+Math.floor(fw/2),y0:ev.yPos-(fh-1),y1:ev.yPos}}
@@ -311,7 +329,7 @@ function draw(){const W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W||cv.hei
       if(s)ctx.drawImage(s,R.x,R.y,R.w,R.h);
       else{const[col,ch]=BADGE[ev.eventType]||['#777','?'];ctx.fillStyle=col;ctx.globalAlpha=.85;ctx.fillRect(R.x+3,R.y+3,TS-6,TS-6);ctx.globalAlpha=1;
         ctx.fillStyle='#fff';ctx.font='bold 16px monospace';ctx.textAlign='center';ctx.fillText(ch,R.x+TS/2,R.y+TS/2+6);ctx.textAlign='left'}
-      if(sel&&sel.map===k&&sel.key===ek){ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;ctx.strokeRect(R.x,R.y,R.w,R.h)}}}
+      if(sel&&sel.map===k&&sel.key===ek){ctx.strokeStyle='#ffd600';ctx.lineWidth=2/cam.z;if(OT()[ev.owID]?.mon)ctx.strokeRect((p.x+ev.xPos)*TS,(p.y+ev.yPos)*TS,TS,TS);else ctx.strokeRect(R.x,R.y,R.w,R.h)}}}
   if(startPos&&L[startPos.map]){const p=L[startPos.map],X=(p.x+startPos.x)*TS,Y=(p.y+startPos.y)*TS,ar={up:'▲',down:'▼',left:'◀',right:'▶'}[startPos.facing]||'▼';
     ctx.strokeStyle='#00e676';ctx.lineWidth=2/cam.z;ctx.setLineDash([5/cam.z,3/cam.z]);ctx.strokeRect(X+2,Y+2,TS-4,TS-4);ctx.setLineDash([]);
     ctx.fillStyle='rgba(0,230,118,.25)';ctx.fillRect(X+2,Y+2,TS-4,TS-4);ctx.fillStyle='#00e676';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText('START',X+TS/2,Y+12);ctx.font='bold 13px monospace';ctx.fillText(ar,X+TS/2,Y+TS-6);ctx.textAlign='left'}
@@ -337,7 +355,7 @@ const toWorld=(mx,my)=>({x:(mx-cam.x)/cam.z,y:(my-cam.y)/cam.z});
 function cellAt(wx,wy){const L=layout();for(const[k,p]of Object.entries(L)){const m=repo[k],gx=Math.floor(wx/TS)-p.x,gy=Math.floor(wy/TS)-p.y;
   if(gx>=0&&gy>=0&&gx<m.dimensions.width&&gy<m.dimensions.height)return{map:k,gx,gy}}return null}
 function eventsAt(wx,wy){const L=layout(),hits=[];for(const[k,m]of Object.entries(repo))for(const[ek,ev]of Object.entries(m.events)){if(!evShown(ev))continue;
-  const R=evRect(L[k],ev);if(wx>=R.x&&wx<R.x+R.w&&wy>=R.y&&wy<R.y+R.h)hits.push({map:k,key:ek})}return hits}
+  const R=OT()[ev.owID]?.mon?{x:L[k].x*TS+ev.xPos*TS,y:L[k].y*TS+ev.yPos*TS,w:TS,h:TS}:evRect(L[k],ev);if(wx>=R.x&&wx<R.x+R.w&&wy>=R.y&&wy<R.y+R.h)hits.push({map:k,key:ek})}return hits}
 function eventAt(wx,wy){const l=eventsAt(wx,wy);return l.length?l[l.length-1]:null}
 // jump to the map a warp leads to (and select the warp it lands on)
 function centerOn(map,gx,gy){const p=layout()[map];if(!p)return;cam.x=cv.clientWidth/2-(p.x+gx+.5)*TS*cam.z;cam.y=cv.clientHeight/2-(p.y+gy+.5)*TS*cam.z}
@@ -421,7 +439,7 @@ const SCHEMA={
   Signpost:[['script','select','script']],Tile:[['tileID','num']],
   Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};
 const allEv=()=>Object.values(repo).flatMap(m=>Object.values(m.events));
-const OPTS={ow:()=>Object.keys(OT()),map:()=>Object.keys(repo),
+const OPTS={ow:()=>owIds(),map:()=>Object.keys(repo),
   script:()=>uniq([...scriptNames(),...allEv().map(e=>e.script).filter(Boolean)]),
   move:()=>uniq([...MOVE_TYPES,...Object.keys(window.OverworldMovement?.types||{}),...allEv().map(e=>e.movementType).filter(Boolean)]),
   facing:()=>['Down','Up','Left','Right'],warpType:()=>['Normal','Teleport','Hole'],
@@ -443,8 +461,10 @@ function inp(type,val,set,optsFn){let e;
   e.onchange=()=>commit(()=>set(type==='bool'?e.checked:(type==='text'||optsFn)?e.value:(e.value===''?undefined:Number(e.value))));return e}
 // ---- owID picker: scrollable list with a sprite preview for every entry; click to choose, or type to filter
 function owThumb(id){const c=document.createElement('canvas');c.width=c.height=40;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
-  const draw=n=>{const s=spr(id);if(s){const k=Math.min(40/s.width,40/s.height,3);const w=s.width*k,h=s.height*k;x.clearRect(0,0,40,40);x.drawImage(s,(40-w)/2,(40-h)/2,w,h)}else if(n<8)setTimeout(()=>draw(n+1),250)};draw(0);return c}
-function owCombo(ev,set){const ids=Object.keys(OT());const box=document.createElement('div');box.className='owc';
+  const draw=n=>{const s=spr(id);if(s){let sx=0,sy=0,sw=s.width,sh=s.height;
+    if(OT()[id]?.mon){if(!s._bb){try{const d=s.getContext('2d').getImageData(0,0,s.width,s.height).data;let x0=s.width,x1=-1,y0=s.height,y1=-1;for(let yy=0;yy<s.height;yy++)for(let xx=0;xx<s.width;xx++)if(d[(yy*s.width+xx)*4+3]>20){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy}s._bb=x1>=0?[x0,y0,x1-x0+1,y1-y0+1]:[0,0,s.width,s.height]}catch(e){s._bb=[0,0,s.width,s.height]}}[sx,sy,sw,sh]=s._bb}
+    const k=Math.min(40/sw,40/sh,3);const w=sw*k,h=sh*k;x.clearRect(0,0,40,40);x.drawImage(s,sx,sy,sw,sh,(40-w)/2,(40-h)/2,w,h)}else if(n<8)setTimeout(()=>draw(n+1),250)};draw(0);return c}
+function owCombo(ev,set){const ids=owIds();const box=document.createElement('div');box.className='owc';
   const cap=document.createElement('span');cap.textContent='owID';box.appendChild(cap);
   const cur=document.createElement('div');cur.className='cur';box.appendChild(cur);
   const pop=document.createElement('div');pop.className='pop';box.appendChild(pop);
@@ -978,6 +998,7 @@ $('addBtns').innerHTML=Object.keys(SCHEMA).filter(t=>t!=='Script Tile').map(t=>`
 $('addBtns').onclick=e=>{if(e.target.dataset.a)addEvent(e.target.dataset.a)};
 $('dupBtn').onclick=duplicate;$('delBtn').onclick=delEvent;$('undoB').onclick=undo;$('redoB').onclick=redo;$('saveB').onclick=save;
 $('copyB').onclick=()=>navigator.clipboard.writeText(out());
+$('monT').checked=MON.on;$('monT').onchange=e=>{MON.on=e.target.checked;try{localStorage.edMon=MON.on?'1':'0'}catch(er){}monLoad();buildInspector();redraw()};monLoad();
 $('evView').onchange=e=>{evView=e.target.value;if(sel){const ev=repo[sel.map]?.events[sel.key];if(ev&&!evShown(ev))sel=null}buildInspector();redraw()};$('gridT').onchange=e=>{showGrid=e.target.checked;redraw()};$('sprT').onchange=e=>{showSpr=e.target.checked;redraw()};
 $('mapSel').onchange=e=>{active=e.target.value;focus(active);refreshAll()};
 $('newMap').onclick=()=>{let n=prompt('New map name:','Route_X');if(!n||repo[n])return;commit(()=>{repo[n]={map:n,bank:0,dimensions:{width:10,height:10,blockSize:8},mapType:'Route',weather:'Normal',isFlyable:true,isRunning:true,

@@ -4,7 +4,12 @@ window.OverworldMovement = (() => {
   const TILE = 32, DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
   const ORDER = ['down', 'left', 'up', 'right'];   // clockwise
-  const frame = (d, s) => window.getOverworldFrame(d, s);
+  // frame of an entity for a facing + step. A Pokémon NPC (owSpecies, made by OWSprites) has named frames, a normal NPC a number.
+  window.getOverworldFrameFor = window.getOverworldFrameFor || function (e, d, s) {
+    if (e && e.owSpecies && window.OWSprites) { const f = window.OWSprites.frameName(e.owSpecies, { shiny: e.owShiny, dir: d, step: s === 1 ? 1 : 0 }); if (f && e.scene && e.scene.textures.exists(f.key)) return f.frame; }
+    return window.getOverworldFrame(d, s);
+  };
+  const frame = (e, d, s) => window.getOverworldFrameFor(e, d, s);
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const tileOf = e => ({ x: Math.round((e.x - 16) / TILE), y: Math.round((e.y - 16) / TILE) });
 
@@ -31,16 +36,16 @@ window.OverworldMovement = (() => {
   function step(e, dir, done, ms = 240, hop = false, force = false) {
     const s = e.scene, [dx, dy] = DIRS[dir];
     e.direction = dir;
-    if (!force && !canStep(s, e, dx, dy)) { e.setFrame(frame(dir, 0)); done && done(); return; }
+    if (!force && !canStep(s, e, dx, dy)) { e.setFrame(frame(e, dir, 0)); done && done(); return; }
     e.alt = e.alt === 1 ? 2 : 1;
-    e.setFrame(frame(dir, e.alt));
+    e.setFrame(frame(e, dir, e.alt));
     const x0 = e.x, y0 = e.y;
     const t0 = tileOf(e); e.src = { x: t0.x, y: t0.y }; e.dest = { x: t0.x + dx, y: t0.y + dy };   // reserve both tiles until the step is over
     e.stepInfo = { x0, y0, dx, dy, dir, done, force };
     e.stepTw = s.tweens.addCounter({
       from: 0, to: 1, duration: ms,
       onUpdate: t => { const v = t.getValue(); e.x = x0 + dx * TILE * v; e.y = y0 + dy * TILE * v - (hop ? Math.sin(v * Math.PI) * 12 : 0); },
-      onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(dir, 0)); done && done(); },
+      onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(e, dir, 0)); done && done(); },
     });
   }
 
@@ -48,10 +53,10 @@ window.OverworldMovement = (() => {
   function inPlace(e, dir, done, scripted = false) {
     e.direction = dir;
     e.alt = e.alt === 1 ? 2 : 1;
-    e.setFrame(frame(dir, e.alt));
+    e.setFrame(frame(e, dir, e.alt));
     e.scene.time.delayedCall(120, () => {
       if (!e.scene) return;
-      e.setFrame(frame(dir, 0));
+      e.setFrame(frame(e, dir, 0));
       e.scene.time.delayedCall(120, () => { done && done(); });
     });
   }
@@ -63,7 +68,7 @@ window.OverworldMovement = (() => {
       delay: 140, repeat: 3,
       callback: () => {
         if (!scripted && e.scene.scriptRunning) { ev.remove(false); done && done(); return; }
-        i = (i + (clockwise ? 1 : 3)) % 4; e.direction = ORDER[i]; e.setFrame(frame(ORDER[i], 0));
+        i = (i + (clockwise ? 1 : 3)) % 4; e.direction = ORDER[i]; e.setFrame(frame(e, ORDER[i], 0));
         if (++n === 4 && done) done();
       },
     });
@@ -78,7 +83,7 @@ window.OverworldMovement = (() => {
     const m = /^(walk_in_place|look|walk|run|jump)_(up|down|left|right)$/.exec(action);
     if (m) {
       const [, k, d] = m;
-      if (k === 'look') { e.direction = d; e.setFrame(frame(d, 0)); onComplete && onComplete(); }
+      if (k === 'look') { e.direction = d; e.setFrame(frame(e, d, 0)); onComplete && onComplete(); }
       else if (k === 'walk') step(e, d, onComplete, 240, false, force);
       else if (k === 'run') step(e, d, onComplete, 120, false, force);
       else if (k === 'jump') step(e, d, onComplete, 300, true, force);
@@ -183,7 +188,7 @@ window.OverworldMovement = (() => {
     try { e.stepTw.stop(); } catch (_) { }
     const f = k >= 0.5 ? 1 : 0;
     e.x = i.x0 + i.dx * TILE * f; e.y = i.y0 + i.dy * TILE * f;
-    e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(i.dir, 0));
+    e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(e, i.dir, 0));
     const d = i.done; d && d(); return true;
   }
   function freezeAll(scene) { let n = 0; for (const e of (scene.npcs || [])) if (freeze(e)) n++; return n; }

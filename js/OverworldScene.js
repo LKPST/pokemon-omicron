@@ -1276,6 +1276,7 @@ class OverworldScene extends Phaser.Scene {
     this.npcGroup = this.add.group();
     this.npcs = [];
     this.triggers = [];
+    this._npcGen = (this._npcGen || 0) + 1;   // Pokémon NPCs load their sprite later: they check this to see they still belong
 
     for (const [mapKey, mapData] of Object.entries(window.OverworldMaps)) {
       const offsetPos = this.getMapWorldOffset(mapKey);
@@ -1302,6 +1303,8 @@ class OverworldScene extends Phaser.Scene {
       }
 
       if (eventData.eventType === 'NPC' && eventData.owID) {
+        // [POKEMON NPC] owID SPECIES_XXX = a Pokémon overworld sprite (tables/OverworldSprites.js) used as a normal NPC
+        if (/^SPECIES_/.test(eventData.owID) && !OW_TABLE()[eventData.owID]) { this.spawnMonNPC(eventData, key, mapKey, offsetX, offsetY); continue; }
         const tableEntry = OW_TABLE()[eventData.owID];
         if (!tableEntry) continue;
         // [SCRIPTS] hidden with the hideobject command
@@ -1338,6 +1341,34 @@ class OverworldScene extends Phaser.Scene {
         this.npcGroup.add(npcSprite);
       }
     }
+  }
+
+  // A Pokémon (owID SPECIES_XXX) as a regular NPC: the sprite is cut out on demand by OWSprites, then it behaves like any NPC
+  // (scripts, movementType, collision, talking). Drawn like the follower: art-fitted scale, feet 14 px below the tile centre.
+  spawnMonNPC(ev, key, mapKey, offsetX, offsetY) {
+    const OWS = window.OWSprites, sp = ev.owID;
+    if (!OWS || !OWS.hasSprite(sp)) { console.warn('[POKEMON NPC] "' + sp + '" has no entry in tables/OverworldSprites.js (or OverworldSpriteLoader.js is missing): ' + mapKey + '/' + key); return; }
+    if (window.OverworldScriptEngine && window.OverworldScriptEngine.isHidden(mapKey, key)) return;
+    const gen = this._npcGen;
+    const make = () => {
+      if (!this.sys || !this.sys.isActive() || !this.add || gen !== this._npcGen) return;
+      if (this.npcs.some(n => n.eventKey === key && n.mapName === mapKey)) return;
+      const f = OWS.frameName(sp, { dir: 'down', step: 0 });
+      if (!f || !this.textures.exists(f.key)) { console.warn('[POKEMON NPC] texture for ' + sp + ' was not made'); return; }
+      const x = Math.round(offsetX + ev.xPos * 32 + 16), y = Math.round(offsetY + ev.yPos * 32 + 16);
+      const F = window.OWFollower || {}, sc = OWS.fitScale(sp, Number(F.scale) || 2), fh = this.textures.getFrame(f.key, f.frame).height;
+      const spr = this.add.sprite(x, y, f.key, f.frame).setScale(sc).setOrigin(0.5, 1 - 14 / (fh * sc));   // the tile centre stays e.x / e.y, the feet sit 14 px lower
+      spr.owSpecies = sp; spr.owShiny = !!ev.shiny; OWS.retain(sp);
+      spr.footprint = { w: 1, h: 1 };
+      const fm = /(?:FACE|WALK_IN_PLACE|LOOK)_(UP|DOWN|LEFT|RIGHT)$/i.exec(String(ev.movementType || ''));
+      const fd = fm ? fm[1].toLowerCase() : String(ev.facing || '').toLowerCase();
+      spr.direction = ['up', 'down', 'left', 'right'].includes(fd) ? fd : 'down';
+      OWS.setFrame(spr, spr.direction, 0, spr.owShiny);
+      spr.eventConfig = ev; spr.eventKey = key; spr.mapName = mapKey;
+      spr.setDepth(y);
+      this.npcs.push(spr); this.npcGroup.add(spr);
+    };
+    if (OWS.has(this, sp)) make(); else OWS.ensure(this, [sp]).then(make);
   }
 
   updateNPCMovement() {
