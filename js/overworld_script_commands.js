@@ -48,6 +48,12 @@ window.OverworldScriptCommands = (() => {
   cmp('goto_if_ne', 'Jump if variable != value', (x, y) => x !== y);
   cmp('goto_if_lt', 'Jump if variable < value', (x, y) => x < y);
   cmp('goto_if_gt', 'Jump if variable > value', (x, y) => x > y);
+  // call_if_eq 4001 11 on_row_11  ->  run the script on_row_11 (it ends with `return`) when variable 4001 = 11, then come back here
+  const cmpCall = (name, help, f) => def(name, 'Control', help, [A('var', 'var'), A('value', 'num'), A('script', 'script')], (a, ctx, next) => { if (f(ctx.getVar(a.var), +a.value)) ctx.call(a.script); next(); });
+  cmpCall('call_if_eq', 'Run a script if variable = value (then come back)', (x, y) => x === y);
+  cmpCall('call_if_ne', 'Run a script if variable != value (then come back)', (x, y) => x !== y);
+  cmpCall('call_if_lt', 'Run a script if variable < value (then come back)', (x, y) => x < y);
+  cmpCall('call_if_gt', 'Run a script if variable > value (then come back)', (x, y) => x > y);
 
   // ------------------------------------------------------------------ flags / variables
   def('setflag', 'Flags', 'Set a flag (for example FLAG_GOT_STARTER)', [A('flag', 'flag')], (a, ctx, next) => { ctx.setFlag(a.flag, true); next(); });

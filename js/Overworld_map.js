@@ -403,10 +403,10 @@ window.OverworldMaps = {
       "NPC_4": {
         "eventType": "NPC",
         "xPos": 12,
-        "yPos": 3,
+        "yPos": 2,
         "owID": "Trainer_69",
         "script": "",
-        "movementType": "MOVEMENT_TYPE_FACE_UP",
+        "movementType": "MOVEMENT_TYPE_FACE_DOWN",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
@@ -414,10 +414,10 @@ window.OverworldMaps = {
       "NPC_5": {
         "eventType": "NPC",
         "xPos": 12,
-        "yPos": 2,
+        "yPos": 3,
         "owID": "Trainer_2",
         "script": "",
-        "movementType": "MOVEMENT_TYPE_FACE_DOWN",
+        "movementType": "MOVEMENT_TYPE_FACE_UP",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
@@ -459,7 +459,7 @@ window.OverworldMaps = {
         "eventType": "Script",
         "xPos": 11,
         "yPos": 0,
-        "script": "",
+        "script": "8000_2",
         "scriptVar": "8000",
         "varValue": 2
       },

@@ -598,4 +598,165 @@ Nyaaahhh...
 }
 release
 end
+
+start: "8000_2"
+lock
+applymovement npc_4 yes
+{
+look_up
+emote_exclaim
+}
+applymovement npc_5 yes
+{
+emote_exclaim
+}
+waitmovement
+msgbox.normal
+{
+{blue}Wilhelm{/}: Looks like someone finally\n
+decided to wake up!\p
+We were starting to think you got\n
+eaten by a Slakoth.
+}
+getpos 4000 4001
+call_if_eq arg1=4000 arg2=11 arg3=on_row_11
+call_if_eq arg1=4000 arg2=12 arg3=on_row_12
+call_if_eq arg1=4000 arg2=13 arg3=on_row_13
+applymovement NPC_4
+{
+look_down
+}
+msgbox.normal
+{
+Since you're joining us on Route 1,\n
+pay close attention.\p
+I've had my Pokémon for months, so\n
+I know these roads inside and out.
+}
+msgbox.normal
+{
+First rule of wild Pokémon: tall\n
+grass is their playground.\p
+If you step in without a team,\n
+you're just asking for trouble!
+}
+applymovement NPC_Wilhelm
+{
+emote_question
+}
+msgbox.normal
+{
+Isn't that right, {red}Hazel{/}?\n
+Experience speaks for itself.
+}
+msgbox.normal
+{
+{red}Hazel{/}: Experience?\p
+You caught one Rockruff last month\n
+and haven't stopped talking about\p
+it since!
+}
+msgbox.normal
+{
+But... he's actually right for\n
+once.\p
+Walking in tall grass without a\n
+Pokémon is a terrible idea.
+}
+applymovement NPC_5 yes
+{
+emote_exclaim
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: See? I told you! Now,\n
+let's keep moving.
+}
+waitmovement
+applymovement NPC_5 yes
+{
+walk_down*4
+}
+applymovement NPC_4 yes
+{
+walk_down*4
+}
+applymovement player yes
+{
+walk_down*4
+}
+msgbox.normal
+{
+{big} WAIT!
+}
+applymovement NPC_5
+{
+look_up
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: Hold up a second!\n
+Look over there in the grass.
+}
+applymovement NPC_5
+{
+look_down
+}
+movecamera 0 6
+msgbox.normal
+{
+{blue}Wilhelm{/}: See those wild Pokémon roaming around out in the open? You can actually spot them before they even spot you.
+}
+resetcamera
+applymovement NPC_5
+{
+look_up
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: Honestly, I'm surprised a Professor's Aide like you didn't know that already.
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: Then again, fetching bags and running errands doesn't really take much battle brain, does it?
+}
+applymovement NPC_4
+{
+walk_in_place_down
+}
+msgbox.normal
+{
+{red}Hazel{/}: Wilhelm! Don't be so rude! Being an Aide is a huge responsibility!
+}
+applymovement NPC_4
+{
+look_up
+}
+msgbox.normal
+{
+{red}Hazel{/}: Though... observing how wild Pokémon move before approaching them is pretty solid advice.
+}
+msgbox.normal
+{
+{red}Hazel{/}: Just ignore his big mouth. He's just flexing because he has a Poké Ball on his belt.
+}
+applymovement NPC_4
+{
+look_down
+}
+msgbox.normal
+{
+{red}Hazel{/}: If I had a choice, I'd skip all these local Pokémon and start my journey with a Mew!
+}
+msgbox.normal
+{
+{red}Hazel{/}: Cute, powerful, and mysterious... Mew is literally the ultimate Pokémon!
+}
+msgbox.normal
+{
+{blue}Wilhelm{/}: Dream on, Hazel! Mew is a Mythical Pokémon. You can't just find one hanging out in Route 1 grass!
+}
+start: arg1=on_row_11 arg2=applymovement arg3=player arg4="{" arg5=walk_down arg6=walk_right arg7=look_down arg8=) arg9=return arg10=start: arg11=on_row_12 arg12=applymovement arg13=player arg14="{" arg15=walk_down arg16=) arg17=return arg18=start: arg19=on_row_13 arg20=applymovement arg21=player arg22="{" arg23=walk_down arg24=walk_left arg25=look_down arg26=) arg27=return
+}
+end
 `;
