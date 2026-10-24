@@ -4,12 +4,17 @@ window.OverworldMovement = (() => {
   const TILE = 32, DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
   const ORDER = ['down', 'left', 'up', 'right'];   // clockwise
-  // frame of an entity for a facing + step. A Pokémon NPC (owSpecies, made by OWSprites) has named frames, a normal NPC a number.
-  window.getOverworldFrameFor = window.getOverworldFrameFor || function (e, d, s) {
+  // Frame of an entity for a facing + step (NOT the same as ow_table.js's getOverworldFrameFor(name, anim, dir, step), which this calls):
+  //  - a Pokémon NPC (owSpecies, made by OWSprites) has named frames,
+  //  - an NPC whose sprite has a frameMap (Overworld Sprite Editor) uses its 'walk' frames,
+  //  - everything else uses the fixed 4x4 layout (getOverworldFrame).
+  window.getOverworldFrameOf = function (e, d, s) {
     if (e && e.owSpecies && window.OWSprites) { const f = window.OWSprites.frameName(e.owSpecies, { shiny: e.owShiny, dir: d, step: s === 1 ? 1 : 0 }); if (f && e.scene && e.scene.textures.exists(f.key)) return f.frame; }
+    const id = e && e.eventConfig && e.eventConfig.owID, T = window.OverworldTable;
+    if (id && T && T[id] && T[id].frameMap && typeof window.getOverworldFrameFor === 'function') { try { const f = window.getOverworldFrameFor(id, 'walk', d, s); if (typeof f === 'number') return f; } catch (er) { /* fall back */ } }
     return window.getOverworldFrame(d, s);
   };
-  const frame = (e, d, s) => window.getOverworldFrameFor(e, d, s);
+  const frame = (e, d, s) => window.getOverworldFrameOf(e, d, s);
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const tileOf = e => ({ x: Math.round((e.x - 16) / TILE), y: Math.round((e.y - 16) / TILE) });
 

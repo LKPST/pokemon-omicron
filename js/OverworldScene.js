@@ -1276,6 +1276,7 @@ class OverworldScene extends Phaser.Scene {
     this.npcGroup = this.add.group();
     this.npcs = [];
     this.triggers = [];
+    this.signposts = [];
     this._npcGen = (this._npcGen || 0) + 1;   // Pokémon NPCs load their sprite later: they check this to see they still belong
 
     for (const [mapKey, mapData] of Object.entries(window.OverworldMaps)) {
@@ -1290,6 +1291,11 @@ class OverworldScene extends Phaser.Scene {
     for (const [key, eventData] of Object.entries(mapData.events)) {
       // [NEW] Warp and Script events are walk-on triggers. They are NOT added to this.npcs,
       // so they never block the player (isPassable only checks this.npcs).
+      // [SIGNPOST] a Signpost runs its script when the player presses the talk key while facing its tile (see tryInteract)
+      if (eventData.eventType === 'Signpost') {
+        (this.signposts = this.signposts || []).push({ key, mapKey, config: eventData, wx: Math.round(offsetX / 32) + (eventData.xPos || 0), wy: Math.round(offsetY / 32) + (eventData.yPos || 0) });
+        continue;
+      }
       if (eventData.eventType === 'Warp' || eventData.eventType === 'Script' || eventData.eventType === 'Script Tile') {
         this.triggers.push({
           type: eventData.eventType === 'Warp' ? 'Warp' : 'Script',
@@ -1335,13 +1341,19 @@ class OverworldScene extends Phaser.Scene {
         npcSprite.eventConfig = eventData;
         npcSprite.eventKey = key;   // [SCRIPTS] lets scripts say applymovement NPC_Portia
         npcSprite.mapName = mapKey;
-        npcSprite.setDepth(y);
+        npcSprite._owAttr = this.owAttrOf(eventData.owTileAttribute || tableEntry.owTileAttribute);
+        npcSprite.setDepth(this.npcDepth(npcSprite));
 
         this.npcs.push(npcSprite);
         this.npcGroup.add(npcSprite);
       }
     }
   }
+
+  // owTileAttribute of an NPC (ow_table.js field, or on the event): 'None' = follows the tile behavior (normal depth),
+  // 'On Top' = always above everything (tiles, NPCs, the player), 'Under' = just above layer 1, below layers 2-5, the NPCs and the player.
+  owAttrOf(v) { const s = String(v || '').toLowerCase().replace(/[^a-z]/g, ''); return (s === 'ontop' || s === 'top') ? 'top' : (s === 'under' || s === 'below') ? 'under' : ''; }
+  npcDepth(n) { const a = n._owAttr; return a === 'top' ? 4100 + n.y / 1000 : a === 'under' ? -275 + n.y / 100000 : n.y; }   // tiles: layer 1 = -300 ... layer 5 = -100, 'above' tiles 4000+, weather 5000
 
   // A Pokémon (owID SPECIES_XXX) as a regular NPC: the sprite is cut out on demand by OWSprites, then it behaves like any NPC
   // (scripts, movementType, collision, talking). Drawn like the follower: art-fitted scale, feet 14 px below the tile centre.
@@ -1365,7 +1377,8 @@ class OverworldScene extends Phaser.Scene {
       spr.direction = ['up', 'down', 'left', 'right'].includes(fd) ? fd : 'down';
       OWS.setFrame(spr, spr.direction, 0, spr.owShiny);
       spr.eventConfig = ev; spr.eventKey = key; spr.mapName = mapKey;
-      spr.setDepth(y);
+      spr._owAttr = this.owAttrOf(ev.owTileAttribute);
+      spr.setDepth(this.npcDepth(spr));
       this.npcs.push(spr); this.npcGroup.add(spr);
     };
     if (OWS.has(this, sp)) make(); else OWS.ensure(this, [sp]).then(make);
@@ -1540,7 +1553,7 @@ class OverworldScene extends Phaser.Scene {
   }
 
   tryInteract() {
-    if (!this.npcs || this.npcs.length === 0) return;
+    if (this.scriptRunning) return;
 
     let targetX = Math.round((this.player.x - 16) / 32);
     let targetY = Math.round((this.player.y - 16) / 32);
@@ -1549,7 +1562,13 @@ class OverworldScene extends Phaser.Scene {
     else if (this.player.direction === 'left') targetX -= 1;
     else if (this.player.direction === 'right') targetX += 1;
 
-    const targetNPC = this.npcs.find(npc => this.npcOccupiesTile(npc, targetX, targetY));
+    const targetNPC = (this.npcs || []).find(npc => this.npcOccupiesTile(npc, targetX, targetY));
+    if (!targetNPC) {   // [SIGNPOST] nobody there: a signpost on that tile?
+      const sp = (this.signposts || []).find(s => s.wx === targetX && s.wy === targetY && s.config.script);
+      const E = window.OverworldScriptEngine;
+      if (sp && E && !(sp.config.scriptVar && E.getVar(sp.config.scriptVar) !== (Number(sp.config.varValue) || 0))) { this.activeNPC = null; E.runScript(this, sp.config.script); }
+      return;
+    }
 
     if (targetNPC && targetNPC.eventConfig) {
       const scriptName = targetNPC.eventConfig.script;
@@ -1869,7 +1888,7 @@ class OverworldScene extends Phaser.Scene {
     if (this.player && this.player.direction) { this.lastDir = this.player.direction; const sd1 = window.GameStateManager && window.GameStateManager.saveData; if (sd1) sd1.facing = this.lastDir; }
     if (this.player && this.npcs) {
       this.player.setDepth(this.player.y);
-      this.npcs.forEach(npc => npc.setDepth(npc.y));
+      this.npcs.forEach(npc => npc.setDepth(this.npcDepth(npc)));
     }
 
     // [SUMMARY] while the summary screen is open the overworld does nothing (the screen reads the keys itself)

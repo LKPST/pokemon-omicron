@@ -143,7 +143,7 @@ dialog::backdrop{background:#000a}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const status=t=>{$('st').textContent=t;$('st').title=t};
-const FIELD_ORDER=['spriteID','frames','genderBased','owType','owDimension','owScale','trueDimension','isRunning','isFishing','isSurfing','isCycling','isFlying','owSprite','shinySprite'];
+const FIELD_ORDER=['spriteID','frames','genderBased','owType','owDimension','owScale','trueDimension','isRunning','isFishing','isSurfing','isCycling','isFlying','owTileAttribute','owSprite','shinySprite'];
 const FLAGS=['genderBased','isRunning','isFishing','isSurfing','isCycling','isFlying'];
 const DEFAULT_SUFFIX=`
 
@@ -244,6 +244,7 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   <div class="row f"><label>Name</label><input type="text" id="fn" value="${esc(e.name)}"></div>
   <div class="row f"><label>spriteID</label><input type="text" id="fid" value="${esc(F.spriteID)}"></div>
   <div class="row f"><label>owType</label><input type="text" id="fty" list="tyl" value="${esc(F.owType)}"><datalist id="tyl"><option>NPC<option>Pokemon<option>Building<option>Trainer</datalist></div>
+  <div class="row f"><label>owTileAttribute</label><select id="fta"><option value="">None (follows the tile behavior)</option><option value="On Top">On Top (above tiles, NPCs and the player)</option><option value="Under">Under (below NPCs and tiles, above layer 1)</option></select></div>
   <div class="row f"><label>owSprite</label><input type="text" id="fsp" value="${esc(F.owSprite)}"></div>
   <div class="row f"><label>shinySprite</label><input type="text" id="fsh" value="${esc(F.shinySprite||'')}" placeholder="(optional)"></div>
   <div class="row f"><label>owDimension</label><input type="text" id="fod" value="${esc(F.owDimension)}" style="width:80px"><span class="hint">collision box</span></div>
@@ -258,6 +259,7 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   const nm=$('fn');nm.oninput=()=>{const old=slug(e.name);e.name=nm.value;if(F.spriteID===old+'_ow')F.spriteID=slug(e.name)+'_ow',$('fid').value=F.spriteID;
     if(F.owSprite==='graphics/overworld/'+old+'.png')F.owSprite='graphics/overworld/'+slug(e.name)+'.png',$('fsp').value=F.owSprite;renderList()};
   const bind=(id,fn)=>{$(id).oninput=()=>{fn($(id).value);renderList();redraw()}};
+  $('fta').value=F.owTileAttribute||'';$('fta').onchange=()=>{const v=$('fta').value;if(v)F.owTileAttribute=v;else delete F.owTileAttribute;status('owTileAttribute '+(v||'None')+' set on '+e.name+'.');renderList()};
   bind('fid',v=>F.spriteID=v);bind('fty',v=>F.owType=v);bind('fsp',v=>F.owSprite=v);bind('fod',v=>F.owDimension=v);
   bind('fsc',v=>{const n=+v;if(!(n>0)||n===1){delete F.owScale;status('owScale cleared on '+e.name+' (1 = normal size).')}else{F.owScale=n;status('owScale '+n+' set on '+e.name+'. It is written to ow_table.js when you download.')}});
   bind('fsh',v=>{if(v)F.shinySprite=v;else delete F.shinySprite});
@@ -674,11 +676,17 @@ $('ghGo').onclick=async ev=>{ev.preventDefault();GHC.token=$('ghTok').value.trim
     const ref=await ghApi('/git/ref/heads/'+encodeURIComponent(br)),parent=ref.object.sha,pc=await ghApi('/git/commits/'+parent),tree=[];let n=0;
     for(const x of picked){say(`Uploading ${++n}/${picked.length}: ${x.path}`);const f=await x.get();
       const b=await ghApi('/git/blobs','POST',f.blob?{content:await ghB64(f.blob),encoding:'base64'}:{content:f.text,encoding:'utf-8'});tree.push({path:x.path,mode:'100644',type:'blob',sha:b.sha})}
-    say('Building the commit…');const nt=await ghApi('/git/trees','POST',{base_tree:pc.tree.sha,tree});
-    if(nt.sha===pc.tree.sha){say('Nothing to commit: the repository already has these exact files.','var(--ok)');$('ghGo').disabled=false;return}
-    const cm=await ghApi('/git/commits','POST',{message:msg,tree:nt.sha,parents:[parent]});await ghApi('/git/refs/heads/'+encodeURIComponent(br),'PATCH',{sha:cm.sha});
+    say('Building the commit…');const cm=await ghCommit(br,msg,tree,say);
+    if(!cm){say('Nothing to commit: the repository already has these exact files.','var(--ok)');$('ghGo').disabled=false;return}
     GHC.msg='';ghStore();say(`✓ Committed ${picked.length} file(s) to ${br}: ${cm.sha.slice(0,7)}. GitHub Pages updates in a minute or two.`,'var(--ok)');status('Committed to GitHub: '+cm.sha.slice(0,7));
   }catch(e){say('Could not commit: '+e.message,'var(--bad)')}$('ghGo').disabled=false};
+// commit with retry: if the branch moved meanwhile ("not a fast forward" 422), rebuild on the new head and try again
+async function ghCommit(br,msg,tree,say){let last;for(let a=0;a<4;a++){try{
+  const ref=await ghApi('/git/ref/heads/'+encodeURIComponent(br)),parent=ref.object.sha,pc=await ghApi('/git/commits/'+parent);
+  const nt=await ghApi('/git/trees','POST',{base_tree:pc.tree.sha,tree});if(nt.sha===pc.tree.sha)return null;
+  const cm=await ghApi('/git/commits','POST',{message:msg,tree:nt.sha,parents:[parent]});await ghApi('/git/refs/heads/'+encodeURIComponent(br),'PATCH',{sha:cm.sha});return cm}
+  catch(e){last=e;if(!/fast.?forward|422|409|reference/i.test(String(e.message)))throw e;say&&say('Branch changed while pushing, retrying ('+(a+1)+'/3)…');await new Promise(r=>setTimeout(r,900*(a+1)))}}
+  throw last}
 $('ghClose').onclick=ev=>{ev.preventDefault();$('ghd').close()};$('bGit').onclick=ghOpen;
 window.OWED=S;window.OWED_API={tableJs,layoutCanvas,rectOf};
 </script></body></html>
