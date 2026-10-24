@@ -105,6 +105,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
     <button id="saveB" class="on">💾 Save Overworld_map.js</button><button id="copyB">Copy</button><button id="owB" title="open the Overworld Sprite Editor (NPC / trainer sprites) here">🧍 OW Sprites</button><button id="pushB" title="paste or upload new code and push it to GitHub">⚡ Push code</button><button id="ghBtn" title="commit the changed files straight to the repository">⬆ Commit to GitHub</button><button id="tilesB" title="add / edit tiles, cut tiles from a sheet">🧱 Tiles</button>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="gridT" checked> Grid</label>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="sprT" checked> Sprites</label>
+    <select id="evView" title="Which events to show and click (when several are on the same tile)"><option value="">All events</option><option value="NPC">NPCs only</option><option value="Warp">Warps only</option><option value="Script">Scripts only</option><option value="Signpost">Signposts only</option><option value="none">No events</option></select>
     <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="borT" checked> Border</label>
     <input id="assetBase" placeholder="asset root (auto)" title="Folder that contains graphics/ , relative to this page. Found automatically; type ../ or similar to force it." style="width:120px">
     <span style="color:#777">Wheel = zoom · Space/Middle/Right-drag = pan · Shift-click palette = pick · V P B R E I = tools</span>
@@ -190,7 +191,8 @@ window.__ready.then(()=>{
 const TS=32,$=id=>document.getElementById(id),clone=o=>JSON.parse(JSON.stringify(o)),uniq=a=>[...new Set(a)];
 const OT=()=>window.OverworldTable||{},TL=()=>window.OverworldTiles||{};
 let repo={},active='',tool='pencil',brush={tid:0,cells:[['0|0']],frames:new Set([0])},sel=null,cam={x:60,y:60,z:1};
-let hist=[],redoS=[],pending=false,unsaved=false,fileHandle=null,hover=null,stroke=null,rectA=null,drag=null,pan=null,pal=null,spaceDown=false,showGrid=true,showSpr=true;
+let hist=[],redoS=[],pending=false,unsaved=false,fileHandle=null,hover=null,stroke=null,rectA=null,drag=null,pan=null,pal=null,spaceDown=false,showGrid=true,showSpr=true,evView='',lastJump=null;
+const evShown=ev=>!evView||(evView==='none'?false:evView==='Script'?/^Script/.test(ev.eventType):ev.eventType===evView);
 const cv=$('cv'),ctx=cv.getContext('2d');
 const EMPTY=l=>l>1?'':'0|0';
 // cell = "tileID|frameID|behavior"  0 passable · 1 blocked · 2 passable, NPC below · 3 surfable · 4 diveable · 5 grass (wild Pokémon roam and fight here; passable)
@@ -303,6 +305,7 @@ function draw(){const W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W||cv.hei
     ctx.fillStyle='#fff';ctx.font=`${12/cam.z}px monospace`;ctx.fillText(k,p.x*TS,p.y*TS-4/cam.z)}
   for(const[k,m]of Object.entries(repo)){const p=L[k];
     for(const[ek,ev]of Object.entries(m.events)){
+      if(!evShown(ev))continue;
       const fp=footprint(ev);if(fp){ctx.fillStyle='rgba(255,0,0,.14)';ctx.fillRect((p.x+fp.x0)*TS,(p.y+fp.y0)*TS,(fp.x1-fp.x0+1)*TS,(fp.y1-fp.y0+1)*TS)}
       const R=evRect(p,ev),s=ev.eventType==='NPC'&&showSpr?spr(ev.owID,facingOf(ev)):null;
       if(s)ctx.drawImage(s,R.x,R.y,R.w,R.h);
@@ -333,8 +336,14 @@ function redo(){if(!redoS.length)return;hist.push(snap());restore(redoS.pop())}
 const toWorld=(mx,my)=>({x:(mx-cam.x)/cam.z,y:(my-cam.y)/cam.z});
 function cellAt(wx,wy){const L=layout();for(const[k,p]of Object.entries(L)){const m=repo[k],gx=Math.floor(wx/TS)-p.x,gy=Math.floor(wy/TS)-p.y;
   if(gx>=0&&gy>=0&&gx<m.dimensions.width&&gy<m.dimensions.height)return{map:k,gx,gy}}return null}
-function eventAt(wx,wy){const L=layout();let hit=null;for(const[k,m]of Object.entries(repo))for(const[ek,ev]of Object.entries(m.events)){
-  const R=evRect(L[k],ev);if(wx>=R.x&&wx<R.x+R.w&&wy>=R.y&&wy<R.y+R.h)hit={map:k,key:ek}}return hit}
+function eventsAt(wx,wy){const L=layout(),hits=[];for(const[k,m]of Object.entries(repo))for(const[ek,ev]of Object.entries(m.events)){if(!evShown(ev))continue;
+  const R=evRect(L[k],ev);if(wx>=R.x&&wx<R.x+R.w&&wy>=R.y&&wy<R.y+R.h)hits.push({map:k,key:ek})}return hits}
+function eventAt(wx,wy){const l=eventsAt(wx,wy);return l.length?l[l.length-1]:null}
+// jump to the map a warp leads to (and select the warp it lands on)
+function centerOn(map,gx,gy){const p=layout()[map];if(!p)return;cam.x=cv.clientWidth/2-(p.x+gx+.5)*TS*cam.z;cam.y=cv.clientHeight/2-(p.y+gy+.5)*TS*cam.z}
+function goWarp(from){const ev=repo[from.map]?.events[from.key];if(!ev||ev.eventType!=='Warp')return false;const t=findKey(ev.map);if(!t){notify('This warp has no valid destination map ("'+(ev.map||'')+'")','bad');return false}
+  lastJump={map:from.map,key:from.key};active=t;const tw=ev.targetWarp&&repo[t].events[ev.targetWarp];sel=tw?{map:t,key:ev.targetWarp}:null;refreshAll();
+  const gx=tw?tw.xPos:(ev.targetX!=null?ev.targetX:Math.floor(repo[t].dimensions.width/2)),gy=tw?tw.yPos:(ev.targetY!=null?ev.targetY:Math.floor(repo[t].dimensions.height/2));centerOn(t,gx,gy);redraw();notify('Jumped to '+t,'ok');return true}
 
 // ---------- painting ----------
 function setCell(k,r,c,v,l=layer){const g=repo[k]['tileData_'+l];if(!g[r]||g[r][c]===undefined||g[r][c]===v)return;touch();g[r][c]=v}
@@ -355,6 +364,7 @@ function fillRect(a,b,pat){const x0=Math.min(a.gx,b.gx),x1=Math.max(a.gx,b.gx),y
 
 // ---------- mouse ----------
 cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('dblclick',e=>{if(tool!=='select'||!sel)return;const w=toWorld(e.offsetX,e.offsetY);if(eventsAt(w.x,w.y).some(x=>x.map===sel.map&&x.key===sel.key))goWarp(sel)});
 cv.addEventListener('mousedown',e=>{cv.focus();
   if(e.button===1||e.button===2||spaceDown){pan={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};return}
   if(tab==='border')return;
@@ -363,7 +373,7 @@ cv.addEventListener('mousedown',e=>{cv.focus();
   if(cell.map!==active){active=cell.map;refreshAll()}
   const val=brush.cells,erase=[[EMPTY(layer)]];
   if(tool==='tsel'){if(TSL.map!==cell.map){TSL.map=cell.map;TSL.set.clear()}TSL.last=cell;TSL.drag={map:cell.map,a:cell,b:cell,rm:e.ctrlKey||e.metaKey||e.altKey};redraw();return}
-  if(tool==='select'){const h=eventAt(w.x,w.y);sel=h;if(h){const ev=repo[h.map].events[h.key];drag={ox:cell.gx-ev.xPos,oy:cell.gy-ev.yPos,from:h}}buildInspector();redraw();return}
+  if(tool==='select'){const hs=eventsAt(w.x,w.y);let h=hs.length?hs[hs.length-1]:null;if(hs.length>1&&sel){const i=hs.findIndex(x=>x.map===sel.map&&x.key===sel.key);if(i>=0)h=e.altKey?hs[(i+1)%hs.length]:hs[i]}sel=h;if(h){const ev=repo[h.map].events[h.key];drag={ox:cell.gx-ev.xPos,oy:cell.gy-ev.yPos,from:h}}buildInspector();redraw();return}
   if(tool==='pencil'||tool==='erase'||tool==='paste'||tool==='behav'){
     const fn=tool==='paste'?(m,x,y)=>stampClip(m,x,y):tool==='behav'?(m,x,y)=>{const v=repo[m]['tileData_'+layer][y]?.[x];if(v)setCell(m,y,x,setPass(v,pass))}:(m,x,y)=>stamp(m,x,y,tool==='erase'?erase:val);
     stroke={last:cell,fn};fn(cell.map,cell.gx,cell.gy);redraw()}
@@ -455,6 +465,14 @@ function owCombo(ev,set){const ids=Object.keys(OT());const box=document.createEl
   q.onblur=()=>setTimeout(()=>box.classList.remove('open'),120);
   showCur();return box}
 function rowTo(box,label,el){const l=document.createElement('label');l.textContent=label;l.appendChild(el);box.appendChild(l)}
+function extraInspector(I,ev,m){
+  const same=Object.entries(m.events).filter(([,e])=>e.xPos===ev.xPos&&e.yPos===ev.yPos);
+  if(same.length>1){const r=document.createElement('div');r.className='row';r.appendChild(Object.assign(document.createElement('span'),{textContent:'Stacked on this tile: ',className:'help'}));
+    same.forEach(([k,e])=>{const b=document.createElement('button');b.textContent=`${e.eventType} · ${k}`;if(sel&&k===sel.key)b.className='on';b.onclick=()=>{sel={map:sel.map,key:k};buildInspector();redraw()};r.appendChild(b)});I.appendChild(r);
+    I.appendChild(Object.assign(document.createElement('div'),{className:'help',textContent:'Tip: Alt+click on the tile cycles through them. The “All events” box next to Sprites can show one type only.'}))}
+  if(ev.eventType==='Warp'){const r=document.createElement('div');r.className='row';const b=document.createElement('button');b.textContent='→ Go to destination map';b.onclick=()=>goWarp(sel);r.appendChild(b);
+    if(lastJump&&repo[lastJump.map]){const bb=document.createElement('button');bb.textContent='↩ Back to '+lastJump.map;bb.onclick=()=>{const j=lastJump;lastJump=null;active=j.map;sel=repo[j.map].events[j.key]?j:null;refreshAll();const e2=repo[j.map].events[j.key];if(e2)centerOn(j.map,e2.xPos,e2.yPos);redraw()};r.appendChild(bb)}
+    I.appendChild(r);I.appendChild(Object.assign(document.createElement('div'),{className:'help',textContent:'Double-click a warp (Select tool) to jump to the map it leads to.'}))}}
 function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&repo[sel.map]?.events[sel.key];
   if(!ev){I.innerHTML='<i>Pick the Select tool (V) and click an event.</i>';return}
   const m=repo[sel.map];
@@ -467,7 +485,8 @@ function buildInspector(){const I=$('inspector');I.innerHTML='';const ev=sel&&re
   if((SCHEMA[ev.eventType]||[]).some(x=>x[0]==='script')){const r=document.createElement('div');r.className='row';
     const b1=document.createElement('button');b1.textContent='✎ Open in Scripts editor';b1.onclick=()=>seOpenEditor(ev.script||undefined);
     const b2=document.createElement('button');b2.textContent='+ New script for this event';b2.onclick=()=>{if(!EN()||!window.OverworldScriptCommands){seOpenEditor();return}const nm=seNew();if(nm){commit(()=>{ev.script=nm});seOpenEditor(nm)}};
-    r.appendChild(b1);r.appendChild(b2);I.appendChild(r)}}
+    r.appendChild(b1);r.appendChild(b2);I.appendChild(r)}
+  extraInspector(I,ev,m)}
 function renameMap(o,n){if(!n||repo[n])return;const r={};for(const[k,m]of Object.entries(repo))r[k===o?n:k]=m;repo=r;repo[n].map=n;
   for(const m of Object.values(repo)){for(const c of Object.values(m.connections))if(c&&findKey(c[0])===null&&norm(c[0])===norm(o))c[0]=n;
     for(const e of Object.values(m.events))if(e.map&&norm(e.map)===norm(o))e.map=n}if(startPos.map===o)startPos.map=n;active=n;if(sel?.map===o)sel.map=n}
@@ -959,7 +978,7 @@ $('addBtns').innerHTML=Object.keys(SCHEMA).filter(t=>t!=='Script Tile').map(t=>`
 $('addBtns').onclick=e=>{if(e.target.dataset.a)addEvent(e.target.dataset.a)};
 $('dupBtn').onclick=duplicate;$('delBtn').onclick=delEvent;$('undoB').onclick=undo;$('redoB').onclick=redo;$('saveB').onclick=save;
 $('copyB').onclick=()=>navigator.clipboard.writeText(out());
-$('gridT').onchange=e=>{showGrid=e.target.checked;redraw()};$('sprT').onchange=e=>{showSpr=e.target.checked;redraw()};
+$('evView').onchange=e=>{evView=e.target.value;if(sel){const ev=repo[sel.map]?.events[sel.key];if(ev&&!evShown(ev))sel=null}buildInspector();redraw()};$('gridT').onchange=e=>{showGrid=e.target.checked;redraw()};$('sprT').onchange=e=>{showSpr=e.target.checked;redraw()};
 $('mapSel').onchange=e=>{active=e.target.value;focus(active);refreshAll()};
 $('newMap').onclick=()=>{let n=prompt('New map name:','Route_X');if(!n||repo[n])return;commit(()=>{repo[n]={map:n,bank:0,dimensions:{width:10,height:10,blockSize:8},mapType:'Route',weather:'Normal',isFlyable:true,isRunning:true,
   music:repo[active]?.music||'',connections:{up:null,down:null,left:null,right:null},events:{},wildData:{morning:[],afternoon:[],night:[],dawn:[]},tileData:[]};if(repo[active]?.borderData)repo[n].borderData=clone(repo[active].borderData);fit(repo[n]);fitBorder(repo[n]);active=n});focus(n)};

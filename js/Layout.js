@@ -103,7 +103,7 @@
       if (document.hidden) { hiddenAt = performance.now(); return; }
       const away = hiddenAt ? performance.now() - hiddenAt : 0; hiddenAt = 0;
       try { const g = window.game, ctx = g && g.sound && g.sound.context; if (ctx && ctx.state !== 'running') ctx.resume().catch(() => { /* needs a tap */ }); } catch (e) { /* ignore */ }
-      if (away > 20000 && PMAudio.mapOk()) setTimeout(() => PMAudio.refreshMap(), 300);   // long away: start the map music fresh
+      // (no restart here: coming back from another tab keeps the music going; kick() below only resumes it if the browser paused it)
       kick(false); setTimeout(() => kick(false), 400);
     });
     window.addEventListener('pageshow', () => kick(false));

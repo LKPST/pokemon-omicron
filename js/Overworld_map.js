@@ -21,13 +21,13 @@ window.OverworldMaps = {
     "events": {
       "NPC_Portia": {
         "eventType": "NPC",
-        "owID": "Trainer_2",
+        "owID": "Trainer_19",
         "script": "portia_battle_trigger",
-        "movementType": "MOVEMENT_TYPE_HOP_AROUND",
+        "movementType": "MOVEMENT_TYPE_WANDER_AROUND",
         "isTrainer": true,
         "viewRadius": 3,
-        "xPos": 14,
-        "yPos": 12,
+        "xPos": 24,
+        "yPos": 13,
         "flagID": "FLAG_DEFEATED_PORTIA"
       },
       "Warp_1": {
@@ -43,33 +43,90 @@ window.OverworldMaps = {
       },
       "NPC_1": {
         "eventType": "NPC",
-        "xPos": 11,
-        "yPos": 13,
-        "owID": "Trainer_69",
+        "xPos": 14,
+        "yPos": 16,
+        "owID": "Trainer_8",
         "script": "roxanne_gym_leader",
-        "movementType": "MOVEMENT_TYPE_SPIN_COUNTER_CLOCKWISE",
+        "movementType": "MOVEMENT_TYPE_WANDER_UP_AND_DOWN",
         "isTrainer": true,
         "viewRadius": 3,
         "flagID": ""
       },
       "NPC_2": {
         "eventType": "NPC",
-        "xPos": 4,
-        "yPos": 12,
-        "owID": "Trainer_1",
+        "xPos": 6,
+        "yPos": 15,
+        "owID": "Trainer_11",
         "script": "new_script",
-        "movementType": "MOVEMENT_TYPE_WALK_IN_PLACE_DOWN",
+        "movementType": "MOVEMENT_TYPE_WANDER_LEFT_RIGHT",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
       },
       "NPC_3": {
         "eventType": "NPC",
-        "xPos": 19,
-        "yPos": 16,
-        "owID": "Portia",
+        "xPos": 17,
+        "yPos": 4,
+        "owID": "Trainer_22",
         "script": "giveitem",
         "movementType": "MOVEMENT_TYPE_PATROL_UP_DOWN",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": ""
+      },
+      "Warp_2": {
+        "eventType": "Warp",
+        "xPos": 22,
+        "yPos": 8,
+        "map": "Route 1",
+        "facing": "Down",
+        "warpType": "Normal"
+      },
+      "Warp_3": {
+        "eventType": "Warp",
+        "xPos": 8,
+        "yPos": 20,
+        "map": "Route 1",
+        "facing": "Down",
+        "warpType": "Normal"
+      },
+      "Warp_4": {
+        "eventType": "Warp",
+        "xPos": 22,
+        "yPos": 20,
+        "map": "Route 1",
+        "facing": "Down",
+        "warpType": "Normal"
+      },
+      "NPC_3_copy": {
+        "eventType": "NPC",
+        "xPos": 18,
+        "yPos": 4,
+        "owID": "Trainer_21",
+        "script": "giveitem",
+        "movementType": "MOVEMENT_TYPE_PATROL_UP_DOWN",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": ""
+      },
+      "NPC_3_copy_copy": {
+        "eventType": "NPC",
+        "xPos": 16,
+        "yPos": 23,
+        "owID": "Trainer_23",
+        "script": "giveitem",
+        "movementType": "MOVEMENT_TYPE_PATROL_UP_DOWN",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": ""
+      },
+      "NPC_3_copy_copy_copy": {
+        "eventType": "NPC",
+        "xPos": 8,
+        "yPos": 26,
+        "owID": "Trainer_17",
+        "script": "giveitem",
+        "movementType": "MOVEMENT_TYPE_WANDER_LEFT_AND_RIGHT",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": ""
@@ -317,9 +374,31 @@ window.OverworldMaps = {
         "movementType": "MOVEMENT_TYPE_WANDER_UP_AND_DOWN",
         "isTrainer": true,
         "viewRadius": 3,
-        "xPos": 13,
-        "yPos": 12,
+        "xPos": 15,
+        "yPos": 11,
         "flagID": "FLAG_LILY_DEFEATED"
+      },
+      "NPC_4": {
+        "eventType": "NPC",
+        "xPos": 12,
+        "yPos": 3,
+        "owID": "Trainer_69",
+        "script": "",
+        "movementType": "MOVEMENT_TYPE_FACE_UP",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": ""
+      },
+      "NPC_5": {
+        "eventType": "NPC",
+        "xPos": 12,
+        "yPos": 2,
+        "owID": "Trainer_2",
+        "script": "",
+        "movementType": "MOVEMENT_TYPE_FACE_DOWN",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": ""
       }
     },
     "wildData": {
@@ -1268,8 +1347,8 @@ window.OverworldMaps = {
     "tileData_2": [
       ["", "", "46|31|1", "46|32|1", "", "", "", "", "", "", "", "", "45|50|1", "45|51|1"],
       ["", "", "46|40|1", "46|41|1", "", "", "", "", "", "36|17|1", "36|18|1", "36|19|1", "45|59|1", "45|60|1"],
-      ["46|45|1", "46|46|1", "46|46|1", "46|47|1", "", "", "", "", "", "36|22|1", "36|23|1", "36|24|1", "", ""],
-      ["46|54|0", "46|55|0", "46|55|0", "46|56|0", "", "", "", "", "", "36|27|1", "36|28|1", "36|29|1", "", ""],
+      ["46|45|1", "46|46|1", "46|46|1", "46|47|1", "", "", "", "", "", "36|22|1", "36|23|1", "36|24|0", "", ""],
+      ["46|54|0", "46|55|0", "46|55|0", "46|56|0", "", "", "", "", "", "36|27|1", "36|28|1", "36|29|0", "", ""],
       ["", "", "", "", "", "46|6|1", "46|7|1", "46|8|1", "45|40|1", "", "", "", "", ""],
       ["46|48|0", "46|49|0", "46|49|0", "46|50|0", "", "46|15|1", "46|16|1", "46|17|1", "", "", "", "", "", ""],
       ["46|57|0", "46|58|0", "46|58|0", "46|59|0", "", "46|24|1", "46|25|1", "46|26|1", "", "", "", "", "", ""],
