@@ -143,9 +143,15 @@ hideobject NPC_2
 end
 
 start: "mom_arrives_in_room"
-wait 5000
+wait 507
+applymovement player yes
+{
+walk_right
+}
+movecamera 4 0
+waitmovement
 showobject NPC_2
-applymovement NPC_2
+applymovement NPC_2 yes
 {
 walk_in_place_right
 emote_exclaim
@@ -163,5 +169,7 @@ walk_left
 walk_up
 look_left
 }
+resetcamera
+waitmovement
 end
 `;
