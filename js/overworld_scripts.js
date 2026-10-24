@@ -491,23 +491,16 @@ Oh! Do you like my hair?\p
 I use a special Pokémon-friendly\n
 shampoo. Even my {pink}Pokémon{/} glows!
 }
-msgbox.normal
-{
-Beauty isn't about winning. It's\n
-about feeling good, sweetie.\p
-Do your best out there, and\n
-remember to smile on your journey!
-}
 end
 
 start: "town_lass"
 faceplayer
 msgbox.normal
 {
-Did you hear about{pink}Hazel{/}?\p
-She gets her first Pokémon from the\n
-gym leader in {yellow}Olenburg City{/}!\p
-zSo jealous!
+Did you hear about {pink}Hazel{/}?\p
+She'll get her first Pokémon from\n
+the gym leader in {yellow}Olenburg City{/}!\p
+So jealous!
 }
 msgbox.normal
 {
