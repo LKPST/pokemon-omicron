@@ -61,7 +61,10 @@ window.OverworldMaps = {
         "movementType": "MOVEMENT_TYPE_WANDER_LEFT_RIGHT",
         "isTrainer": false,
         "viewRadius": 3,
-        "flagID": ""
+        "flagID": "",
+        "followMon": "SPECIES_RALTS",
+        "followPass": false,
+        "followScript": "ralts_script"
       },
       "NPC_3": {
         "eventType": "NPC",
@@ -160,17 +163,6 @@ window.OverworldMaps = {
         "viewRadius": 3,
         "flagID": "",
         "owTileAttribute": "On Top"
-      },
-      "NPC_6": {
-        "eventType": "NPC",
-        "xPos": 5,
-        "yPos": 15,
-        "owID": "SPECIES_RALTS",
-        "script": "ralts_script",
-        "movementType": "MOVEMENT_TYPE_LOOK_AROUND",
-        "isTrainer": false,
-        "viewRadius": 3,
-        "flagID": ""
       }
     },
     "wildData": {
