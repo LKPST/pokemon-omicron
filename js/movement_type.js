@@ -9,6 +9,7 @@ window.OverworldMovement = (() => {
   //  - an NPC whose sprite has a frameMap (Overworld Sprite Editor) uses its 'walk' frames,
   //  - everything else uses the fixed 4x4 layout (getOverworldFrame).
   window.getOverworldFrameOf = function (e, d, s) {
+    if (e && e._anim === 'run' && typeof window.getOverworldFrameFor === 'function') { const id0 = e.eventConfig && e.eventConfig.owID; try { const f0 = window.getOverworldFrameFor(id0, 'run', d, s); if (typeof f0 === 'number' && !(e.owSpecies)) return f0; } catch (er) { /* no run frames: use walk */ } }
     if (e && e.owSpecies && window.OWSprites) { const f = window.OWSprites.frameName(e.owSpecies, { shiny: e.owShiny, dir: d, step: s === 1 ? 1 : 0 }); if (f && e.scene && e.scene.textures.exists(f.key)) return f.frame; }
     const id = e && e.eventConfig && e.eventConfig.owID, T = window.OverworldTable;
     if (id && T && T[id] && T[id].frameMap && typeof window.getOverworldFrameFor === 'function') { try { const f = window.getOverworldFrameFor(id, 'walk', d, s); if (typeof f === 'number') return f; } catch (er) { /* fall back */ } }
@@ -30,7 +31,7 @@ window.OverworldMovement = (() => {
     if (window.OWFollower && window.OWFollower.occupies && window.OWFollower.occupies(nx, ny)) return false;   // the player's follower Pokémon is there
     // another NPC that is stepping onto it (its source and destination tiles stay reserved for the whole step)
     for (const o of (scene.npcs || [])) { if (o === e) continue; if ((o.dest && o.dest.x === nx && o.dest.y === ny) || (o.src && o.src.x === nx && o.src.y === ny)) return false; }
-    if (e.home) {
+    if (e.home && !e.noRadius) {
       const r = (e.eventConfig && e.eventConfig.wanderRadius) ?? 3;
       if (Math.abs(nx - e.home.x) > r || Math.abs(ny - e.home.y) > r) return false;
     }
@@ -42,6 +43,7 @@ window.OverworldMovement = (() => {
     const s = e.scene, [dx, dy] = DIRS[dir];
     e.direction = dir;
     if (!force && !canStep(s, e, dx, dy)) { e.setFrame(frame(e, dir, 0)); done && done(); return; }
+    e._anim = ms <= 130 ? 'run' : 'walk';
     e.alt = e.alt === 1 ? 2 : 1;
     e.setFrame(frame(e, dir, e.alt));
     const x0 = e.x, y0 = e.y;
@@ -49,8 +51,8 @@ window.OverworldMovement = (() => {
     e.stepInfo = { x0, y0, dx, dy, dir, done, force };
     e.stepTw = s.tweens.addCounter({
       from: 0, to: 1, duration: ms,
-      onUpdate: t => { const v = t.getValue(); e.x = x0 + dx * TILE * v; e.y = y0 + dy * TILE * v - (hop ? Math.sin(v * Math.PI) * 12 : 0); },
-      onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(e, dir, 0)); done && done(); },
+      onUpdate: t => { const v = t.getValue(); e.x = x0 + dx * TILE * v; e.y = y0 + dy * TILE * v - (hop ? Math.sin(v * Math.PI) * 14 : 0); },
+      onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(e, dir, 0)); e._anim = null; done && done(); },
     });
   }
 
@@ -64,6 +66,33 @@ window.OverworldMovement = (() => {
       e.setFrame(frame(e, dir, 0));
       e.scene.time.delayedCall(120, () => { done && done(); });
     });
+  }
+
+  // CONTINUOUS movement types (walk in place, spin): one timer per NPC, it keeps going for as long as the map is open.
+  // It pauses while a script / menu / battle is running or while the NPC is doing a scripted move, and picks up again afterwards.
+  function loopOn(e, delay, fn) {
+    if (e.loopTimer) return;
+    e.loopTimer = e.scene.time.addEvent({ delay, loop: true, callback: () => {
+      if (!e.scene || !e.active) { e.loopTimer && e.loopTimer.remove(false); e.loopTimer = null; return; }
+      const sc = e.scene; if (sc.isLocked || sc.scriptRunning || sc.evolving || e.stepTw || e.scriptBusy) return;
+      fn(e);
+    } });
+  }
+  const walkLoop = dir => e => { e.direction = dir; loopOn(e, 170, n => { n.direction = dir; n.alt = n.alt === 1 ? 2 : 1; n.setFrame(frame(n, dir, n.alt)); }); return null; };
+  const spinLoop = cw => e => { let i = Math.max(0, ORDER.indexOf(e.direction)); loopOn(e, 240, n => { i = (i + (cw ? 1 : 3)) % 4; n.direction = ORDER[i]; n.setFrame(frame(n, ORDER[i], 0)); }); return null; };
+
+  // RUN AROUND: runs viewRadius tiles up, then left, then down, then right, and round again (a blocked side is skipped)
+  function runCycle(e) {
+    e.noRadius = true;
+    const N = Math.max(1, Number(e.eventConfig && e.eventConfig.viewRadius) || 3), CY = ['up', 'left', 'down', 'right'];
+    if (e.cyI == null) { e.cyI = 0; e.cyLeft = N; }
+    for (let tries = 0; tries < 5; tries++) {
+      if (e.cyLeft <= 0) { e.cyI = (e.cyI + 1) % 4; e.cyLeft = N; }
+      const d = CY[e.cyI], [dx, dy] = DIRS[d];
+      if (canStep(e.scene, e, dx, dy)) { e.cyLeft--; return 'run_' + d; }
+      e.cyLeft = 0;   // blocked: go on to the next side
+    }
+    return null;
   }
 
   function spin(e, clockwise, done, scripted = false) {
@@ -145,13 +174,14 @@ window.OverworldMovement = (() => {
     MOVEMENT_TYPE_WANDER_LEFT_AND_RIGHT: chance(0.6, () => 'walk_' + pick(['left', 'right'])),
     MOVEMENT_TYPE_WANDER_UP_AND_DOWN: chance(0.6, () => 'walk_' + pick(['up', 'down'])),
     MOVEMENT_TYPE_WANDER_AROUND: chance(0.6, () => 'walk_' + pick(Object.keys(DIRS))),
-    MOVEMENT_TYPE_RUN_AROUND: chance(0.6, () => 'run_' + pick(Object.keys(DIRS))),
-    MOVEMENT_TYPE_HOP_AROUND: chance(0.6, () => 'jump_' + pick(Object.keys(DIRS))),
+    MOVEMENT_TYPE_RUN_AROUND: runCycle,
+    MOVEMENT_TYPE_HOP_AROUND: chance(0.7, () => 'jump_' + pick(Object.keys(DIRS))),   // every move is a hop
+    MOVEMENT_TYPE_HOP_CASUAL: chance(0.7, () => pick(['walk_', 'jump_']) + pick(Object.keys(DIRS))),   // a mix of walking and hopping
     MOVEMENT_TYPE_JUMP_IN_PLACE: () => 'jump_in_place',
-    MOVEMENT_TYPE_WALK_IN_PLACE_UP: inPl('up'), MOVEMENT_TYPE_WALK_IN_PLACE_DOWN: inPl('down'),
-    MOVEMENT_TYPE_WALK_IN_PLACE_LEFT: inPl('left'), MOVEMENT_TYPE_WALK_IN_PLACE_RIGHT: inPl('right'),
-    MOVEMENT_TYPE_SPIN_CLOCKWISE: () => 'spin_cw',
-    MOVEMENT_TYPE_SPIN_COUNTER_CLOCKWISE: () => 'spin_ccw',
+    MOVEMENT_TYPE_WALK_IN_PLACE_UP: walkLoop('up'), MOVEMENT_TYPE_WALK_IN_PLACE_DOWN: walkLoop('down'),
+    MOVEMENT_TYPE_WALK_IN_PLACE_LEFT: walkLoop('left'), MOVEMENT_TYPE_WALK_IN_PLACE_RIGHT: walkLoop('right'),
+    MOVEMENT_TYPE_SPIN_CLOCKWISE: spinLoop(true),
+    MOVEMENT_TYPE_SPIN_COUNTER_CLOCKWISE: spinLoop(false),
     MOVEMENT_TYPE_PATROL_LEFT_RIGHT: patrol('h'),
     MOVEMENT_TYPE_PATROL_UP_DOWN: patrol('v'),
     MOVEMENT_TYPE_INVISIBLE: () => null,
@@ -177,6 +207,7 @@ window.OverworldMovement = (() => {
     const t = e.eventConfig && e.eventConfig.movementType, fn = types[t];
     if (!fn || e.busy || !e.scene || e.scene.isLocked || e.scene.scriptRunning || e.texture.frameTotal < 4) return;   // buildings/trees have 1 frame
     if (!e.home) e.home = tileOf(e);
+    if (/WALK_IN_PLACE|SPIN_/.test(t)) { fn(e); return; }   // continuous types: the timer does the work
     if (holdFor(e)) return;   // a script is about to start: do not begin another move
     const a = fn(e);
     if (!a) return;
