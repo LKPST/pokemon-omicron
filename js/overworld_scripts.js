@@ -585,4 +585,13 @@ And one extra spoon of honey,\n
 because he likes it sweet.
 }
 end
+
+start: "criscanto_town"
+msgbox.normal
+{
+{red}Criscanto Town{/}\p
+A quiet town in the heart of the
+forest, where every journey begins.
+}
+end
 `;
