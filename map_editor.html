@@ -88,6 +88,7 @@ details{background:#141414;border:1px solid #2d2d2d;border-radius:5px;padding:6p
   <div class="tab" id="tab-conn"><div id="conns"></div></div>
   <div class="tab" id="tab-wild"><div id="wild"></div></div>
   <div class="tab" id="tab-props"><div id="props"></div></div>
+  <div class="tab" id="tab-lvl"><div id="lvl"></div></div>
   <div class="tab" id="tab-scripts"><div id="seTabInfo"></div><button class="on openSed">✎ Open the Scripts editor</button><label>Script files not found? Load them here<input type="file" id="seLoadFiles" multiple accept=".js"></label><div class="help" id="seInfo">Scripts are written like xSE and saved in overworld_scripts.js. Put the script name in an NPC / Script event and use ✎ in the Events tab to edit it.</div></div>
   <details open><summary>Problems <span id="issueCount"></span></summary><div id="issues"></div></details>
 </div>
@@ -212,16 +213,20 @@ function img(p){if(!p)return null;let i=imgs[p];if(!i){i=imgs[p]=new Image();i.n
   i.onload=()=>{i.ok=1;if(i.pre!==assetBase){assetBase=i.pre;try{localStorage.edAssets=assetBase}catch(e){}$('assetBase').value=assetBase}redraw();clearTimeout(pt);pt=setTimeout(buildPalette,60)};
   i.onerror=()=>{if(i.n<PREF.length)go()};go()}return i.ok?i:null}
 const sprs={};
-function spr(id){const e=OT()[id];if(!e)return null;if(sprs[id])return sprs[id];const i=img(e.owSprite);if(!i)return null;
+const FROW={down:0,left:1,right:2,up:3};
+// the way an NPC looks when it stands there: from its movementType (FACE_RIGHT, WALK_IN_PLACE_LEFT ...) or a facing field
+function facingOf(ev){const m=/(?:FACE|WALK_IN_PLACE|LOOK)_(UP|DOWN|LEFT|RIGHT)$/i.exec(String((ev&&ev.movementType)||''));const d=m?m[1].toLowerCase():String((ev&&ev.facing)||'').toLowerCase();return FROW[d]!==undefined?d:'down'}
+function spr(id,dir='down'){const e=OT()[id];if(!e)return null;const ck=dir==='down'?id:id+'|'+dir;if(sprs[ck])return sprs[ck];const i=img(e.owSprite);if(!i)return null;
   const[w,h]=(e.trueDimension||'32x32').split('x').map(Number),c=document.createElement('canvas');c.width=w;c.height=h;
-  const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(i,0,0,w,h,0,0,w,h);
+  const row=(FROW[dir]||0)*h+h<=i.naturalHeight?(FROW[dir]||0):0;
+  const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(i,0,row*h,w,h,0,0,w,h);
   try{const d=x.getImageData(0,0,w,h),p=d.data;if(p[3]){const k=[p[0],p[1],p[2]],st=[],seen=new Uint8Array(w*h);
     const bg=j=>p[j*4+3]&&Math.abs(p[j*4]-k[0])<7&&Math.abs(p[j*4+1]-k[1])<7&&Math.abs(p[j*4+2]-k[2])<7;
     const sd=(a,b)=>{const j=b*w+a;if(!seen[j]&&bg(j)){seen[j]=1;st.push(j)}};
     for(let a=0;a<w;a++){sd(a,0);sd(a,h-1)}for(let b=0;b<h;b++){sd(0,b);sd(w-1,b)}
     while(st.length){const j=st.pop();p[j*4+3]=0;const a=j%w,b=(j/w)|0;if(a>0)sd(a-1,b);if(a<w-1)sd(a+1,b);if(b>0)sd(a,b-1);if(b<h-1)sd(a,b+1)}
     x.putImageData(d,0,0)}}catch(e){}
-  return sprs[id]=c}
+  return sprs[ck]=c}
 
 function tileImg(d){return img(d.tileImage)}
 function drawTile(c,val,x,y,s){if(!val)return;c.imageSmoothingEnabled=false;const[t,f]=val.split('|').map(n=>parseInt(n)||0),d=TL()[t];
@@ -274,7 +279,7 @@ function draw(){const W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W||cv.hei
   for(const[k,m]of Object.entries(repo)){const p=L[k];
     for(const[ek,ev]of Object.entries(m.events)){
       const fp=footprint(ev);if(fp){ctx.fillStyle='rgba(255,0,0,.14)';ctx.fillRect((p.x+fp.x0)*TS,(p.y+fp.y0)*TS,(fp.x1-fp.x0+1)*TS,(fp.y1-fp.y0+1)*TS)}
-      const R=evRect(p,ev),s=ev.eventType==='NPC'&&showSpr?spr(ev.owID):null;
+      const R=evRect(p,ev),s=ev.eventType==='NPC'&&showSpr?spr(ev.owID,facingOf(ev)):null;
       if(s)ctx.drawImage(s,R.x,R.y,R.w,R.h);
       else{const[col,ch]=BADGE[ev.eventType]||['#777','?'];ctx.fillStyle=col;ctx.globalAlpha=.85;ctx.fillRect(R.x+3,R.y+3,TS-6,TS-6);ctx.globalAlpha=1;
         ctx.fillStyle='#fff';ctx.font='bold 16px monospace';ctx.textAlign='center';ctx.fillText(ch,R.x+TS/2,R.y+TS/2+6);ctx.textAlign='left'}
@@ -467,9 +472,28 @@ function issues(){const out=[];
         const sn=scriptNames();if(sn.length&&e.script&&!sn.includes(e.script))out.push(`${at}: script "${e.script}" not found`)}
       if(e.eventType==='Warp'){const t=findKey(e.map);if(!t)out.push(`${at}: target map "${e.map}" does not exist`);
         else if(e.targetWarp&&!repo[t].events[e.targetWarp])out.push(`${at}: targetWarp "${e.targetWarp}" not in ${t}`)}}
+    (m.levelScripts||[]).forEach((l,i)=>{const at=`${k}/levelScript ${i+1}`;if(!l.script)out.push(`${at}: no script chosen`);else{const sn=scriptNames();if(sn.length&&!sn.includes(l.script))out.push(`${at}: script "${l.script}" not found`)}if(l.type==='flag'&&!l.flagID)out.push(`${at}: flag-based but no flagID`)});
     const seen={};for(const[ek,e]of Object.entries(m.events))if(e.eventType==='NPC'){const id=`${e.xPos},${e.yPos}`;if(seen[id])out.push(`${k}: ${ek} and ${seen[id]} share tile ${id}`);seen[id]=ek}}
   if(SE)for(const n of SE.order){const l=sLint[n]||[];if(l.length)out.push(`Script "${n}": ${l.length} problem(s) - open the Scripts editor`)}
   return out}
+// ---------- level scripts: scripts that run when the player enters the map ----------
+const LVT=[['mapEnter','Map Enter · always plays (runs first)'],['mapEnterOnce','Map Enter Once · plays once, then never again (runs second)'],['flag','Flag-based · only plays while the flag is ON (runs last)']];
+function buildLvl(){const U=$('lvl');if(!U)return;U.innerHTML='';const m=repo[active];if(!m)return;const L=m.levelScripts||[];
+  const n=document.createElement('div');n.className='help';n.style.lineHeight='1.4';n.innerHTML=`Scripts that run when the player <b>enters ${String(active).replace(/[<>&]/g,"")}</b>. Order: <b>Map Enter</b> → <b>Map Enter Once</b> → <b>Flag-based</b> (inside a type, top to bottom). “Once” remembers itself with the flag <code>LEVELONCE:map:script</code>.`;U.appendChild(n);
+  const sn=()=>{try{return scriptNames()}catch(e){return[]}};
+  L.forEach((l,i)=>{const c=document.createElement('div');c.className='card';c.style.cssText='background:#171717;border:1px solid #2d2d2d;border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:3px';
+    const top=document.createElement('div');top.className='row';top.style.alignItems='center';
+    const t=document.createElement('select');t.style.flex='1';LVT.forEach(([v,x])=>t.add(new Option(x,v)));t.value=l.type||'mapEnter';t.onchange=()=>commit(()=>{l.type=t.value;if(l.type!=='flag')delete l.flagID});
+    top.appendChild(t);
+    const mk=(txt,tip,f)=>{const b=document.createElement('button');b.textContent=txt;b.title=tip;b.onclick=f;top.appendChild(b)};
+    mk('↑','move up',()=>{if(i)commit(()=>{[L[i-1],L[i]]=[L[i],L[i-1]]})});mk('↓','move down',()=>{if(i<L.length-1)commit(()=>{[L[i+1],L[i]]=[L[i],L[i+1]]})});mk('✕','remove',()=>commit(()=>{L.splice(i,1);if(!L.length)delete m.levelScripts}));
+    c.appendChild(top);
+    rowTo(c,'script',inp('text',l.script||'',v=>l.script=v,()=>sn()));
+    if(l.type==='flag'){const f=inp('text',l.flagID||'',v=>l.flagID=v.trim());f.setAttribute('list','dlFlag');rowTo(c,'flagID (must be ON)',f)}
+    U.appendChild(c)});
+  const add=document.createElement('button');add.className='on';add.textContent='+ Add level script';add.onclick=()=>commit(()=>{(m.levelScripts||=[]).push({type:'mapEnter',script:''})});U.appendChild(add);
+  if(!L.length){const e=document.createElement('div');e.className='help';e.textContent='No level scripts on this map.';U.appendChild(e)}}
+
 function buildIssues(){const l=issues();$('issueCount').textContent=l.length?`(${l.length})`:'✓';$('issues').innerHTML=l.length?l.map(x=>`<div class=bad>• ${x}</div>`).join(''):'<div class=ok>No problems found</div>'}
 
 function setTool(t){tool=t;if($('tselUI'))$('tselUI').hidden=t!=='tsel';document.querySelectorAll('#tools button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));redraw()}
@@ -486,7 +510,7 @@ $('palette').addEventListener('mousedown',e=>{const c=e.target;if(c.tagName!=='C
 $('palette').addEventListener('mouseover',e=>{if(pal&&e.target.tagName==='CANVAS'&&e.target.dataset.t===pal.t)setBrushRect(pal.t,pal.n,pal.f0,+e.target.dataset.f)});
 
 function status(){const L=layout();$('status').textContent=`${active} | ${hover?`${hover.map} (${hover.gx}, ${hover.gy}) ${repo[hover.map]['tileData_'+layer][hover.gy][hover.gx]}`:'—'} | zoom ${Math.round(cam.z*100)}% | undo ${hist.length} redo ${redoS.length}${unsaved?' | ● unsaved':''}`}
-function changed(){buildInspector();buildProps();buildBorder();buildWild();buildIssues();updateSel();status();redraw()}
+function changed(){buildInspector();buildProps();buildLvl();buildBorder();buildWild();buildIssues();updateSel();status();redraw()}
 function updateSel(){const s=$('mapSel');s.innerHTML='';Object.keys(repo).forEach(k=>s.add(new Option(k,k)));s.value=active}
 function refreshAll(){changed()}
 function focus(k){const p=layout()[k];if(p){cam.x=60-p.x*TS*cam.z;cam.y=60-p.y*TS*cam.z}}
@@ -877,7 +901,7 @@ $('newMap').onclick=()=>{let n=prompt('New map name:','Route_X');if(!n||repo[n])
 $('assetBase').value=assetBase;$('assetBase').onchange=e=>{assetBase=e.target.value.trim();try{localStorage.edAssets=assetBase}catch(x){}for(const k in imgs)delete imgs[k];for(const k in sprs)delete sprs[k];buildPalette();redraw()};
 if(window.__missing&&window.__missing.length)setTimeout(()=>{$('status').textContent='Not found (optional unless it is a table): '+window.__missing.join(', ')},100);
 window.addEventListener('resize',redraw);window.addEventListener('beforeunload',e=>{if(unsaved||sDirty){e.preventDefault();e.returnValue=''}});
-$('tabs').innerHTML=[['env','Environment'],['border','Border'],['events','Events'],['conn','Connections'],['wild','Wild'],['props','Properties'],['scripts','Scripts']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
+$('tabs').innerHTML=[['env','Environment'],['border','Border'],['events','Events'],['conn','Connections'],['wild','Wild'],['props','Properties'],['lvl','Level Scripts'],['scripts','Scripts']].map(([t,l])=>`<button data-t="${t}">${l}</button>`).join('');
 $('tabs').onclick=e=>{if(e.target.dataset.t)setTab(e.target.dataset.t)};
 $('layerBtns').innerHTML=[1,2,3,4,5].map(n=>`<button data-l="${n}">L${n}${n==1?' ▼ bottom':n==5?' ▲ top':''}</button>`).join('')+'<select id="viewMode"><option value="all">Show all layers</option><option value="below">Active + below</option><option value="active">Active only</option></select><select id="passSel"><option value="0">Behavior 0 · Passable</option><option value="1">1 · Blocked</option><option value="2">2 · Passable, NPC below</option><option value="3">3 · Surfable</option><option value="4">4 · Diveable</option><option value="5">5 · Grass (wild Pokémon)</option><option value="6">6 · Passable, north blocked</option><option value="7">7 · Passable, east blocked</option><option value="8">8 · Passable, west blocked</option><option value="9">9 · Passable, south blocked</option><option value="10">10 · North blocked, NPC below</option><option value="11">11 · East blocked, NPC below</option><option value="12">12 · West blocked, NPC below</option><option value="13">13 · South blocked, NPC below</option><option value="14">14 · Impassable, NPC below</option><option value="15">15 · Spin left</option><option value="16">16 · Spin up</option><option value="17">17 · Spin right</option><option value="18">18 · Spin down</option><option value="19">19 · Spin left, NPC below</option><option value="20">20 · Spin up, NPC below</option><option value="21">21 · Spin right, NPC below</option><option value="22">22 · Spin down, NPC below</option></select><label style="flex-direction:row;gap:4px"><input type="checkbox" id="copyAll" checked> copy all layers</label><label style="flex-direction:row;gap:4px"><input type="checkbox" id="bhvT" checked> show behavior</label>';
 $('layerBtns').onclick=e=>{if(e.target.dataset.l)setLayer(+e.target.dataset.l)};
@@ -1130,10 +1154,17 @@ $('ghCancel').onclick=()=>{$('ghm').hidden=true};$('ghBtn').onclick=()=>ghOpen()
 
 
 // ---- Overworld Sprite Editor inside the map editor (iframe); on close the sprite table is re-read
-function owReloadTable(){let p=null;try{p=(JSON.parse(localStorage.edPaths||'{}'))['ow_table.js']}catch(e){}if(!p)return;
+function owRefresh(){for(const k in sprs)delete sprs[k];buildInspector();buildIssues();redraw()}
+function owReloadTable(){
+  // 1) live: take the table and the sprite pixels straight from the open sprite editor (no saving needed)
+  try{const w=$('owedFr').contentWindow,A=w&&w.OWED_API,S=w&&w.OWED;
+    if(A&&S&&S.entries&&S.entries.length){const sc=document.createElement('script');sc.textContent=A.tableJs();document.head.appendChild(sc);sc.remove();
+      let n=0;for(const e of S.entries){const p=e.fields&&e.fields.owSprite;if(!p||!A.rectOf(e))continue;const c=A.layoutCanvas(e),im=new Image();im.n=99;im.onload=()=>{im.ok=1;owRefresh()};im.src=c.toDataURL('image/png');imgs[p]=im;n++}
+      owRefresh();$('status').textContent=`Overworld table updated from the sprite editor: ${S.entries.length} entries, ${n} sprite(s). Save/commit in the sprite editor to keep them.`;return}}catch(e){console.warn('live OW refresh failed',e)}
+  // 2) fallback: re-read ow_table.js from disk
+  let p=null;try{p=(JSON.parse(localStorage.edPaths||'{}'))['ow_table.js']}catch(e){}if(!p)return;
   const sc=document.createElement('script');sc.src=p+(p.includes('?')?'&':'?')+'t='+Date.now();
-  sc.onload=()=>{for(const k in sprs)delete sprs[k];for(const k in imgs)if(imgs[k]&&imgs[k].n===undefined)delete imgs[k];for(const e of Object.values(OT()))if(e&&e.owSprite)delete imgs[e.owSprite];buildInspector();buildIssues();redraw()};
-  sc.onerror=()=>sc.remove();document.head.appendChild(sc)}
+  sc.onload=()=>{for(const e of Object.values(OT()))if(e&&e.owSprite)delete imgs[e.owSprite];owRefresh()};sc.onerror=()=>sc.remove();document.head.appendChild(sc)}
 $('owB').onclick=()=>{const f=$('owedFr');if(!f.getAttribute('src'))f.src='ow_sprite_editor.html';$('owed').hidden=false;document.body.style.overflow='hidden'};
 $('owedClose').onclick=()=>{$('owed').hidden=true;document.body.style.overflow='';owReloadTable()};
 seInit();load();buildPalette();setLayer(1);changed();setTab('env');
