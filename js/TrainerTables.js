@@ -21,18 +21,17 @@
 // SAMPLE ENTRIES: replace them with your own.
 
 const TrainerClassTable = {
-  'Youngster':  { money: 4 },
-  'Lass':       { money: 4 },
+  'Youngster': { money: 4 },
+  'Lass': { money: 4 },
   'Bug Catcher': { money: 3 },
-  'Rival':      { money: 8 },
+  'Rival': { money: 8 },
   'Gym Leader': { money: 60 },
   'Pkmn Trainer': { money: 12 },
 };
 
 const TrainerTable = {
   TRAINER_ROXANNE: {
-    name: 'Roxanne', class: 'Gym Leader', frontSprite: 'graphics/trainer_front_sprites/portia.png', bg: 'indoor', ai: 'smart',
-    items: ['ITEM_SUPER_POTION', 'ITEM_SUPER_POTION'],
+    name: 'Roxanne', class: 'Gym Leader', frontSprite: 'graphics/trainer_front_sprites/portia.png', bg: 'indoor', ai: 'smart', items: ['ITEM_SUPER_POTION', 'ITEM_SUPER_POTION'],
     party: [
       { species: 'SPECIES_GEODUDE', level: 12, moves: ['MOVE_TACKLE', 'MOVE_DEFENSE_CURL', 'MOVE_ROCK_THROW'] },
       { species: 'SPECIES_GEODUDE', level: 12, moves: ['MOVE_TACKLE', 'MOVE_DEFENSE_CURL', 'MOVE_ROCK_THROW'] },
@@ -48,7 +47,9 @@ const TrainerTable = {
   },
   TRAINER_YOUNGSTER_JOEY: {
     name: 'Joey', class: 'Youngster', frontSprite: 'graphics/trainer_front_sprites/youngster.png',
-    party: [{ species: 'SPECIES_RATTATA', level: 4 }],
+    party: [
+      { species: 'SPECIES_RATTATA', level: 4 },
+    ],
   },
 };
 

@@ -809,7 +809,7 @@ window.OverworldMaps = {
       "NPC_1": {
         "eventType": "NPC",
         "xPos": 31,
-        "yPos": 9,
+        "yPos": 10,
         "owID": "Trainer_1",
         "script": "",
         "movementType": "MOVEMENT_TYPE_LOOK_AROUND",
@@ -847,7 +847,7 @@ window.OverworldMaps = {
       "Warp_1": {
         "eventType": "Warp",
         "xPos": 30,
-        "yPos": 8,
+        "yPos": 9,
         "map": "Olenburg City - Lab",
         "facing": "Down",
         "warpType": "Normal",
