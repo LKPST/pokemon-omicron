@@ -663,7 +663,7 @@ msgbox.normal
 {
 First rule of wild Pokémon: tall\n
 grass is their playground.\p
-If youvstep in without a team,\n
+If you step in without a team,\n
 you're just asking for trouble!
 }
 applymovement NPC_5
@@ -840,8 +840,8 @@ standing around out here.
 msgbox.normal
 {
 The second you walk into their line\n
-of sight, they'll spot\n
-you and rush right over.\p
+of sight, they'll spot you and rush\n
+right over.\p
 Once they've seen you, there's no\n
 running away!
 }
@@ -866,8 +866,7 @@ for an answer.
 msgbox.normal
 {
 Not that it matters for us yet,\n
-since we don't have a\n
-Pokémon.\p
+since we don't have a Pokémon.\p
 But it's good to know before we get\n
 one!
 }
@@ -1008,8 +1007,7 @@ Olenburg City is right ahead.
 msgbox.normal
 {
 Well, here we are! Olenburg City,\n
-right at the end of\n
-Route 1.
+right at the end of Route 1.
 }
 msgbox.normal
 {
@@ -1053,12 +1051,10 @@ See you both later!
 applymovement NPC_5 yes
 {
 walk_down*6
-emote_exclaim
 }
 applymovement NPC_4 yes
 {
 walk_down*6
-emote_exclaim
 }
 waitmovement
 hideobject NPC_4
