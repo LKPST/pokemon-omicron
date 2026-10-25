@@ -723,11 +723,11 @@ window.OverworldTiles = {
     tileName: "Lab Static",
     tileType: "Multi-tile",
     isAnimated: false,
-    frames: 128,
+    frames: 192,
     columns: 16,
     tileCell: 32,
     tileImage: "graphics/tiles/lab_static.png",
-    tileDimension: "512x256",
+    tileDimension: "512x384",
     category: "Laboratory"
   },
   102: {
@@ -735,13 +735,13 @@ window.OverworldTiles = {
     tileName: "Lab Animated",
     tileType: "Multi-tile",
     isAnimated: true,
-    frames: 48,
-    columns: 16,
+    frames: 320,
+    columns: 32,
     animFrames: 4,
-    animColumns: 4,
+    animColumns: 8,
     tileCell: 32,
     tileImage: "graphics/tiles/lab_anim.png",
-    tileDimension: "512x96",
+    tileDimension: "1024x320",
     category: "Laboratory"
   }
 };
