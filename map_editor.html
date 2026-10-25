@@ -890,7 +890,7 @@ function pvSetup(keepPos){const maps=Object.keys(repo);
   const es=$('pvEv');es.innerHTML='';es.add(new Option('(no event)',''));pvEvents().forEach(([k,e])=>es.add(new Option(`${k} (${e.eventType})${e.script?' → '+e.script:''}`,k)));es.value=PV.actor||'';
   if(keepPos){const e=repo[PV.map]?.events[PV.actor];if(e){const below=e.eventType==='NPC';PV.px=e.xPos;PV.py=e.yPos+(below?1:0);PV.pdir=below?'up':'down'}else{const m=repo[PV.map];PV.px=Math.floor((m?.dimensions.width||2)/2);PV.py=Math.floor((m?.dimensions.height||2)/2);PV.pdir='down'}}
   $('pvX').value=PV.px;$('pvY').value=PV.py;pvReset();seDatalists()}
-function pvReset(){PV.run++;PV.tl=[];PV.msg=null;PV.fade=0;PV.shake=0;PV.flash=0;{const c=$('pvCv');if(c)c.style.filter=''}PV.toasts=[];PV.running=false;PV.camMoved=false;PV.pend=0;PV.waiters=[];PV.ends=[];PV.clock=0;PV.hidden={};
+function pvReset(){PV.run++;PV.tl=[];PV.msg=null;PV.fade=0;PV.shake=0;PV.flash=0;{const c=$('pvCv');if(c)c.style.filter=''}PV.toasts=[];PV.running=false;PV.camMoved=false;PV.follow=null;PV.pend=0;PV.waiters=[];PV.ends=[];PV.clock=0;PV.hidden={};
   const L=layout(),off=L[PV.map]||{x:0,y:0},m=repo[PV.map];PV.ents={};
   for(const[k,e]of Object.entries(m?.events||{})){if(e.eventType!=='NPC')continue;const b=isBuilding(e);PV.ents[k]={key:k,ev:e,x:(off.x+e.xPos)*TS+16,y:(off.y+e.yPos)*TS+(b?32:16),dir:'down',building:b,vis:true,id:e.owID}}
   PV.player={key:'player',x:(off.x+PV.px)*TS+16,y:(off.y+PV.py)*TS+16,dir:PV.pdir,vis:true,id:'Brendan'};PV.startDir=PV.pdir;
@@ -929,7 +929,12 @@ function pvHost(){const run=PV.run,guard=f=>(...a)=>{if(run===PV.run)f(...a)};
     waitMove(next){if(!PV.pend)next();else PV.waiters.push(guard(next))},
     moveCamera(dx,dy,ms,next,sync){if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.moveCamera(dx,dy,pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}PV.camMoved=true;const x0=PV.cam.x,y0=PV.cam.y;pvLog(`📷 camera ${dx},${dy}`,'');if(ms<=0){PV.cam.x+=dx*TS;PV.cam.y+=dy*TS;return next()}
       pvTween(ms,t=>{const k=sync?t:t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+dx*TS*k;PV.cam.y=y0+dy*TS*k},guard(next))},
-    resetCamera(ms,next,sync){if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.resetCamera(pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}const x0=PV.cam.x,y0=PV.cam.y;PV.camMoved=false;pvTween(Math.max(1,ms),t=>{const k=sync?t:t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+(PV.player.x-x0)*k;PV.cam.y=y0+(PV.player.y-y0)*k},guard(next))},
+    moveCameraTo(spec,ms,next,sync){const e=pvEnt(spec);if(!e){pvLog('⚠ movecamera_to: nobody called "'+spec+'"','dim');return next()}
+      if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.moveCameraTo(spec,pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}
+      PV.follow=null;PV.camMoved=true;const x0=PV.cam.x,y0=PV.cam.y;pvLog('📷 camera → '+(e.id||e.key),'');if(ms<=0){PV.cam.x=e.x;PV.cam.y=e.y;return next()}
+      pvTween(ms,t=>{const k=sync?t:t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+(e.x-x0)*k;PV.cam.y=y0+(e.y-y0)*k},guard(next))},
+    followCamera(spec,next){const e=pvEnt(spec);if(!e){pvLog('⚠ followcamera: nobody called "'+spec+'"','dim');return next()}PV.follow=e;PV.camMoved=true;pvLog('📷 camera follows '+(e.id||e.key),'');next()},
+    resetCamera(ms,next,sync){PV.follow=null;if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.resetCamera(pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}const x0=PV.cam.x,y0=PV.cam.y;PV.camMoved=false;pvTween(Math.max(1,ms),t=>{const k=sync?t:t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+(PV.player.x-x0)*k;PV.cam.y=y0+(PV.player.y-y0)*k},guard(next))},
     fade(mode,ms,color,next){if(color==='last')color=PV.lastFade||'black';PV.lastFade=color;PV.fadeCol=color==='white'?'#fff':'#000';const a=PV.fade,b=mode==='out'?1:0;pvLog('🌓 fade '+mode,'dim');pvTween(Math.max(1,ms),t=>{PV.fade=a+(b-a)*t},guard(next))},
     flash(ms,color,next){PV.flashCol={white:'#fff',black:'#000',red:'#ff3c3c',yellow:'#ffeb50'}[color]||'#fff';pvLog('✨ flash '+color,'dim');pvTween(Math.max(1,ms),t=>{PV.flash=1-t},()=>{PV.flash=0;guard(next)()})},
     filter(mode,ms){const css={sepia:'sepia(1)',grayscale:'grayscale(1)',inverted:'invert(1)'}[mode]||'';pvLog('🎨 filter '+mode,'dim');const c=$('pvCv');c.style.transition=ms>0?`filter ${ms}ms linear`:'none';c.style.filter=css},
@@ -950,7 +955,7 @@ function pvUpdate(dt){PV.clock=(PV.clock||0)+dt;for(const t of PV.tl.slice()){if
 function pvAdvance(choice){const m=PV.msg;if(!m)return;if(!m.waiting){m.shown=1e9;return}
   if(m.page<m.pages.length-1){m.page++;m.shown=0;m.t=0;m.waiting=false;return}
   if(m.yesno&&choice===undefined)return;PV.msg=null;m.cb(m.yesno?choice:undefined)}
-function pvDraw(){const c=$('pvCv'),x=c.getContext('2d'),W=PV.vw,H=PV.vh;x.setTransform(1,0,0,1,0,0);x.fillStyle='#000';x.fillRect(0,0,W,H);x.imageSmoothingEnabled=false;
+function pvDraw(){const c=$('pvCv'),x=c.getContext('2d'),W=PV.vw,H=PV.vh;if(PV.follow){PV.cam.x=PV.follow.x;PV.cam.y=PV.follow.y}x.setTransform(1,0,0,1,0,0);x.fillStyle='#000';x.fillRect(0,0,W,H);x.imageSmoothingEnabled=false;
   const ox=Math.round(W/2-PV.cam.x+PV.shake),oy=Math.round(H/2-PV.cam.y);x.save();x.translate(ox,oy);const L=layout();
   const vx0=PV.cam.x-W/2,vy0=PV.cam.y-H/2;
   for(const[k,m]of Object.entries(repo)){const p=L[k],w=m.dimensions.width,h=m.dimensions.height;

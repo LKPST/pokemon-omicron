@@ -374,9 +374,23 @@ window.OverworldScriptEngine = (() => {
         if (ms <= 0) { c.centerOn(tx, ty); return next(); }
         return camTween(m.x, m.y, () => ({ x: tx, y: ty }), ms, next, !sync);   // own tween: Phaser's pan effect swallows a pan started from the previous pan's callback
       },
+      // move the camera so it is centred on somebody (it keeps tracking him while it slides, so it also works on a walking NPC)
+      moveCameraTo(spec, ms, next, sync) {
+        const e = resolve(spec); if (!e) { console.warn('[script] movecamera_to: nobody called "' + spec + '"'); return next(); }
+        if (sync) { const pl = syncPlan(ms); if (pl.wait > 0) return scene.time.delayedCall(pl.wait, () => this.moveCameraTo(spec, pl.ms, next, 'go')); if (sync !== 'go') ms = pl.ms; }
+        const c = cam(); c.stopFollow(); scene.camMoved = true;
+        if (ms <= 0) { c.centerOn(e.x, e.y); return next(); }
+        return camTween(c.midPoint.x, c.midPoint.y, () => ({ x: e.x, y: e.y }), ms, next, !sync);
+      },
+      // the camera stays centred on that character whenever he moves, until resetcamera (or the end of the script)
+      followCamera(spec, next) {
+        const e = resolve(spec); if (!e) { console.warn('[script] followcamera: nobody called "' + spec + '"'); return next(); }
+        const c = cam(); c.stopFollow(); c.startFollow(e, true, 1, 1); scene.camMoved = true; next();
+      },
       resetCamera(ms, next, sync) {
         if (sync) { const pl = syncPlan(ms); if (pl.wait > 0) return scene.time.delayedCall(pl.wait, () => this.resetCamera(pl.ms, next, 'go')); if (sync !== 'go') ms = pl.ms; }
         const c = cam(), p = scene.player, done = () => { c.startFollow(p, true, 1, 1); scene.camMoved = false; next(); };
+        c.stopFollow();   // may be following an NPC (followcamera)
         if (ms <= 0) { c.centerOn(p.x, p.y); return done(); }
         return camTween(c.midPoint.x, c.midPoint.y, () => ({ x: p.x, y: p.y }), ms, done, !sync);
       },
@@ -436,7 +450,7 @@ window.OverworldScriptEngine = (() => {
         E.setFlag(`HIDDEN:${ev.map}:${ev.key}`, hide);
         if (hide) {
           const n = (scene.npcs || []).find(x => x.eventKey === ev.key && x.mapName === ev.map);
-          if (n) { scene.npcs.splice(scene.npcs.indexOf(n), 1); n.destroy(); if (scene.activeNPC === n) scene.activeNPC = null; }
+          if (n) { scene.npcs.splice(scene.npcs.indexOf(n), 1); n.destroy(); if (scene.activeNPC === n) scene.activeNPC = null; if (cam()._follow === n) cam().stopFollow(); }
         } else if (scene.spawnAllEvents) scene.spawnAllEvents();
       },
 

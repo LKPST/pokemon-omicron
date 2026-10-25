@@ -79,6 +79,11 @@ window.OverworldScriptCommands = (() => {
   def('movecamera', 'Movement', 'Slide the camera by some tiles (dx right, dy down)',
     [A('dx', 'num', 0, 0, 'tiles right (negative = left)'), A('dy', 'num', 0, 0, 'tiles down (negative = up)'), A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running: the camera arrives when they finish')],
     (a, ctx, next) => ctx.host.moveCamera(+a.dx || 0, +a.dy || 0, a.ms == null || a.ms === '' ? 800 : +a.ms, next, !!a.sync));
+  def('movecamera_to', 'Movement', 'Slide the camera so it is centred on an NPC / event (or the player). Use followcamera next to keep it on him while he moves',
+    [A('target', 'target', 0, 'npc', 'player, npc or an event name like NPC_Portia'), A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running')],
+    (a, ctx, next) => ctx.host.moveCameraTo(a.target || 'npc', a.ms == null || a.ms === '' ? 800 : +a.ms, next, !!a.sync));
+  def('followcamera', 'Movement', 'The camera stays centred on this NPC / event whenever he moves (start with movecamera_to so it does not jump). resetcamera brings it back to the player',
+    [A('target', 'target', 0, 'npc', 'player, npc or an event name like NPC_Portia')], (a, ctx, next) => ctx.host.followCamera(a.target || 'npc', next));
   def('resetcamera', 'Movement', 'Slide the camera back to the player',
     [A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running: the camera arrives when they finish')], (a, ctx, next) => ctx.host.resetCamera(a.ms == null || a.ms === '' ? 800 : +a.ms, next, !!a.sync));
   def('hideobject', 'Movement', 'Hide an NPC / event for good (until showobject)', [A('target', 'target', 0, 'npc')], (a, ctx, next) => { ctx.host.setHidden(a.target, true); next(); });
