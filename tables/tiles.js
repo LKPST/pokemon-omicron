@@ -743,5 +743,16 @@ window.OverworldTiles = {
     tileImage: "graphics/tiles/lab_anim.png",
     tileDimension: "1024x320",
     category: "Laboratory"
+  },
+  103: {
+    tileID: 103,
+    tileName: "PokeBall Tube",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 16,
+    columns: 4,
+    tileImage: "graphics/tiles/pokeball_tube.png",
+    tileDimension: "64x64",
+    category: "Laboratory"
   }
 };
