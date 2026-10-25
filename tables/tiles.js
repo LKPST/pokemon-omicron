@@ -673,7 +673,9 @@ window.OverworldTiles = {
     columns: 20,
     tileImage: "graphics/tiles/fountain.png",
     tileDimension: "320x64",
-    category: "Exteriors"
+    category: "Exteriors",
+    animFrames: 4,
+    animColumns: 5
   },
   68: {
     tileID: 68,
