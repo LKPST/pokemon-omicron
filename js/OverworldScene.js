@@ -1013,6 +1013,17 @@ class OverworldScene extends Phaser.Scene {
     this.renderBorders();
   }
 
+  // Animated multi-tile object (a fountain, a flag ...): tile fields animFrames (how many animation frames) and animColumns (tiles per frame across; default = sheet columns / animFrames).
+  // The frames sit on the sheet as a grid (side by side, then below). You paint the tiles of the FIRST frame; every animation frame uses the same cell of its own block.
+  multiAnimList(tileDef, tex, frame, C) {
+    const N = Math.floor(Number(tileDef.animFrames) || 0), total = Math.max(1, tex.frameTotal - 1); if (N < 2) return null;
+    const R = Math.ceil(total / C), fc = Math.floor(Number(tileDef.animColumns) || 0) || Math.floor(C / N); if (fc < 1) return null;
+    const perRow = Math.max(1, Math.floor(C / fc)), gridRows = Math.ceil(N / perRow), fr = Math.max(1, Math.floor(R / gridRows));
+    const rr = Math.floor(frame / C) % fr, cc = (frame % C) % fc, list = [];
+    for (let k = 0; k < N; k++) { const idx = (Math.floor(k / perRow) * fr + rr) * C + (k % perRow) * fc + cc; if (idx < total) list.push(idx); }
+    return list.length > 1 ? list : null;
+  }
+
   // Creates one tile image for (tileID, frameID) and registers it for tile animation. Returns null when it cannot be drawn.
   addTileImage(tileID, frameID, x, y, depth) {
     const tileDef = window.OverworldTiles && window.OverworldTiles[tileID];
@@ -1037,10 +1048,11 @@ class OverworldScene extends Phaser.Scene {
       const total = Math.max(1, tex.frameTotal - 1);
       const fw = multi ? 16 : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
       const cols = Math.max(1, Math.floor(tex.getSourceImage().width / fw));
-      let base, count;
-      if (multi) { base = Math.floor(frame / cols) * cols; count = Math.min(cols, total - base); }
+      let base, count, list = null;
+      if (multi && tileDef.animFrames > 1) { list = this.multiAnimList(tileDef, tex, frame, cols); count = list ? list.length : 0; if (list && list.length) img.setFrame(list[0]); }   // animFrames / animColumns: the animation frames are laid out as a grid on the sheet
+      else if (multi) { base = Math.floor(frame / cols) * cols; count = Math.min(cols, total - base); }
       else { base = 0; count = cols > 1 ? cols : total; }
-      if (count > 1) this.animTiles.push({ img, base, count });
+      if (count > 1) this.animTiles.push({ img, base, count, list });
     }
     return img;
   }
@@ -1201,10 +1213,11 @@ class OverworldScene extends Phaser.Scene {
             const total = Math.max(1, tex.frameTotal - 1);
             const fw = multi ? 16 : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
             const cols = Math.max(1, Math.floor(tex.getSourceImage().width / fw));
-            let base, count;
-            if (multi) { base = Math.floor(frame / cols) * cols; count = Math.min(cols, total - base); }
+            let base, count, list = null;
+            if (multi && tileDef.animFrames > 1) { list = this.multiAnimList(tileDef, tex, frame, cols); count = list ? list.length : 0; if (list && list.length) img.setFrame(list[0]); }   // animFrames / animColumns: the animation frames are laid out as a grid on the sheet
+            else if (multi) { base = Math.floor(frame / cols) * cols; count = Math.min(cols, total - base); }
             else { base = 0; count = cols > 1 ? cols : total; }
-            if (count > 1) this.animTiles.push({ img, base, count });
+            if (count > 1) this.animTiles.push({ img, base, count, list });
           }
           drawn++;
         }
@@ -1912,7 +1925,7 @@ class OverworldScene extends Phaser.Scene {
     const step = Math.floor(this.tileAnimMs / 300);
     if (step === this.tileAnimStep) return;
     this.tileAnimStep = step;
-    for (const t of this.animTiles) t.img.setFrame(t.base + (step % t.count));
+    for (const t of this.animTiles) t.img.setFrame(t.list ? t.list[step % t.list.length] : t.base + (step % t.count));
   }
 
   // [GUARD] Safety net for the "I can't move after a battle" freeze. It does two things:

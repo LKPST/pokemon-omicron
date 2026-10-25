@@ -181,7 +181,9 @@ body.sedDock #main{margin-right:var(--sedw,660px)}
   <div class="frow"><label>Owner<input type="text" id="ghOwn"></label><label>Repository<input type="text" id="ghRepo"></label><label>Branch<input type="text" id="ghBr" placeholder="(default)"></label></div>
   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="ghRem"> remember the token in this browser</label>
   <label>Commit message<input type="text" id="ghMsg" placeholder="(automatic if empty)"></label>
-  <div class="help">Files to commit (one commit):</div><div id="ghFiles" style="display:flex;flex-direction:column;gap:4px"></div>
+  <div class="help">Files to commit (one commit):</div><div id="ghFiles" style="display:flex;flex-direction:column;gap:4px;max-height:38vh;overflow:auto"></div>
+  <div class="row"><button id="ghScan" class="on" title="pick your project folder once; the editor compares every file with GitHub and lists only the new / changed ones">📁 Scan project folder for changes</button><button id="ghPick" title="choose another folder">Change folder…</button></div>
+  <label>Folder inside the repository (empty = the repository root)<input type="text" id="ghPre" placeholder="(auto)"></label><input type="file" id="ghScanDir" webkitdirectory multiple hidden>
   <div class="row"><button id="ghAdd" title="pick any files from your computer (scripts, js, html, images, audio ...) to commit as well">+ Add files…</button><button id="ghAddDir" title="pick a whole folder; its sub-folders are kept">+ Add folder…</button></div>
   <input type="file" id="ghFile" multiple hidden><input type="file" id="ghDir" webkitdirectory multiple hidden>
   <div id="ghOut" class="help"></div>
@@ -1122,18 +1124,24 @@ function tdForm(){const f=$('tdForm'),t=TD.sel;if(!t){f.innerHTML='<div class="h
   <label>tileType<input type="text" id="tfType" list="tdTypes" value="${tdE(d.tileType||'')}"><datalist id="tdTypes"><option>Normal</option><option>Multi-tile</option></datalist></label>
   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="tfAnim" ${d.isAnimated?'checked':''}> isAnimated</label>
   <div class="frow"><label>frames<input type="number" id="tfFr" min="1" value="${tdE(d.frames??1)}"></label><label>columns<input type="number" id="tfCol" min="1" value="${tdE(d.columns??'')}" placeholder="(none)"></label></div>
+  ${d.isAnimated&&/^Multi/.test(d.tileType||'')?`<div class="help">Animation: frames/columns above describe the whole sheet. Here: how many animation frames it holds, and how many tiles wide ONE frame is. The frames are laid side by side (then below). Paint the tiles of the first frame.</div>
+  <div class="frow"><label>animation frames<input type="number" id="tfAF" min="1" value="${tdE(d.animFrames??'')}" placeholder="(row of the sheet)"></label><label>tiles wide per frame<input type="number" id="tfAC" min="1" value="${tdE(d.animColumns??'')}" placeholder="(auto)"></label></div>
+  <div class="help" id="tfAInfo"></div>`:''}
   <label>tileImage (path in the project)<input type="text" id="tfImg" value="${tdE(d.tileImage||'')}"></label>
   <div class="frow"><label>width<input type="number" id="tfW" min="1" value="${(String(d.tileDimension||'').split('x')[0])||''}"></label><label>height<input type="number" id="tfH" min="1" value="${(String(d.tileDimension||'').split('x')[1])||''}"></label></div>
   <div class="row"><button id="tfDetect" title="read the real size of the image">Detect size${sz?` (${sz.w}×${sz.h})`:''}</button><button id="tfAuto" title="frames = cells of 16×16, columns = width / 16">Auto frames &amp; columns</button></div>
   <div class="row"><button id="tfPaint" class="on" title="open the pixel editor for this tile's image">🎨 Edit pixels…</button></div>
   <div class="row"><button id="tfRepl">Replace image…</button><button id="tfCrop" ${TD.rect&&TD.sheet?'':'disabled'} title="use the highlighted area of the sheet">Replace from sheet selection</button></div>
   <div class="help">Used on maps: <b>${use}</b> cell(s)${t.canvas&&t.mod?' · this image is new and goes in the ZIP at the path above':''}</div>
-  ${Object.keys(d).filter(k=>!['tileID','tileName','tileType','isAnimated','frames','columns','tileImage','tileDimension','category'].includes(k)).map(k=>`<div class="help">kept: ${tdE(k)} = ${tdE(JSON.stringify(d[k]))}</div>`).join('')}
+  ${Object.keys(d).filter(k=>!['tileID','tileName','tileType','isAnimated','frames','columns','tileImage','tileDimension','category','animFrames','animColumns'].includes(k)).map(k=>`<div class="help">kept: ${tdE(k)} = ${tdE(JSON.stringify(d[k]))}</div>`).join('')}
   <canvas id="tfPrev" style="margin-top:8px"></canvas>`;
   const touch=()=>{t.mod=true;tdApply();tdList();tdPrev()};
   const num=(id,key,del)=>{$(id).oninput=()=>{const v=$(id).value;if(v===''&&del)delete d[key];else if(v!=='')d[key]=Number(v);touch()}};
   $('tfName').oninput=()=>{d.tileName=$('tfName').value;touch()};$('tfType').oninput=()=>{d.tileType=$('tfType').value;touch()};
-  $('tfAnim').onchange=()=>{d.isAnimated=$('tfAnim').checked;touch()};num('tfFr','frames');num('tfCol','columns',true);
+  $('tfAnim').onchange=()=>{d.isAnimated=$('tfAnim').checked;touch();tdForm()};num('tfFr','frames');num('tfCol','columns',true);
+  if($('tfAF')){num('tfAF','animFrames',true);num('tfAC','animColumns',true);
+    const info=()=>{const[w,h]=String(d.tileDimension||'').split('x').map(Number),C=Math.round((w||0)/16),R=Math.round((h||0)/16),N=d.animFrames||0;if(!N||N<2||!C){$('tfAInfo').textContent='';return}const fc=d.animColumns||Math.floor(C/N),per=Math.max(1,Math.floor(C/fc)),gr=Math.ceil(N/per),fr=Math.floor(R/gr);$('tfAInfo').textContent=`Sheet ${C}×${R} tiles → ${N} frames of ${fc}×${fr} tiles (${per} per row)${fc*per>C||fr<1||(fc*per*gr*fr)!==C*R?'  ⚠ the sheet size does not divide evenly':''}`};
+    $('tfAF').addEventListener('input',info);$('tfAC').addEventListener('input',info);info()}
   $('tfImg').oninput=()=>{const old=d.tileImage;d.tileImage=$('tfImg').value.trim();touch();tdReg(t)};
   const dim=()=>{d.tileDimension=(+$('tfW').value||0)+'x'+(+$('tfH').value||0);touch()};$('tfW').oninput=dim;$('tfH').oninput=dim;
   if($('tfId'))$('tfId').onchange=()=>{const v=Number($('tfId').value);if(!Number.isFinite(v)||tdById(v)&&tdById(v)!==t){tdMsg('That ID is already taken.');$('tfId').value=t.id;return}t.id=v;d.tileID=v;t.mod=true;TD.tiles.sort((a,b)=>(+a.id)-(+b.id));tdApply();tdList()};
@@ -1581,11 +1589,52 @@ function ghOpen(pre){ghList=ghItems();const c=GH.cfg;$('ghTok').value=c.token||'
 function ghRenderFiles(pre){const L=$('ghFiles');L.innerHTML='';ghList.forEach((x,i)=>{const r=document.createElement('div');r.className='ghf';
     r.innerHTML=`<label style="flex-direction:row;align-items:center;gap:6px;margin:0"><input type="checkbox" ${(pre?pre.includes(x.key)||x.key.startsWith('img:')&&pre.includes('til'):x.on)?'checked':''} data-i="${i}"> <b>${tdE(x.name)}</b></label><input type="text" value="${tdE(x.path)}" data-p="${i}" ${x.fixed?'readonly':''} title="path inside the repository"><small>${tdE(x.note)}</small>${x.extra?'<button class="mini" data-x="'+i+'" title="remove from the list">✕</button>':''}`;L.appendChild(r)});
   L.querySelectorAll('button[data-x]').forEach(b=>b.onclick=()=>{const x=ghList[+b.dataset.x],i=GHX.indexOf(x);if(i>=0)GHX.splice(i,1);const keep=new Set([...document.querySelectorAll('#ghFiles input[data-i]')].filter(i=>i.checked).map(i=>ghList[+i.dataset.i].key));ghList=ghItems();ghRenderFiles(ghList.map(x=>x.key).filter(k=>keep.has(k)))})}
+// ---- scan the project folder: every file is compared with GitHub (git blob SHA-1), only new / changed ones are listed
+const GHD={h:null};
+const ghIdb=()=>new Promise((res,rej)=>{const r=indexedDB.open('edGH',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+async function ghIdbGet(k){try{const d=await ghIdb();return await new Promise(res=>{const q=d.transaction('k').objectStore('k').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)})}catch(e){return null}}
+async function ghIdbSet(k,v){try{const d=await ghIdb();await new Promise(res=>{const t=d.transaction('k','readwrite');t.objectStore('k').put(v,k);t.oncomplete=res;t.onerror=res})}catch(e){}}
+async function ghWalk(dh,pre,out){for await(const[n,h]of dh.entries()){
+  if(h.kind==='directory'){if(n==='.git'||n==='node_modules'||n==='.github')continue;await ghWalk(h,pre+n+'/',out)}
+  else{if(/^(\.DS_Store|Thumbs\.db)$/i.test(n))continue;out.push({path:pre+n,get:()=>h.getFile()})}}}
+async function ghSha(file){const buf=new Uint8Array(await file.arrayBuffer()),head=new TextEncoder().encode('blob '+buf.length+'\0'),all=new Uint8Array(head.length+buf.length);all.set(head);all.set(buf,head.length);
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-1',all))].map(b=>b.toString(16).padStart(2,'0')).join('')}
+function ghReadCfg(){const c=GH.cfg;c.token=$('ghTok').value.trim();c.owner=$('ghOwn').value.trim();c.repo=$('ghRepo').value.trim();c.branch=$('ghBr').value.trim();c.remember=$('ghRem').checked;ghStore();return c}
+async function ghScan(change){const c=ghReadCfg(),o=$('ghOut'),say=(t,cls)=>{o.textContent=t;o.className='help '+(cls||'')};
+  if(!c.token||!c.owner||!c.repo)return say('Fill in the token, owner and repository first.','bad');
+  if(!window.showDirectoryPicker){$('ghScanDir').click();return}   // browsers without folder access: the classic folder picker
+  try{let h=change?null:(GHD.h||await ghIdbGet('dir'));
+    if(h){let p=await h.queryPermission({mode:'read'});if(p!=='granted')p=await h.requestPermission({mode:'read'});if(p!=='granted')h=null}
+    if(!h){h=await showDirectoryPicker({id:'omicron',mode:'read'});await ghIdbSet('dir',h)}
+    GHD.h=h;say('Reading the folder…');const entries=[];await ghWalk(h,'',entries);await ghScanEntries(entries,h.name,say)}
+  catch(e){if(e.name!=='AbortError')say('Could not scan: '+e.message,'bad')}}
+$('ghScanDir').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(!fs.length)return;const o=$('ghOut'),say=(t,cls)=>{o.textContent=t;o.className='help '+(cls||'')};ghReadCfg();
+  const top=fs[0].webkitRelativePath.split('/')[0],entries=fs.map(f=>({path:f.webkitRelativePath.split('/').slice(1).join('/'),get:()=>f})).filter(x=>x.path&&!/(^|\/)(\.git|node_modules|\.github)\//.test(x.path)&&!/(^|\/)(\.DS_Store|Thumbs\.db)$/i.test(x.path));
+  try{await ghScanEntries(entries,top,say)}catch(er){say('Could not scan: '+er.message,'bad')}};
+async function ghScanEntries(entries,dirName,say){const c=GH.cfg;
+  say('Reading the repository…');const info=await ghApi(''),br=c.branch||info.default_branch;
+  const t=await ghApi('/git/trees/'+encodeURIComponent(br)+'?recursive=1'),remote=new Map(t.tree.filter(x=>x.type==='blob').map(x=>[x.path,x.sha]));
+  let pre=$('ghPre').value.trim().replace(/^\/+|\/+$/g,'');
+  if(!$('ghPre').value.trim()){const cand=['',dirName],score=p=>entries.reduce((n,x)=>n+(remote.has((p?p+'/':'')+x.path)?1:0),0);
+    pre=cand.map(p=>[p,score(p)]).sort((a,b)=>b[1]-a[1])[0][0];$('ghPre').value=pre}
+  const pfx=pre?pre+'/':'',mine=new Set(ghList.filter(x=>!x.extra).map(x=>x.path));
+  for(let i=GHX.length-1;i>=0;i--)if(GHX[i].scan)GHX.splice(i,1);
+  let same=0,skip=0,big=0,k=0;const found=[];
+  for(const e of entries){if(++k%15===0)say('Comparing '+k+'/'+entries.length+'…');
+    const path=pfx+e.path;if(mine.has(path)){skip++;continue}
+    const f=await e.get();if(f.size>50*1048576){big++;continue}
+    const sha=await ghSha(f);if(remote.get(path)===sha){same++;continue}
+    found.push({key:'s:'+path,name:path.split('/').pop(),path,extra:true,scan:true,on:true,file:f,note:remote.has(path)?'changed':'new file',get:async()=>({b64:await ghB64(f)}),done:()=>{const i=GHX.findIndex(g=>g.file===f);if(i>=0)GHX.splice(i,1)}})}
+  found.sort((a,b)=>a.path.localeCompare(b.path));GHX.push(...found);
+  ghList=ghItems();ghRenderFiles(ghList.filter(x=>x.on||x.extra).map(x=>x.key));
+  say(found.length?`✓ ${found.length} new / changed file(s) found (${same} identical to GitHub${skip?', '+skip+' left to the editor files above':''}${big?', '+big+' over 50 MB skipped':''}). Untick what you do not want, then Commit.`:`Nothing to push: all ${same} file(s) match GitHub.${pre?'':' (If that is wrong, type the folder inside the repository above and scan again.)'}`,found.length?'ok':'');
+  if(t.truncated)say('Warning: the repository is very large, GitHub listed only part of it. Some changes may be missing.','bad')}
+$('ghScan').onclick=()=>ghScan(false);$('ghPick').onclick=()=>ghScan(true);
 $('ghAdd').onclick=()=>$('ghFile').click();$('ghAddDir').onclick=()=>$('ghDir').click();
 $('ghFile').onchange=e=>{ghAddFiles([...e.target.files],false);e.target.value=''};$('ghDir').onchange=e=>{ghAddFiles([...e.target.files],true);e.target.value=''};
 $('ghGo').onclick=async()=>{const c=GH.cfg;c.token=$('ghTok').value.trim();c.owner=$('ghOwn').value.trim();c.repo=$('ghRepo').value.trim();c.branch=$('ghBr').value.trim();c.remember=$('ghRem').checked;c.msg=$('ghMsg').value;
   const picked=[...document.querySelectorAll('#ghFiles input[data-i]')].filter(i=>i.checked).map(i=>ghList[+i.dataset.i]);
-  picked.forEach(x=>{const i=ghList.indexOf(x),p=document.querySelector(`#ghFiles input[data-p="${i}"]`).value.trim().replace(/^\/+/,'');x.path=p;if(!x.fixed&&!(x.extra&&x.file&&x.file.webkitRelativePath))c.paths[x.name]=p});ghStore();
+  picked.forEach(x=>{const i=ghList.indexOf(x),p=document.querySelector(`#ghFiles input[data-p="${i}"]`).value.trim().replace(/^\/+/,'');x.path=p;if(!x.fixed&&!x.scan&&!(x.extra&&x.file&&x.file.webkitRelativePath))c.paths[x.name]=p});ghStore();
   const o=$('ghOut'),say=(t,cls)=>{o.textContent=t;o.className='help '+(cls||'');notify(t,cls)};
   if(!c.token||!c.owner||!c.repo)return say('Fill in the token, owner and repository.','bad');if(!picked.length)return say('Tick at least one file.','bad');
   const msg=c.msg.trim()||('Update '+picked.map(x=>x.name.split('/').pop()).slice(0,3).join(', ')+(picked.length>3?' …':'')+' (editor)');
