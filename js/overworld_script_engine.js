@@ -101,8 +101,9 @@ window.OverworldScriptEngine = (() => {
       }
       const cmd = toks[0] && toks[0].key === undefined ? toks[0].val : null;
       if (!cmd) { err(i, `Cannot read this line: ${t}`); continue; }
-      const sc = CMDS()[cmd];
-      const step = { cmd, args: {}, line: i + 1 };
+      const cmdL = (CMDS()[cmd] || !CMDS()[cmd.toLowerCase()]) ? cmd : cmd.toLowerCase();   // changeOWID = changeowid
+      const sc = CMDS()[cmdL];
+      const step = { cmd: cmdL, args: {}, line: i + 1 };
       if (!sc) err(i, `Unknown command "${cmd}"`);
 
       // a block can also start on the next non-empty line
@@ -383,8 +384,14 @@ window.OverworldScriptEngine = (() => {
           x = p.x + d[0]; y = p.y + d[1];
         }
         const none = v => { v = String(v == null ? '' : v).trim(); return /^(|-|none|off)$/i.test(v) ? '' : v; };
-        const key = scene.spawnRuntimeNPC({ owID: o.owID, effect: none(o.spawn_effect), filter: none(o.spritefilter), color: none(o.filtercolor), permanent: !!o.isPermanent, movementType: none(o.movementtype), key: none(o.owkey), x, y, script: none(o.script) });
+        const key = scene.spawnRuntimeNPC({ owID: o.owID, effect: none(o.spawn_effect), filter: none(o.spritefilter), color: none(o.filtercolor), permanent: !!o.isPermanent, movementType: none(o.movementtype), key: none(o.owkey), x, y, script: none(o.script), randomMode: none(o.randomMode), changeEvery: o.changeEvery });
         if (!key) console.warn('[script] spawnnpc did not work for "' + o.owID + '"');
+        next();
+      },
+      // changeowid: new sprite for an NPC that exists (ow_id can be randomPokemon / randomNPC; randomMode static = one pick, changing = keeps changing)
+      changeOwId(o, next) {
+        const e = resolve(o.owkey); if (!e) { console.warn('[script] changeowid: nobody called "' + o.owkey + '"'); return next(); }
+        if (!scene.setNpcOwID(e, o.owID, o.randomMode, o.changeEvery)) console.warn('[script] changeowid did not work for "' + o.owID + '"');
         next();
       },
       // move the camera so it is centred on somebody (it keeps tracking him while it slides, so it also works on a walking NPC)

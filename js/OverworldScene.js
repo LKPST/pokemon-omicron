@@ -1328,7 +1328,9 @@ class OverworldScene extends Phaser.Scene {
   spawnMapEvents(mapData, mapKey, offsetX, offsetY) {
     if (!mapData.events) return;
 
-    for (const [key, eventData] of Object.entries(mapData.events)) {
+    const _sd = window.GameStateManager && window.GameStateManager.saveData, _ov = (_sd && _sd.owOverrides) || {};
+    for (const [key, eventData0] of Object.entries(mapData.events)) {
+      const eventData = _ov[mapKey + ':' + key] ? Object.assign({}, eventData0, { owID: _ov[mapKey + ':' + key] }) : eventData0;   // [CHANGEOWID] a sprite changed by script (changeowid)
       // [NEW] Warp and Script events are walk-on triggers. They are NOT added to this.npcs,
       // so they never block the player (isPassable only checks this.npcs).
       // [SIGNPOST] a Signpost runs its script when the player presses the talk key while facing its tile (see tryInteract)
@@ -1405,7 +1407,8 @@ class OverworldScene extends Phaser.Scene {
   // cfg: { owID, effect, filter, color, permanent, movementType, key, x, y, script }  (x, y = tile on the current map). Returns the new NPC's key, or null.
   spawnRuntimeNPC(cfg) {
     const E = window.OverworldScriptEngine, map = this.currentMapKey, maps = window.OverworldMaps || {};
-    const id = String(cfg.owID || '').trim();
+    const isRnd = this.isRandomOw(cfg.owID);
+    const id = isRnd ? (this.pickRandomOw(cfg.owID) || '') : String(cfg.owID || '').trim();
     if (!id || (!OW_TABLE()[id] && !/^SPECIES_/.test(id))) { console.warn('[spawnnpc] "' + id + '" is not in tables/ow_table.js (or a SPECIES_ id)'); return null; }
     this._spawnN = (this._spawnN || 0) + 1;
     const key = String(cfg.key || '').trim() || ('NPC_Spawn' + this._spawnN);
@@ -1425,7 +1428,69 @@ class OverworldScene extends Phaser.Scene {
     this.spawnMapEvents({ events: { [key]: ev } }, map, off.x, off.y);
     let tries = 0; const fx = () => { const spr = (this.npcs || []).find(n => n.eventKey === key && n.mapName === map); if (spr) return this.spawnEffect(spr, cfg.effect); if (++tries < 25) this.time.delayedCall(80, fx); };   // Pokémon NPCs load their sprite a moment later
     fx();
+    if (isRnd && String(cfg.randomMode || '').toLowerCase() === 'changing') {
+      let t2 = 0; const go = () => { const spr = (this.npcs || []).find(n => n.eventKey === key && n.mapName === map); if (spr) this.startOwRandom(spr, cfg.owID, cfg.changeEvery); else if (++t2 < 25) this.time.delayedCall(80, go); }; go();
+    }
     return key;
+  }
+  // ---- [CHANGEOWID] random sprite ids and changing the sprite of an NPC that already exists
+  isRandomOw(spec) { return /^random_?(pokemon|npc)$/i.test(String(spec || '').trim()); }
+  pickRandomOw(spec, not) {
+    const poke = /pokemon/i.test(String(spec)); let list = [];
+    if (poke) { const sp = window.OverworldSprites && window.OverworldSprites.species; list = sp ? Object.keys(sp) : Object.entries(OW_TABLE()).filter(([, v]) => v && v.owType === 'Pokemon').map(([k]) => k); }
+    else list = Object.entries(OW_TABLE()).filter(([k, v]) => v && v.owType === 'NPC' && this.textures.exists(v.spriteID || `${k.toLowerCase()}_ow`)).map(([k]) => k);
+    if (not && list.length > 1) list = list.filter(k => k !== not);
+    return list.length ? list[Math.floor(Math.random() * list.length)] : null;
+  }
+  // randomMode 'changing' = a new random sprite every `every` ms (min 250) until changeowid is used on it again; otherwise one random pick that stays
+  startOwRandom(spr, spec, every) {
+    this.stopOwRandom(spr); const k = spr.mapName + ':' + spr.eventKey, ms = Math.max(250, +every || 1000);
+    this._owRnd = this._owRnd || {};
+    this._owRnd[k] = this.time.addEvent({ delay: ms, loop: true, callback: () => {
+      const cur = (this.npcs || []).find(n => n.eventKey === spr.eventKey && n.mapName === spr.mapName);
+      if (!cur || !cur.scene) { this.stopOwRandom(spr); return; }
+      const id = this.pickRandomOw(spec, cur.eventConfig && cur.eventConfig.owID); if (id) this.changeNpcOwID(cur, id, true);
+    } });
+  }
+  stopOwRandom(spr) { const k = spr.mapName + ':' + spr.eventKey, t = this._owRnd && this._owRnd[k]; if (t) { try { t.remove(false); } catch (_) { } delete this._owRnd[k]; } }
+  // the entry point of the script command changeowid: spec = a real id, randomPokemon or randomNPC
+  setNpcOwID(spr, spec, mode, every) {
+    if (!spr || !spr.scene) return false;
+    this.stopOwRandom(spr);
+    if (this.isRandomOw(spec)) {
+      const id = this.pickRandomOw(spec); if (!id) { console.warn('[changeowid] nothing to pick for ' + spec); return false; }
+      if (!this.changeNpcOwID(spr, id, String(mode || '').toLowerCase() === 'changing')) return false;
+      if (String(mode || '').toLowerCase() === 'changing') this.startOwRandom(spr, spec, every);
+      return true;
+    }
+    return this.changeNpcOwID(spr, String(spec || '').trim(), false);
+  }
+  // swap the picture (and nothing else) of an NPC. temp = a passing change (no save). Table NPC -> table NPC changes the texture in place; anything else (a Pokémon, a building) rebuilds the NPC on its current tile.
+  changeNpcOwID(spr, id, temp) {
+    const table = OW_TABLE(), te = table[id], old = spr.eventConfig || {}, oldTe = table[old.owID];
+    if (!te && !(/^SPECIES_/.test(id) && window.OWSprites && window.OWSprites.hasSprite(id))) { console.warn('[changeowid] "' + id + '" is not in tables/ow_table.js (or a SPECIES_ id with a sprite)'); return false; }
+    const map = spr.mapName, key = spr.eventKey, sd = window.GameStateManager && window.GameStateManager.saveData, E = window.OverworldScriptEngine;
+    if (!temp) {   // remember it: a spawned NPC keeps it in its own record, a map NPC in the save
+      const rec = this.runtimeNpcList().find(r => r.map === map && r.key === key);
+      if (rec) rec.ev.owID = id; else if (sd) { sd.owOverrides = sd.owOverrides || {}; sd.owOverrides[map + ':' + key] = id; }
+      if (E) E.save();
+    }
+    const tex = te && (te.spriteID || `${id.toLowerCase()}_ow`);
+    if (te && oldTe && te.owType !== 'Building' && oldTe.owType !== 'Building' && !spr.owSpecies && this.textures.exists(tex)) {
+      const f = window.getOverworldFrame ? window.getOverworldFrame(spr.direction || 'down', 0) : 0;
+      spr.setTexture(tex, this.textures.getFrame(tex, f) ? f : 0);
+      const sc = Number(te.owScale) > 0 ? Number(te.owScale) : 1; spr.setScale(sc);
+      spr.eventConfig = Object.assign({}, old, { owID: id }); return true;
+    }
+    // rebuild on the tile it stands on now
+    const off = this.getMapWorldOffset(map), bld = oldTe && oldTe.owType === 'Building';
+    const tx = Math.round((spr.x - 16 - off.x) / 32), ty = Math.round((spr.y - (bld ? 32 : 16) - off.y) / 32);
+    const ev2 = Object.assign({}, spr.eventConfig, { owID: id, xPos: tx, yPos: ty, facing: spr.direction || 'down' });
+    const wasActive = this.activeNPC === spr, hadTimer = this._owRnd && this._owRnd[map + ':' + key];
+    this.npcs.splice(this.npcs.indexOf(spr), 1); try { spr.destroy(); } catch (_) { }
+    this.spawnMapEvents({ events: { [key]: ev2 } }, map, off.x, off.y);
+    if (wasActive) { let n = 0; const fix = () => { const s2 = this.npcs.find(x => x.eventKey === key && x.mapName === map); if (s2) this.activeNPC = s2; else if (++n < 25) this.time.delayedCall(80, fix); }; fix(); }
+    return true;
   }
   // appearing effects: fade, poof (smoke puff), sparkle, holo (cyan light beam + flicker) and teleport (white beam)
   spawnEffect(spr, effect) {

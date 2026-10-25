@@ -933,6 +933,7 @@ function pvHost(){const run=PV.run,guard=f=>(...a)=>{if(run===PV.run)f(...a)};
       const key=(o.owkey&&!/^(-|none)$/i.test(o.owkey))?o.owkey:'NPC_Spawn'+(++PV.spawnN||(PV.spawnN=1));
       PV.ents[key]={key,ev:{eventType:'NPC',owID:o.owID,xPos:+x,yPos:+y},x:(off.x+ +x)*TS+16,y:(off.y+ +y)*TS+16,dir:'down',building:false,vis:true,id:o.owID};
       pvLog('👤 spawnnpc '+o.owID+' as '+key+' at '+x+','+y+(o.spawn_effect&&o.spawn_effect!=='none'?' ('+o.spawn_effect+')':''),'');next()},
+    changeOwId(o,next){const e=pvEnt(o.owkey);if(!e){pvLog('⚠ changeowid: nobody called "'+o.owkey+'"','dim');return next()}const rnd=/^random_?(pokemon|npc)$/i.test(o.owID||'');e.id=rnd?o.owID:o.owID;pvLog('👤 changeowid '+(e.key)+' → '+o.owID+(rnd?(' ('+(o.randomMode||'static')+')'):''),'');next()},
     moveCameraTo(spec,ms,next,sync){const e=pvEnt(spec);if(!e){pvLog('⚠ movecamera_to: nobody called "'+spec+'"','dim');return next()}
       if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.moveCameraTo(spec,pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}
       PV.follow=null;PV.camMoved=true;const x0=PV.cam.x,y0=PV.cam.y;pvLog('📷 camera → '+(e.id||e.key),'');if(ms<=0){PV.cam.x=e.x;PV.cam.y=e.y;return next()}
