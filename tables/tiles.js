@@ -621,5 +621,46 @@ window.OverworldTiles = {
     columns: 3,
     tileImage: "graphics/tiles/pot_plants.png",
     tileDimension: "48x64"
+  },
+  63: {
+    tileID: 63,
+    tileName: "Sidestairs",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 35,
+    columns: 7,
+    tileImage: "graphics/tiles/sidestairs.png",
+    tileDimension: "112x80"
+  },
+  64: {
+    tileID: 64,
+    tileName: "Terrain-stairs",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 21,
+    columns: 3,
+    tileImage: "graphics/tiles/terrain-stairs.png",
+    tileDimension: "48x112"
+  },
+  65: {
+    tileID: 65,
+    tileName: "Wooden Gate",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 32,
+    columns: 8,
+    tileImage: "graphics/tiles/wooden_gate.png",
+    tileDimension: "128x64",
+    category: "Olenburg"
+  },
+  66: {
+    tileID: 66,
+    tileName: "Pointy Fence",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 18,
+    columns: 6,
+    tileImage: "graphics/tiles/pointy_fence.png",
+    tileDimension: "96x48"
   }
 };
