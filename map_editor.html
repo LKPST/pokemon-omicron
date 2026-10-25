@@ -182,6 +182,8 @@ body.sedDock #main{margin-right:var(--sedw,660px)}
   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="ghRem"> remember the token in this browser</label>
   <label>Commit message<input type="text" id="ghMsg" placeholder="(automatic if empty)"></label>
   <div class="help">Files to commit (one commit):</div><div id="ghFiles" style="display:flex;flex-direction:column;gap:4px"></div>
+  <div class="row"><button id="ghAdd" title="pick any files from your computer (scripts, js, html, images, audio ...) to commit as well">+ Add files…</button><button id="ghAddDir" title="pick a whole folder; its sub-folders are kept">+ Add folder…</button></div>
+  <input type="file" id="ghFile" multiple hidden><input type="file" id="ghDir" webkitdirectory multiple hidden>
   <div id="ghOut" class="help"></div>
   <div class="row"><button id="ghGo" class="on" style="flex:1">Commit</button><button id="ghCancel" style="flex:1">Close</button></div>
 </div></div>
@@ -1556,16 +1558,34 @@ function ghItems(){const it=[];
     it.push({key:'til',name:'tiles.js',on:mod,note:mod?TD.tiles.filter(t=>t.mod).length+' tile(s) edited':'',get:async()=>({text:tdOut()}),done:()=>{for(const t of TD.tiles)if(t.mod){t.block=tdBlock(t);t.mod=false}tdList();tdForm()}});
     const seen=new Set();for(const t of TD.tiles)if(t.canvas&&t.mod&&t.d.tileImage&&!seen.has(t.d.tileImage)){seen.add(t.d.tileImage);
       it.push({key:'img:'+t.d.tileImage,name:t.d.tileImage,fixed:true,on:true,note:'new tile image',get:async()=>({b64:await ghB64(await new Promise(r=>t.canvas.toBlob(r,'image/png')))})})}}
-  for(const x of it){x.path=x.fixed?x.name:ghPath(x.name)||x.name}return it}
+  for(const x of GHX)it.push(x);   // files added with "+ Add files / folder"
+  for(const x of it){x.path=x.fixed?x.name:x.extra?x.path:ghPath(x.name)||x.name}return it}
+const GHX=[];   // extra files picked from the computer: {key,name,path,extra,file,on,note,get,done}
+const GH_TEXT=/\.(js|json|html?|css|txt|md|csv|svg|xml|yml|yaml|tsv)$/i;
+function ghGuessPath(name){const k=ghPath(name);if(k)return k;
+  if(/(Tables|Database|Sprites)\.js$/i.test(name)&&/^(Pokemon|Learnset|Evolution|Pokedex|OverworldSprites|tiles)/i.test(name))return 'tables/'+name;
+  if(/\.js$/i.test(name))return 'js/'+name;return name}
+function ghAddFiles(files,isDir){if(!files.length)return;let added=0;
+  for(const f of files){let p;if(isDir&&f.webkitRelativePath){p=f.webkitRelativePath;const top=p.split('/')[0];if(top===GH.cfg.repo||/-(main|master)$/i.test(top))p=p.split('/').slice(1).join('/')}else p=ghGuessPath(f.name);
+    if(!p||/(^|\/)(\.git|node_modules)\//.test(p)||/(^|\/)\.DS_Store$/.test(p))continue;
+    const old=GHX.findIndex(x=>x.path===p);if(old>=0)GHX.splice(old,1);
+    GHX.push({key:'x:'+p+':'+Math.random(),name:p.split('/').pop(),path:p,extra:true,on:true,file:f,note:'from your computer',
+      get:async()=>GH_TEXT.test(f.name)?{text:await f.text()}:{b64:await ghB64(f)},done:()=>{const i=GHX.indexOf(GHX.find(g=>g.file===f));if(i>=0)GHX.splice(i,1)}});added++}
+  const keep=new Set([...document.querySelectorAll('#ghFiles input[data-i]')].filter(i=>i.checked).map(i=>ghList[+i.dataset.i].key));
+  ghList=ghItems();ghRenderFiles(ghList.map(x=>x.key).filter(k=>keep.has(k)||k.startsWith('x:')));
+  $('ghOut').textContent=added+' file(s) added. Check the path of each one (the folder inside the repository), then Commit.';$('ghOut').className='help ok'}
 let ghList=[];
 function ghOpen(pre){ghList=ghItems();const c=GH.cfg;$('ghTok').value=c.token||'';$('ghOwn').value=c.owner;$('ghRepo').value=c.repo;$('ghBr').value=c.branch||'';$('ghRem').checked=c.remember!==false;
   $('ghMsg').value=c.msg||'';$('ghOut').textContent='';$('ghOut').className='help';
-  const L=$('ghFiles');L.innerHTML='';ghList.forEach((x,i)=>{const r=document.createElement('div');r.className='ghf';
-    r.innerHTML=`<label style="flex-direction:row;align-items:center;gap:6px;margin:0"><input type="checkbox" ${(pre?pre.includes(x.key)||x.key.startsWith('img:')&&pre.includes('til'):x.on)?'checked':''} data-i="${i}"> <b>${tdE(x.name)}</b></label><input type="text" value="${tdE(x.path)}" data-p="${i}" ${x.fixed?'readonly':''} title="path inside the repository"><small>${tdE(x.note)}</small>`;L.appendChild(r)});
-  $('ghm').hidden=false}
+  ghRenderFiles(pre);$('ghm').hidden=false}
+function ghRenderFiles(pre){const L=$('ghFiles');L.innerHTML='';ghList.forEach((x,i)=>{const r=document.createElement('div');r.className='ghf';
+    r.innerHTML=`<label style="flex-direction:row;align-items:center;gap:6px;margin:0"><input type="checkbox" ${(pre?pre.includes(x.key)||x.key.startsWith('img:')&&pre.includes('til'):x.on)?'checked':''} data-i="${i}"> <b>${tdE(x.name)}</b></label><input type="text" value="${tdE(x.path)}" data-p="${i}" ${x.fixed?'readonly':''} title="path inside the repository"><small>${tdE(x.note)}</small>${x.extra?'<button class="mini" data-x="'+i+'" title="remove from the list">✕</button>':''}`;L.appendChild(r)});
+  L.querySelectorAll('button[data-x]').forEach(b=>b.onclick=()=>{const x=ghList[+b.dataset.x],i=GHX.indexOf(x);if(i>=0)GHX.splice(i,1);const keep=new Set([...document.querySelectorAll('#ghFiles input[data-i]')].filter(i=>i.checked).map(i=>ghList[+i.dataset.i].key));ghList=ghItems();ghRenderFiles(ghList.map(x=>x.key).filter(k=>keep.has(k)))})}
+$('ghAdd').onclick=()=>$('ghFile').click();$('ghAddDir').onclick=()=>$('ghDir').click();
+$('ghFile').onchange=e=>{ghAddFiles([...e.target.files],false);e.target.value=''};$('ghDir').onchange=e=>{ghAddFiles([...e.target.files],true);e.target.value=''};
 $('ghGo').onclick=async()=>{const c=GH.cfg;c.token=$('ghTok').value.trim();c.owner=$('ghOwn').value.trim();c.repo=$('ghRepo').value.trim();c.branch=$('ghBr').value.trim();c.remember=$('ghRem').checked;c.msg=$('ghMsg').value;
   const picked=[...document.querySelectorAll('#ghFiles input[data-i]')].filter(i=>i.checked).map(i=>ghList[+i.dataset.i]);
-  picked.forEach(x=>{const i=ghList.indexOf(x),p=document.querySelector(`#ghFiles input[data-p="${i}"]`).value.trim().replace(/^\/+/,'');x.path=p;if(!x.fixed)c.paths[x.name]=p});ghStore();
+  picked.forEach(x=>{const i=ghList.indexOf(x),p=document.querySelector(`#ghFiles input[data-p="${i}"]`).value.trim().replace(/^\/+/,'');x.path=p;if(!x.fixed&&!(x.extra&&x.file&&x.file.webkitRelativePath))c.paths[x.name]=p});ghStore();
   const o=$('ghOut'),say=(t,cls)=>{o.textContent=t;o.className='help '+(cls||'');notify(t,cls)};
   if(!c.token||!c.owner||!c.repo)return say('Fill in the token, owner and repository.','bad');if(!picked.length)return say('Tick at least one file.','bad');
   const msg=c.msg.trim()||('Update '+picked.map(x=>x.name.split('/').pop()).slice(0,3).join(', ')+(picked.length>3?' …':'')+' (editor)');
