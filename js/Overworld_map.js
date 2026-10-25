@@ -75,7 +75,8 @@ window.OverworldMaps = {
         "movementType": "MOVEMENT_TYPE_FACE_DOWN",
         "isTrainer": false,
         "viewRadius": 3,
-        "flagID": ""
+        "flagID": "",
+        "followPass": true
       },
       "Warp_2": {
         "eventType": "Warp",
@@ -804,7 +805,22 @@ window.OverworldMaps = {
       "left": null,
       "right": ["Route_2", 0, 0]
     },
-    "events": {},
+    "events": {
+      "NPC_1": {
+        "eventType": "NPC",
+        "xPos": 22,
+        "yPos": 8,
+        "owID": "Trainer_1",
+        "script": "",
+        "movementType": "MOVEMENT_TYPE_LOOK_AROUND",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": "",
+        "spriteFx": "holo",
+        "fxColor": "cyan",
+        "followShiny": false
+      }
+    },
     "wildData": {
       "morning": [],
       "afternoon": [],
