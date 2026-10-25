@@ -717,5 +717,31 @@ window.OverworldTiles = {
     columns: 4,
     tileImage: "graphics/tiles/olen_benches.png",
     tileDimension: "64x32"
+  },
+  101: {
+    tileID: 101,
+    tileName: "Lab Static",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 128,
+    columns: 16,
+    tileCell: 32,
+    tileImage: "graphics/tiles/lab_static.png",
+    tileDimension: "512x256",
+    category: "Laboratory"
+  },
+  102: {
+    tileID: 102,
+    tileName: "Lab Animated",
+    tileType: "Multi-tile",
+    isAnimated: true,
+    frames: 48,
+    columns: 16,
+    animFrames: 4,
+    animColumns: 4,
+    tileCell: 32,
+    tileImage: "graphics/tiles/lab_anim.png",
+    tileDimension: "512x96",
+    category: "Laboratory"
   }
 };
