@@ -817,8 +817,32 @@ window.OverworldMaps = {
         "viewRadius": 3,
         "flagID": "",
         "spriteFx": "holo",
-        "fxColor": "cyan",
+        "fxColor": "red",
         "followShiny": false
+      },
+      "NPC_2": {
+        "eventType": "NPC",
+        "xPos": 21,
+        "yPos": 8,
+        "owID": "Trainer_1",
+        "script": "",
+        "movementType": "MOVEMENT_TYPE_LOOK_AROUND",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": "",
+        "spriteFx": "ghost"
+      },
+      "NPC_2_copy": {
+        "eventType": "NPC",
+        "xPos": 23,
+        "yPos": 8,
+        "owID": "Trainer_1",
+        "script": "",
+        "movementType": "MOVEMENT_TYPE_LOOK_AROUND",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": "",
+        "spriteFx": "glitch"
       }
     },
     "wildData": {
