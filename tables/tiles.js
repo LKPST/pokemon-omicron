@@ -661,6 +661,59 @@ window.OverworldTiles = {
     frames: 18,
     columns: 6,
     tileImage: "graphics/tiles/pointy_fence.png",
-    tileDimension: "96x48"
+    tileDimension: "96x48",
+    category: "Exteriors"
+  },
+  67: {
+    tileID: 67,
+    tileName: "Fountain",
+    tileType: "Multi-tile",
+    isAnimated: true,
+    frames: 80,
+    columns: 20,
+    tileImage: "graphics/tiles/fountain.png",
+    tileDimension: "320x64",
+    category: "Exteriors"
+  },
+  68: {
+    tileID: 68,
+    tileName: "Pokecenter",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 30,
+    columns: 5,
+    tileImage: "graphics/tiles/pokecenter_2.png",
+    tileDimension: "80x96",
+    category: "Buildings"
+  },
+  69: {
+    tileID: 69,
+    tileName: "Pokemart",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 24,
+    columns: 4,
+    tileImage: "graphics/tiles/pokemart.png",
+    tileDimension: "64x96",
+    category: "Buildings"
+  },
+  70: {
+    tileID: 70,
+    tileName: "Plant",
+    tileType: "Normal",
+    isAnimated: false,
+    frames: 1,
+    tileImage: "graphics/tiles/plant.png",
+    tileDimension: "16x16"
+  },
+  71: {
+    tileID: 71,
+    tileName: "Olen Benches",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 8,
+    columns: 4,
+    tileImage: "graphics/tiles/olen_benches.png",
+    tileDimension: "64x32"
   }
 };
