@@ -1730,14 +1730,16 @@ window.OverworldMaps = {
         "eventType": "NPC",
         "xPos": 11,
         "yPos": 5,
-        "owID": "Trainer_1",
+        "owID": "randomNPC",
         "script": "",
         "movementType": "MOVEMENT_TYPE_SPIN_CLOCKWISE",
         "isTrainer": false,
         "viewRadius": 3,
         "flagID": "",
         "spriteFx": "holo",
-        "fxColor": "purple"
+        "fxColor": "purple",
+        "owRandom": "changing",
+        "owTileAttribute": "On Top"
       },
       "Warp_1": {
         "eventType": "Warp",
@@ -1756,6 +1758,36 @@ window.OverworldMaps = {
         "facing": "Up",
         "warpType": "Normal",
         "targetWarp": "Warp_1"
+      },
+      "NPC_1_copy": {
+        "eventType": "NPC",
+        "xPos": 11,
+        "yPos": 7,
+        "owID": "randomCaughtPokemon",
+        "script": "",
+        "movementType": "MOVEMENT_TYPE_SPIN_CLOCKWISE",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": "",
+        "spriteFx": "holo",
+        "fxColor": "purple",
+        "owRandom": "changing",
+        "owTileAttribute": "On Top"
+      },
+      "NPC_1_copy_copy": {
+        "eventType": "NPC",
+        "xPos": 9,
+        "yPos": 7,
+        "owID": "randomPokemon",
+        "script": "",
+        "movementType": "MOVEMENT_TYPE_SPIN_CLOCKWISE",
+        "isTrainer": false,
+        "viewRadius": 3,
+        "flagID": "",
+        "spriteFx": "holo",
+        "fxColor": "purple",
+        "owRandom": "changing",
+        "owTileAttribute": "On Top"
       }
     },
     "wildData": {
