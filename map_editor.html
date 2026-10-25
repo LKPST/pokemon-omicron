@@ -929,6 +929,10 @@ function pvHost(){const run=PV.run,guard=f=>(...a)=>{if(run===PV.run)f(...a)};
     waitMove(next){if(!PV.pend)next();else PV.waiters.push(guard(next))},
     moveCamera(dx,dy,ms,next,sync){if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.moveCamera(dx,dy,pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}PV.camMoved=true;const x0=PV.cam.x,y0=PV.cam.y;pvLog(`📷 camera ${dx},${dy}`,'');if(ms<=0){PV.cam.x+=dx*TS;PV.cam.y+=dy*TS;return next()}
       pvTween(ms,t=>{const k=sync?t:t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;PV.cam.x=x0+dx*TS*k;PV.cam.y=y0+dy*TS*k},guard(next))},
+    spawnNpc(o,next){const L=layout(),off=L[PV.map]||{x:0,y:0};let x=o.x,y=o.y;if(x===undefined||x===''||y===undefined||y===''){x=PV.px;y=PV.py}
+      const key=(o.owkey&&!/^(-|none)$/i.test(o.owkey))?o.owkey:'NPC_Spawn'+(++PV.spawnN||(PV.spawnN=1));
+      PV.ents[key]={key,ev:{eventType:'NPC',owID:o.owID,xPos:+x,yPos:+y},x:(off.x+ +x)*TS+16,y:(off.y+ +y)*TS+16,dir:'down',building:false,vis:true,id:o.owID};
+      pvLog('👤 spawnnpc '+o.owID+' as '+key+' at '+x+','+y+(o.spawn_effect&&o.spawn_effect!=='none'?' ('+o.spawn_effect+')':''),'');next()},
     moveCameraTo(spec,ms,next,sync){const e=pvEnt(spec);if(!e){pvLog('⚠ movecamera_to: nobody called "'+spec+'"','dim');return next()}
       if(sync){const pl=pvSyncPlan(ms);if(pl.wait>0)return pvTween(pl.wait,null,guard(()=>this.moveCameraTo(spec,pl.ms,next,'go')));if(sync!=='go')ms=pl.ms}
       PV.follow=null;PV.camMoved=true;const x0=PV.cam.x,y0=PV.cam.y;pvLog('📷 camera → '+(e.id||e.key),'');if(ms<=0){PV.cam.x=e.x;PV.cam.y=e.y;return next()}

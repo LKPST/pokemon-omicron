@@ -1322,6 +1322,7 @@ class OverworldScene extends Phaser.Scene {
       const offsetPos = this.getMapWorldOffset(mapKey);
       this.spawnMapEvents(mapData, mapKey, offsetPos.x, offsetPos.y);
     }
+    this.respawnRuntimeNPCs();   // [SPAWNNPC]
   }
 
   spawnMapEvents(mapData, mapKey, offsetX, offsetY) {
@@ -1389,6 +1390,70 @@ class OverworldScene extends Phaser.Scene {
         if (eventData.followMon) this.spawnNpcFollower(npcSprite);   // [NPC POKÉMON]
       }
     }
+  }
+
+
+  // ---- [SPAWNNPC] NPCs made while the game runs by the script command spawnnpc.
+  // permanent ones are stored in the save (saveData.spawnedNPCs) and come back every time; the others live until this scene is rebuilt (battle, loading a save).
+  runtimeNpcList() { const sd = window.GameStateManager && window.GameStateManager.saveData; return [...((sd && sd.spawnedNPCs) || []), ...(this._tempSpawns || [])]; }
+  respawnRuntimeNPCs() {
+    for (const r of this.runtimeNpcList()) {
+      if (!r || !r.ev || !(window.OverworldMaps || {})[r.map]) continue;
+      const off = this.getMapWorldOffset(r.map); this.spawnMapEvents({ events: { [r.key]: r.ev } }, r.map, off.x, off.y);
+    }
+  }
+  // cfg: { owID, effect, filter, color, permanent, movementType, key, x, y, script }  (x, y = tile on the current map). Returns the new NPC's key, or null.
+  spawnRuntimeNPC(cfg) {
+    const E = window.OverworldScriptEngine, map = this.currentMapKey, maps = window.OverworldMaps || {};
+    const id = String(cfg.owID || '').trim();
+    if (!id || (!OW_TABLE()[id] && !/^SPECIES_/.test(id))) { console.warn('[spawnnpc] "' + id + '" is not in tables/ow_table.js (or a SPECIES_ id)'); return null; }
+    this._spawnN = (this._spawnN || 0) + 1;
+    const key = String(cfg.key || '').trim() || ('NPC_Spawn' + this._spawnN);
+    if (maps[map] && maps[map].events && maps[map].events[key]) { console.warn('[spawnnpc] "' + key + '" is already an event of this map: pick another name'); return null; }
+    const old = (this.npcs || []).find(n => n.eventKey === key && n.mapName === map);
+    if (old) { this.npcs.splice(this.npcs.indexOf(old), 1); try { old.destroy(); } catch (_) { } }
+    let mt = String(cfg.movementType || '').trim().toUpperCase(); if (mt && !/^MOVEMENT_TYPE_/.test(mt)) mt = 'MOVEMENT_TYPE_' + mt;
+    const ev = { eventType: 'NPC', owID: id, xPos: Math.round(+cfg.x || 0), yPos: Math.round(+cfg.y || 0) };
+    if (mt) ev.movementType = mt; if (cfg.script) ev.script = cfg.script; if (cfg.filter) { ev.spriteFx = cfg.filter; if (cfg.color) ev.fxColor = cfg.color; }
+    const sd = window.GameStateManager && window.GameStateManager.saveData, rec = { map, key, ev };
+    const drop = l => { const i = l.findIndex(r => r.map === map && r.key === key); if (i >= 0) l.splice(i, 1); };
+    this._tempSpawns = this._tempSpawns || []; drop(this._tempSpawns); if (sd) { sd.spawnedNPCs = sd.spawnedNPCs || []; drop(sd.spawnedNPCs); }
+    if (cfg.permanent && sd) sd.spawnedNPCs.push(rec); else this._tempSpawns.push(rec);
+    if (E && E.getFlag(`HIDDEN:${map}:${key}`)) E.setFlag(`HIDDEN:${map}:${key}`, false);
+    if (E) E.save();
+    const off = this.getMapWorldOffset(map);
+    this.spawnMapEvents({ events: { [key]: ev } }, map, off.x, off.y);
+    let tries = 0; const fx = () => { const spr = (this.npcs || []).find(n => n.eventKey === key && n.mapName === map); if (spr) return this.spawnEffect(spr, cfg.effect); if (++tries < 25) this.time.delayedCall(80, fx); };   // Pokémon NPCs load their sprite a moment later
+    fx();
+    return key;
+  }
+  // appearing effects: fade, poof (smoke puff), sparkle, holo (cyan light beam + flicker) and teleport (white beam)
+  spawnEffect(spr, effect) {
+    const f = String(effect || '').toLowerCase().trim(); if (!f || f === 'none' || f === 'off' || !spr || !spr.scene) return;
+    const a = spr.alpha, sx = spr.scaleX, sy = spr.scaleY, x = spr.x, y = spr.y, d = spr.depth + 1, T = o => { o.setDepth(d); return o; };
+    if (f === 'fade') { spr.setAlpha(0); this.tweens.add({ targets: spr, alpha: a, duration: 600 }); return; }
+    if (f === 'poof') {
+      spr.setAlpha(0); spr.setScale(sx * 0.6, sy * 0.6);
+      this.tweens.add({ targets: spr, alpha: a, scaleX: sx, scaleY: sy, duration: 260, delay: 140, ease: 'Back.Out' });
+      for (let i = 0; i < 8; i++) { const an = i / 8 * Math.PI * 2, c = T(this.add.circle(x, y - 12, 5 + Math.random() * 3, 0xffffff, 0.85)); this.tweens.add({ targets: c, x: x + Math.cos(an) * 24, y: y - 12 + Math.sin(an) * 15, alpha: 0, scale: 2, duration: 460, onComplete: () => c.destroy() }); }
+      return;
+    }
+    if (f === 'sparkle') {
+      spr.setAlpha(0); this.tweens.add({ targets: spr, alpha: a, duration: 450, delay: 150 });
+      for (let i = 0; i < 9; i++) { const r = T(this.add.rectangle(x + (Math.random() - .5) * 28, y - 4 - Math.random() * 20, 3, 3, i % 2 ? 0xfff6a8 : 0xffffff)); this.tweens.add({ targets: r, y: r.y - 26, alpha: 0, duration: 650, delay: i * 40, onComplete: () => r.destroy() }); }
+      return;
+    }
+    if (f === 'holo' || f === 'teleport') {
+      const col = f === 'holo' ? 0x77ffff : 0xffffff; spr.setAlpha(0);
+      const b = T(this.add.rectangle(x, y - 30, 26, 100, col, 0.6)); b.setScale(1, 0.05); b.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: b, scaleY: 1, duration: 160, onComplete: () => {
+        let n = 0; const seq = f === 'holo' ? [0.2, 0.9, 0.3, 1, 0.5, 1] : [1];
+        const tick = () => { if (!spr.scene) return; spr.setAlpha(a * seq[n]); if (++n < seq.length) this.time.delayedCall(60, tick); };
+        tick(); this.tweens.add({ targets: b, scaleX: 0.1, alpha: 0, duration: 380, delay: 120, onComplete: () => b.destroy() });
+      } });
+      return;
+    }
+    console.warn('[spawnnpc] unknown effect "' + effect + '" (none, fade, poof, sparkle, holo, teleport)');
   }
 
   // owTileAttribute of an NPC (ow_table.js field, or on the event): 'None' = follows the tile behavior (normal depth),

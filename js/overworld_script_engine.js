@@ -125,7 +125,7 @@ window.OverworldScriptEngine = (() => {
         let pi = 0;
         for (const tk of rest) {
           if (tk.key !== undefined) {
-            const ag = sc.args.find(x => x.n === tk.key);
+            const ag = sc.args.find(x => x.n === tk.key) || sc.args.find(x => x.n.toLowerCase() === String(tk.key).toLowerCase());
             if (!ag) err(i, `${cmd}: unknown argument "${tk.key}"`); else step.args[ag.n] = convert(ag, tk.val);
           } else {
             while (pi < sc.args.length && step.args[sc.args[pi].n] !== undefined) pi++;
@@ -325,6 +325,7 @@ window.OverworldScriptEngine = (() => {
       const maps = window.OverworldMaps || {};
       if (maps[scene.currentMapKey] && maps[scene.currentMapKey].events && maps[scene.currentMapKey].events[s]) return { map: scene.currentMapKey, key: s };
       for (const [mk, m] of Object.entries(maps)) if (m.events && m.events[s]) return { map: mk, key: s };
+      { const rt = (scene.npcs || []).find(n => n.eventKey === s); if (rt) return { map: rt.mapName, key: s }; }   // an NPC made by spawnnpc
       return null;
     }
 
@@ -373,6 +374,18 @@ window.OverworldScriptEngine = (() => {
         const m = c.midPoint, tx = m.x + dx * 32, ty = m.y + dy * 32;
         if (ms <= 0) { c.centerOn(tx, ty); return next(); }
         return camTween(m.x, m.y, () => ({ x: tx, y: ty }), ms, next, !sync);   // own tween: Phaser's pan effect swallows a pan started from the previous pan's callback
+      },
+      // spawnnpc: make a new NPC at run time (see OverworldScene.spawnRuntimeNPC). No x / y = the tile in front of the player.
+      spawnNpc(o, next) {
+        let x = o.x, y = o.y;
+        if (x === undefined || x === null || x === '' || y === undefined || y === null || y === '') {
+          const p = this.getPos('player') || { x: 0, y: 0 }, d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[(scene.player && scene.player.direction) || 'down'] || [0, 1];
+          x = p.x + d[0]; y = p.y + d[1];
+        }
+        const none = v => { v = String(v == null ? '' : v).trim(); return /^(|-|none|off)$/i.test(v) ? '' : v; };
+        const key = scene.spawnRuntimeNPC({ owID: o.owID, effect: none(o.spawn_effect), filter: none(o.spritefilter), color: none(o.filtercolor), permanent: !!o.isPermanent, movementType: none(o.movementtype), key: none(o.owkey), x, y, script: none(o.script) });
+        if (!key) console.warn('[script] spawnnpc did not work for "' + o.owID + '"');
+        next();
       },
       // move the camera so it is centred on somebody (it keeps tracking him while it slides, so it also works on a walking NPC)
       moveCameraTo(spec, ms, next, sync) {

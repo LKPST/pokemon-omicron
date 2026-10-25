@@ -79,6 +79,18 @@ window.OverworldScriptCommands = (() => {
   def('movecamera', 'Movement', 'Slide the camera by some tiles (dx right, dy down)',
     [A('dx', 'num', 0, 0, 'tiles right (negative = left)'), A('dy', 'num', 0, 0, 'tiles down (negative = up)'), A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running: the camera arrives when they finish')],
     (a, ctx, next) => ctx.host.moveCamera(+a.dx || 0, +a.dy || 0, a.ms == null || a.ms === '' ? 800 : +a.ms, next, !!a.sync));
+  def('spawnnpc', 'Movement', 'Make a NEW NPC appear while the game runs. Without x / y it appears on the tile in front of the player. isPermanent = it stays (and is saved); otherwise it lasts until the game reloads the map (battle / loading). Give it a name with owkey so later commands can say applymovement NPC_Name, followcamera NPC_Name, hideobject NPC_Name ...',
+    [A('owID', 'text', 0, '', 'sprite id from tables/ow_table.js (OW_SCIENTIST ...) or SPECIES_XXX'),
+     A('spawn_effect', 'select', 1, 'none', 'how it appears', ['none', 'fade', 'poof', 'sparkle', 'holo', 'teleport']),
+     A('spritefilter', 'select', 1, 'none', 'optional look for the sprite', ['none', 'holo', 'ghost', 'glitch']),
+     A('filtercolor', 'text', 1, '', 'optional: cyan, blue, green, pink, purple, red, orange, yellow, white or #66ffff'),
+     A('isPermanent', 'bool', 1, false, 'stays for good and is saved'),
+     A('movementtype', 'text', 1, 'FACE_DOWN', 'FACE_DOWN, FACE_UP, FACE_LEFT, FACE_RIGHT, LOOK_AROUND, WANDER_AROUND, WANDER_LEFT_RIGHT, WANDER_UP_AND_DOWN ... (MOVEMENT_TYPE_ is added for you)'),
+     A('owkey', 'text', 1, '', 'name of the new NPC, like NPC_Hologram (empty = NPC_Spawn1, 2 ...)'),
+     A('x', 'num', 1, '', 'tile x on this map (empty = in front of the player)'),
+     A('y', 'num', 1, '', 'tile y on this map'),
+     A('script', 'text', 1, '', 'script that runs when the player talks to it')],
+    (a, ctx, next) => ctx.host.spawnNpc(a, next));
   def('movecamera_to', 'Movement', 'Slide the camera so it is centred on an NPC / event (or the player). Use followcamera next to keep it on him while he moves',
     [A('target', 'target', 0, 'npc', 'player, npc or an event name like NPC_Portia'), A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running')],
     (a, ctx, next) => ctx.host.moveCameraTo(a.target || 'npc', a.ms == null || a.ms === '' ? 800 : +a.ms, next, !!a.sync));
