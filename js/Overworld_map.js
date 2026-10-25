@@ -808,8 +808,8 @@ window.OverworldMaps = {
     "events": {
       "NPC_1": {
         "eventType": "NPC",
-        "xPos": 22,
-        "yPos": 8,
+        "xPos": 31,
+        "yPos": 9,
         "owID": "Trainer_1",
         "script": "",
         "movementType": "MOVEMENT_TYPE_LOOK_AROUND",
@@ -817,7 +817,7 @@ window.OverworldMaps = {
         "viewRadius": 3,
         "flagID": "",
         "spriteFx": "holo",
-        "fxColor": "red",
+        "fxColor": "violet",
         "followShiny": false
       },
       "NPC_2": {
