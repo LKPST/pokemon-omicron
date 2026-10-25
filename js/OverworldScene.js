@@ -1330,7 +1330,15 @@ class OverworldScene extends Phaser.Scene {
 
     const _sd = window.GameStateManager && window.GameStateManager.saveData, _ov = (_sd && _sd.owOverrides) || {};
     for (const [key, eventData0] of Object.entries(mapData.events)) {
-      const eventData = _ov[mapKey + ':' + key] ? Object.assign({}, eventData0, { owID: _ov[mapKey + ':' + key] }) : eventData0;   // [CHANGEOWID] a sprite changed by script (changeowid)
+      let eventData = _ov[mapKey + ':' + key] ? Object.assign({}, eventData0, { owID: _ov[mapKey + ':' + key] }) : eventData0;   // [CHANGEOWID] a sprite changed by script (changeowid)
+      // [RANDOM OW] owID randomPokemon / randomNPC / randomCaughtPokemon: one pick when it appears (owRandom 'static'), or a new pick every owChangeEvery ms (500 by default) ('changing')
+      if (eventData.eventType === 'NPC' && this.isRandomOw(eventData.owID)) {
+        const spec = eventData.owID, pick = this.pickRandomOw(spec); if (!pick) continue;
+        eventData = Object.assign({}, eventData, { owID: pick });
+        if (String(eventData.owRandom || '').toLowerCase() === 'changing') {
+          let tries = 0; const every = eventData.owChangeEvery, go = () => { const spr = (this.npcs || []).find(n => n.eventKey === key && n.mapName === mapKey); if (spr) this.startOwRandom(spr, spec, every); else if (++tries < 25) this.time.delayedCall(80, go); }; go();
+        }
+      }
       // [NEW] Warp and Script events are walk-on triggers. They are NOT added to this.npcs,
       // so they never block the player (isPassable only checks this.npcs).
       // [SIGNPOST] a Signpost runs its script when the player presses the talk key while facing its tile (see tryInteract)
@@ -1434,17 +1442,21 @@ class OverworldScene extends Phaser.Scene {
     return key;
   }
   // ---- [CHANGEOWID] random sprite ids and changing the sprite of an NPC that already exists
-  isRandomOw(spec) { return /^random_?(pokemon|npc)$/i.test(String(spec || '').trim()); }
+  isRandomOw(spec) { return /^random_?(caught_?pokemon|pokemon|npc)$/i.test(String(spec || '').trim()); }
   pickRandomOw(spec, not) {
     const poke = /pokemon/i.test(String(spec)); let list = [];
-    if (poke) { const sp = window.OverworldSprites && window.OverworldSprites.species; list = sp ? Object.keys(sp) : Object.entries(OW_TABLE()).filter(([, v]) => v && v.owType === 'Pokemon').map(([k]) => k); }
+    if (/caught/i.test(String(spec))) {   // randomCaughtPokemon: only species the player has caught (Pokédex); nothing caught yet = Pikachu
+      const sp = window.OverworldSprites && window.OverworldSprites.species, D = window.Dex, c = D && D.data ? D.data().caught : null;
+      if (sp && c) list = Object.entries(sp).filter(([, v]) => v && c[v.src]).map(([k]) => k);
+      if (!list.length) return 'SPECIES_PIKACHU';
+    } else if (poke) { const sp = window.OverworldSprites && window.OverworldSprites.species; list = sp ? Object.keys(sp) : Object.entries(OW_TABLE()).filter(([, v]) => v && v.owType === 'Pokemon').map(([k]) => k); }
     else list = Object.entries(OW_TABLE()).filter(([k, v]) => v && v.owType === 'NPC' && this.textures.exists(v.spriteID || `${k.toLowerCase()}_ow`)).map(([k]) => k);
-    if (not && list.length > 1) list = list.filter(k => k !== not);
+    if (not && list.length > 1) list = list.filter(k => k !== not);   // never the one it already is
     return list.length ? list[Math.floor(Math.random() * list.length)] : null;
   }
   // randomMode 'changing' = a new random sprite every `every` ms (min 250) until changeowid is used on it again; otherwise one random pick that stays
   startOwRandom(spr, spec, every) {
-    this.stopOwRandom(spr); const k = spr.mapName + ':' + spr.eventKey, ms = Math.max(250, +every || 1000);
+    this.stopOwRandom(spr); const k = spr.mapName + ':' + spr.eventKey, ms = Math.max(250, +every || 500);
     this._owRnd = this._owRnd || {};
     this._owRnd[k] = this.time.addEvent({ delay: ms, loop: true, callback: () => {
       const cur = (this.npcs || []).find(n => n.eventKey === spr.eventKey && n.mapName === spr.mapName);

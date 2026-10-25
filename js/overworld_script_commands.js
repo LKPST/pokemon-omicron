@@ -80,7 +80,7 @@ window.OverworldScriptCommands = (() => {
     [A('dx', 'num', 0, 0, 'tiles right (negative = left)'), A('dy', 'num', 0, 0, 'tiles down (negative = up)'), A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running: the camera arrives when they finish')],
     (a, ctx, next) => ctx.host.moveCamera(+a.dx || 0, +a.dy || 0, a.ms == null || a.ms === '' ? 800 : +a.ms, next, !!a.sync));
   def('spawnnpc', 'Movement', 'Make a NEW NPC appear while the game runs. Without x / y it appears on the tile in front of the player. isPermanent = it stays (and is saved); otherwise it lasts until the game reloads the map (battle / loading). Give it a name with owkey so later commands can say applymovement NPC_Name, followcamera NPC_Name, hideobject NPC_Name ...',
-    [A('owID', 'text', 0, '', 'sprite id from tables/ow_table.js (Portia ...) or SPECIES_XXX, or randomPokemon / randomNPC'),
+    [A('owID', 'text', 0, '', 'sprite id from tables/ow_table.js (Portia ...) or SPECIES_XXX, or randomPokemon / randomNPC / randomCaughtPokemon (the Pokémon you caught; none = Pikachu)'),
      A('spawn_effect', 'select', 1, 'none', 'how it appears', ['none', 'fade', 'poof', 'sparkle', 'holo', 'teleport']),
      A('spritefilter', 'select', 1, 'none', 'optional look for the sprite', ['none', 'holo', 'ghost', 'glitch']),
      A('filtercolor', 'text', 1, '', 'optional: cyan, blue, green, pink, purple, red, orange, yellow, white or #66ffff'),
@@ -91,13 +91,13 @@ window.OverworldScriptCommands = (() => {
      A('y', 'num', 1, '', 'tile y on this map'),
      A('script', 'text', 1, '', 'script that runs when the player talks to it'),
      A('randomMode', 'select', 1, 'static', 'only for randomPokemon / randomNPC: static = one random pick, changing = a new random sprite all the time', ['static', 'changing']),
-     A('changeEvery', 'num', 1, 1000, 'changing: milliseconds between changes (min 250)')],
+     A('changeEvery', 'num', 1, 500, 'changing: milliseconds between changes (min 250)')],
     (a, ctx, next) => ctx.host.spawnNpc(a, next));
-  def('changeowid', 'Movement', 'Change the sprite of an NPC that is already there (same tile, same facing). ow_id = a sprite id, SPECIES_XXX, randomPokemon or randomNPC. With a random one, randomMode static picks once, changing keeps picking a new one every changeEvery ms until you use changeowid on it again',
-    [A('owID', 'text', 0, '', 'sprite id from tables/ow_table.js, SPECIES_XXX, randomPokemon or randomNPC'),
+  def('changeowid', 'Movement', 'Change the sprite of an NPC that is already there (same tile, same facing). ow_id = a sprite id, SPECIES_XXX, randomPokemon, randomNPC or randomCaughtPokemon (the Pokémon the player has caught; none yet = Pikachu). With a random one, randomMode static picks once, changing keeps picking a new one every changeEvery ms until you use changeowid on it again',
+    [A('owID', 'text', 0, '', 'sprite id from tables/ow_table.js, SPECIES_XXX, randomPokemon, randomNPC or randomCaughtPokemon (the Pokémon you caught; none = Pikachu)'),
      A('owkey', 'target', 0, 'npc', 'the NPC: its name like NPC_Portia, or npc (the one you talked to)'),
-     A('randomMode', 'select', 1, 'static', 'only for randomPokemon / randomNPC', ['static', 'changing']),
-     A('changeEvery', 'num', 1, 1000, 'changing: milliseconds between changes (min 250)')],
+     A('randomMode', 'select', 1, 'static', 'only for randomPokemon / randomNPC / randomCaughtPokemon', ['static', 'changing']),
+     A('changeEvery', 'num', 1, 500, 'changing: milliseconds between changes (min 250)')],
     (a, ctx, next) => ctx.host.changeOwId(a, next));
   def('movecamera_to', 'Movement', 'Slide the camera so it is centred on an NPC / event (or the player). Use followcamera next to keep it on him while he moves',
     [A('target', 'target', 0, 'npc', 'player, npc or an event name like NPC_Portia'), A('ms', 'num', 1, 800, 'duration'), A('sync', 'bool', 1, false, 'match the speed of the async movement(s) that are running')],

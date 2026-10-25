@@ -225,7 +225,8 @@ function monEntry(id){const T=monTab(),s=T&&T.species&&T.species[id];if(!s)retur
   return MON.ent[id]={owType:'Pokemon',mon:true,spriteID:id,trueDimension:s.w+'x'+s.h,owDimension:s.w+'x'+s.h,owScale:sc,owSprite:''}}
 const OT=()=>{const t=window.OverworldTable||{};if(!monTab())return t;if(MON.base!==t){MON.base=t;MON.px=new Proxy(t,{get:(o,k)=>(k in o||typeof k!=='string'||k.slice(0,8)!=='SPECIES_')?o[k]:monEntry(k)})}return MON.px},TL=()=>window.OverworldTiles||{};
 const monIds=()=>{const T=monTab();return T&&T.species?Object.keys(T.species):[]};
-const owIds=()=>{const k=Object.keys(OT()),T=monTab();return MON.on&&T&&T.species?k.concat(Object.keys(T.species)):k};
+const RND_OW=['randomPokemon','randomNPC','randomCaughtPokemon'];
+const owIds=()=>{const k=Object.keys(OT()),T=monTab();return RND_OW.concat(MON.on&&T&&T.species?k.concat(Object.keys(T.species)):k)};
 let repo={},active='',tool='pencil',brush={tid:0,cells:[['0|0']],frames:new Set([0])},sel=null,cam={x:60,y:60,z:1};
 let hist=[],redoS=[],pending=false,unsaved=false,fileHandle=null,hover=null,stroke=null,rectA=null,drag=null,pan=null,pal=null,spaceDown=false,showGrid=true,showSpr=true,evView='',lastJump=null;
 const evShown=ev=>!evView||(evView==='none'?false:evView==='Script'?/^Script/.test(ev.eventType):ev.eventType===evView);
@@ -464,12 +465,12 @@ window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.t
 
 // ---------- events: add / duplicate / delete ----------
 const SCHEMA={
-  NPC:[['owID','select','ow'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['spriteFx','select','fx'],['fxColor','text'],['followMon','select','mon'],['followShiny','bool'],['followPass','bool'],['followScript','select','script'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
+  NPC:[['owID','select','ow'],['owRandom','select','rmode'],['owChangeEvery','text'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['spriteFx','select','fx'],['fxColor','text'],['followMon','select','mon'],['followShiny','bool'],['followPass','bool'],['followScript','select','script'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
   Script:[['script','select','script'],['scriptVar','text'],['varValue','num']],'Script Tile':[['script','select','script'],['scriptVar','text'],['varValue','num']],
   Signpost:[['script','select','script']],Tile:[['tileID','num']],
   Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};
 const allEv=()=>Object.values(repo).flatMap(m=>Object.values(m.events));
-const OPTS={fx:()=>['holo','ghost','glitch'],ow:()=>owIds(),tileAttr:()=>['None','On Top','Under'],map:()=>Object.keys(repo),
+const OPTS={rmode:()=>['static','changing'],fx:()=>['holo','ghost','glitch'],ow:()=>owIds(),tileAttr:()=>['None','On Top','Under'],map:()=>Object.keys(repo),
   script:()=>uniq([...scriptNames(),...allEv().map(e=>e.script).filter(Boolean)]),
   move:()=>uniq([...MOVE_TYPES,...Object.keys(window.OverworldMovement?.types||{}),...allEv().map(e=>e.movementType).filter(Boolean)]),
   facing:()=>['Down','Up','Left','Right'],warpType:()=>['Normal','Teleport','Hole'],
@@ -502,7 +503,7 @@ function owCombo(ev,set,field='owID',list){const ids=list||owIds();const none=fi
   const lst=document.createElement('div');lst.className='lst';pop.appendChild(lst);let hl=0,shown=[];
   const info=id=>{if(!id)return'';const e=OT()[id]||{};return`${e.owType||'?'} · ${e.trueDimension||'?'}${e.owScale&&e.owScale!==1?' · ×'+e.owScale:''}`};
   const showCur=()=>{cur.innerHTML='';const id=ev[field]||'';if(id&&OT()[id])cur.appendChild(owThumb(id));
-    const b=document.createElement('b');b.textContent=id||'(none)';cur.appendChild(b);const sm=document.createElement('small');sm.textContent=id&&OT()[id]?info(id):(id?'not in table':'');cur.appendChild(sm);const ar=document.createElement('small');ar.textContent='▾';cur.appendChild(ar)};
+    const b=document.createElement('b');b.textContent=id||'(none)';cur.appendChild(b);const sm=document.createElement('small');sm.textContent=id&&OT()[id]?info(id):(id?(RND_OW.includes(id)?'random sprite':'not in table'):'');cur.appendChild(sm);const ar=document.createElement('small');ar.textContent='▾';cur.appendChild(ar)};
   const pick=id=>{box.classList.remove('open');if(id!==(ev[field]||''))commit(()=>set(id));else showCur()};
   const fill=()=>{const t=q.value.trim().toLowerCase();shown=(none?['',...ids]:ids).filter(id=>!id?!t:(!t||id.toLowerCase().includes(t)||String((OT()[id]||{}).owType||'').toLowerCase().includes(t)));lst.innerHTML='';hl=Math.max(0,shown.indexOf(ev[field]));
     shown.forEach((id,i)=>{const it=document.createElement('div');it.className='it'+(id===ev[field]?' on':'')+(i===hl?' hl':'');if(id)it.appendChild(owThumb(id));const d=document.createElement('div');
@@ -569,7 +570,7 @@ function issues(){const out=[];
     for(const[dir,c]of Object.entries(m.connections||{}))if(c&&!findKey(c[0]))out.push(`${k}: connection ${dir} → "${c[0]}" does not exist`);
     for(const[ek,e]of Object.entries(m.events)){const at=`${k}/${ek}`;
       if(e.xPos<0||e.yPos<0||e.xPos>=m.dimensions.width||e.yPos>=m.dimensions.height)out.push(`${at}: outside the map`);
-      if(e.eventType==='NPC'){if(!OT()[e.owID])out.push(`${at}: owID "${e.owID}" not in OverworldTable`);
+      if(e.eventType==='NPC'){if(!OT()[e.owID]&&!RND_OW.includes(e.owID))out.push(`${at}: owID "${e.owID}" not in OverworldTable`);
         const sn=scriptNames();if(sn.length&&e.script&&!sn.includes(e.script))out.push(`${at}: script "${e.script}" not found`)}
       if(e.eventType==='Warp'){const t=findKey(e.map);if(!t)out.push(`${at}: target map "${e.map}" does not exist`);
         else if(e.targetWarp&&!repo[t].events[e.targetWarp])out.push(`${at}: targetWarp "${e.targetWarp}" not in ${t}`)}}
