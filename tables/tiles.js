@@ -521,5 +521,105 @@ window.OverworldTiles = {
     columns: 2,
     tileImage: "graphics/tiles/pc.png",
     tileDimension: "32x32"
+  },
+  53: {
+    tileID: 53,
+    tileName: "Pokemon Lab",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 99,
+    columns: 9,
+    tileImage: "graphics/tiles/pokemon_lab.png",
+    tileDimension: "144x176"
+  },
+  54: {
+    tileID: 54,
+    tileName: "Olenburg Houses",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 725,
+    columns: 29,
+    tileImage: "graphics/tiles/olenburg_houses.png",
+    tileDimension: "464x400"
+  },
+  55: {
+    tileID: 55,
+    tileName: "Olenburg Shops",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 345,
+    columns: 23,
+    tileImage: "graphics/tiles/olenburg_shops.png",
+    tileDimension: "368x240"
+  },
+  56: {
+    tileID: 56,
+    tileName: "Water Bed",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 312,
+    columns: 13,
+    tileImage: "graphics/tiles/water_bed.png",
+    tileDimension: "208x384"
+  },
+  57: {
+    tileID: 57,
+    tileName: "Olenburg Floors",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 30,
+    columns: 6,
+    tileImage: "graphics/tiles/olenburg_floors.png",
+    tileDimension: "96x80"
+  },
+  58: {
+    tileID: 58,
+    tileName: "PostLamps",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 8,
+    columns: 2,
+    tileImage: "graphics/tiles/postlamps.png",
+    tileDimension: "32x64"
+  },
+  59: {
+    tileID: 59,
+    tileName: "Post Lamp",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 2,
+    columns: 1,
+    tileImage: "graphics/tiles/post_lamp.png",
+    tileDimension: "16x32"
+  },
+  60: {
+    tileID: 60,
+    tileName: "Brick Flooes",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 30,
+    columns: 6,
+    tileImage: "graphics/tiles/brick_flooes.png",
+    tileDimension: "96x80"
+  },
+  61: {
+    tileID: 61,
+    tileName: "Plants",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 56,
+    columns: 4,
+    tileImage: "graphics/tiles/plants.png",
+    tileDimension: "64x224"
+  },
+  62: {
+    tileID: 62,
+    tileName: "Pot Plants",
+    tileType: "Multi-tile",
+    isAnimated: false,
+    frames: 12,
+    columns: 3,
+    tileImage: "graphics/tiles/pot_plants.png",
+    tileDimension: "48x64"
   }
 };
