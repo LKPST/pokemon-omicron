@@ -96,6 +96,9 @@ window.OverworldScriptCommands = (() => {
   def('screenfilter', 'Screen', 'Change how the whole screen looks: normal, sepia, grayscale or inverted (stays until you set normal)',
     [A('mode', 'select', 0, 'sepia', '', ['normal', 'sepia', 'grayscale', 'inverted']), A('ms', 'num', 1, 0, 'fade into it (0 = at once)')],
     (a, ctx, next) => { ctx.host.filter(a.mode || 'normal', +a.ms || 0); next(); });
+  def('spritefx', 'Screen', 'Give a character a look: holo (flickering hologram), ghost (see-through), glitch (hologram that glitches a lot) or off. Target: player, npc or an event name. The look stays until you say off.',
+    [A('target', 'target', 0, 'npc', 'player, npc or an event name like NPC_Hologram'), A('style', 'select', 0, 'holo', '', ['holo', 'ghost', 'glitch', 'off']), A('color', 'text', 1, '', 'cyan, blue, green, pink, purple, red, orange, yellow, white or #66ffff (empty = the look\'s own color)')],
+    (a, ctx, next) => { if (ctx.host.spriteFx) ctx.host.spriteFx(a.target || 'npc', a.style || 'holo', a.color || ''); next(); });
   def('screennormal', 'Screen', 'Back to the normal look: removes the screen filter',
     [], (a, ctx, next) => { ctx.host.filter('normal', 0); next(); });
   def('shakecamera', 'Screen', 'Shake the screen (ground shake / earthquake)',

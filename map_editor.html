@@ -464,12 +464,12 @@ window.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.t
 
 // ---------- events: add / duplicate / delete ----------
 const SCHEMA={
-  NPC:[['owID','select','ow'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['followMon','select','mon'],['followShiny','bool'],['followPass','bool'],['followScript','select','script'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
+  NPC:[['owID','select','ow'],['owTileAttribute','select','tileAttr'],['script','select','script'],['movementType','select','move'],['spriteFx','select','fx'],['fxColor','text'],['followMon','select','mon'],['followShiny','bool'],['followPass','bool'],['followScript','select','script'],['isTrainer','bool'],['viewRadius','num'],['flagID','text']],
   Script:[['script','select','script'],['scriptVar','text'],['varValue','num']],'Script Tile':[['script','select','script'],['scriptVar','text'],['varValue','num']],
   Signpost:[['script','select','script']],Tile:[['tileID','num']],
   Warp:[['map','select','map'],['targetWarp','select','warp'],['targetX','num?'],['targetY','num?'],['facing','select','facing'],['warpType','select','warpType']]};
 const allEv=()=>Object.values(repo).flatMap(m=>Object.values(m.events));
-const OPTS={ow:()=>owIds(),tileAttr:()=>['None','On Top','Under'],map:()=>Object.keys(repo),
+const OPTS={fx:()=>['holo','ghost','glitch'],ow:()=>owIds(),tileAttr:()=>['None','On Top','Under'],map:()=>Object.keys(repo),
   script:()=>uniq([...scriptNames(),...allEv().map(e=>e.script).filter(Boolean)]),
   move:()=>uniq([...MOVE_TYPES,...Object.keys(window.OverworldMovement?.types||{}),...allEv().map(e=>e.movementType).filter(Boolean)]),
   facing:()=>['Down','Up','Left','Right'],warpType:()=>['Normal','Teleport','Hole'],

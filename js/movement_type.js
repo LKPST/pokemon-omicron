@@ -46,13 +46,16 @@ window.OverworldMovement = (() => {
     e._anim = ms <= 130 ? 'run' : 'walk';
     e.alt = e.alt === 1 ? 2 : 1;
     e.setFrame(frame(e, dir, e.alt));
-    const x0 = e.x, y0 = e.y;
+    const x0 = e.x, y0 = e.y; let half = false;
     const t0 = tileOf(e); e.src = { x: t0.x, y: t0.y }; e.dest = { x: t0.x + dx, y: t0.y + dy };   // reserve both tiles until the step is over
     e.stepInfo = { x0, y0, dx, dy, dir, done, force };
     if (e.monFollower) followStep(e, t0, ms);   // the Pokémon that follows this NPC steps onto the tile the NPC just left
     e.stepTw = s.tweens.addCounter({
       from: 0, to: 1, duration: ms,
-      onUpdate: t => { const v = t.getValue(); e.x = x0 + dx * TILE * v; e.y = y0 + dy * TILE * v - (hop ? Math.sin(v * Math.PI) * 14 : 0); },
+      // Emerald timing: the walking frame for the first half of the tile, the standing frame for the second half (foot - stand - foot - stand ...).
+      // Holding one walking frame for the whole step and then snapping to "stand" is what looked jerky. Positions are rounded to whole pixels, so the sprite does not shimmer.
+      onUpdate: t => { const v = t.getValue(); e.x = Math.round(x0 + dx * TILE * v); e.y = Math.round(y0 + dy * TILE * v - (hop ? Math.sin(v * Math.PI) * 14 : 0));
+        if (!half && v >= 0.5) { half = true; e.setFrame(frame(e, dir, 0)); } },
       onComplete: () => { e.x = x0 + dx * TILE; e.y = y0 + dy * TILE; e.src = e.dest = null; e.stepTw = null; e.stepInfo = null; e.setFrame(frame(e, dir, 0)); e._anim = null; done && done(); },
     });
   }
@@ -64,10 +67,10 @@ window.OverworldMovement = (() => {
     const ddx = tx - fx, ddy = ty - fy; if (Math.abs(ddx) < 1 && Math.abs(ddy) < 1) return;
     const dir = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 'right' : 'left') : (ddy > 0 ? 'down' : 'up');
     f.direction = dir; if (f.moveTw) { try { f.moveTw.stop(); } catch (_) { } }
-    let alt = 0;
+    let alt = 1;
     if (OWS) OWS.setFrame(f, dir, 1, f.owShiny);
     f.moveTw = s.tweens.addCounter({ from: 0, to: 1, duration: ms,
-      onUpdate: t => { const v = t.getValue(); f.x = fx + ddx * v; f.y = fy + ddy * v; const st = v > 0.5 ? 0 : 1; if (st !== alt) { alt = st; if (OWS) OWS.setFrame(f, dir, st === 0 ? 1 : 0, f.owShiny); } },
+      onUpdate: t => { const v = t.getValue(); f.x = Math.round(fx + ddx * v); f.y = Math.round(fy + ddy * v); const st = v > 0.5 ? 0 : 1; if (st !== alt) { alt = st; if (OWS) OWS.setFrame(f, dir, st, f.owShiny); } },   // walking frame first half, standing frame second half
       onComplete: () => { f.x = tx; f.y = ty; f.moveTw = null; if (OWS) OWS.setFrame(f, dir, 0, f.owShiny); } });
   }
 

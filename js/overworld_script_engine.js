@@ -330,6 +330,11 @@ window.OverworldScriptEngine = (() => {
 
     return {
       lock(on) { scene.isLocked = !!on; },
+      spriteFx(spec, style, color) {   // holo / ghost / glitch / off on the player or an NPC
+        const e = resolve(spec); if (!e) { console.warn('[script] spritefx: nobody called "' + spec + '"'); return; }
+        if (e.eventKey) (window.OWSpriteFx = window.OWSpriteFx || {})[e.mapName + ':' + e.eventKey] = { style, color };   // remembered, so the NPC has it again after a map reload
+        scene.applySpriteFx(e, style, color);
+      },
       getPos(spec) { const e = resolve(spec); if (!e) return null; const off = scene.getMapWorldOffset(scene.currentMapKey); return { x: Math.round((e.x - 16) / 32 - off.x / 32), y: Math.round((e.y - 16) / 32 - off.y / 32) }; },
       wait(ms, next) { scene.time.delayedCall(Math.max(0, ms), next); },
       note(t) { console.log('[script]', t); },

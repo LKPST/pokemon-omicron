@@ -1013,6 +1013,31 @@ class OverworldScene extends Phaser.Scene {
     this.renderBorders();
   }
 
+  // Character looks (script command spritefx, or the NPC fields spriteFx / fxColor): holo, ghost, glitch, off
+  applySpriteFx(spr, style, color) {
+    if (!spr || !spr.scene) return;
+    const old = spr._fx;
+    if (old) { try { old.t.remove(false); } catch (_) { } spr.clearTint(); spr.setAlpha(old.a0); spr.setBlendMode(old.bm); spr.scaleX = old.sx; spr._fx = null; }
+    style = String(style || '').toLowerCase(); if (!style || style === 'off' || style === 'none') return;
+    const def = { holo: { col: 0x66ffff, a: 0.78, add: true }, ghost: { col: 0xd0d8ff, a: 0.5, add: false }, glitch: { col: 0x66ffff, a: 0.9, add: true } }[style];
+    if (!def) { console.warn('[spritefx] unknown look "' + style + '" (holo, ghost, glitch, off)'); return; }
+    const names = { cyan: 0x66ffff, blue: 0x66aaff, green: 0x66ff99, pink: 0xff88dd, purple: 0xbb99ff, red: 0xff6666, orange: 0xffaa55, yellow: 0xffee66, white: 0xffffff };
+    let col = def.col, cs = String(color || '').trim().toLowerCase();
+    if (names[cs] !== undefined) col = names[cs]; else if (/^(#|0x)[0-9a-f]{6}$/.test(cs)) col = parseInt(cs.replace('#', '').replace('0x', ''), 16);
+    const fx = { a0: spr.alpha, bm: spr.blendMode, sx: spr.scaleX, g: 0 };
+    spr.setTint(col); spr.setAlpha(def.a); if (def.add) spr.setBlendMode(Phaser.BlendModes.ADD);   // additive: dark pixels fade away, bright ones glow
+    let n = 0;
+    fx.t = this.time.addEvent({ delay: 90, loop: true, callback: () => {
+      if (!spr.scene) { fx.t.remove(false); return; }
+      n++; const r = Math.random();
+      if (style === 'ghost') { spr.setAlpha(0.42 + 0.14 * Math.sin(n * 0.35)); return; }
+      spr.setAlpha(def.a * (0.65 + 0.35 * Math.abs(Math.sin(n * 0.5))) * (r < 0.08 ? 0.5 : 1));   // flicker
+      if (fx.g > 0) { fx.g--; if (fx.g === 0) { spr.setTint(col); spr.scaleX = fx.sx; } }
+      else if (r < (style === 'glitch' ? 0.35 : 0.06)) { fx.g = 1 + (n % 2); spr.setTint(0xff66ff); spr.scaleX = fx.sx * 1.12; }   // glitch frame: wider and pink for a moment
+    } });
+    spr._fx = fx; spr.once('destroy', () => { try { fx.t.remove(false); } catch (_) { } });
+  }
+
   // Animated multi-tile object (a fountain, a flag ...): tile fields animFrames (how many animation frames) and animColumns (tiles per frame across; default = sheet columns / animFrames).
   // The frames sit on the sheet as a grid (side by side, then below). You paint the tiles of the FIRST frame; every animation frame uses the same cell of its own block.
   multiAnimList(tileDef, tex, frame, C) {
@@ -1357,6 +1382,7 @@ class OverworldScene extends Phaser.Scene {
         npcSprite.mapName = mapKey;
         npcSprite._owAttr = this.owAttrOf(eventData.owTileAttribute || tableEntry.owTileAttribute);
         npcSprite.setDepth(this.npcDepth(npcSprite));
+        { const rf = (window.OWSpriteFx || {})[mapKey + ':' + key], st = rf ? rf.style : eventData.spriteFx; if (st) this.applySpriteFx(npcSprite, st, rf ? rf.color : eventData.fxColor); }   // [FX] holo / ghost / glitch
 
         this.npcs.push(npcSprite);
         this.npcGroup.add(npcSprite);
