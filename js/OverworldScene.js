@@ -600,7 +600,7 @@ class OverworldScene extends Phaser.Scene {
 
         if (tileDef.tileType === "Multi-tile" || tileDef.tileType === "Multi-tile Pixel Split") {
           this.load.spritesheet(`tile_sheet_${tID}`, tileDef.tileImage, {
-            frameWidth: 16, frameHeight: 16, margin: 0, spacing: 0
+            frameWidth: Number(tileDef.tileCell) || 16, frameHeight: Number(tileDef.tileCell) || 16, margin: 0, spacing: 0   // tileCell: 16 (default) or 32 = detailed tiles drawn at the size they show on screen
           });
         } else if (tileDef.isAnimated) {
           // animated single tile: frame size comes from tileDimension (default 16x16); frames run along the row
@@ -1058,7 +1058,7 @@ class OverworldScene extends Phaser.Scene {
       key = `tile_sheet_${tileID}`;
       if (!this.textures.exists(key)) return null;
       const total = Math.max(1, this.textures.get(key).frameTotal - 1);
-      frame = Math.min(frameID, total - 1); scale = 2; multi = true;
+      frame = Math.min(frameID, total - 1); scale = 32 / (Number(tileDef.tileCell) || 16); multi = true;
     } else if (tileDef.isAnimated) {
       key = `tile_anim_${tileID}`;
       scale = 32 / (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
@@ -1071,7 +1071,7 @@ class OverworldScene extends Phaser.Scene {
     if (tileDef.isAnimated) {
       const tex = this.textures.get(key);
       const total = Math.max(1, tex.frameTotal - 1);
-      const fw = multi ? 16 : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
+      const fw = multi ? (Number(tileDef.tileCell) || 16) : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
       const cols = Math.max(1, Math.floor(tex.getSourceImage().width / fw));
       let base, count, list = null;
       if (multi && tileDef.animFrames > 1) { list = this.multiAnimList(tileDef, tex, frame, cols); count = list ? list.length : 0; if (list && list.length) img.setFrame(list[0]); }   // animFrames / animColumns: the animation frames are laid out as a grid on the sheet
@@ -1213,7 +1213,7 @@ class OverworldScene extends Phaser.Scene {
             // trust the real sheet size, not the (possibly wrong) frames value in tiles.js
             const total = tex ? Math.max(1, tex.frameTotal - 1) : (tileDef.frames || 1);
             frame = Math.min(frameID, total - 1);
-            scale = 2; multi = true;
+            scale = 32 / (Number(tileDef.tileCell) || 16); multi = true;
           } else if (tileDef.isAnimated) {
             key = `tile_anim_${tileID}`;
             const fw = parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16;
@@ -1236,7 +1236,7 @@ class OverworldScene extends Phaser.Scene {
           if (tileDef.isAnimated) {
             const tex = this.textures.get(key);
             const total = Math.max(1, tex.frameTotal - 1);
-            const fw = multi ? 16 : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
+            const fw = multi ? (Number(tileDef.tileCell) || 16) : (parseInt(String(tileDef.tileDimension || '16x16').split('x')[0]) || 16);
             const cols = Math.max(1, Math.floor(tex.getSourceImage().width / fw));
             let base, count, list = null;
             if (multi && tileDef.animFrames > 1) { list = this.multiAnimList(tileDef, tex, frame, cols); count = list ? list.length : 0; if (list && list.length) img.setFrame(list[0]); }   // animFrames / animColumns: the animation frames are laid out as a grid on the sheet

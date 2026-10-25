@@ -305,7 +305,7 @@ function tileImg(d){return img(d.tileImage)}
 function drawTile(c,val,x,y,s){if(!val)return;c.imageSmoothingEnabled=false;const[t,f]=val.split('|').map(n=>parseInt(n)||0),d=TL()[t];
   if(!d||!d.tileImage){c.fillStyle='#78c850';c.fillRect(x,y,s,s);return}
   const i=tileImg(d);if(!i){c.fillStyle='#456';c.fillRect(x,y,s,s);return}
-  if(/^Multi-tile/.test(d.tileType)){const n=d.columns||3;c.drawImage(i,(f%n)*16,Math.floor(f/n)*16,16,16,x,y,s,s)}
+  if(/^Multi-tile/.test(d.tileType)){const n=d.columns||3,cs=Number(d.tileCell)||16;c.drawImage(i,(f%n)*cs,Math.floor(f/n)*cs,cs,cs,x,y,s,s)}
   else if(d.isAnimated){const[w,h]=String(d.tileDimension||'16x16').split('x').map(Number);c.drawImage(i,0,0,w||16,h||16,x,y,s,s)}else c.drawImage(i,x,y,s,s)}
 
 const BR=14;
@@ -1127,33 +1127,34 @@ function tdForm(){const f=$('tdForm'),t=TD.sel;if(!t){f.innerHTML='<div class="h
   ${d.isAnimated&&/^Multi/.test(d.tileType||'')?`<div class="help">Animation: frames/columns above describe the whole sheet. Here: how many animation frames it holds, and how many tiles wide ONE frame is. The frames are laid side by side (then below). Paint the tiles of the first frame.</div>
   <div class="frow"><label>animation frames<input type="number" id="tfAF" min="1" value="${tdE(d.animFrames??'')}" placeholder="(row of the sheet)"></label><label>tiles wide per frame<input type="number" id="tfAC" min="1" value="${tdE(d.animColumns??'')}" placeholder="(auto)"></label></div>
   <div class="help" id="tfAInfo"></div>`:''}
+  <label>cell size (px of ONE map tile in the picture: 16 = normal, 32 = detailed tiles)<input type="number" id="tfCell" min="8" value="${tdE(d.tileCell??'')}" placeholder="16"></label>
   <label>tileImage (path in the project)<input type="text" id="tfImg" value="${tdE(d.tileImage||'')}"></label>
   <div class="frow"><label>width<input type="number" id="tfW" min="1" value="${(String(d.tileDimension||'').split('x')[0])||''}"></label><label>height<input type="number" id="tfH" min="1" value="${(String(d.tileDimension||'').split('x')[1])||''}"></label></div>
   <div class="row"><button id="tfDetect" title="read the real size of the image">Detect size${sz?` (${sz.w}×${sz.h})`:''}</button><button id="tfAuto" title="frames = cells of 16×16, columns = width / 16">Auto frames &amp; columns</button></div>
   <div class="row"><button id="tfPaint" class="on" title="open the pixel editor for this tile's image">🎨 Edit pixels…</button></div>
   <div class="row"><button id="tfRepl">Replace image…</button><button id="tfCrop" ${TD.rect&&TD.sheet?'':'disabled'} title="use the highlighted area of the sheet">Replace from sheet selection</button></div>
   <div class="help">Used on maps: <b>${use}</b> cell(s)${t.canvas&&t.mod?' · this image is new and goes in the ZIP at the path above':''}</div>
-  ${Object.keys(d).filter(k=>!['tileID','tileName','tileType','isAnimated','frames','columns','tileImage','tileDimension','category','animFrames','animColumns'].includes(k)).map(k=>`<div class="help">kept: ${tdE(k)} = ${tdE(JSON.stringify(d[k]))}</div>`).join('')}
+  ${Object.keys(d).filter(k=>!['tileID','tileName','tileType','isAnimated','frames','columns','tileImage','tileDimension','category','animFrames','animColumns','tileCell'].includes(k)).map(k=>`<div class="help">kept: ${tdE(k)} = ${tdE(JSON.stringify(d[k]))}</div>`).join('')}
   <canvas id="tfPrev" style="margin-top:8px"></canvas>`;
   const touch=()=>{t.mod=true;tdApply();tdList();tdPrev()};
   const num=(id,key,del)=>{$(id).oninput=()=>{const v=$(id).value;if(v===''&&del)delete d[key];else if(v!=='')d[key]=Number(v);touch()}};
   $('tfName').oninput=()=>{d.tileName=$('tfName').value;touch()};$('tfType').oninput=()=>{d.tileType=$('tfType').value;touch()};
-  $('tfAnim').onchange=()=>{d.isAnimated=$('tfAnim').checked;touch();tdForm()};num('tfFr','frames');num('tfCol','columns',true);
+  $('tfAnim').onchange=()=>{d.isAnimated=$('tfAnim').checked;touch();tdForm()};num('tfFr','frames');num('tfCol','columns',true);num('tfCell','tileCell',true);
   if($('tfAF')){num('tfAF','animFrames',true);num('tfAC','animColumns',true);
-    const info=()=>{const[w,h]=String(d.tileDimension||'').split('x').map(Number),C=Math.round((w||0)/16),R=Math.round((h||0)/16),N=d.animFrames||0;if(!N||N<2||!C){$('tfAInfo').textContent='';return}const fc=d.animColumns||Math.floor(C/N),per=Math.max(1,Math.floor(C/fc)),gr=Math.ceil(N/per),fr=Math.floor(R/gr);$('tfAInfo').textContent=`Sheet ${C}×${R} tiles → ${N} frames of ${fc}×${fr} tiles (${per} per row)${fc*per>C||fr<1||(fc*per*gr*fr)!==C*R?'  ⚠ the sheet size does not divide evenly':''}`};
+    const info=()=>{const[w,h]=String(d.tileDimension||'').split('x').map(Number),cs=Number(d.tileCell)||16,C=Math.round((w||0)/cs),R=Math.round((h||0)/cs),N=d.animFrames||0;if(!N||N<2||!C){$('tfAInfo').textContent='';return}const fc=d.animColumns||Math.floor(C/N),per=Math.max(1,Math.floor(C/fc)),gr=Math.ceil(N/per),fr=Math.floor(R/gr);$('tfAInfo').textContent=`Sheet ${C}×${R} tiles → ${N} frames of ${fc}×${fr} tiles (${per} per row)${fc*per>C||fr<1||(fc*per*gr*fr)!==C*R?'  ⚠ the sheet size does not divide evenly':''}`};
     $('tfAF').addEventListener('input',info);$('tfAC').addEventListener('input',info);info()}
   $('tfImg').oninput=()=>{const old=d.tileImage;d.tileImage=$('tfImg').value.trim();touch();tdReg(t)};
   const dim=()=>{d.tileDimension=(+$('tfW').value||0)+'x'+(+$('tfH').value||0);touch()};$('tfW').oninput=dim;$('tfH').oninput=dim;
   if($('tfId'))$('tfId').onchange=()=>{const v=Number($('tfId').value);if(!Number.isFinite(v)||tdById(v)&&tdById(v)!==t){tdMsg('That ID is already taken.');$('tfId').value=t.id;return}t.id=v;d.tileID=v;t.mod=true;TD.tiles.sort((a,b)=>(+a.id)-(+b.id));tdApply();tdList()};
   $('tfDetect').onclick=()=>{const s=tdImgSize(t);if(!s)return tdMsg('The image is not loaded (check the path).');d.tileDimension=s.w+'x'+s.h;t.mod=true;tdApply();tdForm();tdList()};
-  $('tfAuto').onclick=()=>{const[w,h]=String(d.tileDimension||'16x16').split('x').map(Number);const c=Math.max(1,Math.ceil((w||16)/16)),r=Math.max(1,Math.ceil((h||16)/16));d.frames=c*r;if(c>1||/^Multi/.test(d.tileType||''))d.columns=c;t.mod=true;tdApply();tdForm();tdList()};
+  $('tfAuto').onclick=()=>{const[w,h]=String(d.tileDimension||'16x16').split('x').map(Number);const cs=Number(d.tileCell)||16,c=Math.max(1,Math.ceil((w||cs)/cs)),r=Math.max(1,Math.ceil((h||cs)/cs));d.frames=c*r;if(c>1||/^Multi/.test(d.tileType||''))d.columns=c;t.mod=true;tdApply();tdForm();tdList()};
   $('tfRepl').onclick=()=>$('tdFR').click();$('tfPaint').onclick=()=>pxOpen(t);$('tfCat').onchange=()=>tdSetCat(t.id,$('tfCat').value);
   $('tfCrop').onclick=()=>{if(!TD.rect||!TD.sheet)return;const r=TD.rect;t.canvas=tdCrop(TD.sheet,r.x,r.y,r.w,r.h);t.src={sheet:TD.sheet.name,...r};d.tileDimension=r.w+'x'+r.h;t.mod=true;tdReg(t);tdApply();tdForm();tdList();tdDraw();tdMsg(`Image of “${d.tileName}” replaced from the sheet (${r.w}×${r.h}).`)};
   tdPrev()}
 function tdPrev(){const c=$('tfPrev'),t=TD.sel;if(!c||!t)return;const i=t.canvas||tileImg(t.d);if(!i){c.width=c.height=4;return}
   const w=i.naturalWidth||i.width,h=i.naturalHeight||i.height,k=Math.max(1,Math.min(4,Math.floor(290/w)));c.width=w*k;c.height=h*k;const x=c.getContext('2d');x.imageSmoothingEnabled=false;x.drawImage(i,0,0,w*k,h*k);
   x.strokeStyle='rgba(255,214,0,.55)';x.lineWidth=1;const n=Math.ceil(w/16),m=Math.ceil(h/16);x.beginPath();for(let a=1;a<n;a++){x.moveTo(a*16*k+.5,0);x.lineTo(a*16*k+.5,h*k)}for(let b=1;b<m;b++){x.moveTo(0,b*16*k+.5);x.lineTo(w*k,b*16*k+.5)}x.stroke();
-  if(/^Multi/.test(t.d.tileType||'')){x.fillStyle='#ffd600';x.font='10px monospace';const cols=t.d.columns||3;for(let f=0;f<(t.d.frames||1);f++){const cx=(f%cols)*16*k+2,cy=Math.floor(f/cols)*16*k+10;if(cx<w*k&&cy<h*k+10)x.fillText(f,cx,cy)}}}
+  if(/^Multi/.test(t.d.tileType||'')){x.fillStyle='#ffd600';x.font='10px monospace';const cols=t.d.columns||3,cs=Number(t.d.tileCell)||16;for(let f=0;f<(t.d.frames||1);f++){const cx=(f%cols)*cs*k+2,cy=Math.floor(f/cols)*cs*k+10;if(cx<w*k&&cy<h*k+10)x.fillText(f,cx,cy)}}}
 // ---------- sheets (kept in this browser so you can come back to them)
 const tdIdb=()=>new Promise((res,rej)=>{const r=indexedDB.open('pmTileSheets',1);r.onupgradeneeded=()=>r.result.createObjectStore('s');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 async function tdIdbPut(k,b){try{const d=await tdIdb();d.transaction('s','readwrite').objectStore('s').put(b,k)}catch(e){}}
@@ -1329,7 +1330,7 @@ function pxPaint(){const c=$('tpxCv'),x=c.getContext('2d'),d=devicePixelRatio||1
   x.imageSmoothingEnabled=false;x.drawImage(PX.cv,ox,oy,W,H);
   if(PX.drag&&PX.drag.prev){x.drawImage(PX.drag.prev,ox,oy,W,H)}
   if($('tpxGrid').checked&&z>=6){x.strokeStyle='rgba(255,255,255,.10)';x.lineWidth=1;x.beginPath();for(let i=0;i<=PX.w;i++){x.moveTo(ox+i*z+.5,oy);x.lineTo(ox+i*z+.5,oy+H)}for(let j=0;j<=PX.h;j++){x.moveTo(ox,oy+j*z+.5);x.lineTo(ox+W,oy+j*z+.5)}x.stroke()}
-  if($('tpxG16').checked){x.strokeStyle='rgba(0,229,255,.45)';x.lineWidth=1;x.beginPath();for(let i=0;i<=PX.w;i+=16){x.moveTo(ox+i*z+.5,oy);x.lineTo(ox+i*z+.5,oy+H)}for(let j=0;j<=PX.h;j+=16){x.moveTo(ox,oy+j*z+.5);x.lineTo(ox+W,oy+j*z+.5)}x.stroke()}
+  if($('tpxG16').checked){x.strokeStyle='rgba(0,229,255,.45)';x.lineWidth=1;x.beginPath();for(let i=0;i<=PX.w;i+=(Number(PX.t&&PX.t.d.tileCell)||16)){x.moveTo(ox+i*z+.5,oy);x.lineTo(ox+i*z+.5,oy+H)}for(let j=0;j<=PX.h;j+=(Number(PX.t&&PX.t.d.tileCell)||16)){x.moveTo(ox,oy+j*z+.5);x.lineTo(ox+W,oy+j*z+.5)}x.stroke()}
   x.strokeStyle='#ffd600';x.strokeRect(ox-.5,oy-.5,W+1,H+1);
   if(PX.hover&&!PX.pan){const s=+$('tpxSize').value||1,k=(PX.tool==='pencil'||PX.tool==='eraser')?s:1;x.strokeStyle='#fff';x.strokeRect(ox+(PX.hover.x-(k>1?Math.floor(k/2):0))*z+.5,oy+(PX.hover.y-(k>1?Math.floor(k/2):0))*z+.5,k*z-1,k*z-1)}}
 const pxPos=e=>{const r=$('tpxCv').getBoundingClientRect();return{x:Math.floor((e.clientX-r.left-PX.ox)/PX.z),y:Math.floor((e.clientY-r.top-PX.oy)/PX.z)}};
