@@ -246,6 +246,9 @@ function pasteClip(){if(!clipC||!ctx)return;if(flt)commitFloat();pushHist();setT
 const inRect=(p,r)=>r&&p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h;
 
 // ---------- overlay ----------
+function selLabel(w,h){let t=w+'×'+h+' px';for(const c of[32,16])if(w%c===0&&h%c===0){t+='  ·  '+(w/c)+'×'+(h/c)+' tiles of '+c;break}return t}
+function selBadge(x,y,w,h){const t=selLabel(w,h);octx.font='bold 12px monospace';const tw=octx.measureText(t).width+12,bh=20;let bx=x*z,by=y*z-bh-4;if(by<2)by=y*z+h*z+4;if(by+bh>ov.height-2)by=Math.max(2,y*z+4);bx=Math.max(2,Math.min(bx,ov.width-tw-2));
+  octx.fillStyle='rgba(10,14,24,.92)';octx.fillRect(bx,by,tw,bh);octx.strokeStyle='#5d8aff';octx.lineWidth=1;octx.strokeRect(bx+.5,by+.5,tw-1,bh-1);octx.fillStyle='#fff';octx.textBaseline='middle';octx.fillText(t,bx+6,by+bh/2+1)}
 const maskCv=document.createElement('canvas');
 function overlayBase(){if(!cv)return;octx.clearRect(0,0,ov.width,ov.height);octx.imageSmoothingEnabled=false;
   if($('tGrid').checked&&z>=6){octx.strokeStyle='rgba(255,255,255,.18)';octx.lineWidth=1;octx.beginPath();
@@ -254,8 +257,8 @@ function overlayBase(){if(!cv)return;octx.clearRect(0,0,ov.width,ov.height);octx
   const r=flt?{x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height,mask:flt.mask}:sel;
   if(r){if(r.mask){maskCv.width=r.w;maskCv.height=r.h;const m=maskCv.getContext('2d'),id=m.createImageData(r.w,r.h);
       for(let i=0;i<r.w*r.h;i++)if(r.mask[i]){id.data[i*4]=60;id.data[i*4+1]=130;id.data[i*4+2]=255;id.data[i*4+3]=110}m.putImageData(id,0,0);octx.drawImage(maskCv,r.x*z,r.y*z,r.w*z,r.h*z)}
-    octx.lineWidth=1;octx.setLineDash([5,4]);octx.strokeStyle='#fff';octx.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);octx.lineDashOffset=4;octx.strokeStyle='#000';octx.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);octx.setLineDash([]);octx.lineDashOffset=0}
-  if(drag&&drag.k==='newsel'){const a=drag.a,b=drag.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;octx.fillStyle='rgba(60,130,255,.25)';octx.fillRect(x*z,y*z,w*z,h*z);octx.strokeStyle='#fff';octx.strokeRect(x*z+.5,y*z+.5,w*z-1,h*z-1)}
+    octx.lineWidth=1;octx.setLineDash([5,4]);octx.strokeStyle='#fff';octx.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);octx.lineDashOffset=4;octx.strokeStyle='#000';octx.strokeRect(r.x*z+.5,r.y*z+.5,r.w*z-1,r.h*z-1);octx.setLineDash([]);octx.lineDashOffset=0;selBadge(r.x,r.y,r.w,r.h)}
+  if(drag&&drag.k==='newsel'){const a=drag.a,b=drag.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;octx.fillStyle='rgba(60,130,255,.25)';octx.fillRect(x*z,y*z,w*z,h*z);octx.strokeStyle='#fff';octx.strokeRect(x*z+.5,y*z+.5,w*z-1,h*z-1);selBadge(x,y,w,h)}
   if(['pencil','eraser'].includes(tool)&&hover){const s=bsz(),o=Math.floor(s/2);octx.strokeStyle='rgba(255,255,255,.8)';octx.strokeRect((hover.x-o)*z+.5,(hover.y-o)*z+.5,s*z-1,s*z-1)}}
 var fontReady=false;
 function overlay(){overlayBase();if(fontReady)fontOverlay()}
@@ -293,7 +296,7 @@ window.addEventListener('mousemove',e=>{if(!cv)return;
     else if(drag.k==='movef'){flt.x=p.x-drag.ox;flt.y=p.y-drag.oy}
     else if(drag.k==='newsel')drag.b=clampP(p);
     overlay()}else overlay();
-  if(hover){const d=ctx.getImageData(hover.x,hover.y,1,1).data;status(`(${hover.x}, ${hover.y})  rgba(${d[0]}, ${d[1]}, ${d[2]}, ${d[3]})  ·  ${cv.width}×${cv.height}  ·  ${Math.round(z*100)}%`)}});
+  if(hover){const d=ctx.getImageData(hover.x,hover.y,1,1).data;status(`(${hover.x}, ${hover.y})  rgba(${d[0]}, ${d[1]}, ${d[2]}, ${d[3]})  ·  ${cv.width}×${cv.height}  ·  ${Math.round(z*100)}%`+(flt||sel?(()=>{const r=flt?{x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height}:sel;return `  ·  selection ${r.w}×${r.h} at (${r.x}, ${r.y})`})():''))}});
 window.addEventListener('mouseup',()=>{if(!drag)return;const d=drag;drag=null;
   if(d.k==='paint'||d.k==='shape'){addRecent(toHex(d.c[0],d.c[1],d.c[2]));refreshThumb()}
   if(d.k==='newsel'){const a=d.a,b=d.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;sel=(w>1||h>1)?{x,y,w,h,mask:null}:null}
