@@ -55,7 +55,7 @@ input[type=color]{padding:0;height:30px;width:44px;flex:none}
   <button id="bUndo" title="Ctrl+Z">Undo</button><button id="bRedo" title="Ctrl+Y">Redo</button>
   <div class="sep"></div>
   <button id="bFlipH">Flip H</button><button id="bFlipV">Flip V</button><button id="bRotL">Rotate ⟲</button><button id="bRotR">Rotate ⟳</button>
-  <button id="bResize">Canvas size</button><button id="bScale">Scale</button><button id="bCrop">Crop to selection</button><button id="bTrim">Trim empty edges</button><button id="bInvert">Invert colours</button>
+  <button id="bResize">Canvas size</button><label title="When you change the canvas size, keep the existing picture centered (otherwise it stays at the top-left)" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="cResizeCenter">auto-center</label><button id="bScale">Scale</button><button id="bCrop">Crop to selection</button><button id="bTrim">Trim empty edges</button><button id="bInvert">Invert colours</button>
   <div class="sep"></div>
   <button id="bZm">−</button><span id="zl" style="min-width:42px;text-align:center">100%</span><button id="bZp">+</button><button id="bFit">Fit</button>
   <label class="in" style="flex-direction:row"><input type="checkbox" id="tGrid" checked> Pixel grid</label>
@@ -335,8 +335,9 @@ $('bFlipH').onclick=()=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{g.translate
 $('bFlipV').onclick=()=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{g.translate(0,s.height);g.scale(1,-1);g.drawImage(s,0,0)}}));
 $('bRotR').onclick=()=>xform(s=>({w:s.height,h:s.width,draw:(g,s)=>{g.translate(s.height,0);g.rotate(Math.PI/2);g.drawImage(s,0,0)}}));
 $('bRotL').onclick=()=>xform(s=>({w:s.height,h:s.width,draw:(g,s)=>{g.translate(0,s.width);g.rotate(-Math.PI/2);g.drawImage(s,0,0)}}));
-$('bResize').onclick=()=>{if(!cv)return;const v=prompt('New canvas size (width x height). Content stays at the top-left, new space is transparent:',`${cv.width}x${cv.height}`);const m=v&&v.match(/(\d+)\D+(\d+)/);if(!m)return;
-  const w=Math.max(1,Math.min(4096,+m[1])),h=Math.max(1,Math.min(4096,+m[2]));xform(s=>({w,h,draw:(g,s)=>g.drawImage(s,0,0)}))};
+{const cb=$('cResizeCenter');try{cb.checked=localStorage.getItem('pe_resizeCenter')==='1'}catch(e){}cb.onchange=()=>{try{localStorage.setItem('pe_resizeCenter',cb.checked?'1':'0')}catch(e){}}}
+$('bResize').onclick=()=>{if(!cv)return;const center=$('cResizeCenter').checked;const v=prompt(`New canvas size (width x height). ${center?'The picture is centered':'Content stays at the top-left'}, new space is transparent:`,`${cv.width}x${cv.height}`);const m=v&&v.match(/(\d+)\D+(\d+)/);if(!m)return;
+  const w=Math.max(1,Math.min(4096,+m[1])),h=Math.max(1,Math.min(4096,+m[2]));xform(s=>{const ox=center?Math.floor((w-s.width)/2):0,oy=center?Math.floor((h-s.height)/2):0;return{w,h,draw:(g,s)=>g.drawImage(s,ox,oy)}})};
 $('bScale').onclick=()=>{if(!cv)return;const v=prompt('Scale: a factor (like 2 or 0.5) or a size like 64x64 (nearest-neighbour, pixels stay sharp):','2');if(!v)return;
   let w,h;const m=v.match(/^\s*(\d+)\s*[x×]\s*(\d+)\s*$/i);if(m){w=+m[1];h=+m[2]}else{const f=parseFloat(v);if(!(f>0))return;w=Math.round(cv.width*f);h=Math.round(cv.height*f)}
   w=Math.max(1,Math.min(4096,w));h=Math.max(1,Math.min(4096,h));xform(s=>({w,h,draw:(g,s)=>g.drawImage(s,0,0,w,h)}))};
