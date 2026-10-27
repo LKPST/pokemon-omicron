@@ -28,6 +28,15 @@ button{cursor:pointer}button:hover{background:#343b50}button.on{background:#3a6d
  background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/16px 16px;box-shadow:0 0 0 1px #556}
 #stage canvas{display:block;image-rendering:pixelated}
 #ov{position:absolute;left:0;top:0;pointer-events:none;width:100%;height:100%}
+#stage canvas:not(#ov){position:absolute;left:0;top:0}
+#zs{width:150px;padding:0;border:none;background:transparent;accent-color:#5d8aff}
+#llist{max-height:210px;overflow:auto;display:flex;flex-direction:column;gap:3px}
+.ly{display:flex;gap:6px;align-items:center;padding:3px;border:1px solid #2c3140;border-radius:5px;cursor:pointer}
+.ly.cur{border-color:#5d8aff;background:#222a40}.ly.off span,.ly.off canvas{opacity:.45}
+.ly canvas{width:30px;height:30px;object-fit:contain;image-rendering:pixelated;flex:none;background:repeating-conic-gradient(#4a4f5e 0 25%,#383c49 0 50%) 0 0/8px 8px}
+.ly span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ly .eye{width:24px;text-align:center;cursor:pointer;user-select:none;font-size:14px}
+body[data-tab=font] #layersFs{display:none}
 #side{background:#1c1f28;border-left:1px solid #2c3140;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
 fieldset{border:1px solid #333a4b;border-radius:6px;padding:8px;margin:0;display:flex;flex-direction:column;gap:6px}
 legend{color:#7fa4ff;padding:0 4px}
@@ -55,9 +64,9 @@ input[type=color]{padding:0;height:30px;width:44px;flex:none}
   <button id="bUndo" title="Ctrl+Z">Undo</button><button id="bRedo" title="Ctrl+Y">Redo</button>
   <div class="sep"></div>
   <button id="bFlipH">Flip H</button><button id="bFlipV">Flip V</button><button id="bRotL">Rotate ⟲</button><button id="bRotR">Rotate ⟳</button>
-  <button id="bResize">Canvas size</button><label title="When you change the canvas size, keep the existing picture centered (otherwise it stays at the top-left)" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="cResizeCenter">auto-center</label><button id="bScale">Scale</button><button id="bCrop">Crop to selection</button><button id="bTrim">Trim empty edges</button><button id="bInvert">Invert colours</button>
+  <button id="bResize">Canvas size</button><label title="When you change the canvas size, keep the existing picture centered (otherwise it stays at the top-left)" style="display:inline-flex;flex-direction:row;align-items:center;gap:4px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="cResizeCenter">auto-center</label><button id="bScale">Scale</button><button id="bCrop">Crop to selection</button><button id="bTrim">Trim empty edges</button><button id="bInvert">Invert colours</button>
   <div class="sep"></div>
-  <button id="bZm">−</button><span id="zl" style="min-width:42px;text-align:center">100%</span><button id="bZp">+</button><button id="bFit">Fit</button>
+  <button id="bZm">−</button><input type="range" id="zs" min="0" max="16" value="2" title="Zoom"><button id="bZp">+</button><span id="zl" style="min-width:48px;text-align:center">100%</span><button id="bFit">Fit</button>
   <label class="in" style="flex-direction:row"><input type="checkbox" id="tGrid" checked> Pixel grid</label>
 </div>
 <div id="tools"></div>
@@ -102,6 +111,14 @@ Pokémon ♂♀  /up/ /down/ /left/ /right/</textarea>
     <label>Opacity <span id="aV">100</span>%<input type="range" id="alpha" min="0" max="100" value="100"></label>
     <div id="sw"></div>
     <button id="bPal">Get palette from image</button>
+  </fieldset>
+  <fieldset id="layersFs"><legend>Layers (<span id="lcnt">0</span>)</legend>
+    <div id="llist"></div>
+    <label>Layer opacity <span id="loV">100</span>%<input type="range" id="lop" min="0" max="100" value="100"></label>
+    <div class="row"><button id="lAdd" title="New empty layer above the current one">+ New</button><button id="lDup" title="Copy of the current layer">Duplicate</button><button id="lRen" title="Rename the current layer">Rename</button><button id="lDel" title="Delete the current layer">Delete</button></div>
+    <div class="row"><button id="lUp" title="Move the layer up">▲ Up</button><button id="lDn" title="Move the layer down">▼ Down</button><button id="lMerge" title="Merge the current layer into the one below">Merge ↓</button><button id="lFlat" title="Merge all layers into one">Flatten</button></div>
+    <button id="lZip">Download layers (ZIP, one PNG each)</button>
+    <div class="hint">Everything you draw, fill, select or paste goes on the <b>highlighted layer</b>. 👁 shows / hides a layer; double-click a name (or press Rename) to rename it. Flip, rotate, canvas size, scale and crop change all layers together. PNG / ZIP exports are the flattened picture (hidden layers are left out).</div>
   </fieldset>
   <fieldset><legend>Tool options</legend>
     <label>Brush size <span id="bsV">1</span> px<input type="range" id="bs" min="1" max="32" value="1"></label>
@@ -158,12 +175,19 @@ $('alpha').oninput=()=>$('aV').textContent=$('alpha').value;
 $('bs').oninput=()=>$('bsV').textContent=$('bs').value;
 $('tolF').oninput=()=>$('tolFV').textContent=$('tolF').value;
 $('tol').oninput=()=>$('tolV').textContent=$('tol').value;
-$('bPal').onclick=()=>{if(!ctx)return;const d=ctx.getImageData(0,0,cv.width,cv.height).data,m=new Map();
+$('bPal').onclick=()=>{if(!ctx)return;const d=flat(items[cur]).getContext('2d').getImageData(0,0,cv.width,cv.height).data,m=new Map();
   for(let i=0;i<d.length&&m.size<400;i+=4)if(d[i+3]>0){const h=toHex(d[i],d[i+1],d[i+2]);m.set(h,(m.get(h)||0)+1)}
   recent=[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,40).map(x=>x[0]);drawSw()};
 
 // ---------- items ----------
-function mkItem(name,c,path){return{name,path:path||name,c,hist:[],redo:[]}}
+function mkItem(name,c,path){return{name,path:path||name,layers:[{name:'Layer 1',c,vis:true,op:1}],li:0,hist:[],redo:[],
+  get c(){return this.layers[this.li].c},   // the ACTIVE layer: every tool draws on it
+  get w(){return this.layers[0].c.width},get h(){return this.layers[0].c.height}}}
+// composite of the visible layers (opacity respected)
+function drawFlat(g,it){for(const L of it.layers){if(!L.vis)continue;g.globalAlpha=L.op;g.drawImage(L.c,0,0)}g.globalAlpha=1}
+function flat(it){const c=document.createElement('canvas');c.width=it.w;c.height=it.h;drawFlat(c.getContext('2d',{willReadFrequently:true}),it);return c}
+function flatPx(x,y){const it=items[cur],c=document.createElement('canvas');c.width=1;c.height=1;const g=c.getContext('2d');
+  for(const L of it.layers){if(!L.vis)continue;g.globalAlpha=L.op;g.drawImage(L.c,x,y,1,1,0,0,1,1)}return g.getImageData(0,0,1,1).data}
 function prep(c){c.style.imageRendering='pixelated';c.getContext('2d',{willReadFrequently:true})}
 async function addFile(f){
   try{const bm=await createImageBitmap(f),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;prep(c);
@@ -174,33 +198,51 @@ async function addFiles(list){const fs=[...list].filter(f=>/^image\//.test(f.typ
   const start=items.length;let n=0;for(const f of fs){status(`Loading ${++n}/${fs.length}…`);await addFile(f)}
   if(items.length>start)select(start);buildList();status(`Loaded ${items.length-start} image(s).`)}
 function newImage(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;prep(c);items.push(mkItem('image_'+(items.length+1),c));select(items.length-1);buildList()}
-function select(i){if(flt)commitFloat();sel=null;if(i<0||i>=items.length){cur=-1;return}
-  const old=cv;cur=i;cv=items[i].c;ctx=cv.getContext('2d',{willReadFrequently:true});
-  if(old&&old.parentNode===stage)stage.replaceChild(cv,old);else stage.insertBefore(cv,ov);
-  fitZoom();buildList();overlay()}
+// put the layer canvases of the current image into the stage (bottom layer first, the overlay stays on top)
+function mountStage(){const it=items[cur];stage.querySelectorAll('canvas:not(#ov)').forEach(c=>c.remove());if(!it)return;
+  it.layers.forEach(L=>{prep(L.c);styleLayer(L);stage.insertBefore(L.c,ov)});cv=it.c;ctx=cv.getContext('2d',{willReadFrequently:true})}
+function styleLayer(L){L.c.style.visibility=L.vis?'visible':'hidden';L.c.style.opacity=L.op}
+function select(i){if(flt)commitFloat();sel=null;if(i<0||i>=items.length){cur=-1;buildLayers();return}
+  cur=i;mountStage();fitZoom();buildList();buildLayers();overlay()}
 function buildList(){const L=$('list');L.innerHTML='';$('cnt').textContent=items.length;
   items.forEach((it,i)=>{const d=document.createElement('div');d.className='it'+(i===cur?' cur':'');
-    const t=document.createElement('canvas');t.width=it.c.width;t.height=it.c.height;t.getContext('2d').drawImage(it.c,0,0);
-    const s=document.createElement('span');s.textContent=it.path;s.title=it.path+` (${it.c.width}×${it.c.height})`;
+    const t=document.createElement('canvas');t.width=it.w;t.height=it.h;drawFlat(t.getContext('2d'),it);
+    const s=document.createElement('span');s.textContent=it.path;s.title=it.path+` (${it.w}×${it.h})`+(it.layers.length>1?`  ·  ${it.layers.length} layers`:'');
     const x=document.createElement('b');x.textContent='×';x.title='Remove from list';
     x.onclick=ev=>{ev.stopPropagation();items.splice(i,1);if(cur===i){cv=null;ctx=null;stage.querySelectorAll('canvas:not(#ov)').forEach(c=>c.remove());select(Math.min(i,items.length-1))}else if(cur>i)cur--;buildList()};
     d.append(t,s,x);d.onclick=()=>{select(i)};L.appendChild(d)})}
-function refreshThumb(){const it=items[cur];if(!it)return;const t=$('list').children[cur]?.querySelector('canvas');if(t){t.width=it.c.width;t.height=it.c.height;t.getContext('2d').drawImage(it.c,0,0)}}
+function listThumb(){const it=items[cur];if(!it)return;const t=$('list').children[cur]?.querySelector('canvas');if(t){t.width=it.w;t.height=it.h;drawFlat(t.getContext('2d'),it)}}
+function refreshThumb(){listThumb();buildLayers()}
 
 // ---------- zoom ----------
+const ZS=[.25,.5,1,2,3,4,5,6,8,10,12,16,20,24,32,48,64];   // the slider steps (whole-number zooms keep pixels square)
+const zIdx=v=>{let b=0;for(let i=1;i<ZS.length;i++)if(Math.abs(Math.log(ZS[i]/v))<Math.abs(Math.log(ZS[b]/v)))b=i;return b};
 function applyZoom(){if(!cv)return;const m=Math.max(cv.width,cv.height);z=Math.max(.25,Math.min(z,Math.floor(8192/m)||1,64));
-  cv.style.width=cv.width*z+'px';cv.style.height=cv.height*z+'px';ov.width=Math.round(cv.width*z);ov.height=Math.round(cv.height*z);
-  $('zl').textContent=Math.round(z*100)+'%';overlay()}
+  const it=items[cur],W=cv.width*z+'px',H=cv.height*z+'px';stage.style.width=W;stage.style.height=H;
+  for(const L of it?it.layers:[cv]){const c=L.c||L;c.style.width=W;c.style.height=H}
+  ov.width=Math.round(cv.width*z);ov.height=Math.round(cv.height*z);
+  $('zl').textContent=Math.round(z*100)+'%';$('zs').value=zIdx(z);overlay()}
+// zoom to nz and keep the point under (ax, ay) (view coordinates; default the centre of the view) where it is
+function zoomTo(nz,ax,ay){if(!cv){z=nz;return}if(ax==null){ax=view.clientWidth/2;ay=view.clientHeight/2}
+  const ix=(view.scrollLeft+ax-40)/z,iy=(view.scrollTop+ay-40)/z;z=nz;applyZoom();view.scrollLeft=40+ix*z-ax;view.scrollTop=40+iy*z-ay}
+const zIn=v=>v<1?v*2:Math.round(v*1.5+.4),zOut=v=>v<=1?v/2:Math.max(1,Math.round(v/1.5));
 function fitZoom(){if(!cv)return;z=Math.max(1,Math.min(32,Math.floor(Math.min((view.clientWidth-100)/cv.width,(view.clientHeight-100)/cv.height))||1));applyZoom()}
-$('bZp').onclick=()=>{z=z<1?z*2:Math.round(z*1.5+.4);applyZoom()};$('bZm').onclick=()=>{z=z<=1?z/2:Math.max(1,Math.round(z/1.5));applyZoom()};$('bFit').onclick=fitZoom;
-view.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.altKey)return;e.preventDefault();e.deltaY<0?$('bZp').click():$('bZm').click()},{passive:false});
+$('bZp').onclick=()=>zoomTo(zIn(z));$('bZm').onclick=()=>zoomTo(zOut(z));$('bFit').onclick=fitZoom;
+$('zs').oninput=()=>zoomTo(ZS[+$('zs').value]);
+view.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.altKey)return;e.preventDefault();const r=view.getBoundingClientRect();zoomTo(e.deltaY<0?zIn(z):zOut(z),e.clientX-r.left,e.clientY-r.top)},{passive:false});
 
 // ---------- history ----------
 function snap(it=items[cur]){const g=it.c.getContext('2d');return g.getImageData(0,0,it.c.width,it.c.height)}
-function pushHist(it=items[cur]){if(!it)return;it.hist.push(snap(it));if(it.hist.length>60)it.hist.shift();it.redo=[]}
-function restore(it,d){it.c.width=d.width;it.c.height=d.height;it.c.getContext('2d').putImageData(d,0,0)}
-function undo(){const it=items[cur];if(!it||!it.hist.length)return;flt=null;sel=null;it.redo.push(snap());restore(it,it.hist.pop());applyZoom();refreshThumb()}
-function redo(){const it=items[cur];if(!it||!it.redo.length)return;flt=null;sel=null;it.hist.push(snap());restore(it,it.redo.pop());applyZoom();refreshThumb()}
+// a history entry is either one layer's pixels ('px', the normal case) or the whole layer stack ('all': layer add / delete / move / merge, flip, rotate, resize...)
+function capture(it,k,li){if(k==='all')return{k:'all',li:it.li,layers:it.layers.map(L=>({name:L.name,vis:L.vis,op:L.op,d:L.c.getContext('2d').getImageData(0,0,L.c.width,L.c.height)}))};
+  const i=li!=null?li:it.li,c=it.layers[i].c;return{k:'px',li:i,d:c.getContext('2d').getImageData(0,0,c.width,c.height)}}
+function pushHist(it=items[cur],k='px'){if(!it)return;it.hist.push(capture(it,k));if(it.hist.length>60)it.hist.shift();it.redo=[]}
+function applyState(it,e){
+  if(e.k==='all'){it.layers=e.layers.map(q=>{const c=document.createElement('canvas');c.width=q.d.width;c.height=q.d.height;prep(c);c.getContext('2d').putImageData(q.d,0,0);return{name:q.name,vis:q.vis,op:q.op,c}});it.li=Math.max(0,Math.min(e.li,it.layers.length-1))}
+  else if(it.layers[e.li]){const c=it.layers[e.li].c;c.width=e.d.width;c.height=e.d.height;c.getContext('2d').putImageData(e.d,0,0)}
+  if(it===items[cur]){mountStage();applyZoom()}}
+function undo(){const it=items[cur];if(!it||!it.hist.length)return;flt=null;sel=null;const e=it.hist.pop();it.redo.push(capture(it,e.k,e.li));applyState(it,e);refreshThumb()}
+function redo(){const it=items[cur];if(!it||!it.redo.length)return;flt=null;sel=null;const e=it.redo.pop();it.hist.push(capture(it,e.k,e.li));applyState(it,e);refreshThumb()}
 $('bUndo').onclick=undo;$('bRedo').onclick=redo;
 
 // ---------- drawing primitives ----------
@@ -279,7 +321,7 @@ view.addEventListener('mousedown',e=>{if(!cv)return;
     if(sel&&inRect(p,sel)){liftSel();drag={k:'movef',ox:p.x-flt.x,oy:p.y-flt.y};overlay();return}
     sel=null;const q=clampP(p);drag={k:'newsel',a:q,b:q};overlay();return}
   if(!inside(p)&&tool!=='select')return;
-  if(tool==='pick'){const d=ctx.getImageData(p.x,p.y,1,1).data;$(right?'c2':'c1').value=toHex(d[0],d[1],d[2]);if(!right){$('alpha').value=Math.round(d[3]/2.55);$('aV').textContent=$('alpha').value}return}
+  if(tool==='pick'){const d=flatPx(p.x,p.y);$(right?'c2':'c1').value=toHex(d[0],d[1],d[2]);if(!right){$('alpha').value=Math.round(d[3]/2.55);$('aV').textContent=$('alpha').value}return}
   if(tool==='bgpick'){$('bgx').value=p.x;$('bgy').value=p.y;bgInfo();return}
   if(tool==='wand'){const m=region(p.x,p.y,+$('tolF').value,$('oContig').checked);sel=maskBBox(m);overlay();return}
   pushHist();
@@ -296,7 +338,7 @@ window.addEventListener('mousemove',e=>{if(!cv)return;
     else if(drag.k==='movef'){flt.x=p.x-drag.ox;flt.y=p.y-drag.oy}
     else if(drag.k==='newsel')drag.b=clampP(p);
     overlay()}else overlay();
-  if(hover){const d=ctx.getImageData(hover.x,hover.y,1,1).data;status(`(${hover.x}, ${hover.y})  rgba(${d[0]}, ${d[1]}, ${d[2]}, ${d[3]})  ·  ${cv.width}×${cv.height}  ·  ${Math.round(z*100)}%`+(flt||sel?(()=>{const r=flt?{x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height}:sel;return `  ·  selection ${r.w}×${r.h} at (${r.x}, ${r.y})`})():''))}});
+  if(hover){const d=ctx.getImageData(hover.x,hover.y,1,1).data;status(`(${hover.x}, ${hover.y})  rgba(${d[0]}, ${d[1]}, ${d[2]}, ${d[3]})  ·  ${cv.width}×${cv.height}  ·  ${Math.round(z*100)}%`+(items[cur].layers.length>1?`  ·  layer "${items[cur].layers[items[cur].li].name}"`:'')+(flt||sel?(()=>{const r=flt?{x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height}:sel;return `  ·  selection ${r.w}×${r.h} at (${r.x}, ${r.y})`})():''))}});
 window.addEventListener('mouseup',()=>{if(!drag)return;const d=drag;drag=null;
   if(d.k==='paint'||d.k==='shape'){addRecent(toHex(d.c[0],d.c[1],d.c[2]));refreshThumb()}
   if(d.k==='newsel'){const a=d.a,b=d.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;sel=(w>1||h>1)?{x,y,w,h,mask:null}:null}
@@ -329,8 +371,10 @@ $('bgAll').onclick=()=>{if(!items.length)return;if(flt)commitFloat();const o=bgO
   status(`Batch: ${done} image(s) processed, ${skipped} skipped (already transparent / pixel outside). ${px} pixels removed.`);buildList();bgInfo()};
 
 // ---------- transforms ----------
-function xform(fn){if(!ctx)return;if(flt)commitFloat();sel=null;pushHist();const src=document.createElement('canvas');src.width=cv.width;src.height=cv.height;src.getContext('2d').drawImage(cv,0,0);
-  const r=fn(src);cv.width=r.w;cv.height=r.h;ctx=cv.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,r.w,r.h);r.draw(ctx,src);applyZoom();refreshThumb()}
+function xform(fn){if(!ctx)return;if(flt)commitFloat();sel=null;const it=items[cur];pushHist(it,'all');
+  for(const L of it.layers){const c=L.c,src=document.createElement('canvas');src.width=c.width;src.height=c.height;src.getContext('2d').drawImage(c,0,0);
+    const r=fn(src);c.width=r.w;c.height=r.h;const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;g.clearRect(0,0,r.w,r.h);r.draw(g,src)}
+  ctx=cv.getContext('2d',{willReadFrequently:true});applyZoom();refreshThumb()}
 $('bFlipH').onclick=()=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{g.translate(s.width,0);g.scale(-1,1);g.drawImage(s,0,0)}}));
 $('bFlipV').onclick=()=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{g.translate(0,s.height);g.scale(1,-1);g.drawImage(s,0,0)}}));
 $('bRotR').onclick=()=>xform(s=>({w:s.height,h:s.width,draw:(g,s)=>{g.translate(s.height,0);g.rotate(Math.PI/2);g.drawImage(s,0,0)}}));
@@ -342,7 +386,7 @@ $('bScale').onclick=()=>{if(!cv)return;const v=prompt('Scale: a factor (like 2 o
   let w,h;const m=v.match(/^\s*(\d+)\s*[x×]\s*(\d+)\s*$/i);if(m){w=+m[1];h=+m[2]}else{const f=parseFloat(v);if(!(f>0))return;w=Math.round(cv.width*f);h=Math.round(cv.height*f)}
   w=Math.max(1,Math.min(4096,w));h=Math.max(1,Math.min(4096,h));xform(s=>({w,h,draw:(g,s)=>g.drawImage(s,0,0,w,h)}))};
 $('bCrop').onclick=()=>{if(!cv||!sel){status('Select an area first (Select tool or Wand).');return}const r={...sel};xform(s=>({w:r.w,h:r.h,draw:(g,s)=>g.drawImage(s,r.x,r.y,r.w,r.h,0,0,r.w,r.h)}))};
-$('bTrim').onclick=()=>{if(!cv)return;const w=cv.width,h=cv.height,d=ctx.getImageData(0,0,w,h).data;let x0=w,y0=h,x1=-1,y1=-1;
+$('bTrim').onclick=()=>{if(!cv)return;const w=cv.width,h=cv.height,d=flat(items[cur]).getContext('2d').getImageData(0,0,w,h).data;let x0=w,y0=h,x1=-1,y1=-1;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[(y*w+x)*4+3]){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
   if(x1<0||(x0===0&&y0===0&&x1===w-1&&y1===h-1)){status('Nothing to trim.');return}
   xform(s=>({w:x1-x0+1,h:y1-y0+1,draw:(g,s)=>g.drawImage(s,x0,y0,x1-x0+1,y1-y0+1,0,0,x1-x0+1,y1-y0+1)}))};
@@ -365,10 +409,10 @@ function zip(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;const n
   return new Blob(parts,{type:'application/zip'})}
 const toPng=c=>new Promise(r=>c.toBlob(r,'image/png'));
 function save(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
-$('bPng').onclick=async()=>{if(!cv)return;if(flt)commitFloat();save(await toPng(cv),items[cur].name+'.png')};
+$('bPng').onclick=async()=>{if(!cv)return;if(flt)commitFloat();save(await toPng(flat(items[cur])),items[cur].name+'.png')};
 $('bZip').onclick=async()=>{if(!items.length)return;if(flt)commitFloat();const files=[],used=new Set(),keep=$('zipFolders').checked;let n=0;
   for(const it of items){status(`Packing ${++n}/${items.length}…`);let nm=(keep?it.path:it.name).replace(/^\/+/,'')+'.png',base=nm,k=2;while(used.has(nm.toLowerCase()))nm=base.replace(/\.png$/,`_${k++}.png`);used.add(nm.toLowerCase());
-    files.push({name:nm,data:new Uint8Array(await(await toPng(it.c)).arrayBuffer())})}
+    files.push({name:nm,data:new Uint8Array(await(await toPng(flat(it))).arrayBuffer())})}
   save(zip(files),'images_transparent.zip');status(`ZIP downloaded with ${files.length} image(s).`)};
 
 // ---------- files in ----------
@@ -383,6 +427,43 @@ window.addEventListener('drop',async e=>{e.preventDefault();$('drop').style.disp
   const its=[...(e.dataTransfer.items||[])].map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
   if(its.length){for(const en of its)await walk(en);addFiles(fs)}else addFiles(e.dataTransfer.files)});
 window.addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])];if(fs.length){e.preventDefault();addFiles(fs)}});
+
+// ---------- layers ----------
+function buildLayers(){const it=items[cur],L=$('llist');L.innerHTML='';$('lcnt').textContent=it?it.layers.length:0;if(!it)return;
+  for(let i=it.layers.length-1;i>=0;i--){const ly=it.layers[i],d=document.createElement('div');d.className='ly'+(i===it.li?' cur':'')+(ly.vis?'':' off');
+    const eye=document.createElement('b');eye.className='eye';eye.textContent=ly.vis?'👁':'–';eye.title='Show / hide this layer';
+    eye.onclick=ev=>{ev.stopPropagation();ly.vis=!ly.vis;styleLayer(ly);buildLayers();listThumb()};
+    const t=document.createElement('canvas');t.width=ly.c.width;t.height=ly.c.height;t.getContext('2d').drawImage(ly.c,0,0);
+    const n=document.createElement('span');n.textContent=ly.name;n.title=ly.name+'  (double-click to rename)';
+    n.ondblclick=ev=>{ev.stopPropagation();renameLayer(i)};
+    d.append(eye,t,n);d.onclick=()=>setLayer(i);L.appendChild(d)}
+  const cl=it.layers[it.li];$('lop').value=Math.round(cl.op*100);$('loV').textContent=$('lop').value}
+function setLayer(i){const it=items[cur];if(!it||i===it.li||i<0||i>=it.layers.length)return;if(flt)commitFloat();
+  it.li=i;cv=it.c;ctx=cv.getContext('2d',{willReadFrequently:true});buildLayers();overlay()}
+function renameLayer(i){const it=items[cur];if(!it)return;const ly=it.layers[i===undefined?it.li:i],v=prompt('Layer name:',ly.name);if(v&&v.trim()){ly.name=v.trim().slice(0,40);buildLayers()}}
+function newLayerCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;prep(c);return c}
+// every structural change is one undo step that restores the whole stack
+function layerOp(fn,msg){const it=items[cur];if(!it)return;if(flt)commitFloat();pushHist(it,'all');fn(it);mountStage();applyZoom();refreshThumb();if(msg)status(msg)}
+$('lAdd').onclick=()=>layerOp(it=>{let n=it.layers.length+1;while(it.layers.some(l=>l.name==='Layer '+n))n++;
+  it.layers.splice(it.li+1,0,{name:'Layer '+n,c:newLayerCanvas(it.w,it.h),vis:true,op:1});it.li++},'New layer added above the current one.');
+$('lDup').onclick=()=>layerOp(it=>{const src=it.layers[it.li],c=newLayerCanvas(it.w,it.h);c.getContext('2d').drawImage(src.c,0,0);
+  it.layers.splice(it.li+1,0,{name:src.name+' copy',c,vis:src.vis,op:src.op});it.li++},'Layer duplicated.');
+$('lDel').onclick=()=>{const it=items[cur];if(!it)return;if(it.layers.length<2){status('An image needs at least one layer.');return}
+  layerOp(it=>{it.layers.splice(it.li,1);it.li=Math.min(it.li,it.layers.length-1)},'Layer deleted (Undo brings it back).')};
+$('lRen').onclick=()=>renameLayer();
+$('lUp').onclick=()=>{const it=items[cur];if(!it)return;if(it.li>=it.layers.length-1){status('Already the top layer.');return}
+  layerOp(it=>{[it.layers[it.li],it.layers[it.li+1]]=[it.layers[it.li+1],it.layers[it.li]];it.li++})};
+$('lDn').onclick=()=>{const it=items[cur];if(!it)return;if(it.li<=0){status('Already the bottom layer.');return}
+  layerOp(it=>{[it.layers[it.li],it.layers[it.li-1]]=[it.layers[it.li-1],it.layers[it.li]];it.li--})};
+$('lMerge').onclick=()=>{const it=items[cur];if(!it)return;if(it.li<=0){status('Nothing below to merge into: pick a layer that has one under it.');return}
+  layerOp(it=>{const up=it.layers[it.li],lo=it.layers[it.li-1];if(up.vis){const g=lo.c.getContext('2d');g.globalAlpha=up.op;g.drawImage(up.c,0,0);g.globalAlpha=1}it.layers.splice(it.li,1);it.li--},'Merged into the layer below.')};
+$('lFlat').onclick=()=>{const it=items[cur];if(!it)return;if(it.layers.length<2){status('Only one layer.');return}
+  layerOp(it=>{const f=flat(it);it.layers=[{name:'Layer 1',c:f,vis:true,op:1}];it.li=0},'All layers merged into one (hidden layers were dropped).')};
+$('lop').oninput=()=>{const it=items[cur];if(!it)return;const L=it.layers[it.li];L.op=$('lop').value/100;$('loV').textContent=$('lop').value;styleLayer(L);listThumb()};
+$('lZip').onclick=async()=>{const it=items[cur];if(!it)return;if(flt)commitFloat();const safe=t=>t.replace(/[^\w\- ]+/g,'_').trim()||'layer',files=[];
+  for(let i=0;i<it.layers.length;i++){const L=it.layers[i];files.push({name:String(i+1).padStart(2,'0')+'_'+safe(L.name)+'.png',data:new Uint8Array(await(await toPng(L.c)).arrayBuffer())})}
+  files.push({name:'flattened.png',data:new Uint8Array(await(await toPng(flat(it))).arrayBuffer())});
+  save(zip(files),it.name+'_layers.zip');status(`${it.layers.length} layer PNG(s) + flattened.png downloaded (01 is the bottom layer).`)};
 
 // ---------- keyboard ----------
 function status(t){$('status').textContent=t}
@@ -478,7 +559,7 @@ $('ft_auto').onclick=()=>{const it=fontItem();if(!it)return;const W=+$('ft_w').v
   $('ft_adv').value=mx<0?6:Math.max(6,Math.min(W+2,mx+2));$('ft_adv').onchange()};
 // ----- preview (same rules as the engine: space 5, newline 16, /tag/, advance 6 or the glyph's own adv)
 let kc=null,kcKey='';
-function keyedSheet(){const it=fontItem();if(!it)return null;const w=it.c.width,h=it.c.height,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(it.c,0,0);
+function keyedSheet(){const it=fontItem();if(!it)return null;const w=it.w,h=it.h,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});drawFlat(x,it);
   const id=x.getImageData(0,0,w,h),d=id.data,r0=d[0],g0=d[1],b0=d[2],orig=$('ft_orig').checked,ink=hex2($('ft_ink').value),sh=hex2($('ft_shadow').value);
   for(let i=0;i<d.length;i+=4){const r=d[i],g=d[i+1],b=d[i+2];
     if(d[i+3]===0||(r===r0&&g===g0&&b===b0)||(r>=245&&g>=245&&b>=245)){d[i+3]=0;continue}
@@ -513,9 +594,9 @@ function genEF(){const[a,b]=mapSpan(efText||EF_DEFAULT);const keys=Object.keys(G
 const jsonOut=()=>JSON.stringify(G,null,1);
 $('ft_dljs').onclick=()=>save(new Blob([genEF()],{type:'text/javascript'}),'EmeraldFont.js');
 $('ft_dljson').onclick=()=>save(new Blob([jsonOut()],{type:'application/json'}),'glyphs.json');
-$('ft_dlpng').onclick=async()=>{const it=fontItem();if(!it){status('Load the font sheet first.');return}if(it===items[cur]&&flt)commitFloat();save(await toPng(it.c),'latin_short.png')};
+$('ft_dlpng').onclick=async()=>{const it=fontItem();if(!it){status('Load the font sheet first.');return}if(it===items[cur]&&flt)commitFloat();save(await toPng(flat(it)),'latin_short.png')};
 $('ft_zip').onclick=async()=>{const it=fontItem();if(!it){status('Load the font sheet first.');return}if(it===items[cur]&&flt)commitFloat();const enc=new TextEncoder();
-  save(zip([{name:'graphics/fonts/latin_short.png',data:new Uint8Array(await(await toPng(it.c)).arrayBuffer())},{name:'js/utils/EmeraldFont.js',data:enc.encode(genEF())},{name:'glyphs.json',data:enc.encode(jsonOut())}]),'font_update.zip');status('font_update.zip downloaded: unzip it into the repo root.')};
+  save(zip([{name:'graphics/fonts/latin_short.png',data:new Uint8Array(await(await toPng(flat(it))).arrayBuffer())},{name:'js/utils/EmeraldFont.js',data:enc.encode(genEF())},{name:'glyphs.json',data:enc.encode(jsonOut())}]),'font_update.zip');status('font_update.zip downloaded: unzip it into the repo root.')};
 // ----- tabs
 function setTab(t){tab=t;document.body.dataset.tab=t;$('tabPx').classList.toggle('on',t==='pixel');$('tabFt').classList.toggle('on',t==='font');
   if(t==='font'){if(!Object.keys(G).length){try{setMap(parseEF(EF_DEFAULT),'built-in',EF_DEFAULT)}catch(e){}if(/^https?:/.test(location.protocol))loadEngine()}
