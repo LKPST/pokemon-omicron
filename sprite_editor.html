@@ -59,11 +59,11 @@ input[type=color]{padding:0;height:30px;width:44px;flex:none}
 <div id="tabs"><button id="tabPx" class="on">Pixel Editor</button><button id="tabFt">Font Editor</button></div>
 <div id="top">
   <button id="bOpen">Open images</button><button id="bFolder">Open folder</button><button id="bNew">New</button>
-  <input type="file" id="fFiles" accept="image/*" multiple hidden><input type="file" id="fFolder" webkitdirectory multiple hidden>
+  <input type="file" id="fFiles" accept="image/*,.ora" multiple hidden><input type="file" id="fFolder" webkitdirectory multiple hidden>
   <div class="sep"></div>
   <button id="bUndo" title="Ctrl+Z">Undo</button><button id="bRedo" title="Ctrl+Y">Redo</button>
   <div class="sep"></div>
-  <button id="bFlipH">Flip H</button><button id="bFlipV">Flip V</button><button id="bRotL">Rotate ⟲</button><button id="bRotR">Rotate ⟳</button>
+  <button id="bFlipH" title="Flip the selection (or the whole canvas when nothing is selected: Esc deselects)">Flip H</button><button id="bFlipV" title="Flip the selection (or the whole canvas when nothing is selected: Esc deselects)">Flip V</button><button id="bRotL">Rotate ⟲</button><button id="bRotR">Rotate ⟳</button>
   <button id="bResize">Canvas size</button><label title="When you change the canvas size, keep the existing picture centered (otherwise it stays at the top-left)" style="display:inline-flex;flex-direction:row;align-items:center;gap:4px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="cResizeCenter">auto-center</label><button id="bScale">Scale</button><button id="bCrop">Crop to selection</button><button id="bTrim">Trim empty edges</button><button id="bInvert">Invert colours</button>
   <div class="sep"></div>
   <button id="bZm">−</button><input type="range" id="zs" min="0" max="16" value="2" title="Zoom"><button id="bZp">+</button><span id="zl" style="min-width:48px;text-align:center">100%</span><button id="bFit">Fit</button>
@@ -117,11 +117,14 @@ Pokémon ♂♀  /up/ /down/ /left/ /right/</textarea>
     <label>Layer opacity <span id="loV">100</span>%<input type="range" id="lop" min="0" max="100" value="100"></label>
     <div class="row"><button id="lAdd" title="New empty layer above the current one">+ New</button><button id="lDup" title="Copy of the current layer">Duplicate</button><button id="lRen" title="Rename the current layer">Rename</button><button id="lDel" title="Delete the current layer">Delete</button></div>
     <div class="row"><button id="lUp" title="Move the layer up">▲ Up</button><button id="lDn" title="Move the layer down">▼ Down</button><button id="lMerge" title="Merge the current layer into the one below">Merge ↓</button><button id="lFlat" title="Merge all layers into one">Flatten</button></div>
+    <div class="row"><button id="lSave" style="background:#2e8b57" title="Save this image with all its layers as a project file (OpenRaster .ora)">Save project (.ora)</button><button id="lOpen" title="Open a .ora project">Open project</button></div>
+    <input type="file" id="fOra" accept=".ora" hidden>
     <button id="lZip">Download layers (ZIP, one PNG each)</button>
-    <div class="hint">Everything you draw, fill, select or paste goes on the <b>highlighted layer</b>. 👁 shows / hides a layer; double-click a name (or press Rename) to rename it. Flip, rotate, canvas size, scale and crop change all layers together. PNG / ZIP exports are the flattened picture (hidden layers are left out).</div>
+    <div class="hint">Everything you draw, fill, select or paste goes on the <b>highlighted layer</b>. 👁 shows / hides a layer; double-click a name (or press Rename) to rename it. Flip, rotate, canvas size, scale and crop change all layers together. PNG / ZIP exports are the flattened picture (hidden layers are left out). <b>Save project (.ora)</b> keeps every layer, its name, opacity and visibility, so you can open it here again (Open project, Open images or drag &amp; drop) and it also opens in Krita, GIMP and MyPaint.</div>
   </fieldset>
   <fieldset><legend>Tool options</legend>
     <label>Brush size <span id="bsV">1</span> px<input type="range" id="bs" min="1" max="32" value="1"></label>
+    <label class="in"><input type="checkbox" id="oSelOnly" checked> Edit only inside the selection (pencil, eraser, fill, shapes, remove background, invert)</label>
     <label class="in"><input type="checkbox" id="oFill"> Fill shapes (rectangle, ellipse)</label>
     <label>Fill / wand tolerance <span id="tolFV">0</span><input type="range" id="tolF" min="0" max="128" value="0"></label>
     <label class="in"><input type="checkbox" id="oContig" checked> Contiguous (uncheck = whole image)</label>
@@ -152,7 +155,7 @@ Pokémon ♂♀  /up/ /down/ /left/ /right/</textarea>
 const $=id=>document.getElementById(id);
 const stage=$('stage'),view=$('view'),ov=$('ov'),octx=ov.getContext('2d');
 let items=[],cur=-1,cv=null,ctx=null,z=4,tool='pencil',spaceDown=false,sel=null,flt=null,clipC=null,recent=[];
-let drag=null,hover={x:0,y:0};
+let drag=null,hover={x:0,y:0},guard=null;
 const TOOLS=[['pencil','✏️','Pencil (B)','b'],['eraser','🧽','Eraser (E)','e'],['fill','🪣','Fill (G)','g'],['pick','💧','Colour picker (I)','i'],
  ['line','╱','Line (L)','l'],['rect','▭','Rectangle (R)','r'],['ellipse','◯','Ellipse (O)','o'],['select','⬚','Select (M)','m'],['wand','✨','Magic wand (W)','w'],
  ['bgpick','🎯','Pick background pixel (K)','k'],['cell','▦','Pick font glyph cell (C)','c'],['hand','✋','Hand (H)','h']];
@@ -190,10 +193,10 @@ function flatPx(x,y){const it=items[cur],c=document.createElement('canvas');c.wi
   for(const L of it.layers){if(!L.vis)continue;g.globalAlpha=L.op;g.drawImage(L.c,x,y,1,1,0,0,1,1)}return g.getImageData(0,0,1,1).data}
 function prep(c){c.style.imageRendering='pixelated';c.getContext('2d',{willReadFrequently:true})}
 async function addFile(f){
-  try{const bm=await createImageBitmap(f),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;prep(c);
+  try{if(/\.ora$/i.test(f.name))return await addOra(f);const bm=await createImageBitmap(f),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;prep(c);
     c.getContext('2d',{willReadFrequently:true}).drawImage(bm,0,0);
     items.push(mkItem(f.name.replace(/\.[^.]+$/,''),c,(f.webkitRelativePath||f.name).replace(/\.[^.]+$/,'')));return true}catch(e){return false}}
-async function addFiles(list){const fs=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
+async function addFiles(list){const fs=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|gif|bmp|webp|ora)$/i.test(f.name));
   if(!fs.length){status('No images found.');return}
   const start=items.length;let n=0;for(const f of fs){status(`Loading ${++n}/${fs.length}…`);await addFile(f)}
   if(items.length>start)select(start);buildList();status(`Loaded ${items.length-start} image(s).`)}
@@ -245,9 +248,19 @@ function undo(){const it=items[cur];if(!it||!it.hist.length)return;flt=null;sel=
 function redo(){const it=items[cur];if(!it||!it.redo.length)return;flt=null;sel=null;const e=it.redo.pop();it.hist.push(capture(it,e.k,e.li));applyState(it,e);refreshThumb()}
 $('bUndo').onclick=undo;$('bRedo').onclick=redo;
 
+// ---------- edit only inside the selection ----------
+// makeGuard() remembers the layer before an edit; guardRect/guardAll then put every pixel OUTSIDE the selection back to what it was
+function makeGuard(){if(!$('oSelOnly').checked||!sel||flt||!ctx)return null;return{base:snap(),s:{x:sel.x,y:sel.y,w:sel.w,h:sel.h,mask:sel.mask}}}
+function inSel(g,x,y){const s=g.s;if(x<s.x||y<s.y||x>=s.x+s.w||y>=s.y+s.h)return false;return!s.mask||!!s.mask[(y-s.y)*s.w+(x-s.x)]}
+function guardRect(g,x,y,w,h){x=Math.max(0,x);y=Math.max(0,y);const x1=Math.min(cv.width,x+w),y1=Math.min(cv.height,y+h);w=x1-x;h=y1-y;if(w<=0||h<=0)return;
+  const cur=ctx.getImageData(x,y,w,h),d=cur.data,b=g.base.data,W=cv.width;
+  for(let j=0;j<h;j++)for(let i=0;i<w;i++)if(!inSel(g,x+i,y+j)){const q=((y+j)*W+x+i)*4,k=(j*w+i)*4;d[k]=b[q];d[k+1]=b[q+1];d[k+2]=b[q+2];d[k+3]=b[q+3]}
+  ctx.putImageData(cur,x,y)}
+const guardAll=g=>guardRect(g,0,0,cv.width,cv.height);
+
 // ---------- drawing primitives ----------
 const bsz=()=>+$('bs').value;
-function plot(x,y,c,erase){const s=bsz(),o=Math.floor(s/2);if(erase)ctx.clearRect(x-o,y-o,s,s);else{ctx.fillStyle=css(c);ctx.fillRect(x-o,y-o,s,s)}}
+function plot(x,y,c,erase){const s=bsz(),o=Math.floor(s/2);if(erase)ctx.clearRect(x-o,y-o,s,s);else{ctx.fillStyle=css(c);ctx.fillRect(x-o,y-o,s,s)}if(guard)guardRect(guard,x-o,y-o,s,s)}
 function plotLine(a,b,c,erase){let x=a.x,y=a.y;const dx=Math.abs(b.x-x),dy=Math.abs(b.y-y),sx=x<b.x?1:-1,sy=y<b.y?1:-1;let e=dx-dy;
   for(;;){plot(x,y,c,erase);if(x===b.x&&y===b.y)break;const e2=2*e;if(e2>-dy){e-=dy;x+=sx}if(e2<dx){e+=dx;y+=sy}}}
 function drawRect(a,b,c){const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y);
@@ -324,9 +337,9 @@ view.addEventListener('mousedown',e=>{if(!cv)return;
   if(tool==='pick'){const d=flatPx(p.x,p.y);$(right?'c2':'c1').value=toHex(d[0],d[1],d[2]);if(!right){$('alpha').value=Math.round(d[3]/2.55);$('aV').textContent=$('alpha').value}return}
   if(tool==='bgpick'){$('bgx').value=p.x;$('bgy').value=p.y;bgInfo();return}
   if(tool==='wand'){const m=region(p.x,p.y,+$('tolF').value,$('oContig').checked);sel=maskBBox(m);overlay();return}
-  pushHist();
+  pushHist();guard=makeGuard();
   if(tool==='pencil'||tool==='eraser'){drag={k:'paint',last:p,c,erase:tool==='eraser'};plot(p.x,p.y,c,drag.erase)}
-  else if(tool==='fill'){bucket(p,c);addRecent(toHex(c[0],c[1],c[2]));refreshThumb()}
+  else if(tool==='fill'){bucket(p,c);if(guard){guardAll(guard);guard=null}addRecent(toHex(c[0],c[1],c[2]));refreshThumb()}
   else{drag={k:'shape',a:p,c,base:snap()}}
   overlay()});
 window.addEventListener('mousemove',e=>{if(!cv)return;
@@ -334,12 +347,12 @@ window.addEventListener('mousemove',e=>{if(!cv)return;
   const p=pos(e);hover=inside(p)?p:null;
   if(drag){
     if(drag.k==='paint'){const q=p;plotLine(drag.last,q,drag.c,drag.erase);drag.last=q}
-    else if(drag.k==='shape'){ctx.putImageData(drag.base,0,0);if(tool==='line')plotLine(drag.a,p,drag.c);else if(tool==='rect')drawRect(drag.a,p,drag.c);else drawEllipse(drag.a,p,drag.c)}
+    else if(drag.k==='shape'){ctx.putImageData(drag.base,0,0);const g=guard;guard=null;if(tool==='line')plotLine(drag.a,p,drag.c);else if(tool==='rect')drawRect(drag.a,p,drag.c);else drawEllipse(drag.a,p,drag.c);if(g){guardAll(g);guard=g}}
     else if(drag.k==='movef'){flt.x=p.x-drag.ox;flt.y=p.y-drag.oy}
     else if(drag.k==='newsel')drag.b=clampP(p);
     overlay()}else overlay();
   if(hover){const d=ctx.getImageData(hover.x,hover.y,1,1).data;status(`(${hover.x}, ${hover.y})  rgba(${d[0]}, ${d[1]}, ${d[2]}, ${d[3]})  ·  ${cv.width}×${cv.height}  ·  ${Math.round(z*100)}%`+(items[cur].layers.length>1?`  ·  layer "${items[cur].layers[items[cur].li].name}"`:'')+(flt||sel?(()=>{const r=flt?{x:flt.x,y:flt.y,w:flt.c.width,h:flt.c.height}:sel;return `  ·  selection ${r.w}×${r.h} at (${r.x}, ${r.y})`})():''))}});
-window.addEventListener('mouseup',()=>{if(!drag)return;const d=drag;drag=null;
+window.addEventListener('mouseup',()=>{if(!drag)return;const d=drag;drag=null;guard=null;
   if(d.k==='paint'||d.k==='shape'){addRecent(toHex(d.c[0],d.c[1],d.c[2]));refreshThumb()}
   if(d.k==='newsel'){const a=d.a,b=d.b,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x)+1,h=Math.abs(a.y-b.y)+1;sel=(w>1||h>1)?{x,y,w,h,mask:null}:null}
   overlay()});
@@ -364,8 +377,9 @@ function removeBg(c,o){const w=c.width,h=c.height,g=c.getContext('2d',{willReadF
   g.putImageData(img,0,0);return n}
 const bgOpts=()=>({x:+$('bgx').value||0,y:+$('bgy').value||0,tol:+$('tol').value,mode:$('bgMode').value,color:$('bgFixed').checked?bgColor:null});
 $('bgOne').onclick=()=>{if(!ctx)return;if(flt)commitFloat();const o=bgOpts();if($('bgFixed').checked&&!bgColor){status('Pick a colour with the 🎯 tool first.');return}
-  pushHist();const n=removeBg(cv,o);if(n<0){items[cur].hist.pop();status('Nothing to do: that pixel is already transparent (or outside the image).');return}
-  status(`Removed ${n} pixels.`);refreshThumb();bgInfo()};
+  pushHist();const g=makeGuard();let n=removeBg(cv,o);if(n<0){items[cur].hist.pop();status('Nothing to do: that pixel is already transparent (or outside the image).');return}
+  if(g){guardAll(g);const a=snap().data,b=g.base.data;n=0;for(let i=3;i<a.length;i+=4)if(b[i]&&!a[i])n++}
+  status(`Removed ${n} pixels${g?' inside the selection':''}.`);refreshThumb();bgInfo()};
 $('bgAll').onclick=()=>{if(!items.length)return;if(flt)commitFloat();const o=bgOpts();if($('bgFixed').checked&&!bgColor){status('Pick a colour with the 🎯 tool first.');return}
   let done=0,skipped=0,px=0;for(const it of items){pushHist(it);const n=removeBg(it.c,o);if(n<0){it.hist.pop();skipped++}else{done++;px+=n}}
   status(`Batch: ${done} image(s) processed, ${skipped} skipped (already transparent / pixel outside). ${px} pixels removed.`);buildList();bgInfo()};
@@ -375,8 +389,23 @@ function xform(fn){if(!ctx)return;if(flt)commitFloat();sel=null;const it=items[c
   for(const L of it.layers){const c=L.c,src=document.createElement('canvas');src.width=c.width;src.height=c.height;src.getContext('2d').drawImage(c,0,0);
     const r=fn(src);c.width=r.w;c.height=r.h;const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;g.clearRect(0,0,r.w,r.h);r.draw(g,src)}
   ctx=cv.getContext('2d',{willReadFrequently:true});applyZoom();refreshThumb()}
-$('bFlipH').onclick=()=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{g.translate(s.width,0);g.scale(-1,1);g.drawImage(s,0,0)}}));
-$('bFlipV').onclick=()=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{g.translate(0,s.height);g.scale(1,-1);g.drawImage(s,0,0)}}));
+// flips the selection only (rectangle, wand shape, or a floating piece); returns false when nothing is selected
+function flipSelection(horiz){
+  const mirror=(m,w,h)=>{if(!m)return null;const o=new Uint8Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++)o[y*w+x]=horiz?m[y*w+(w-1-x)]:m[(h-1-y)*w+x];return o};
+  if(flt){const n=document.createElement('canvas');n.width=flt.c.width;n.height=flt.c.height;const g=n.getContext('2d');
+    if(horiz){g.translate(n.width,0);g.scale(-1,1)}else{g.translate(0,n.height);g.scale(1,-1)}g.drawImage(flt.c,0,0);
+    flt.c=n;flt.mask=mirror(flt.mask,n.width,n.height);sel={x:flt.x,y:flt.y,w:n.width,h:n.height,mask:flt.mask};overlay();return true}
+  if(!sel)return false;
+  pushHist();const{x,y,w,h,mask}=sel,src=ctx.getImageData(x,y,w,h),out=ctx.getImageData(x,y,w,h),a=src.data,d=out.data;
+  const mx=(i,j)=>horiz?[w-1-i,j]:[i,h-1-j];
+  if(!mask){for(let j=0;j<h;j++)for(let i=0;i<w;i++){const[m,n]=mx(i,j),q=(j*w+i)*4,k=(n*w+m)*4;for(let c=0;c<4;c++)d[k+c]=a[q+c]}}
+  else{for(let k=0;k<w*h;k++)if(mask[k])d[k*4]=d[k*4+1]=d[k*4+2]=d[k*4+3]=0;     // lift the selected pixels, then drop them mirrored
+    for(let j=0;j<h;j++)for(let i=0;i<w;i++){const q=j*w+i;if(!mask[q])continue;const[m,n]=mx(i,j),k=(n*w+m)*4;for(let c=0;c<4;c++)d[k+c]=a[q*4+c]}
+    sel.mask=mirror(mask,w,h)}
+  ctx.putImageData(out,x,y);overlay();refreshThumb();return true}
+const flipAll=horiz=>xform(s=>({w:s.width,h:s.height,draw:(g,s)=>{if(horiz){g.translate(s.width,0);g.scale(-1,1)}else{g.translate(0,s.height);g.scale(1,-1)}g.drawImage(s,0,0)}}));
+$('bFlipH').onclick=()=>{if(flipSelection(true))status('Flipped the selection. Press Esc to deselect, then Flip flips the whole canvas.');else flipAll(true)};
+$('bFlipV').onclick=()=>{if(flipSelection(false))status('Flipped the selection. Press Esc to deselect, then Flip flips the whole canvas.');else flipAll(false)};
 $('bRotR').onclick=()=>xform(s=>({w:s.height,h:s.width,draw:(g,s)=>{g.translate(s.height,0);g.rotate(Math.PI/2);g.drawImage(s,0,0)}}));
 $('bRotL').onclick=()=>xform(s=>({w:s.height,h:s.width,draw:(g,s)=>{g.translate(0,s.width);g.rotate(-Math.PI/2);g.drawImage(s,0,0)}}));
 {const cb=$('cResizeCenter');try{cb.checked=localStorage.getItem('pe_resizeCenter')==='1'}catch(e){}cb.onchange=()=>{try{localStorage.setItem('pe_resizeCenter',cb.checked?'1':'0')}catch(e){}}}
@@ -390,8 +419,8 @@ $('bTrim').onclick=()=>{if(!cv)return;const w=cv.width,h=cv.height,d=flat(items[
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[(y*w+x)*4+3]){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
   if(x1<0||(x0===0&&y0===0&&x1===w-1&&y1===h-1)){status('Nothing to trim.');return}
   xform(s=>({w:x1-x0+1,h:y1-y0+1,draw:(g,s)=>g.drawImage(s,x0,y0,x1-x0+1,y1-y0+1,0,0,x1-x0+1,y1-y0+1)}))};
-$('bInvert').onclick=()=>{if(!ctx)return;if(flt)commitFloat();pushHist();const img=ctx.getImageData(0,0,cv.width,cv.height),d=img.data;
-  for(let i=0;i<d.length;i+=4)if(d[i+3]){d[i]=255-d[i];d[i+1]=255-d[i+1];d[i+2]=255-d[i+2]}ctx.putImageData(img,0,0);refreshThumb()};
+$('bInvert').onclick=()=>{if(!ctx)return;if(flt)commitFloat();pushHist();const g=makeGuard(),img=ctx.getImageData(0,0,cv.width,cv.height),d=img.data;
+  for(let i=0;i<d.length;i+=4)if(d[i+3]){d[i]=255-d[i];d[i+1]=255-d[i+1];d[i+2]=255-d[i+2]}ctx.putImageData(img,0,0);if(g)guardAll(g);refreshThumb()};
 
 // ---------- export (own ZIP writer, no libraries) ----------
 const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
@@ -464,6 +493,36 @@ $('lZip').onclick=async()=>{const it=items[cur];if(!it)return;if(flt)commitFloat
   for(let i=0;i<it.layers.length;i++){const L=it.layers[i];files.push({name:String(i+1).padStart(2,'0')+'_'+safe(L.name)+'.png',data:new Uint8Array(await(await toPng(L.c)).arrayBuffer())})}
   files.push({name:'flattened.png',data:new Uint8Array(await(await toPng(flat(it))).arrayBuffer())});
   save(zip(files),it.name+'_layers.zip');status(`${it.layers.length} layer PNG(s) + flattened.png downloaded (01 is the bottom layer).`)};
+
+// ---------- project file: OpenRaster (.ora) keeps every layer ----------
+// Reads a zip (stored or deflated entries) through its central directory.
+async function unzip(buf){const dv=new DataView(buf),u8=new Uint8Array(buf);let e=u8.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error('not a zip file');
+  const n=dv.getUint16(e+10,true),out={};let p=dv.getUint32(e+16,true);
+  for(let i=0;i<n;i++){if(dv.getUint32(p,true)!==0x02014b50)throw new Error('damaged zip');
+    const meth=dv.getUint16(p+10,true),csz=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),el=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),off=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nl)),ds=off+30+dv.getUint16(off+26,true)+dv.getUint16(off+28,true),raw=u8.subarray(ds,ds+csz);
+    if(meth===0)out[name]=raw;else if(meth===8)out[name]=new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    p+=46+nl+el+cl}
+  return out}
+const pngBytes=async c=>new Uint8Array(await(await toPng(c)).arrayBuffer());
+async function saveProject(){const it=items[cur];if(!it)return;if(flt)commitFloat();const enc=new TextEncoder(),attr=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const files=[{name:'mimetype',data:enc.encode('image/openraster')}];   // must be the first entry, stored uncompressed
+  let st=`<?xml version="1.0" encoding="UTF-8"?>\n<image version="0.0.3" w="${it.w}" h="${it.h}">\n <stack>\n`;
+  for(let i=it.layers.length-1;i>=0;i--){const L=it.layers[i],nm=`data/layer${i+1}.png`;files.push({name:nm,data:await pngBytes(L.c)});   // the first <layer> in stack.xml is the TOP one
+    st+=`  <layer name="${attr(L.name)}" src="${nm}" opacity="${L.op}" visibility="${L.vis?'visible':'hidden'}" x="0" y="0" composite-op="svg:src-over"${i===it.li?' selected="true"':''}/>\n`}
+  st+=' </stack>\n</image>\n';files.splice(1,0,{name:'stack.xml',data:enc.encode(st)});files.push({name:'mergedimage.png',data:await pngBytes(flat(it))});
+  save(zip(files),it.name+'.ora');status(`Project saved: ${it.name}.ora (${it.layers.length} layer${it.layers.length>1?'s':''}). Open it again with Open project.`)}
+async function addOra(f){const z=await unzip(await f.arrayBuffer()),sx=z['stack.xml'];if(!sx)throw new Error('no stack.xml');
+  const doc=new DOMParser().parseFromString(new TextDecoder().decode(sx),'application/xml'),im=doc.querySelector('image'),W=+im.getAttribute('w'),H=+im.getAttribute('h'),els=[...doc.querySelectorAll('layer')].reverse(),layers=[];let act=-1;
+  if(!(W>0&&H>0&&els.length))throw new Error('empty project');
+  for(const e of els){const data=z[e.getAttribute('src')];if(!data)continue;const bm=await createImageBitmap(new Blob([data],{type:'image/png'})),c=newLayerCanvas(W,H),op=parseFloat(e.getAttribute('opacity'));
+    c.getContext('2d').drawImage(bm,Math.round(+(e.getAttribute('x')||0)),Math.round(+(e.getAttribute('y')||0)));
+    layers.push({name:e.getAttribute('name')||('Layer '+(layers.length+1)),c,vis:e.getAttribute('visibility')!=='hidden',op:isFinite(op)?Math.max(0,Math.min(1,op)):1});
+    if(e.getAttribute('selected')==='true')act=layers.length-1}
+  if(!layers.length)throw new Error('no layers');
+  const nm=f.name.replace(/\.[^.]+$/,''),it=mkItem(nm,layers[0].c,(f.webkitRelativePath||f.name).replace(/\.[^.]+$/,''));it.layers=layers;it.li=act>=0?act:layers.length-1;items.push(it);return true}
+$('lSave').onclick=saveProject;$('lOpen').onclick=()=>$('fOra').click();
+$('fOra').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(fs.length)await addFiles(fs)};
 
 // ---------- keyboard ----------
 function status(t){$('status').textContent=t}
