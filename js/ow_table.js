@@ -1137,6 +1137,7 @@ window.OverworldTable = {
 
 
 
+
 // Helper utility to get frame indices based on direction and animation step
 window.getOverworldFrame = function(direction, step = 0) {
   // direction: 'down', 'left', 'right', 'up'
