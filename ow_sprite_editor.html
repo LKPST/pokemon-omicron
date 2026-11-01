@@ -560,6 +560,17 @@ function prompt_(t,d){const v=window.prompt(t,d);return v==null?d:v}
 $('bPngs').onclick=()=>$('fPngs').click();
 $('fPngs').onchange=async e=>{const fs=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name));e.target.value='';if(!fs.length)return;
   const items=[];for(const f of fs)items.push({f,c:await bitmapCanvas(f)});
+  const placed=S.entries.filter(e=>rectOf(e));
+  if(placed.length){ // a sheet with NPCs is already open: ADD the PNGs below it, leave everyone else untouched
+    pushUndoSafe();let y=0,W=S.W;for(const e of placed){const r=rectOf(e);y=Math.max(y,r.y+r.h)}
+    W=Math.max(W,...items.map(i=>i.c.width));const H=y+items.reduce((t,i)=>t+i.c.height,0);const u=S.undo,rd=S.redo;newSheet(W,Math.max(S.H,H),true);S.undo=u;S.redo=rd;
+    let first=-1;
+    for(const it of items){const base=it.f.name.replace(/\.png$/i,'').replace(/_ow$/,'');S.sx.drawImage(it.c,0,y);
+      let ent=S.entries.find(e=>!rectOf(e)&&slug(e.name)===slug(base));const[cw,ch]=ent?(parseDim(ent.fields.trueDimension)||[32,48]):[32,48];
+      const cols=Math.max(1,Math.round(it.c.width/cw)),rows=Math.max(1,Math.round(it.c.height/ch));
+      if(ent){ent.rect={x:0,y};ent.cols=cols;ent.rows=rows}else{ent=mkEntry(base,{trueDimension:'32x48',owSprite:'graphics/overworld/'+it.f.name,spriteID:slug(base)+'_ow'},{x:0,y},cols,rows);S.entries.push(ent)}
+      if(first<0)first=S.entries.indexOf(ent);y+=it.c.height}
+    S.sel=first;renderList();renderForm();redraw();status(`${items.length} PNG(s) added below the existing sheet; other NPCs untouched.`);return}
   const W=Math.max(256,...items.map(i=>i.c.width));let y=0;const place=[];for(const it of items){place.push({...it,x:0,y});y+=it.c.height}
   newSheet(W,y,false);for(const p of place)S.sx.drawImage(p.c,p.x,p.y);S.entries=[];
   const tbl=S.tableEntries||{};
