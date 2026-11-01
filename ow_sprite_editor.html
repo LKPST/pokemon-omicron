@@ -265,6 +265,7 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   <div class="row f"><label>owScale</label><input type="number" id="fsc" value="${F.owScale||1}" min="0.25" max="8" step="0.25" style="width:80px"><span class="hint">display size in game &amp; map editor</span></div>
   <div class="row f"><label>Frame size</label><input type="number" id="fcw" value="${cw}"><span>×</span><input type="number" id="fch" value="${ch}"><span class="hint">= trueDimension</span></div>
   <div class="row f"><label>Cols × rows</label><input type="number" id="fco" value="${e.cols}" min="1"><span>×</span><input type="number" id="fro" value="${e.rows}" min="1"></div>
+  <div class="row f"><label>Sprite PNG</label><button id="fRep" title="swap this NPC's pixels for a PNG; everyone else is untouched">Replace sprite from PNG…</button><input type="file" id="fRepIn" accept="image/png" hidden></div>
   <div class="row f"><label>Layout</label><select id="flo"><option value="game4x4">Game 4×4 (rows = down/left/right/up)</option><option value="custom3x4">Your 3×4 sheet</option><option value="custom4x3">4×3 sheet (columns = down/up/left/right, rows = idle/R foot/L foot)</option></select></div>
   <div class="row f"><label></label><button class="sm" id="fconv" title="rearranges the frames in the sheet into the game's 4×4 layout">Convert to game 4×4</button><span class="hint">PNG is converted to the game 4×4 on export anyway (3×4 and 4×3 sheets)</span></div>
   <div class="row f"><label>frames</label><input type="number" id="ffr" value="${F.frames}" min="1"><button class="sm" id="ffrA">= cols×rows</button></div>
@@ -284,6 +285,15 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   $('flo').value=e.layout||'game4x4';$('flo').onchange=()=>{const was=LAYOUTS[e.layout]||LAYOUTS.game4x4,now=LAYOUTS[$('flo').value]||LAYOUTS.game4x4;e.layout=$('flo').value;if(e.cols===was.cols&&e.rows===was.rows){e.cols=now.cols;e.rows=now.rows}renderForm();renderList();redraw();previewDirty=true};
   $('fconv').onclick=()=>convertEntry(e);
   $('fdraw').onclick=()=>setTool('region');
+  $('fRep').onclick=()=>$('fRepIn').click();
+  $('fRepIn').onchange=async ev=>{const file=ev.target.files[0];ev.target.value='';if(!file)return;const c=await bitmapCanvas(file);pushUndoSafe();
+    const[cw,ch]=cell(e);let r=rectOf(e);
+    if(r&&c.width===r.w&&c.height===r.h){S.sx.clearRect(r.x,r.y,r.w,r.h);S.sx.drawImage(c,r.x,r.y);redraw();status('Replaced '+e.name+' in place ('+c.width+'×'+c.height+').');return}
+    if(r)S.sx.clearRect(r.x,r.y,r.w,r.h);
+    let y=0;for(const o of S.entries){if(o===e)continue;const q=rectOf(o);if(q)y=Math.max(y,q.y+q.h)}
+    const W=Math.max(S.W,c.width),H=Math.max(S.H,y+c.height);if(W!==S.W||H!==S.H){const u=S.undo,rd=S.redo;newSheet(W,H,true);S.undo=u;S.redo=rd}
+    S.sx.drawImage(c,0,y);e.rect={x:0,y};e.cols=Math.max(1,Math.round(c.width/cw));e.rows=Math.max(1,Math.round(c.height/ch));
+    renderList();renderForm();redraw();status('Replaced '+e.name+' with a '+c.width+'×'+c.height+' PNG (placed at the bottom of the sheet; cols×rows '+e.cols+'×'+e.rows+').')};
   f.querySelectorAll('[data-fl]').forEach(c=>c.onchange=()=>{F[c.dataset.fl]=c.checked});}
 function selectFrame(i,ev){const e=cur();if(!e)return;const n=e.cols*e.rows;i=Math.max(0,Math.min(n-1,i));
   if(ev&&ev.shiftKey&&S.fsel.length){const a=S.fsel[S.fsel.length-1],lo=Math.min(a,i),hi=Math.max(a,i);for(let k=lo;k<=hi;k++)if(!S.fsel.includes(k))S.fsel.push(k)}
