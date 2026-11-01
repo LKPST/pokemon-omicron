@@ -133,7 +133,7 @@ dialog::backdrop{background:#000a}
   <div class="row f"><label>Start x,y</label><input type="number" id="bkX" value="0"><input type="number" id="bkY" value="0"></div>
   <div class="row f"><label>Frame size</label><input type="number" id="bkW" value="32"><span>×</span><input type="number" id="bkH" value="48"></div>
   <div class="row f"><label>Cols × rows</label><input type="number" id="bkC" value="4"><span>×</span><input type="number" id="bkR" value="4"> <span class="hint">frames per NPC</span></div>
-  <div class="row f"><label>Layout</label><select id="bkL"><option value="game4x4">Game 4×4</option><option value="custom3x4">Your 3×4 sheet</option></select></div>
+  <div class="row f"><label>Layout</label><select id="bkL"><option value="game4x4">Game 4×4</option><option value="custom3x4">Your 3×4 sheet</option><option value="custom4x3">4×3 sheet (columns down / up / left / right, rows idle / R foot / L foot)</option></select></div>
   <div class="row f"><label>NPCs across</label><input type="number" id="bkA" value="4"><label style="width:auto">total</label><input type="number" id="bkN" value="8"></div>
   <div class="row"><button class="pri" id="bkGo">Create</button><button id="bkX2">Cancel</button></div>
 </dialog>
@@ -196,7 +196,21 @@ const L3NAMES=['face up','face right','walk up (L foot)','walk left (R foot)','w
 const L3SHORT=['U','R','U·L','L·R','R·R','D','L','R·L','D·R','L·L','U·R','D·L'];
 const L3DIR={down:[5,8,11],left:[6,3,9],right:[1,4,7],up:[0,10,2]};   // [stand, step1 (R foot), step2 (L foot)]
 // game 4x4: rows down/left/right/up; step1 -> col 1, step2 -> col 3 (right: col 2), as in getOverworldFrame
-const L3TO4=(()=>{const m={};for(const[dir,row]of[['down',0],['left',1],['right',2],['up',3]]){const[st,a,b]=L3DIR[dir];m[row*4+0]=st;m[row*4+1]=a;m[row*4+2]=dir==='right'?b:st;m[row*4+3]=dir==='right'?st:b}return m})();
+const toGame4=D=>{const m={};for(const[dir,row]of[['down',0],['left',1],['right',2],['up',3]]){const[st,a,b]=D[dir];m[row*4+0]=st;m[row*4+1]=a;m[row*4+2]=dir==='right'?b:st;m[row*4+3]=dir==='right'?st:b}return m};
+const L3TO4=toGame4(L3DIR);
+// custom4x3 = 4 columns x 3 rows (index = row*4+col): columns = down, up, left, right; rows = idle, right foot forward, left foot forward
+const L43NAMES=['face down','face up','face left','face right','walk down (R foot)','walk up (R foot)','walk left (R foot)','walk right (R foot)','walk down (L foot)','walk up (L foot)','walk left (L foot)','walk right (L foot)'];
+const L43SHORT=['D','U','L','R','D·R','U·R','L·R','R·R','D·L','U·L','L·L','R·L'];
+const L43DIR={down:[0,4,8],up:[1,5,9],left:[2,6,10],right:[3,7,11]};   // [stand, step1 (R foot), step2 (L foot)]
+const L43TO4=toGame4(L43DIR);
+// every layout: its size, the frame of each facing [stand, R foot, L foot], the labels, and how it maps onto the game's 4x4 (the PNG is converted to that on export)
+const LAYOUTS={game4x4:{cols:4,rows:4,label:'Game 4×4'},
+  custom3x4:{cols:3,rows:4,label:'Your 3×4 sheet',dir:L3DIR,to4:L3TO4,short:L3SHORT},
+  custom4x3:{cols:4,rows:3,label:'4×3 sheet',dir:L43DIR,to4:L43TO4,short:L43SHORT}};
+const customL=e=>{const l=LAYOUTS[e.layout];return l&&l.to4&&e.cols===l.cols&&e.rows===l.rows?l:null};   // the layout, when it is a custom one at its proper size
+// the roles as they have to be written to the table: frame numbers of the converted game 4x4 PNG
+function exportRoles(e){const l=customL(e);if(!l)return e.roles||[];const seen=new Set(),out=[];
+  for(let k=0;k<16;k++)for(const x of(e.roles||[]))if(x.f===l.to4[k]){const key=x.anim+'|'+x.dir+'|'+x.slot;if(seen.has(key))continue;seen.add(key);out.push({...x,f:k})}return out}
 // ---- frame roles: which frame is which animation / facing / step. One frame can have several roles.
 const ANIMS=['walk','run','cycle','surf','fish','fly'],DIRS=['down','left','right','up'];
 const AL={walk:'W',run:'R',cycle:'C',surf:'S',fish:'F',fly:'Y'},DA={down:'↓',left:'←',right:'→',up:'↑'};
@@ -210,7 +224,7 @@ function buildFrameMap(e){const n=e.cols*e.rows,out={};
 function mapToRoles(fm){const out=[];if(!fm||typeof fm!=='object')return out;for(const a of Object.keys(fm))for(const d of Object.keys(fm[a]||{})){const arr=fm[a][d];if(Array.isArray(arr))arr.forEach((f,i)=>out.push({f:+f,anim:a,dir:d,slot:i}))}return out}
 function takeFrameMap(e){if(e.fields.frameMap){e.roles=mapToRoles(e.fields.frameMap);delete e.fields.frameMap}}
 function roleLabel(e,f){const rs=(e.roles||[]).filter(x=>x.f===f);if(!rs.length)return'';const x=rs[0];return(AL[x.anim]||'?')+(DA[x.dir]||'')+x.slot+(rs.length>1?'+':'')}
-function walkPreset(e){const g=e.layout==='custom3x4'?L3DIR:{down:[0,1,3],left:[4,5,7],right:[8,9,10],up:[12,13,15]};const out=[];for(const d of DIRS)g[d].forEach((f,i)=>out.push({f,anim:'walk',dir:d,slot:i}));return out}
+function walkPreset(e){const g=(LAYOUTS[e.layout]||{}).dir||{down:[0,1,3],left:[4,5,7],right:[8,9,10],up:[12,13,15]};const out=[];for(const d of DIRS)g[d].forEach((f,i)=>out.push({f,anim:'walk',dir:d,slot:i}));return out}
 const slug=n=>String(n).trim().replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').toLowerCase()||'sprite';
 function mkEntry(name,f,rect,cols,rows){const e={name,fields:Object.assign({spriteID:slug(name)+'_ow',frames:12,genderBased:false,owType:'NPC',owDimension:'16x32',trueDimension:'32x48',
   isRunning:false,isFishing:false,isSurfing:false,isCycling:false,owSprite:'graphics/overworld/'+slug(name)+'.png'},f||{}),rect:rect||null,cols:cols||4,rows:rows||4,layout:'game4x4',roles:[]};takeFrameMap(e);return e}
@@ -235,7 +249,7 @@ function renderList(){const l=$('list');l.innerHTML='';const c0=cur();if(c0&&!S.
   const w=[];const ids={};for(const e of S.entries){const id=e.fields.spriteID;ids[id]=(ids[id]||0)+1}
   for(const id in ids)if(ids[id]>1)w.push('Duplicate spriteID: '+id);
   const paths={};for(const e of S.entries){const p=e.fields.owSprite;if(e.rect){paths[p]=(paths[p]||0)+1}}for(const p in paths)if(paths[p]>1)w.push('Same PNG path used twice: '+p);
-  for(const e of S.entries)if(e.layout==='custom3x4'&&e.rect&&!(e.cols===3&&e.rows===4))w.push(e.name+': “Your 3×4 sheet” needs 3 cols × 4 rows');
+  for(const e of S.entries){const l=LAYOUTS[e.layout];if(l&&l.to4&&e.rect&&!(e.cols===l.cols&&e.rows===l.rows))w.push(e.name+': “'+l.label+'” needs '+l.cols+' cols × '+l.rows+' rows')}
   for(const e of S.entries){const r=rectOf(e);if(r&&(r.x+r.w>S.W||r.y+r.h>S.H))w.push(e.name+': region goes past the sheet edge')}
   $('warns').innerHTML=w.map(esc).join('<br>')}
 function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="hint">Pick or create an NPC.</div>';return}
@@ -251,8 +265,8 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   <div class="row f"><label>owScale</label><input type="number" id="fsc" value="${F.owScale||1}" min="0.25" max="8" step="0.25" style="width:80px"><span class="hint">display size in game &amp; map editor</span></div>
   <div class="row f"><label>Frame size</label><input type="number" id="fcw" value="${cw}"><span>×</span><input type="number" id="fch" value="${ch}"><span class="hint">= trueDimension</span></div>
   <div class="row f"><label>Cols × rows</label><input type="number" id="fco" value="${e.cols}" min="1"><span>×</span><input type="number" id="fro" value="${e.rows}" min="1"></div>
-  <div class="row f"><label>Layout</label><select id="flo"><option value="game4x4">Game 4×4 (rows = down/left/right/up)</option><option value="custom3x4">Your 3×4 sheet</option></select></div>
-  <div class="row f"><label></label><button class="sm" id="fconv" title="rearranges the frames in the sheet into the game's 4×4 layout">Convert to game 4×4</button><span class="hint">PNG is converted on export anyway</span></div>
+  <div class="row f"><label>Layout</label><select id="flo"><option value="game4x4">Game 4×4 (rows = down/left/right/up)</option><option value="custom3x4">Your 3×4 sheet</option><option value="custom4x3">4×3 sheet (columns = down/up/left/right, rows = idle/R foot/L foot)</option></select></div>
+  <div class="row f"><label></label><button class="sm" id="fconv" title="rearranges the frames in the sheet into the game's 4×4 layout">Convert to game 4×4</button><span class="hint">PNG is converted to the game 4×4 on export anyway (3×4 and 4×3 sheets)</span></div>
   <div class="row f"><label>frames</label><input type="number" id="ffr" value="${F.frames}" min="1"><button class="sm" id="ffrA">= cols×rows</button></div>
   <div class="row f"><label>Sheet x,y</label><input type="number" id="fx" value="${r.x}"><input type="number" id="fy" value="${r.y}"><button class="sm" id="fdraw" title="then drag on the sheet">draw region</button></div>
   <div class="row">${FLAGS.map(k=>`<label><input type="checkbox" data-fl="${k}" ${F[k]?'checked':''}> ${k}</label>`).join('')}</div>`;
@@ -267,7 +281,7 @@ function renderForm(){const f=$('form'),e=cur();if(!e){f.innerHTML='<div class="
   $('fco').oninput=()=>{e.cols=Math.max(1,+$('fco').value||1);redraw()};$('fro').oninput=()=>{e.rows=Math.max(1,+$('fro').value||1);redraw()};
   $('ffr').oninput=()=>{F.frames=Math.max(1,+$('ffr').value||1)};$('ffrA').onclick=()=>{F.frames=e.cols*e.rows;$('ffr').value=F.frames};
   const xy=()=>{const x=$('fx').value,y=$('fy').value;if(x===''||y==='')return;e.rect={x:+x,y:+y};renderList();redraw()};$('fx').oninput=xy;$('fy').oninput=xy;
-  $('flo').value=e.layout||'game4x4';$('flo').onchange=()=>{e.layout=$('flo').value;if(e.layout==='custom3x4'&&e.cols===4&&e.rows===4){e.cols=3;e.rows=4}else if(e.layout==='game4x4'&&e.cols===3&&e.rows===4){e.cols=4;e.rows=4}renderForm();renderList();redraw();previewDirty=true};
+  $('flo').value=e.layout||'game4x4';$('flo').onchange=()=>{const was=LAYOUTS[e.layout]||LAYOUTS.game4x4,now=LAYOUTS[$('flo').value]||LAYOUTS.game4x4;e.layout=$('flo').value;if(e.cols===was.cols&&e.rows===was.rows){e.cols=now.cols;e.rows=now.rows}renderForm();renderList();redraw();previewDirty=true};
   $('fconv').onclick=()=>convertEntry(e);
   $('fdraw').onclick=()=>setTool('region');
   f.querySelectorAll('[data-fl]').forEach(c=>c.onchange=()=>{F[c.dataset.fl]=c.checked});}
@@ -294,7 +308,7 @@ $('rAssign').onclick=()=>{const e=cur();if(!e)return;if(!S.fsel.length)return st
   S.fsel.forEach((f,i)=>setRole(e,f,anim,dir,sl==='auto'?i:+sl));renderFrames();renderForm();redraw();status(`${S.fsel.length} frame(s) → ${anim} ${dir}.`)};
 $('rClear').onclick=()=>{const e=cur();if(!e)return;e.roles=(e.roles||[]).filter(x=>!S.fsel.includes(x.f));renderFrames();redraw()};
 $('rClearA').onclick=()=>{const e=cur();if(!e)return;const a=$('rAnim').value;e.roles=(e.roles||[]).filter(x=>x.anim!==a);renderFrames();redraw();status('Cleared all “'+a+'” frames.')};
-$('rAuto').onclick=()=>{const e=cur();if(!e)return;e.roles=(e.roles||[]).filter(x=>x.anim!=='walk').concat(walkPreset(e));renderFrames();redraw();status('Walk frames assigned from the '+(e.layout==='custom3x4'?'3×4':'game 4×4')+' layout.')};
+$('rAuto').onclick=()=>{const e=cur();if(!e)return;e.roles=(e.roles||[]).filter(x=>x.anim!=='walk').concat(walkPreset(e));renderFrames();redraw();status('Walk frames assigned from the '+((LAYOUTS[e.layout]||LAYOUTS.game4x4).label)+' layout.')};
 $('rAll').onclick=()=>{const e=cur();if(!e)return;const same=$('rSame').checked;let n=0;
   for(const o of S.entries){if(o===e)continue;if(same&&(o.cols!==e.cols||o.rows!==e.rows))continue;o.roles=JSON.parse(JSON.stringify(e.roles||[]));for(const x of o.roles){const fl=ANIM_FLAG[x.anim];if(fl)o.fields[fl]=true}n++}
   status(`Roles copied to ${n} other NPC(s)`+(same?' with the same grid.':'.'))};
@@ -340,7 +354,7 @@ $('mPack').onclick=()=>{const list=S.entries.filter(e=>rectOf(e));if(!list.lengt
   blocks.forEach((b,k)=>{S.sx.drawImage(b.c,pos[k].x,pos[k].y);b.e.rect={x:pos[k].x,y:pos[k].y}});
   renderList();renderForm();renderFrames();redraw();status(`Sheet re-packed in list order: ${per} per row.`)};
 $('growBtn').onclick=()=>{let w=S.W,h=S.H;for(const e of S.entries){const r=rectOf(e);if(r){w=Math.max(w,r.x+r.w);h=Math.max(h,r.y+r.h)}}const u=S.undo,rd=S.redo;newSheet(w,h,true);S.undo=u;S.redo=rd;renderList();redraw();status(`Sheet grown to ${w}×${h}.`)};
-$('bkL').onchange=()=>{const c=$('bkL').value==='custom3x4';$('bkC').value=c?3:4;$('bkR').value=4};
+$('bkL').onchange=()=>{const l=LAYOUTS[$('bkL').value]||LAYOUTS.game4x4;$('bkC').value=l.cols;$('bkR').value=l.rows};
 $('eBulk').onclick=()=>$('dBulk').showModal();$('bkX2').onclick=()=>$('dBulk').close();
 $('bkGo').onclick=()=>{const v=id=>+$(id).value||0,nm=$('bkName').value||'Trainer',x0=v('bkX'),y0=v('bkY'),w=v('bkW'),h=v('bkH'),c=v('bkC'),r=v('bkR'),a=Math.max(1,v('bkA')),n=v('bkN');
   let first=S.entries.length;for(let i=0;i<n;i++){const nn=nm+'_'+(i+1);const e=mkEntry(nn,{trueDimension:w+'x'+h,frames:12},{x:x0+(i%a)*c*w,y:y0+Math.floor(i/a)*r*h},c,r);e.layout=$('bkL').value;
@@ -365,7 +379,7 @@ function draw(){need=false;if($('zV').textContent!==Math.round(S.z*100)+'%'){$('
     if(showGrid&&sel){cx.strokeStyle='#ffd24a66';cx.lineWidth=1;cx.beginPath();for(let c=1;c<e.cols;c++){cx.moveTo(ox+(r.x+c*r.cw)*z+.5,oy+r.y*z);cx.lineTo(ox+(r.x+c*r.cw)*z+.5,oy+(r.y+r.h)*z)}
       for(let rr=1;rr<e.rows;rr++){cx.moveTo(ox+r.x*z,oy+(r.y+rr*r.ch)*z+.5);cx.lineTo(ox+(r.x+r.w)*z,oy+(r.y+rr*r.ch)*z+.5)}cx.stroke();
       for(const f of(S.fsel.length?S.fsel:[Math.min(S.frame,e.cols*e.rows-1)])){const fx=r.x+(f%e.cols)*r.cw,fy=r.y+Math.floor(f/e.cols)*r.ch;cx.strokeStyle='#4fd18b';cx.lineWidth=2;cx.strokeRect(ox+fx*z+1,oy+fy*z+1,r.cw*z-1,r.ch*z-1)}}
-    if(sel&&S.z>=2){cx.fillStyle='#ffd24acc';cx.font=(9*d)+'px system-ui';const hasR=(e.roles||[]).length;for(let k=0;k<e.cols*e.rows&&k<96;k++){const t=hasR?roleLabel(e,k):(e.layout==='custom3x4'?L3SHORT[k]||'':'');if(t)cx.fillText(t,ox+(r.x+(k%e.cols)*r.cw)*z+3*d,oy+(r.y+Math.floor(k/e.cols)*r.ch)*z+11*d)}}
+    if(sel&&S.z>=2){cx.fillStyle='#ffd24acc';cx.font=(9*d)+'px system-ui';const hasR=(e.roles||[]).length;for(let k=0;k<e.cols*e.rows&&k<96;k++){const t=hasR?roleLabel(e,k):(((LAYOUTS[e.layout]||{}).short||[])[k]||'');if(t)cx.fillText(t,ox+(r.x+(k%e.cols)*r.cw)*z+3*d,oy+(r.y+Math.floor(k/e.cols)*r.ch)*z+11*d)}}
     cx.fillStyle=sel?'#ffd24a':'#ffffffaa';cx.font=(11*d)+'px system-ui';cx.fillText(e.name,ox+r.x*z+3,oy+r.y*z-4*d)});
   if(S.z>=8&&showGrid){cx.strokeStyle='#ffffff14';cx.lineWidth=1;cx.beginPath();const x0=Math.max(0,Math.floor(-S.ox/S.z)),y0=Math.max(0,Math.floor(-S.oy/S.z)),x1=Math.min(S.W,Math.ceil((w/d-S.ox)/S.z)),y1=Math.min(S.H,Math.ceil((h/d-S.oy)/S.z));
     for(let x=x0;x<=x1;x++){cx.moveTo(ox+x*z+.5,oy+y0*z);cx.lineTo(ox+x*z+.5,oy+y1*z)}for(let y=y0;y<=y1;y++){cx.moveTo(ox+x0*z,oy+y*z+.5);cx.lineTo(ox+x1*z,oy+y*z+.5)}cx.stroke()}
@@ -532,7 +546,7 @@ setInterval(()=>{pvT++;const e=cur(),r=e&&rectOf(e),pc=$('prev'),px=pc.getContex
   const z=+$('pvZ').value,seq=[0,1,0,2],step=pvPlay?seq[pvT%4]:0,{row,col}=frameIdx(pvDir,step);
   const A=$('pvA').value,arr=((buildFrameMap(e)[A]||{})[pvDir])||null;let roleFrame=-1;
   if(arr&&arr.length){if(['fish','fly','surf'].includes(A))roleFrame=arr[pvPlay?pvT%arr.length:0];else{const sq=arr.length>=3?[0,1,0,2]:[0,1];roleFrame=arr[pvPlay?sq[pvT%sq.length]%arr.length:0]}}
-  let c=Math.min(col,e.cols-1),rr=Math.min(row,e.rows-1);if(roleFrame>=0){c=roleFrame%e.cols;rr=Math.floor(roleFrame/e.cols)}else if(A!=='walk'&&!((e.roles||[]).length===0)){px.clearRect(0,0,pc.width,pc.height);px.fillStyle='#8a93a6';px.font='11px system-ui';px.fillText('no '+A+' frames for '+pvDir,6,16);return}else if(e.layout==='custom3x4'){const dd=L3DIR[pvDir]||L3DIR.down,fi=dd[step===0?0:step===1?1:2];c=fi%e.cols;rr=Math.floor(fi/e.cols)}const W=r.cw*z,H=r.ch*z;if(pc.width!==Math.max(W,64)||pc.height!==Math.max(H,64)){pc.width=Math.max(W,64);pc.height=Math.max(H,64)}
+  let c=Math.min(col,e.cols-1),rr=Math.min(row,e.rows-1);if(roleFrame>=0){c=roleFrame%e.cols;rr=Math.floor(roleFrame/e.cols)}else if(A!=='walk'&&!((e.roles||[]).length===0)){px.clearRect(0,0,pc.width,pc.height);px.fillStyle='#8a93a6';px.font='11px system-ui';px.fillText('no '+A+' frames for '+pvDir,6,16);return}else if((LAYOUTS[e.layout]||{}).dir){const L=LAYOUTS[e.layout],dd=L.dir[pvDir]||L.dir.down,fi=dd[step===0?0:step===1?1:2];c=fi%e.cols;rr=Math.floor(fi/e.cols)}const W=r.cw*z,H=r.ch*z;if(pc.width!==Math.max(W,64)||pc.height!==Math.max(H,64)){pc.width=Math.max(W,64);pc.height=Math.max(H,64)}
   px.imageSmoothingEnabled=false;px.clearRect(0,0,pc.width,pc.height);px.drawImage(S.sheet,r.x+c*r.cw,r.y+rr*r.ch,r.cw,r.ch,0,0,W,H)},180);
 // ---------------------------------------------------------------- load / import
 const bitmapCanvas=async f=>{const bm=await createImageBitmap(f),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;c.getContext('2d').drawImage(bm,0,0);return c};
@@ -599,7 +613,7 @@ const q=s=>"'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";
 function fieldsOrdered(F){const out=[];const seen=new Set();for(const k of FIELD_ORDER)if(k in F&&F[k]!==undefined&&!(k==='shinySprite'&&!F[k])){out.push(k);seen.add(k)}for(const k of Object.keys(F))if(!seen.has(k))out.push(k);return out}
 const valStr=v=>typeof v==='string'?q(v):typeof v==='object'&&v!==null?JSON.stringify(v):String(v);
 function fmJs(fm){const as=Object.keys(fm);return'{\n'+as.map(a=>`      ${a}: { `+Object.keys(fm[a]).map(d=>`${d}: [${fm[a][d].join(', ')}]`).join(', ')+' }').join(',\n')+'\n    }'}
-function tableJs(){const body=S.entries.map(e=>{const F=e.fields,ks=fieldsOrdered(F).filter(k=>k!=='frameMap'),fm=buildFrameMap(e),hasFm=Object.keys(fm).length;
+function tableJs(){const body=S.entries.map(e=>{const F=e.fields,ks=fieldsOrdered(F).filter(k=>k!=='frameMap'),fm=buildFrameMap(customL(e)?{...e,roles:exportRoles(e),cols:4,rows:4}:e),hasFm=Object.keys(fm).length;
   const lines=ks.map(k=>`    ${k}: ${valStr(F[k])}`);if(hasFm)lines.push('    frameMap: '+fmJs(fm)+' // anim -> facing -> frame numbers [stand, step 1, step 2, …]');
   return`  ${/^[A-Za-z_$][\w$]*$/.test(e.name)?e.name:q(e.name)}: {\n`+lines.map((l,i)=>i<lines.length-1?l.replace(/( \/\/ .*)?$/,m=>m)+',':l).join('\n')+'\n  }'}).join(',\n');
   let suf=S.tableSuffix;if(!/getOverworldFrameFor/.test(suf))suf=suf.replace(/\s*$/,'')+`
@@ -618,15 +632,15 @@ window.getOverworldFrameFor = function(name, anim, direction, step = 0) {
 function manifest(){const sp={};for(const e of S.entries){const r=rectOf(e);if(!r)continue;sp[e.name]={fields:Object.fromEntries(Object.entries(e.fields).filter(([k])=>k!=='frameMap')),file:e.fields.owSprite,rect:[r.x,r.y,r.w,r.h],frame:[r.cw,r.ch],cols:e.cols,rows:e.rows,layout:e.layout||'game4x4',roles:e.roles||[],frames:e.fields.frames}}
   return JSON.stringify({version:1,sheet:'graphics/overworld/'+S.sheetName,sheetSize:[S.W,S.H],sprites:sp},null,2)}
 function layoutCanvas(e){const r=rectOf(e);
-  if(e.layout!=='custom3x4'||e.cols!==3||e.rows!==4){const c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(S.sheet,r.x,r.y,r.w,r.h,0,0,r.w,r.h);return c}
+  const L=customL(e);if(!L){const c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(S.sheet,r.x,r.y,r.w,r.h,0,0,r.w,r.h);return c}
   const c=document.createElement('canvas');c.width=4*r.cw;c.height=4*r.ch;const x=c.getContext('2d');
-  for(let k=0;k<16;k++){const src=L3TO4[k];x.drawImage(S.sheet,r.x+(src%3)*r.cw,r.y+Math.floor(src/3)*r.ch,r.cw,r.ch,(k%4)*r.cw,Math.floor(k/4)*r.ch,r.cw,r.ch)}return c}
-function convertEntry(e){const r=rectOf(e);if(!r)return status('Place this NPC on the sheet first.');if(e.layout!=='custom3x4'||e.cols!==3||e.rows!==4)return status('Only a 3×4 “Your 3×4 sheet” NPC can be converted.');
+  for(let k=0;k<16;k++){const src=L.to4[k];x.drawImage(S.sheet,r.x+(src%L.cols)*r.cw,r.y+Math.floor(src/L.cols)*r.ch,r.cw,r.ch,(k%4)*r.cw,Math.floor(k/4)*r.ch,r.cw,r.ch)}return c}
+function convertEntry(e){const r=rectOf(e);if(!r)return status('Place this NPC on the sheet first.');if(!customL(e))return status('Only an NPC with the “Your 3×4 sheet” (3×4) or the “4×3 sheet” (4×3) layout, at that size, can be converted.');
   const c=layoutCanvas(e);let nx=r.x,ny=r.y;const w=c.width,h=c.height;
   const hit=S.entries.some(o=>{if(o===e)return false;const q=rectOf(o);return q&&nx<q.x+q.w&&nx+w>q.x&&ny<q.y+q.h&&ny+h>q.y});
   pushUndo();S.sx.clearRect(r.x,r.y,r.w,r.h);
   if(hit||nx+w>S.W||ny+h>S.H){let y=0;for(const o of S.entries){if(o===e)continue;const q=rectOf(o);if(q)y=Math.max(y,q.y+q.h)}nx=0;ny=y;if(ny+h>S.H||w>S.W){const u=S.undo,rd=S.redo;newSheet(Math.max(S.W,w),Math.max(S.H,ny+h),true);S.undo=u;S.redo=rd}}
-  {const seen=new Set(),nr=[];for(let k=0;k<16;k++)for(const x of(e.roles||[]))if(x.f===L3TO4[k]){const key=x.anim+'|'+x.dir+'|'+x.slot;if(seen.has(key))continue;seen.add(key);nr.push({...x,f:k})}e.roles=nr}
+  e.roles=exportRoles(e);
   S.sx.drawImage(c,nx,ny);e.rect={x:nx,y:ny};e.cols=4;e.rows=4;e.layout='game4x4';e.fields.frames=12;renderForm();renderList();redraw();previewDirty=true;status(e.name+' converted to the game 4×4 layout'+(hit?' (moved below the others, there was no room)':'')+'.')}
 function cutPng(e){return new Promise(res=>layoutCanvas(e).toBlob(res,'image/png'))}
 const sheetBlob=()=>new Promise(res=>S.sheet.toBlob(res,'image/png'));
